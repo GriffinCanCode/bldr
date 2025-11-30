@@ -17,6 +17,7 @@ enum NonDeterminismSource
     CompilerNonDet, // Compiler-specific non-determinism
     FileOrdering,   // File system ordering
     PointerAddress, // ASLR/pointer addresses
+    OutputMismatch, // Output hash mismatch
     Unknown         // Unknown source
 }
 
@@ -59,7 +60,7 @@ struct NonDeterminismDetector
         
         // Auto-detect compiler if not specified
         if (compilerType == CompilerType.Unknown)
-            compilerType = detectCompilerType(command);
+            compilerType = detectCompiler(command);
         
         // Check for missing determinism flags
         final switch (compilerType)
@@ -103,13 +104,13 @@ struct NonDeterminismDetector
     }
     
     /// Analyze build output for non-determinism patterns
-    static Detection[] analyzeOutput(string stdout, string stderr) @safe
+    static Detection[] analyzeBuildOutput(string stdout, string stderr) @safe
     {
         Detection[] detections;
         immutable output = stdout ~ "\n" ~ stderr;
         
         // Check for timestamp patterns
-        if (hasTimestampPattern(output))
+        if (containsTimestamp(output))
         {
             Detection d;
             d.source = NonDeterminismSource.Timestamp;
@@ -132,10 +133,25 @@ struct NonDeterminismDetector
         return detections;
     }
     
-    private:
-    
+    /// Compare build outputs and return violations if they differ
+    static Detection[] compareBuildOutputs(string hash1, string hash2, string[] files) @safe
+    {
+        Detection[] detections;
+        
+        if (hash1 != hash2)
+        {
+            Detection d;
+            d.source = NonDeterminismSource.OutputMismatch;
+            d.description = "Build outputs differ (hash mismatch)";
+            d.priority = 1;
+            detections ~= d;
+        }
+        
+        return detections;
+    }
+
     /// Detect compiler type from command
-    static CompilerType detectCompilerType(string[] command) pure @safe nothrow
+    static CompilerType detectCompiler(string[] command) pure @safe nothrow
     {
         if (command.length == 0)
             return CompilerType.Unknown;
@@ -163,6 +179,26 @@ struct NonDeterminismDetector
         
         return CompilerType.Unknown;
     }
+
+    /// Check for timestamp patterns in output
+    static bool containsTimestamp(string text) @safe
+    {
+        // Pattern: YYYY-MM-DD or HH:MM:SS
+        try
+        {
+            auto datePattern = regex(r"\d{4}-\d{2}-\d{2}");
+            auto timePattern = regex(r"\d{2}:\d{2}:\d{2}");
+            
+            return !matchFirst(text, datePattern).empty || 
+                   !matchFirst(text, timePattern).empty;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    private:
     
     /// Detect GCC/GDC issues
     static Detection[] detectGCCIssues(string[] command) @safe
@@ -327,24 +363,6 @@ struct NonDeterminismDetector
         return detections;
     }
     
-    /// Check for timestamp patterns in output
-    static bool hasTimestampPattern(string text) @safe
-    {
-        // Pattern: YYYY-MM-DD or HH:MM:SS
-        try
-        {
-            auto datePattern = regex(r"\d{4}-\d{2}-\d{2}");
-            auto timePattern = regex(r"\d{2}:\d{2}:\d{2}");
-            
-            return !matchFirst(text, datePattern).empty || 
-                   !matchFirst(text, timePattern).empty;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
-    
     /// Check for UUID patterns in output
     static bool hasUUIDPattern(string text) @safe
     {
@@ -376,10 +394,10 @@ struct NonDeterminismDetector
     assert(gccDetections[0].source == NonDeterminismSource.CompilerNonDet);
     
     // Test compiler type detection
-    auto detectedType = NonDeterminismDetector.detectCompilerType(["gcc", "-c", "test.c"]);
+    auto detectedType = NonDeterminismDetector.detectCompiler(["gcc", "-c", "test.c"]);
     assert(detectedType == CompilerType.GCC);
     
-    detectedType = NonDeterminismDetector.detectCompilerType(["rustc", "main.rs"]);
+    detectedType = NonDeterminismDetector.detectCompiler(["rustc", "main.rs"]);
     assert(detectedType == CompilerType.Rustc);
     
     writeln("✓ Non-determinism detector tests passed");

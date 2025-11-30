@@ -254,6 +254,8 @@ struct ResourceLimits
     uint cpuShares = 1024;        // CPU weight (Linux)
     ulong maxDiskIO = 0;          // 0 = unlimited (bytes)
     ulong maxNetworkIO = 0;       // 0 = unlimited (bytes)
+    uint maxOpenFiles = 1024;     // File descriptor limit
+    ulong maxOutputBytes = 0;     // 0 = unlimited (bytes)
     
     /// Create default limits
     static ResourceLimits defaults() @safe pure nothrow
@@ -270,6 +272,8 @@ struct ResourceLimits
         limits.maxProcesses = 128;
         limits.maxDiskIO = 10UL * 1024 * 1024 * 1024;  // 10GB
         limits.maxNetworkIO = 1UL * 1024 * 1024 * 1024;  // 1GB
+        limits.maxOpenFiles = 512;
+        limits.maxOutputBytes = 100UL * 1024 * 1024;   // 100MB
         return limits;
     }
 }
@@ -340,6 +344,13 @@ struct SandboxSpecBuilder
     ref auto env(string key, string value) @safe return
     {
         spec.environment.set(key, value);
+        return this;
+    }
+    
+    /// Clear all environment variables
+    ref auto clearEnvironment() @safe return
+    {
+        spec.environment.vars.clear();
         return this;
     }
     

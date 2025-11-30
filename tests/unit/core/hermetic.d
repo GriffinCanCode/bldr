@@ -55,7 +55,7 @@ import tests.harness;
 }
 
 @("hermetic.spec.set_operations")
-@safe unittest
+@system unittest
 {
     writeln("Testing PathSet set operations...");
     
@@ -88,7 +88,7 @@ import tests.harness;
 }
 
 @("hermetic.spec.path_containment")
-@safe unittest
+@system unittest
 {
     writeln("Testing path containment...");
     
@@ -348,7 +348,7 @@ import tests.harness;
 }
 
 @("hermetic.resource_limits")
-@safe unittest
+@system unittest
 {
     writeln("Testing resource limits...");
     

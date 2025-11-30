@@ -245,7 +245,7 @@ version(unittest):
 }
 
 @("hermetic_advanced.determinism.custom_epoch")
-@safe unittest
+@system unittest
 {
     writeln("\x1b[36m[TEST]\x1b[0m hermetic_advanced - custom SOURCE_DATE_EPOCH");
     
@@ -262,7 +262,7 @@ version(unittest):
 }
 
 @("hermetic_advanced.determinism.strict_vs_relaxed")
-@safe unittest
+@system unittest
 {
     writeln("\x1b[36m[TEST]\x1b[0m hermetic_advanced - strict vs relaxed determinism");
     
@@ -282,7 +282,7 @@ version(unittest):
 }
 
 @("hermetic_advanced.path_set.union_many")
-@safe unittest
+@system unittest
 {
     writeln("\x1b[36m[TEST]\x1b[0m hermetic_advanced - union of many path sets");
     
@@ -306,7 +306,7 @@ version(unittest):
 }
 
 @("hermetic_advanced.path_set.intersection_many")
-@safe unittest
+@system unittest
 {
     writeln("\x1b[36m[TEST]\x1b[0m hermetic_advanced - intersection of many path sets");
     
@@ -331,29 +331,29 @@ version(unittest):
 }
 
 @("hermetic_advanced.compiler_detection.path_variations")
-@safe unittest
+@system unittest
 {
     writeln("\x1b[36m[TEST]\x1b[0m hermetic_advanced - compiler detection with path variations");
     
     // Test with full paths
-    Assert.equal(NonDeterminismDetector.detectCompiler("/usr/bin/gcc"),
+    Assert.equal(NonDeterminismDetector.detectCompiler(["/usr/bin/gcc"]),
                  CompilerType.GCC, "Should detect GCC in full path");
     
-    Assert.equal(NonDeterminismDetector.detectCompiler("/opt/llvm/bin/clang++"),
+    Assert.equal(NonDeterminismDetector.detectCompiler(["/opt/llvm/bin/clang++"]),
                  CompilerType.Clang, "Should detect Clang in full path");
     
     // Test with version suffixes
-    Assert.equal(NonDeterminismDetector.detectCompiler("gcc-11"),
+    Assert.equal(NonDeterminismDetector.detectCompiler(["gcc-11"]),
                  CompilerType.GCC, "Should detect GCC with version");
     
-    Assert.equal(NonDeterminismDetector.detectCompiler("clang-15"),
+    Assert.equal(NonDeterminismDetector.detectCompiler(["clang-15"]),
                  CompilerType.Clang, "Should detect Clang with version");
     
     writeln("  \x1b[32m✓ Compiler path variations test passed\x1b[0m");
 }
 
 @("hermetic_advanced.violation_detection.multiple_sources")
-@safe unittest
+@system unittest
 {
     writeln("\x1b[36m[TEST]\x1b[0m hermetic_advanced - multiple non-determinism sources");
     
@@ -468,7 +468,7 @@ Thread 0x7f8a9b2c3d4e started
 }
 
 @("hermetic_advanced.timestamp_formats.comprehensive")
-@safe unittest
+@system unittest
 {
     writeln("\x1b[36m[TEST]\x1b[0m hermetic_advanced - comprehensive timestamp detection");
     
@@ -496,7 +496,7 @@ Thread 0x7f8a9b2c3d4e started
 }
 
 @("hermetic_advanced.resource_monitoring.interface")
-@safe unittest
+@system unittest
 {
     writeln("\x1b[36m[TEST]\x1b[0m hermetic_advanced - resource monitoring interface");
     
