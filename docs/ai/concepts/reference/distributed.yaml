@@ -1,0 +1,25 @@
+topic: distributed
+category: concepts
+summary: "Distributed Builds - Scale builds across a cluster"
+definition: |
+  Distributed builds allow you to offload build actions to a cluster of machines,
+  significantly speeding up large builds by utilizing shared compute resources.
+
+key_points:
+  - "Remote execution: Run compilers/tests on remote workers"
+  - "Scalability: Scale from one to hundreds of cores"
+  - "Transparency: Works without code changes"
+  - "Protocol: Uses standard Remote Execution API (REAPI)"
+
+usage_examples:
+  - description: "Configure remote execution"
+    code: |
+      remote:
+        address: "grpc://build-farm.example.com:8980"
+
+related: [remote-cache, hermetic, action-cache]
+
+next_steps: |
+  - Set up a REAPI-compatible build farm
+  - Configure remote endpoint in builder.yml
+

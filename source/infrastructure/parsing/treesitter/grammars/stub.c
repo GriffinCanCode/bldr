@@ -1,38 +1,96 @@
 /*
- * Tree-sitter Grammar Stub
- * 
- * This is a stub implementation that demonstrates the grammar loader interface.
- * Actual grammars would be compiled from tree-sitter grammar repositories.
- * 
- * To add real grammars:
- * 1. Clone grammar repo: git clone https://github.com/tree-sitter/tree-sitter-<lang>
- * 2. Build grammar: cd tree-sitter-<lang> && npm install && npm run build
- * 3. Link against: tree-sitter-<lang>/src/parser.c
- * 
- * See: https://tree-sitter.github.io/tree-sitter/creating-parsers
+ * Tree-sitter Grammar Loader & Stub
+ *
+ * Unified implementation supporting:
+ * 1. Static linking (via weak symbols) - Zero overhead, optimized
+ * 2. Dynamic loading (via dlopen) - Flexible system integration
+ *
+ * Designed for elegance, performance, and extensibility.
  */
 
-#include <stddef.h>
+#define _GNU_SOURCE
+#include <dlfcn.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-/* 
- * Stub function - does nothing but provides symbol for linking
- * 
- * In a real implementation, this would return actual TSLanguage* pointers
- * from grammar libraries like tree-sitter-python, tree-sitter-java, etc.
- */
-void* ts_grammar_stub_init(void) {
+// Dynamic loader helper
+static void *load_dynamic(const char *lang, const char *symbol) {
+    char path[256];
+    void *handle = NULL;
+    void *func = NULL;
+
+    const char *paths[] = {
+#ifdef __APPLE__
+        "/opt/homebrew/lib/libtree-sitter-%s.dylib",
+        "/usr/local/lib/libtree-sitter-%s.dylib",
+        "libtree-sitter-%s.dylib",
+#else
+        "/usr/lib/libtree-sitter-%s.so",
+        "/usr/local/lib/libtree-sitter-%s.so",
+        "libtree-sitter-%s.so",
+#endif
+        NULL
+    };
+
+    for (int i = 0; paths[i]; i++) {
+        snprintf(path, sizeof(path), paths[i], lang);
+        handle = dlopen(path, RTLD_LAZY | RTLD_LOCAL);
+        if (handle) {
+            func = dlsym(handle, symbol);
+            if (func) return ((void *(*)(void))func)();
+            dlclose(handle);
+        }
+    }
     return NULL;
 }
 
-/*
- * Future: Add grammar loaders here
- * 
- * Example for Python:
- * 
- * extern const TSLanguage *tree_sitter_python(void);
- * 
- * const TSLanguage* ts_get_python_grammar(void) {
- *     return tree_sitter_python();
- * }
- */
+// Macro for standard grammars
+// Uses weak linking for static builds, falls back to dynamic loading
+#define DEFINE_LOADER(lang) \
+    extern void *tree_sitter_##lang(void) __attribute__((weak)); \
+    void *ts_load_##lang(void) { \
+        if (tree_sitter_##lang) return tree_sitter_##lang(); \
+        static void *cached = NULL; \
+        if (!cached) cached = load_dynamic(#lang, "tree_sitter_" #lang); \
+        return cached; \
+    }
 
+// Macro for grammars with non-standard symbol names
+#define DEFINE_LOADER_NAMED(lang, name) \
+    extern void *tree_sitter_##name(void) __attribute__((weak)); \
+    void *ts_load_##lang(void) { \
+        if (tree_sitter_##name) return tree_sitter_##name(); \
+        static void *cached = NULL; \
+        if (!cached) cached = load_dynamic(#lang, "tree_sitter_" #name); \
+        return cached; \
+    }
+
+// Language Definitions
+DEFINE_LOADER(c)
+DEFINE_LOADER(cpp)
+DEFINE_LOADER(python)
+DEFINE_LOADER(java)
+DEFINE_LOADER(javascript)
+DEFINE_LOADER(typescript)
+DEFINE_LOADER(go)
+DEFINE_LOADER(rust)
+DEFINE_LOADER_NAMED(csharp, c_sharp)
+DEFINE_LOADER(ruby)
+DEFINE_LOADER(php)
+DEFINE_LOADER(swift)
+DEFINE_LOADER(kotlin)
+DEFINE_LOADER(scala)
+DEFINE_LOADER(elixir)
+DEFINE_LOADER(lua)
+DEFINE_LOADER(perl)
+DEFINE_LOADER(r)
+DEFINE_LOADER(haskell)
+DEFINE_LOADER(ocaml)
+DEFINE_LOADER(nim)
+DEFINE_LOADER(zig)
+DEFINE_LOADER(d)
+DEFINE_LOADER(elm)
+DEFINE_LOADER_NAMED(fsharp, f_sharp)
+DEFINE_LOADER(css)
+DEFINE_LOADER(protobuf)

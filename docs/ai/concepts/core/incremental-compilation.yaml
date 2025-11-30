@@ -1,0 +1,20 @@
+topic: incremental-compilation
+category: concepts
+summary: "Incremental Compilation - Speeding up rebuilds"
+definition: |
+  Deep dive into how Builder handles incremental compilation for languages that support it.
+  This goes beyond file-level caching to artifact reuse within a single target.
+
+key_points:
+  - "State preservation: Keeps compiler state hot if possible"
+  - "Partial rebuilds: Only recompiles changed functions/modules"
+  - "Dependency analysis: Accurate pruning of downstream rebuilds"
+
+usage_examples:
+  - description: "Automatic for supported languages"
+
+related: [incremental, caching, languages]
+
+next_steps: |
+  - Ensure your code structure allows for modular compilation
+

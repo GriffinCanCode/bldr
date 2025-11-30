@@ -1,0 +1,20 @@
+topic: external-deps
+category: concepts
+summary: "External Dependencies - Managing third-party code"
+definition: |
+  Strategies for managing dependencies outside the repository.
+  Vendoring vs Fetching.
+
+key_points:
+  - "WORKSPACE: The registry of external repos"
+  - "Vendoring: Checking code into source tree"
+  - "Fetching: Downloading at build time"
+
+usage_examples:
+  - description: "Recommend fetching with hash pinning"
+
+related: [repository-rules, workspace, ecosystem]
+
+next_steps: |
+  - Use Bzlmod (if supported) for transitive dep management
+

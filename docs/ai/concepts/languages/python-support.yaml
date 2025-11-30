@@ -1,0 +1,25 @@
+topic: python-support
+category: concepts
+summary: "Python Support - Building Python code"
+definition: |
+  Specifics of Python support in Builder. PEX (Python Executable) generation,
+  pip integration, and testing.
+
+key_points:
+  - "py_binary: Creates executable zip/par"
+  - "py_library: Reusable python code"
+  - "py_test: Python unit tests"
+
+usage_examples:
+  - description: "Python app"
+    code: |
+      py_binary(
+        name = "main",
+        srcs = ["main.py"],
+      )
+
+related: [dynamic-languages, languages, ecosystem]
+
+next_steps: |
+  - Use requirements.txt for external deps
+

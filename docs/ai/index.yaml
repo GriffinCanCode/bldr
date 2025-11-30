@@ -2,50 +2,306 @@
 # Fast lookup table for all AI-optimized documentation
 
 concepts:
-  blake3:
-    file: "concepts/blake3.yaml"
-    summary: "BLAKE3 cryptographic hash function - 3-5x faster than SHA-256"
-    keywords: ["hash", "blake3", "crypto", "performance", "cache-key"]
-  
-  caching:
-    file: "concepts/caching.yaml"
-    summary: "Multi-tier caching system: target-level, action-level, and remote"
-    keywords: ["cache", "build-cache", "target-cache", "performance", "optimization"]
-  
-  determinism:
-    file: "concepts/determinism.yaml"
-    summary: "Bit-for-bit reproducible builds through syscall interception"
-    keywords: ["determinism", "reproducible", "hermetic", "verification", "security"]
-  
-  incremental:
-    file: "concepts/incremental.yaml"
-    summary: "Module-level incremental compilation - only rebuild affected files"
-    keywords: ["incremental", "dependencies", "smart-rebuild", "optimization"]
-  
   action-cache:
-    file: "concepts/action-cache.yaml"
-    summary: "Fine-grained caching for individual build actions"
-    keywords: ["action-cache", "fine-grained", "compile", "link", "granular"]
-  
-  remote-cache:
-    file: "concepts/remote-cache.yaml"
-    summary: "Shared cache across machines/CI - HTTP-based distributed caching"
-    keywords: ["remote-cache", "distributed", "ci", "team", "shared"]
-  
+    file: "concepts/core/action-cache.yaml"
+    summary: "Fine-grained caching for individual build actions (compile, link, test)"
+
+  artifact-management:
+    file: "concepts/core/artifact-management.yaml"
+    summary: "Artifact Management - Handling build outputs"
+
+  aspects:
+    file: "concepts/rules/aspects.yaml"
+    summary: "Aspects - Cross-cutting build logic"
+
+  bazel-compatibility:
+    file: "concepts/ecosystem/bazel-compatibility.yaml"
+    summary: "Bazel Compatibility - Relation to Bazel"
+
+  blake3:
+    file: "concepts/core/blake3.yaml"
+    summary: "BLAKE3 cryptographic hash function - 3-5x faster than SHA-256"
+
+  bldrquery:
+    file: "concepts/reference/bldrquery.yaml"
+    summary: "BldrQuery - Query language for the build graph"
+
+  build-graph:
+    file: "concepts/core/build-graph.yaml"
+    summary: "Build Graph - The core data structure"
+
+  bzlmod:
+    file: "concepts/ecosystem/bzlmod.yaml"
+    summary: "Bzlmod - The external dependency system"
+
+  caching:
+    file: "concepts/core/caching.yaml"
+    summary: "Multi-tier caching system: target-level, action-level, and remote"
+
+  cli:
+    file: "concepts/reference/cli.yaml"
+    summary: "Command Line Interface - The primary way to interact with Builder"
+
+  concurrency:
+    file: "concepts/core/concurrency.yaml"
+    summary: "Concurrency - Parallel build execution"
+
+  concurrency-control:
+    file: "concepts/reference/concurrency-control.yaml"
+    summary: "Concurrency Control - Managing resource contention"
+
+  config-profiles:
+    file: "concepts/config/config-profiles.yaml"
+    summary: "Configuration Profiles - Build variants"
+
+  constraints:
+    file: "concepts/config/constraints.yaml"
+    summary: "Constraints - Platform compatibility"
+
+  content-addressed-sources:
+    file: "concepts/core/content-addressed-sources.yaml"
+    summary: "Content Addressed Sources - Source file management"
+
+  cpp-support:
+    file: "concepts/languages/cpp-support.yaml"
+    summary: "C++ Support - Building C/C++ code"
+
+  critical-path:
+    file: "concepts/reference/critical-path.yaml"
+    summary: "Critical Path - Bottleneck analysis"
+
+  cross-compile:
+    file: "concepts/config/cross-compile.yaml"
+    summary: "Cross Compilation - Building for other platforms"
+
+  defaults:
+    file: "concepts/rules/defaults.yaml"
+    summary: "Defaults - Package-level default settings"
+
+  dependency-graph:
+    file: "concepts/core/dependency-graph.yaml"
+    summary: "Dependency Graph - Managing relationships"
+
+  determinism:
+    file: "concepts/core/determinism.yaml"
+    summary: "Bit-for-bit reproducible builds through syscall interception and enforcement"
+
+  distributed:
+    file: "concepts/reference/distributed.yaml"
+    summary: "Distributed Builds - Scale builds across a cluster"
+
+  docker-integration:
+    file: "concepts/ecosystem/docker-integration.yaml"
+    summary: "Docker Integration - Building containers"
+
+  dynamic-languages:
+    file: "concepts/languages/dynamic-languages.yaml"
+    summary: "Dynamic Languages - Support for interpreted languages"
+
+  ecosystem:
+    file: "concepts/ecosystem/ecosystem.yaml"
+    summary: "Ecosystem - Integration with external tools"
+
+  execution-phases:
+    file: "concepts/reference/execution-phases.yaml"
+    summary: "Execution Phases - How a build runs"
+
+  external-deps:
+    file: "concepts/ecosystem/external-deps.yaml"
+    summary: "External Dependencies - Managing third-party code"
+
+  genrule:
+    file: "concepts/rules/genrule.yaml"
+    summary: "Genrule - Generic build rule"
+
+  glob:
+    file: "concepts/rules/glob.yaml"
+    summary: "Globbing - File pattern matching"
+
+  go-support:
+    file: "concepts/languages/go-support.yaml"
+    summary: "Go Support - Building Go code"
+
   hermetic:
-    file: "concepts/hermetic.yaml"
+    file: "concepts/core/hermetic.yaml"
     summary: "Isolated build execution with sandboxed environments"
-    keywords: ["hermetic", "sandbox", "isolation", "reproducible"]
-  
-  workspace:
-    file: "concepts/workspace.yaml"
-    summary: "Workspace configuration (Builderspace) - project-wide settings"
-    keywords: ["workspace", "builderspace", "configuration", "settings"]
-  
+
+  incremental:
+    file: "concepts/core/incremental.yaml"
+    summary: "Module-level incremental compilation - only rebuild affected files"
+
+  incremental-compilation:
+    file: "concepts/core/incremental-compilation.yaml"
+    summary: "Incremental Compilation - Speeding up rebuilds"
+
+  java-support:
+    file: "concepts/languages/java-support.yaml"
+    summary: "Java Support - Building Java code"
+
+  languages:
+    file: "concepts/languages/languages.yaml"
+    summary: "Supported Languages - Multi-language build support"
+
+  license-checking:
+    file: "concepts/ecosystem/license-checking.yaml"
+    summary: "License Checking - Compliance tools"
+
+  linking:
+    file: "concepts/config/linking.yaml"
+    summary: "Linking - Static vs Dynamic linking"
+
+  linux-support:
+    file: "concepts/config/linux-support.yaml"
+    summary: "Linux Support - Building on Linux"
+
+  lsp:
+    file: "concepts/reference/lsp.yaml"
+    summary: "Language Server Protocol - IDE integration for Builder files"
+
+  macos-support:
+    file: "concepts/config/macos-support.yaml"
+    summary: "macOS Support - Building on macOS"
+
+  macros:
+    file: "concepts/rules/macros.yaml"
+    summary: "Macros - Reusable Starlark functions"
+
+  migration:
+    file: "concepts/ecosystem/migration.yaml"
+    summary: "Migration Tools - Moving to Builder"
+
+  observability:
+    file: "concepts/reference/observability.yaml"
+    summary: "Observability - Tracing and debugging builds"
+
+  output-groups:
+    file: "concepts/rules/output-groups.yaml"
+    summary: "Output Groups - Managing target outputs"
+
+  performance:
+    file: "concepts/reference/performance.yaml"
+    summary: "Performance Tuning - Making builds faster"
+
+  platforms:
+    file: "concepts/config/platforms.yaml"
+    summary: "Platforms - Defining target environments"
+
+  plugins:
+    file: "concepts/reference/plugins.yaml"
+    summary: "Plugin System - Extend Builder with custom logic"
+
+  providers:
+    file: "concepts/rules/providers.yaml"
+    summary: "Providers - Data exchange between rules"
+
+  python-support:
+    file: "concepts/languages/python-support.yaml"
+    summary: "Python Support - Building Python code"
+
+  query-language:
+    file: "concepts/reference/query-language.yaml"
+    summary: "Query Language - Query syntax reference"
+
+  releases:
+    file: "concepts/ecosystem/releases.yaml"
+    summary: "Releases - Packaging for distribution"
+
+  remote-cache:
+    file: "concepts/core/remote-cache.yaml"
+    summary: "Shared cache across machines/CI - HTTP-based distributed caching"
+
+  remote-execution:
+    file: "concepts/reference/remote-execution.yaml"
+    summary: "Remote Execution - Running actions on a cluster"
+
+  repository-rules:
+    file: "concepts/ecosystem/repository-rules.yaml"
+    summary: "Repository Rules - External dependency logic"
+
+  reproducibility-verification:
+    file: "concepts/reference/reproducibility-verification.yaml"
+    summary: "Reproducibility Verification - Validating build determinism"
+
+  rules-api:
+    file: "concepts/rules/rules-api.yaml"
+    summary: "Rules API - Creating custom rules"
+
+  runfiles:
+    file: "concepts/rules/runfiles.yaml"
+    summary: "Runfiles - Runtime dependencies"
+
+  rust-support:
+    file: "concepts/languages/rust-support.yaml"
+    summary: "Rust Support - Building Rust code"
+
+  security:
+    file: "concepts/reference/security.yaml"
+    summary: "Security - Supply chain security features"
+
+  shell-support:
+    file: "concepts/languages/shell-support.yaml"
+    summary: "Shell Support - Shell scripts and tests"
+
+  skylib:
+    file: "concepts/rules/skylib.yaml"
+    summary: "Skylib - Standard library for Starlark"
+
+  stamping:
+    file: "concepts/config/stamping.yaml"
+    summary: "Stamping - Embedding build info"
+
+  starlark:
+    file: "concepts/rules/starlark.yaml"
+    summary: "Starlark - The configuration language"
+
   targets:
-    file: "concepts/targets.yaml"
+    file: "concepts/core/targets.yaml"
     summary: "Build targets - the basic unit of compilation in Builder"
-    keywords: ["targets", "build", "executable", "library", "dependencies"]
+
+  test-suites:
+    file: "concepts/reference/test-suites.yaml"
+    summary: "Test Suites - Grouping tests"
+
+  testing:
+    file: "concepts/reference/testing.yaml"
+    summary: "Testing System - Unified test runner for all languages"
+
+  toolchains:
+    file: "concepts/config/toolchains.yaml"
+    summary: "Toolchains - Compiler and tool configuration"
+
+  troubleshooting:
+    file: "concepts/reference/troubleshooting.yaml"
+    summary: "Troubleshooting - Diagnosing common issues"
+
+  verification:
+    file: "concepts/reference/verification.yaml"
+    summary: "Build Verification - Ensure build correctness and reproducibility"
+
+  visibility:
+    file: "concepts/core/visibility.yaml"
+    summary: "Visibility - Access control for targets"
+
+  watch:
+    file: "concepts/reference/watch.yaml"
+    summary: "Watch Mode - Intelligent auto-rebuild on file changes"
+
+  windows-support:
+    file: "concepts/config/windows-support.yaml"
+    summary: "Windows Support - Building on Windows"
+
+  wizard:
+    file: "concepts/reference/wizard.yaml"
+    summary: "Project Wizard - Interactive project scaffolding and configuration"
+
+  workspace:
+    file: "concepts/core/workspace.yaml"
+    summary: "Workspace configuration (Builderspace) - project-wide settings"
+
+  workspace-rules:
+    file: "concepts/ecosystem/workspace-rules.yaml"
+    summary: "Workspace Rules - Repository definition rules"
+
 
 aliases:
   hash: "blake3"
@@ -56,67 +312,45 @@ aliases:
   action: "action-cache"
   actions: "action-cache"
   remote: "remote-cache"
-  distributed: "remote-cache"
-  incremental-compilation: "incremental"
+  dist: "distributed"
+  incremental-compilation: "incremental-compilation"
   sandbox: "hermetic"
   isolation: "hermetic"
   builderspace: "workspace"
   config: "workspace"
   target: "targets"
   build: "targets"
+  rule: "rules-api"
+  rules: "rules-api"
+  macro: "macros"
+  macros: "macros"
+  query: "bldrquery"
+  profile: "config-profiles"
+  profiles: "config-profiles"
+  deps: "dependency-graph"
+  dependencies: "dependency-graph"
+  cpp: "cpp-support"
+  c++: "cpp-support"
+  java: "java-support"
+  python: "python-support"
+  py: "python-support"
+  go: "go-support"
+  rust: "rust-support"
+  rs: "rust-support"
+  sh: "shell-support"
+  shell: "shell-support"
 
 categories:
-  - name: "concepts"
-    description: "Core Builder concepts and features"
-    count: 9
-  
-  - name: "workflows"
-    description: "Step-by-step task guides"
-    count: 0
-  
-  - name: "examples"
-    description: "Working code examples"
-    count: 0
-  
-  - name: "commands"
-    description: "CLI command references"
-    count: 0
-  
-  - name: "troubleshooting"
-    description: "Problem-solution mappings"
-    count: 0
-
-all_topics:
-  - blake3
-  - caching
-  - determinism
-  - incremental
-  - action-cache
-  - remote-cache
-  - hermetic
-  - workspace
-  - targets
-
-searchable_terms:
-  - "blake3"
-  - "hash"
-  - "hashing"
-  - "crypto"
-  - "cache"
-  - "caching"
-  - "build-cache"
-  - "target-cache"
-  - "action-cache"
-  - "remote-cache"
-  - "determinism"
-  - "deterministic"
-  - "reproducible"
-  - "hermetic"
-  - "incremental"
-  - "dependencies"
-  - "optimization"
-  - "performance"
-  - "distributed"
-  - "ci"
-  - "verification"
+  - name: "core"
+    description: "Core Builder concepts"
+  - name: "languages"
+    description: "Language support guides"
+  - name: "rules"
+    description: "Build rules and Starlark"
+  - name: "config"
+    description: "Configuration and Platforms"
+  - name: "ecosystem"
+    description: "External dependencies and tools"
+  - name: "reference"
+    description: "Reference documentation"
 

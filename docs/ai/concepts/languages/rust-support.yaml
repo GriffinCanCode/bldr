@@ -1,0 +1,27 @@
+topic: rust-support
+category: concepts
+summary: "Rust Support - Building Rust code"
+definition: |
+  Support for Rust compilation, cargo integration, and testing.
+  Manages crates and editions.
+
+key_points:
+  - "rust_library: Rust crate"
+  - "rust_binary: Executable"
+  - "rust_test: Unit and integration tests"
+  - "editions: 2018/2021 support"
+
+usage_examples:
+  - description: "Rust Bin"
+    code: |
+      rust_binary(
+        name = "app",
+        srcs = ["main.rs"],
+        edition = "2021",
+      )
+
+related: [languages, ecosystem, toolchains]
+
+next_steps: |
+  - Can co-exist with Cargo.toml
+

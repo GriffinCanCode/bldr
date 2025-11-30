@@ -1,0 +1,22 @@
+topic: providers
+category: concepts
+summary: "Providers - Data exchange between rules"
+definition: |
+  Structured data objects passed from a dependency to a dependent rule.
+  The primary mechanism for information flow in the graph.
+
+key_points:
+  - "DefaultInfo: Files to build/run"
+  - "CcInfo: C++ headers/libs"
+  - "Custom: User-defined providers"
+
+usage_examples:
+  - description: "Returning a provider"
+    code: |
+      return [MyInfo(value="test")]
+
+related: [rules-api, starlark, dependency-graph]
+
+next_steps: |
+  - Use providers to decouple rules
+

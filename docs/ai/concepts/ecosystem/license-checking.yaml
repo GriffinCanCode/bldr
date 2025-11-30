@@ -1,0 +1,22 @@
+topic: license-checking
+category: concepts
+summary: "License Checking - Compliance tools"
+definition: |
+  Tools to verify that dependencies comply with project license policies.
+  Can assert allowed license types.
+
+key_points:
+  - "Attributes: 'licenses' attribute on targets"
+  - "Collection: Aggregating licenses for release"
+  - "Policy: Whitelisting allowed licenses"
+
+usage_examples:
+  - description: "Declaring license"
+    code: |
+      licenses(["notice"])  # Apache 2.0
+
+related: [releases, security, ecosystem]
+
+next_steps: |
+  - Ensure all external deps have license info
+

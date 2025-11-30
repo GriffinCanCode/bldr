@@ -1,0 +1,28 @@
+topic: lsp
+category: concepts
+summary: "Language Server Protocol - IDE integration for Builder files"
+definition: |
+  Builder includes a built-in Language Server Protocol (LSP) implementation to provide
+  IDE features like autocompletion, diagnostics, and go-to-definition for Builder files
+  (.builder, .bldr).
+
+key_points:
+  - "Standard LSP: Works with VSCode, Neovim, Emacs, etc."
+  - "Autocompletion: Suggests targets, dependencies, and config options"
+  - "Diagnostics: Real-time error checking and linting"
+  - "Go-to-definition: Jump to target definitions"
+
+usage_examples:
+  - description: "VSCode Configuration"
+    code: |
+      {
+        "builder.lsp.enabled": true,
+        "builder.lsp.path": "/usr/local/bin/builder"
+      }
+
+related: [cli, workspace, targets]
+
+next_steps: |
+  - Install the Builder VSCode extension
+  - Configure your editor to use 'builder lsp' as the language server
+

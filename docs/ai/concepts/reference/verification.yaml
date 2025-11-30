@@ -1,0 +1,22 @@
+topic: verification
+category: concepts
+summary: "Build Verification - Ensure build correctness and reproducibility"
+definition: |
+  Verification tools helps ensure your builds are correct, complete, and reproducible.
+  It checks for missing dependencies, non-hermetic inputs, and undeclared outputs.
+
+key_points:
+  - "Sandboxing checks: Detect file access outside declared inputs"
+  - "Reproducibility check: Verify bit-for-bit identical builds"
+  - "Header verification: Ensure all included headers are declared"
+
+usage_examples:
+  - command: "builder verify"
+    description: "Run standard verification checks"
+
+related: [determinism, hermetic, security]
+
+next_steps: |
+  - Run verification in CI pipelines
+  - Fix any reported hermeticity violations
+

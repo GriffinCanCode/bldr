@@ -1,0 +1,21 @@
+topic: reproducibility-verification
+category: concepts
+summary: "Reproducibility Verification - Validating build determinism"
+definition: |
+  Tools to verify that builds are truly reproducible. Can run builds twice
+  and compare outputs to detect non-deterministic behavior.
+
+key_points:
+  - "Double build: Build twice, compare checksums"
+  - "Environment variation: Can inject random variations to test robustness"
+  - "Audit report: detailed diff of non-matching artifacts"
+
+usage_examples:
+  - command: "builder verify --reproducible"
+    description: "Run reproducibility check"
+
+related: [determinism, verification, hermetic]
+
+next_steps: |
+  - Use this to certify releases
+

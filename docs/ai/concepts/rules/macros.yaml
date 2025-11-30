@@ -1,0 +1,24 @@
+topic: macros
+category: concepts
+summary: "Macros - Reusable Starlark functions"
+definition: |
+  Starlark functions that instantiate rules. Used to compose existing rules
+  into higher-level abstractions.
+
+key_points:
+  - "Composition: Can call multiple rules"
+  - "Transparency: Expands to targets in the graph"
+  - "Code reuse: DRY up BUILD files"
+
+usage_examples:
+  - description: "Macro example"
+    code: |
+      def my_test(name, srcs):
+          cc_test(name=name, srcs=srcs)
+          lint_test(name=name+"_lint", srcs=srcs)
+
+related: [starlark, rules-api, defaults]
+
+next_steps: |
+  - Prefer macros over rules for simple composition
+

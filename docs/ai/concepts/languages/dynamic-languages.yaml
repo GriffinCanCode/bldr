@@ -1,0 +1,26 @@
+topic: dynamic-languages
+category: concepts
+summary: "Dynamic Languages - Support for interpreted languages"
+definition: |
+  Support for languages like Python, Ruby, and JavaScript where 'building'
+  often means packaging, linting, or testing rather than compiling.
+
+key_points:
+  - "Runtime management: Can manage interpreters/virtualenvs"
+  - "Dependency locking: Integrates with pip, npm, bundler"
+  - "Test integration: Runs standard test runners"
+
+usage_examples:
+  - description: "Python target"
+    code: |
+      python_binary(
+        name="app",
+        main="main.py",
+        deps=[":lib"]
+      )
+
+related: [languages, ecosystem, plugins]
+
+next_steps: |
+  - Use specific rules for your dynamic language
+

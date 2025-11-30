@@ -1,0 +1,26 @@
+topic: watch
+category: concepts
+summary: "Watch Mode - Intelligent auto-rebuild on file changes"
+definition: |
+  Watch mode monitors your source files and automatically triggers rebuilds or test runs
+  when changes are detected. It uses efficient file system events rather than polling.
+
+key_points:
+  - "Event-driven: Low CPU usage, immediate response"
+  - "Smart debouncing: Groups rapid changes into single builds"
+  - "Incremental: Only rebuilds what changed"
+  - "Resilient: Continues watching even after build errors"
+
+usage_examples:
+  - command: "builder watch"
+    description: "Watch and rebuild on change"
+  
+  - command: "builder watch --test"
+    description: "Watch and run tests on change"
+
+related: [cli, incremental, caching]
+
+next_steps: |
+  - Use 'builder watch' during active development
+  - Combine with 'builder test' for TDD workflows
+

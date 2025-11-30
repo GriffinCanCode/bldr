@@ -1,0 +1,22 @@
+topic: glob
+category: concepts
+summary: "Globbing - File pattern matching"
+definition: |
+  How to use glob() in BUILD files to select source files.
+  Includes support for recursive matching and exclusion.
+
+key_points:
+  - "Patterns: * and ** supported"
+  - "Excludes: Filter out unwanted files"
+  - "Determinism: Sorts results for stability"
+
+usage_examples:
+  - description: "Recursive glob"
+    code: |
+      srcs = glob(["**/*.java"], exclude=["**/*Test.java"])
+
+related: [starlark, targets, workspace]
+
+next_steps: |
+  - Use globs sparingly to keep dependencies explicit
+

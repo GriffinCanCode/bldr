@@ -1,0 +1,26 @@
+topic: go-support
+category: concepts
+summary: "Go Support - Building Go code"
+definition: |
+  Support for the Go language. Handles package management, testing,
+  and static linking.
+
+key_points:
+  - "go_library: Go package"
+  - "go_binary: Native executable"
+  - "go_test: Go testing"
+  - "cgo: C integration support"
+
+usage_examples:
+  - description: "Go Binary"
+    code: |
+      go_binary(
+        name = "server",
+        srcs = ["main.go"],
+      )
+
+related: [languages, ecosystem, toolchains]
+
+next_steps: |
+  - Works with Gazelle for auto-generating BUILD files
+

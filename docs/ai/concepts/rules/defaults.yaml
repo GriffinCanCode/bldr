@@ -1,0 +1,22 @@
+topic: defaults
+category: concepts
+summary: "Defaults - Package-level default settings"
+definition: |
+  Setting default visibility, licenses, or other attributes for a whole package (BUILD file).
+  Reduces repetition.
+
+key_points:
+  - "package(): Function to set defaults"
+  - "Scope: Applies to all rules in the file"
+  - "Overridable: Individual rules can override"
+
+usage_examples:
+  - description: "Set public visibility"
+    code: |
+      package(default_visibility = ["//visibility:public"])
+
+related: [visibility, starlark, workspace]
+
+next_steps: |
+  - Use at top of BUILD files
+

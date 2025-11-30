@@ -1,0 +1,23 @@
+topic: ecosystem
+category: concepts
+summary: "Ecosystem - Integration with external tools"
+definition: |
+  Builder integrates with the broader development ecosystem, including package managers,
+  CI systems, and cloud providers.
+
+key_points:
+  - "Package managers: npm, cargo, pip, dub integration"
+  - "CI/CD: GitHub Actions, GitLab CI, Jenkins"
+  - "Docker: Container image generation"
+
+usage_examples:
+  - description: "Using external packages"
+    code: |
+      dependencies:
+        - npm:react@18.2.0
+
+related: [plugins, languages, distributed]
+
+next_steps: |
+  - Check documentation for specific tool integrations
+

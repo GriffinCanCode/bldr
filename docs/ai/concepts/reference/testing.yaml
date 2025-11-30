@@ -1,0 +1,26 @@
+topic: testing
+category: concepts
+summary: "Testing System - Unified test runner for all languages"
+definition: |
+  Builder provides a unified testing interface that works across all supported languages.
+  It can run unit tests, integration tests, and benchmark tests with consistent reporting.
+
+key_points:
+  - "Unified runner: One command for C++, D, Python, etc."
+  - "Parallel execution: Runs independent tests concurrently"
+  - "Caching: Skips tests if code hasn't changed"
+  - "Rich reporting: Detailed pass/fail output and timing"
+
+usage_examples:
+  - command: "builder test"
+    description: "Run all tests in the workspace"
+  
+  - command: "builder test //core:..."
+    description: "Run tests for specific targets"
+
+related: [cli, targets, caching]
+
+next_steps: |
+  - Define test targets in your builder.yml
+  - Run 'builder test' to verify your code
+

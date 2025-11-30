@@ -1,0 +1,21 @@
+topic: config-profiles
+category: concepts
+summary: "Configuration Profiles - Build variants"
+definition: |
+  Manage different build configurations (Debug, Release, ASan, etc.)
+  without messy command line flags.
+
+key_points:
+  - ".rc files: Define groups of flags"
+  - "Inheritance: Profiles can include others"
+  - "Selection: --config=name"
+
+usage_examples:
+  - command: "builder build --config=asan"
+    description: "Build with Address Sanitizer"
+
+related: [cli, workspace, performance]
+
+next_steps: |
+  - Define common configs in .builderrc
+

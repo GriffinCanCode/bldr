@@ -1,0 +1,25 @@
+topic: linking
+category: concepts
+summary: "Linking - Static vs Dynamic linking"
+definition: |
+  How Builder handles linking of binaries. Supports static linking for portability
+  and dynamic linking for speed/size.
+
+key_points:
+  - "linkstatic: Force static linking"
+  - "linkshared: Create shared library (.so/.dll)"
+  - "alwayslink: Force inclusion of all symbols"
+
+usage_examples:
+  - description: "Static binary"
+    code: |
+      cc_binary(
+        name = "tool",
+        linkstatic = 1,
+      )
+
+related: [cpp-support, artifact-management, languages]
+
+next_steps: |
+  - Prefer static linking for deployment
+

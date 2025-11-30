@@ -1,0 +1,21 @@
+topic: build-graph
+category: concepts
+summary: "Build Graph - The core data structure"
+definition: |
+  Conceptual explanation of the Directed Acyclic Graph (DAG) that represents the build.
+  Nodes are targets/actions, edges are dependencies.
+
+key_points:
+  - "DAG: No circular dependencies allowed"
+  - "Topological sort: Determines build order"
+  - "Traversal: How Builder walks the graph"
+
+usage_examples:
+  - command: "builder query --graph"
+    description: "Visualize the graph"
+
+related: [bldrquery, targets, dependencies]
+
+next_steps: |
+  - Use 'builder query' to explore the graph
+

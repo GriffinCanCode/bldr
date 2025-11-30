@@ -1,0 +1,23 @@
+topic: observability
+category: concepts
+summary: "Observability - Tracing and debugging builds"
+definition: |
+  Observability features provide deep visibility into what the build system is doing.
+  It supports distributed tracing, structured logging, and performance profiling.
+
+key_points:
+  - "Trace export: Export spans to Jaeger/OpenTelemetry"
+  - "Critical path: Identify the bottleneck in your build"
+  - "Structured logs: JSON logs for analysis"
+  - "Resource usage: CPU/RAM usage over time"
+
+usage_examples:
+  - command: "builder build --trace=trace.json"
+    description: "Generate a build trace file"
+
+related: [telemetry, performance, concurrency]
+
+next_steps: |
+  - Load trace.json into Chrome Tracing (chrome://tracing) or Perfetto
+  - Analyze critical path to optimize build times
+

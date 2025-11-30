@@ -1,0 +1,23 @@
+topic: wizard
+category: concepts
+summary: "Project Wizard - Interactive project scaffolding and configuration"
+definition: |
+  The Wizard is an interactive CLI tool that helps you set up new projects, 
+  configure existing ones, or add new languages and targets.
+
+key_points:
+  - "Interactive: Asks questions to guide configuration"
+  - "Smart detection: Detects existing code and structure"
+  - "Best practices: Generates idiomatic configuration"
+  - "Multi-language: Supports all Builder languages"
+
+usage_examples:
+  - command: "builder init"
+    description: "Start the wizard for a new or existing project"
+
+related: [cli, workspace, languages]
+
+next_steps: |
+  - Run 'builder init' in an empty directory to start a new project
+  - Run 'builder init' in an existing codebase to generate a builder.yml
+

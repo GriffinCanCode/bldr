@@ -1,0 +1,23 @@
+topic: concurrency
+category: concepts
+summary: "Concurrency - Parallel build execution"
+definition: |
+  Builder automatically parallelizes build steps based on the dependency graph.
+  It uses a work-stealing scheduler to maximize CPU utilization.
+
+key_points:
+  - "Graph-based: Executes independent tasks in parallel"
+  - "Work stealing: Efficiently balances load across cores"
+  - "Resource aware: Respects CPU and memory limits"
+  - "Configurable: Adjust concurrency level with flags"
+
+usage_examples:
+  - command: "builder build -j 8"
+    description: "Build with 8 parallel jobs"
+
+related: [performance, graphcache, coordinator]
+
+next_steps: |
+  - Trust the default auto-detection for most cases
+  - Use '-j' to throttle builds on shared machines
+

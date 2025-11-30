@@ -1,0 +1,20 @@
+topic: concurrency-control
+category: concepts
+summary: "Concurrency Control - Managing resource contention"
+definition: |
+  Advanced configuration for how Builder manages concurrent tasks, locks, and resources.
+
+key_points:
+  - "Job slots: -j flag controls parallelism"
+  - "Resource tags: Limit heavy tasks (e.g., 'link' jobs)"
+  - "RAM estimation: Avoid OOM by scheduling based on memory"
+
+usage_examples:
+  - command: "builder build -j 4 --resources=ram:8000"
+    description: "Build with 4 jobs and 8GB RAM limit"
+
+related: [concurrency, performance, coordinator]
+
+next_steps: |
+  - Tune these settings for your specific machine
+

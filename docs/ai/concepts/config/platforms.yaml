@@ -1,0 +1,28 @@
+topic: platforms
+category: concepts
+summary: "Platforms - Defining target environments"
+definition: |
+  Definitions of target environments (OS + CPU + other constraints).
+  Used for cross-compilation and toolchain selection.
+
+key_points:
+  - "Constraint values: linux, x86_64, etc."
+  - "Platform rules: Combinations of constraints"
+  - "Mapping: Toolchains map to platforms"
+
+usage_examples:
+  - description: "Define platform"
+    code: |
+      platform(
+        name = "rpi",
+        constraint_values = [
+          "@platforms//os:linux",
+          "@platforms//cpu:arm",
+        ],
+      )
+
+related: [cross-compile, constraints, toolchains]
+
+next_steps: |
+  - Define custom platforms for embedded devices
+

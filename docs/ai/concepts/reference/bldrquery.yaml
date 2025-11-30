@@ -1,0 +1,26 @@
+topic: bldrquery
+category: concepts
+summary: "BldrQuery - Query language for the build graph"
+definition: |
+  BldrQuery allows you to inspect and query the dependency graph. You can find
+  reverse dependencies, paths between targets, and filter targets by attributes.
+
+key_points:
+  - "Graph inspection: Understand complex dependencies"
+  - "Filtering: Select targets based on tags or types"
+  - "Path finding: Debug why a target is included"
+  - "Scriptable: Output in JSON/text for tools"
+
+usage_examples:
+  - command: "builder query 'deps(//main)'"
+    description: "List all dependencies of //main"
+  
+  - command: "builder query 'rdeps(//common/lib)'"
+    description: "List all targets depending on //common/lib"
+
+related: [cli, targets, dependencies]
+
+next_steps: |
+  - Use query to debug circular dependencies
+  - Use query to find impact of changing a library
+

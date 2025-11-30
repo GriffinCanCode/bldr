@@ -1,0 +1,19 @@
+topic: content-addressed-sources
+category: concepts
+summary: "Content Addressed Sources - Source file management"
+definition: |
+  Builder tracks source files by their content (hash) rather than just path/timestamp.
+  This enables accurate change detection and caching regardless of file location or time.
+
+key_points:
+  - "Hash-based: Changes detected via BLAKE3 hash"
+  - "Location independence: Renaming file doesn't change hash"
+  - "Efficiency: Fast comparison of source trees"
+
+usage_examples:
+  - description: "Core mechanism, always active"
+
+related: [blake3, caching, incremental]
+
+next_steps: |
+  - Understand that 'touching' a file without changing content won't trigger a rebuild

@@ -1,0 +1,22 @@
+topic: dependency-graph
+category: concepts
+summary: "Dependency Graph - Managing relationships"
+definition: |
+  How dependencies are declared, resolved, and linked.
+  Includes compile-time vs link-time vs runtime dependencies.
+
+key_points:
+  - "Explicit: All deps must be declared"
+  - "Transitive: Deps of deps are handled automatically"
+  - "Scope: Visibility controls (public/private)"
+
+usage_examples:
+  - description: "Visibility"
+    code: |
+      visibility: ["//pkg:__subpackages__"]
+
+related: [targets, build-graph, bldrquery]
+
+next_steps: |
+  - Keep dependencies minimal for faster builds
+

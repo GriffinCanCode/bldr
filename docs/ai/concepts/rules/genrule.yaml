@@ -1,0 +1,26 @@
+topic: genrule
+category: concepts
+summary: "Genrule - Generic build rule"
+definition: |
+  A flexible rule to run arbitrary shell commands to generate outputs.
+  Useful when no specific rule exists for a task.
+
+key_points:
+  - "Bash: Runs in bash shell"
+  - "Inputs/Outputs: Must be explicitly declared"
+  - "Tools: Can depend on other executable targets"
+
+usage_examples:
+  - description: "Generate a header"
+    code: |
+      genrule(
+        name = "version_h",
+        outs = ["version.h"],
+        cmd = "echo '#define VERSION 1' > $@",
+      )
+
+related: [targets, plugins, starlark]
+
+next_steps: |
+  - Use specialized rules over genrule when possible
+

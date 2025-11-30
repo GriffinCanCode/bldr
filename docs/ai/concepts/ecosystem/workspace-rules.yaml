@@ -1,0 +1,26 @@
+topic: workspace-rules
+category: concepts
+summary: "Workspace Rules - Repository definition rules"
+definition: |
+  Rules used in the WORKSPACE file to define external dependencies.
+  Executed before any BUILD files are loaded.
+
+key_points:
+  - "http_archive: Download tarball"
+  - "git_repository: Clone git repo"
+  - "local_repository: Link local folder"
+
+usage_examples:
+  - description: "Git repo"
+    code: |
+      git_repository(
+        name = "my_lib",
+        remote = "https://github.com/user/repo.git",
+        tag = "v1.0",
+      )
+
+related: [repository-rules, workspace, ecosystem]
+
+next_steps: |
+  - Pin versions (tags/hashes) for reproducibility
+

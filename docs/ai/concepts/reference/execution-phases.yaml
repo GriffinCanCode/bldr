@@ -1,0 +1,20 @@
+topic: execution-phases
+category: concepts
+summary: "Execution Phases - How a build runs"
+definition: |
+  Breakdown of the build process: Loading, Analysis, Execution.
+  Understanding this helps debug build issues.
+
+key_points:
+  - "Loading: Parse BUILD files"
+  - "Analysis: Construct graph, compute actions"
+  - "Execution: Run actions (compile, link)"
+
+usage_examples:
+  - description: "Phases shown in progress bar"
+
+related: [performance, coordinator, graphcache]
+
+next_steps: |
+  - 'Analysis' is CPU bound (single thread often), 'Execution' is parallel
+

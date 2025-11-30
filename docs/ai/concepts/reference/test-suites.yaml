@@ -1,0 +1,25 @@
+topic: test-suites
+category: concepts
+summary: "Test Suites - Grouping tests"
+definition: |
+  Define groups of tests that can be run together.
+  Useful for organizing tests by feature or speed.
+
+key_points:
+  - "Aggregation: Collects other test targets"
+  - "Tags: Can filter by tags"
+  - "CI: easy target for CI jobs"
+
+usage_examples:
+  - description: "Smoke tests"
+    code: |
+      test_suite(
+        name = "smoke",
+        tests = [":unit", "//pkg:integration"],
+      )
+
+related: [testing, targets, ci]
+
+next_steps: |
+  - Create a //:all_tests suite for convenience
+

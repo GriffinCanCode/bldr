@@ -1,0 +1,21 @@
+topic: query-language
+category: concepts
+summary: "Query Language - Query syntax reference"
+definition: |
+  Reference for the BldrQuery language syntax and functions.
+
+key_points:
+  - "set(...): Set operations (union, intersect)"
+  - "deps(...): Find dependencies"
+  - "kind(...): Filter by rule type"
+  - "attr(...): Filter by attribute value"
+
+usage_examples:
+  - command: "builder query 'kind(test, //...)'"
+    description: "Find all tests"
+
+related: [bldrquery, build-graph, cli]
+
+next_steps: |
+  - Master query language to manage large repos
+

@@ -1,0 +1,23 @@
+topic: security
+category: concepts
+summary: "Security - Supply chain security features"
+definition: |
+  Builder integrates security features to protect your software supply chain.
+  It ensures artifact integrity, validates hashes, and runs builds in isolated sandboxes.
+
+key_points:
+  - "Artifact integrity: BLAKE3 hashing for all inputs/outputs"
+  - "Sandboxing: Prevents malicious build scripts from affecting host"
+  - "Lockfiles: Pins dependency versions and hashes"
+  - "Vulnerability scanning: Can integrate with scanners"
+
+usage_examples:
+  - command: "builder audit"
+    description: "Check for known security issues (if enabled)"
+
+related: [blake3, hermetic, determinism]
+
+next_steps: |
+  - Always use lockfiles for external dependencies
+  - Enable sandboxing for all builds
+

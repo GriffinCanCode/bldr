@@ -1,0 +1,23 @@
+topic: skylib
+category: concepts
+summary: "Skylib - Standard library for Starlark"
+definition: |
+  A standard library of Starlark functions for manipulating lists, paths,
+  strings, and unit testing Starlark code.
+
+key_points:
+  - "Utilities: path.join, partial, etc."
+  - "unittest: Framework for testing rules"
+  - "Portable: Works in Bazel and Builder"
+
+usage_examples:
+  - description: "Load util"
+    code: |
+      load("@bazel_skylib//lib:paths.bzl", "paths")
+      p = paths.join("a", "b")
+
+related: [starlark, plugins, ecosystem]
+
+next_steps: |
+  - Use skylib instead of writing your own utils
+

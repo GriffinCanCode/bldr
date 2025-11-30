@@ -1,0 +1,22 @@
+topic: starlark
+category: concepts
+summary: "Starlark - The configuration language"
+definition: |
+  Builder uses a dialect of Starlark (Python-like) for BUILD files and extensions.
+  It is deterministic and side-effect free.
+
+key_points:
+  - "Pythonic: Syntax feels like Python"
+  - "Deterministic: No I/O, no random, no time"
+  - "Typed: Dynamic but with type safety checks"
+
+usage_examples:
+  - description: "List comprehension"
+    code: |
+      srcs = [f for f in glob(["*.cc"]) if "test" not in f]
+
+related: [bldrquery, plugins, workspace]
+
+next_steps: |
+  - Learn Starlark for writing complex build logic
+

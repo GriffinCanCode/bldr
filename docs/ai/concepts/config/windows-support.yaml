@@ -1,0 +1,21 @@
+topic: windows-support
+category: concepts
+summary: "Windows Support - Building on Windows"
+definition: |
+  Specifics of running Builder on Windows. Path handling, MSVC integration,
+  and long path support.
+
+key_points:
+  - "Paths: Handles backslashes and long paths"
+  - "MSVC: Auto-detection of Visual Studio"
+  - "Bash: Requires MSYS2 or Git Bash for some rules"
+
+usage_examples:
+  - command: "builder build //..."
+    description: "Works natively in PowerShell/CMD"
+
+related: [platforms, cpp-support, cli]
+
+next_steps: |
+  - Enable 'Long Paths' in Windows Registry
+

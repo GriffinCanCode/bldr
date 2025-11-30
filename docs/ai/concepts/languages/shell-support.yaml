@@ -1,0 +1,26 @@
+topic: shell-support
+category: concepts
+summary: "Shell Support - Shell scripts and tests"
+definition: |
+  Support for wrapping shell scripts (bash/sh) as build targets and tests.
+  Useful for integration tests and glue code.
+
+key_points:
+  - "sh_binary: Executable script"
+  - "sh_test: Test script"
+  - "data: Dependencies available at runtime"
+
+usage_examples:
+  - description: "Test Script"
+    code: |
+      sh_test(
+        name = "integration_test",
+        srcs = ["test.sh"],
+        data = [":server"],
+      )
+
+related: [languages, testing, genrule]
+
+next_steps: |
+  - Use for black-box integration testing
+

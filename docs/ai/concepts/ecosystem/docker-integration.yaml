@@ -1,0 +1,27 @@
+topic: docker-integration
+category: concepts
+summary: "Docker Integration - Building containers"
+definition: |
+  Building Docker/OCI images deterministically without a Docker daemon.
+  Images are just tarballs of layers.
+
+key_points:
+  - "Deterministic: Same inputs = same image hash"
+  - "Fast: Layer caching"
+  - "No daemon: Runs purely in user space"
+
+usage_examples:
+  - description: "Image rule"
+    code: |
+      container_image(
+        name = "image",
+        base = "@distroless//image",
+        entrypoint = ["/app"],
+        files = [":app"],
+      )
+
+related: [releases, ecosystem, hermetic]
+
+next_steps: |
+  - Use for production deployments
+

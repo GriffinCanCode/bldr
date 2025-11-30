@@ -1,0 +1,26 @@
+topic: repository-rules
+category: concepts
+summary: "Repository Rules - External dependency logic"
+definition: |
+  Rules that define how to fetch and prepare external dependencies (repositories).
+  Can download archives, git repos, or generate files.
+
+key_points:
+  - "Fetch: Download via HTTP, Git, etc."
+  - "Transform: Patch or restructure downloaded content"
+  - "Expose: Make external code available as targets"
+
+usage_examples:
+  - description: "Defining a http_archive"
+    code: |
+      http_archive(
+        name="gtest",
+        url="https://github.com/...",
+        sha256="..."
+      )
+
+related: [workspace, ecosystem, plugins]
+
+next_steps: |
+  - Define external deps in WORKSPACE/builder.yml
+

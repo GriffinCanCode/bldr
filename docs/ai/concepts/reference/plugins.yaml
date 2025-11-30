@@ -1,0 +1,29 @@
+topic: plugins
+category: concepts
+summary: "Plugin System - Extend Builder with custom logic"
+definition: |
+  Builder's plugin system allows you to extend functionality using Python scripts.
+  Plugins can define new build steps, custom validation, or integration with external tools.
+
+key_points:
+  - "Python API: Write plugins in standard Python"
+  - "Hooks: Intercept build events (pre-build, post-build)"
+  - "Custom Rules: Define new target types"
+  - "Sandboxed: Plugins run in a controlled environment"
+
+usage_examples:
+  - description: "Plugin definition structure"
+    code: |
+      def build(ctx):
+          ctx.action(
+              inputs=["src/main.custom"],
+              outputs=["bin/app"],
+              cmd="custom-compiler $1 -o $2"
+          )
+
+related: [workspace, targets, languages]
+
+next_steps: |
+  - Create a 'plugins' directory in your workspace
+  - Add a .py file with your plugin logic
+

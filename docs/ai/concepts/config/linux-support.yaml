@@ -1,0 +1,20 @@
+topic: linux-support
+category: concepts
+summary: "Linux Support - Building on Linux"
+definition: |
+  Specifics of running Builder on Linux. The primary development platform.
+  Uses namespaces for sandboxing.
+
+key_points:
+  - "Performance: Best performance on Linux"
+  - "Sandboxing: Robust namespace isolation"
+  - "Docker: Native docker support"
+
+usage_examples:
+  - description: "Primary platform"
+
+related: [platforms, hermetic-sandbox, performance]
+
+next_steps: |
+  - Use for CI/CD runners
+

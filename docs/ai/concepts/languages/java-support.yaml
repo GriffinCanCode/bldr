@@ -1,0 +1,26 @@
+topic: java-support
+category: concepts
+summary: "Java Support - Building Java code"
+definition: |
+  Support for Java compilation, JAR creation, and JVM execution.
+  Handles classpaths and strict dependency checking.
+
+key_points:
+  - "java_library: Compiles .class files"
+  - "java_binary: Creates executable JAR"
+  - "strict_deps: Enforces declaring all direct deps"
+
+usage_examples:
+  - description: "Java App"
+    code: |
+      java_binary(
+        name = "server",
+        main_class = "com.example.Main",
+        runtime_deps = [":lib"],
+      )
+
+related: [languages, ecosystem, toolchains]
+
+next_steps: |
+  - Use java_import for external JARs
+

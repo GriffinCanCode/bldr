@@ -1,0 +1,20 @@
+topic: aspects
+category: concepts
+summary: "Aspects - Cross-cutting build logic"
+definition: |
+  Aspects allow augmenting the build graph with additional actions across dependencies.
+  Used for IDE generation, linting, or collecting metadata without modifying rules.
+
+key_points:
+  - "Propagation: Flows down dependency graph"
+  - "Shadow graph: Creates shadow nodes with extra actions"
+  - "Read-only: Cannot change original build actions"
+
+usage_examples:
+  - description: "IDE project generation (IntelliJ/VSCode)"
+
+related: [plugins, starlark, lsp]
+
+next_steps: |
+  - Advanced topic for plugin authors
+

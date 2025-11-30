@@ -1,0 +1,22 @@
+topic: troubleshooting
+category: concepts
+summary: "Troubleshooting - Diagnosing common issues"
+definition: |
+  Guide to diagnosing and resolving common build issues, including cache misses,
+  hermeticity violations, and configuration errors.
+
+key_points:
+  - "Verbose logging: Increase log level for details"
+  - "Sanity checks: Verify environment setup"
+  - "Cache inspection: meaningful cache miss analysis"
+
+usage_examples:
+  - command: "builder build -v"
+    description: "Run with verbose logging"
+
+related: [observability, error-codes, support]
+
+next_steps: |
+  - Use verbose logging to see what's happening
+  - Check 'builder doctor' (if available)
+

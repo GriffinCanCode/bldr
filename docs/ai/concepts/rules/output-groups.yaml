@@ -1,0 +1,21 @@
+topic: output-groups
+category: concepts
+summary: "Output Groups - Managing target outputs"
+definition: |
+  Targets can produce multiple groups of outputs (e.g., binary, debug symbols, docs).
+  Output groups allow requesting specific subsets.
+
+key_points:
+  - "Default: What builds by default"
+  - "Implicit: e.g., .d files, .map files"
+  - "Selection: --output_groups=name"
+
+usage_examples:
+  - command: "builder build --output_groups=debug_symbols //:app"
+    description: "Build only debug symbols"
+
+related: [artifact-management, targets, cli]
+
+next_steps: |
+  - Useful for IDE integration or partial builds
+

@@ -1,0 +1,21 @@
+topic: artifact-management
+category: concepts
+summary: "Artifact Management - Handling build outputs"
+definition: |
+  How Builder manages the 'bazel-out' / 'build-out' directory.
+  Symlink forests, output layout, and garbage collection.
+
+key_points:
+  - "Layout: Structured by config (debug/release)"
+  - "Symlinks: Convenience links in workspace root"
+  - "GC: Cleaning up old artifacts"
+
+usage_examples:
+  - command: "builder clean"
+    description: "Remove all artifacts"
+
+related: [caching, workspace, targets]
+
+next_steps: |
+  - Don't manually modify the output directory
+

@@ -1,0 +1,25 @@
+topic: runfiles
+category: concepts
+summary: "Runfiles - Runtime dependencies"
+definition: |
+  Files that are needed by a binary at runtime (data files, dynamic libraries).
+  Builder ensures they are available/symlinked relative to the binary.
+
+key_points:
+  - "Data attribute: targets in 'data' become runfiles"
+  - "Access: Use runfiles library to locate paths"
+  - "Sandboxing: Only runfiles are visible in tests"
+
+usage_examples:
+  - description: "Adding config file"
+    code: |
+      cc_binary(
+        name = "app",
+        data = ["config.json"],
+      )
+
+related: [targets, testing, hermetic]
+
+next_steps: |
+  - Use runfiles library for portable path lookups
+

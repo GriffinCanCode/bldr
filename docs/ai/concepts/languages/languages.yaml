@@ -1,0 +1,27 @@
+topic: languages
+category: concepts
+summary: "Supported Languages - Multi-language build support"
+definition: |
+  Builder is a polyglot build system. It natively supports compilation, linking,
+  and dependency management for a wide range of programming languages.
+
+key_points:
+  - "Native support: C, C++, D, Rust, Go, Python, JavaScript/TypeScript"
+  - "Cross-compilation: Build for different architectures"
+  - "Mixed builds: Seamlessly link C++ with D or Rust"
+  - "Unified config: Manage all languages in one builder.yml"
+
+usage_examples:
+  - description: "Defining a C++ target"
+    code: |
+      targets:
+        app:
+          type: c++_binary
+          srcs: ["main.cpp"]
+
+related: [targets, workspace, wizard]
+
+next_steps: |
+  - Check 'builder explain list' for specific language guides (if available)
+  - Use 'builder init' to set up language support
+

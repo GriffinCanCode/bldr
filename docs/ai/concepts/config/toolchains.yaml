@@ -1,0 +1,22 @@
+topic: toolchains
+category: concepts
+summary: "Toolchains - Compiler and tool configuration"
+definition: |
+  Abstraction for selecting the right tools (compilers, linkers) for the target platform.
+  Allows switching between gcc, clang, msvc, etc.
+
+key_points:
+  - "Selection: Automatic based on target constraints"
+  - "Hermetic: Toolchains can be downloaded as deps"
+  - "Configuration: Flags and paths defined in toolchain"
+
+usage_examples:
+  - description: "Registering a toolchain"
+    code: |
+      register_toolchain("//tools:my_clang")
+
+related: [languages, cross-compile, ecosystem]
+
+next_steps: |
+  - Define custom toolchains for embedded development
+

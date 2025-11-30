@@ -1,0 +1,27 @@
+topic: cpp-support
+category: concepts
+summary: "C++ Support - Building C/C++ code"
+definition: |
+  Core support for C and C++. Includes library management, linking,
+  header inclusion, and toolchain selection.
+
+key_points:
+  - "cc_library: Headers and sources"
+  - "cc_binary: Executable"
+  - "hdrs: Public headers"
+  - "includes: Include path manipulation"
+
+usage_examples:
+  - description: "C++ Lib"
+    code: |
+      cc_library(
+        name = "math",
+        hdrs = ["math.h"],
+        srcs = ["math.cc"],
+      )
+
+related: [languages, toolchains, linking]
+
+next_steps: |
+  - Separate public headers from private sources
+

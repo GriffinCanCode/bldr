@@ -1,0 +1,20 @@
+topic: critical-path
+category: concepts
+summary: "Critical Path - Bottleneck analysis"
+definition: |
+  The sequence of dependent actions that determines the minimum possible build time.
+  Parallelism cannot speed up the critical path.
+
+key_points:
+  - "Analysis: 'builder analyze-profile'"
+  - "Optimization: Break large targets"
+  - "Visualization: Gantt charts"
+
+usage_examples:
+  - description: "Look for 'Critical Path' in build summary"
+
+related: [performance, concurrency, observability]
+
+next_steps: |
+  - Optimize the longest chain of dependencies
+

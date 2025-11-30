@@ -1,0 +1,22 @@
+topic: bzlmod
+category: concepts
+summary: "Bzlmod - The external dependency system"
+definition: |
+  The modern module system for managing external dependencies,
+  resolving transitive versions, and diamond dependencies.
+
+key_points:
+  - "MODULE.bazel: The manifest file"
+  - "Registry: Central lookup (BCR)"
+  - "Strict deps: Better isolation"
+
+usage_examples:
+  - description: "Adding a dep"
+    code: |
+      bazel_dep(name = "rules_cc", version = "0.0.1")
+
+related: [external-deps, ecosystem, workspace]
+
+next_steps: |
+  - Migrate from WORKSPACE to MODULE.bazel
+

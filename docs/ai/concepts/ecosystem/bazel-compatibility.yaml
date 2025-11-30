@@ -1,0 +1,20 @@
+topic: bazel-compatibility
+category: concepts
+summary: "Bazel Compatibility - Relation to Bazel"
+definition: |
+  Builder shares many concepts and syntax with Google's Bazel build system.
+  This topic explains similarities and differences.
+
+key_points:
+  - "Starlark: Same configuration language"
+  - "Workspace: Similar layout"
+  - "Migration: Easy to move between them"
+
+usage_examples:
+  - description: "Many Bazel BUILD files work in Builder"
+
+related: [migration, starlark, ecosystem]
+
+next_steps: |
+  - Leverage Bazel knowledge and docs
+

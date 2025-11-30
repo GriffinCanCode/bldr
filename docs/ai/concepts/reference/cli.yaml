@@ -1,0 +1,32 @@
+topic: cli
+category: concepts
+summary: "Command Line Interface - The primary way to interact with Builder"
+definition: |
+  The Builder CLI provides a unified interface for all build, test, and management operations.
+  It follows a consistent `builder <command> [subcommand] [flags]` structure.
+
+key_points:
+  - "Unified entry point: One tool for all languages"
+  - "Consistent syntax: Standardized flags across commands"
+  - "Rich output: Color-coded, structured output"
+  - "Intelligent defaults: Zero-config for most common tasks"
+
+usage_examples:
+  - command: "builder build"
+    description: "Build the current project"
+  
+  - command: "builder test"
+    description: "Run all tests"
+  
+  - command: "builder run"
+    description: "Build and run the main executable"
+
+  - command: "builder explain list"
+    description: "List all documentation topics"
+
+related: [workspace, targets, wizard]
+
+next_steps: |
+  - Run 'builder --help' to see all available commands
+  - Try 'builder explain <command>' for specific command help
+

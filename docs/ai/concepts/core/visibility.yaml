@@ -1,0 +1,25 @@
+topic: visibility
+category: concepts
+summary: "Visibility - Access control for targets"
+definition: |
+  Controls which other packages can depend on a given target.
+  Enforces architectural boundaries.
+
+key_points:
+  - "Public: //visibility:public"
+  - "Private: //visibility:private (default)"
+  - "Package group: specific lists of packages"
+
+usage_examples:
+  - description: "Public library"
+    code: |
+      cc_library(
+        name = "util",
+        visibility = ["//visibility:public"],
+      )
+
+related: [dependency-graph, targets, workspace]
+
+next_steps: |
+  - Default to private, open up as needed
+

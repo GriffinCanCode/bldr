@@ -1,0 +1,21 @@
+topic: stamping
+category: concepts
+summary: "Stamping - Embedding build info"
+definition: |
+  Process of embedding version control info (git hash, timestamp) into binaries
+  without breaking caching for everything else.
+
+key_points:
+  - "Volatile status: Changes every build (timestamp)"
+  - "Stable status: Changes on commit (git hash)"
+  - "workspace_status_command: Script to generate status"
+
+usage_examples:
+  - command: "builder build --stamp"
+    description: "Enable stamping"
+
+related: [telemetry, observability, release]
+
+next_steps: |
+  - Use for release builds to track versions
+

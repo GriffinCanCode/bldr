@@ -1,0 +1,26 @@
+topic: releases
+category: concepts
+summary: "Releases - Packaging for distribution"
+definition: |
+  How to bundle artifacts for release (tarballs, deb, rpm, docker).
+  Usually involves rules from the packaging ecosystem.
+
+key_points:
+  - "pkg_tar: Create tarballs"
+  - "pkg_deb: Create Debian packages"
+  - "container_image: Create Docker images"
+
+usage_examples:
+  - description: "Tarball"
+    code: |
+      pkg_tar(
+        name = "release",
+        srcs = [":bin"],
+        package_dir = "/usr/bin",
+      )
+
+related: [ecosystem, artifact-management, stamping]
+
+next_steps: |
+  - Automate releases with stamping
+

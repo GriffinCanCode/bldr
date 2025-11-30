@@ -1,0 +1,20 @@
+topic: macos-support
+category: concepts
+summary: "macOS Support - Building on macOS"
+definition: |
+  Specifics of running Builder on macOS. Xcode integration, sandbox-exec,
+  and signing.
+
+key_points:
+  - "Xcode: Auto-detects active developer dir"
+  - "Sandboxing: Uses native macOS sandbox"
+  - "Universal binaries: Support for x86_64 and arm64"
+
+usage_examples:
+  - description: "Works natively"
+
+related: [platforms, cpp-support, hermetic]
+
+next_steps: |
+  - Keep Xcode up to date
+

@@ -1,0 +1,25 @@
+topic: constraints
+category: concepts
+summary: "Constraints - Platform compatibility"
+definition: |
+  Define execution constraints and platform compatibility for targets.
+  Ensures targets only build on compatible platforms.
+
+key_points:
+  - "exec_properties: Requirements for execution (e.g. GPU)"
+  - "target_compatible_with: Platform constraints"
+  - "toolchain resolution: Matches constraints to tools"
+
+usage_examples:
+  - description: "Linux only"
+    code: |
+      cc_binary(
+        name = "linux_tool",
+        target_compatible_with = ["@platforms//os:linux"],
+      )
+
+related: [cross-compile, remote-execution, toolchains]
+
+next_steps: |
+  - Use constraints for OS-specific code
+

@@ -39,7 +39,7 @@ struct ExplainCommand
                     Logger.error("Usage: builder explain search <query>");
                     return;
                 }
-                searchTopics(args[2 .. $].join(" "));
+                performSearch(args[2 .. $].join(" "));
                 break;
             
             case "example":
@@ -61,8 +61,9 @@ struct ExplainCommand
                 break;
             
             default:
-                // Direct topic query
-                showTopic(subcommand);
+                // Smart lookup: check for exact topic match, otherwise search
+                string query = args[1 .. $].join(" ");
+                smartLookup(query);
                 break;
         }
     }
@@ -74,7 +75,7 @@ struct ExplainCommand
         writeln("=== Builder Explain - AI-Optimized Documentation ===");
         writeln();
         writeln("USAGE:");
-        writeln("  builder explain <topic>              Show topic definition");
+        writeln("  builder explain <topic>              Show topic documentation (smart match)");
         writeln("  builder explain list                 List all available topics");
         writeln("  builder explain search <query>       Search across all topics");
         writeln("  builder explain example <topic>      Show working examples");
@@ -90,7 +91,7 @@ struct ExplainCommand
         writeln();
         writeln("EXAMPLES:");
         writeln("  builder explain blake3");
-        writeln("  builder explain search \"fast builds\"");
+        writeln("  builder explain \"fast builds\"");
         writeln("  builder explain example caching");
         writeln();
     }
@@ -116,15 +117,20 @@ struct ExplainCommand
             
             if ("concepts" in index && index["concepts"].type == JSONType.object)
             {
-                writeln("\x1b[1mCONCEPTS:\x1b[0m");
+                // Group by category if possible
+                // For now, just list them
+                string[][string] categories;
+                string[] uncategorized;
+                
                 foreach (topic, data; index["concepts"].object)
                 {
-                    if (data.type == JSONType.object && "summary" in data)
-                    {
-                        writefln("  \x1b[36m%-20s\x1b[0m %s", 
-                                topic,
-                                data["summary"].str);
-                    }
+                    if (data.type != JSONType.object) continue;
+                    
+                    string summary = "summary" in data ? data["summary"].str : "";
+                    
+                    // We could look up category in the file, but that's slow.
+                    // For now just print alphabetical list
+                    writefln("  \x1b[36m%-25s\x1b[0m %s", topic, summary);
                 }
                 writeln();
             }
@@ -134,23 +140,98 @@ struct ExplainCommand
             Logger.error("Failed to read index: " ~ e.msg);
         }
     }
-    
-    /// Search topics by keyword
-    private static void searchTopics(string query) @system
+
+    /// Smart lookup that handles exact matches and fuzzy search
+    private static void smartLookup(string query) @system
     {
-        auto indexPath = buildPath(getDocsPath(), "ai", "index.yaml");
+        // 1. Try exact match (or alias)
+        string topic = resolveAlias(query);
+        string topicPath = getTopicPath(topic);
         
-        if (!exists(indexPath))
+        if (topicPath.length > 0 && exists(topicPath))
         {
-            Logger.error("AI documentation index not found");
+            displayTopicFromFile(topicPath);
             return;
         }
+        
+        // 2. Fallback to search
+        auto matches = findMatches(query);
+        
+        if (matches.length == 1)
+        {
+            // Only one match - show it directly
+            string matchTopic = matches[0]["topic"].str;
+            writeln("Best match for '" ~ query ~ "': " ~ matchTopic);
+            
+            topicPath = getTopicPath(matchTopic);
+            if (topicPath.length > 0 && exists(topicPath))
+            {
+                displayTopicFromFile(topicPath);
+            }
+            else 
+            {
+                Logger.error("Topic found in index but file missing: " ~ matchTopic);
+            }
+        }
+        else if (matches.length > 1)
+        {
+            // Multiple matches - list them
+            writeln("Topic '" ~ query ~ "' not found. Did you mean:");
+            writeln();
+            foreach (match; matches)
+            {
+                writefln("  \x1b[36m%-20s\x1b[0m %s", match["topic"].str, match["summary"].str);
+            }
+            writeln();
+            writefln("Found %d related topics. Use 'builder explain <topic>' to view.", matches.length);
+        }
+        else
+        {
+            Logger.error("Topic not found: " ~ query);
+            writeln("\nAvailable topics:");
+            writeln("  builder explain list");
+        }
+    }
+    
+    /// Perform search and display results
+    private static void performSearch(string query) @system
+    {
+        auto matches = findMatches(query);
+        
+        writeln();
+        if (matches.length == 0)
+        {
+            Logger.info("No topics found matching: " ~ query);
+            writeln("\nTry: builder explain list");
+        }
+        else
+        {
+            writeln("=== Search Results for: " ~ query ~ " ===");
+            writeln();
+            foreach (match; matches)
+            {
+                writefln("  \x1b[36m%-20s\x1b[0m %s", match["topic"].str, match["summary"].str);
+            }
+            writeln();
+            writefln("Found %d topic(s). Use 'builder explain <topic>' for details.", matches.length);
+        }
+    }
+    
+    /// Find matching topics
+    private static JSONValue[] findMatches(string query) @system
+    {
+        auto indexPath = buildPath(getDocsPath(), "ai", "index.yaml");
+        JSONValue[] matches;
+        
+        if (!exists(indexPath)) return matches;
         
         try
         {
             auto index = parseYAMLIndex(indexPath);
             auto queryLower = query.toLower();
-            JSONValue[] matches;
+            // Normalize query (replace separators with spaces)
+            auto normalizedQuery = queryLower.replace("-", " ").replace("_", " ");
+            auto queryTokens = normalizedQuery.split(" ");
             
             if ("concepts" in index && index["concepts"].type == JSONType.object)
             {
@@ -158,11 +239,33 @@ struct ExplainCommand
                 {
                     if (data.type != JSONType.object) continue;
                     
-                    bool match = topic.toLower().canFind(queryLower);
+                    string topicLower = topic.toLower();
+                    string normalizedTopic = topicLower.replace("-", " ").replace("_", " ");
+                    string summaryLower = "summary" in data ? data["summary"].str.toLower() : "";
                     
-                    if (!match && "summary" in data)
-                        match = data["summary"].str.toLower().canFind(queryLower);
+                    // Match 1: Topic contains query (fuzzy on separators)
+                    bool match = normalizedTopic.canFind(normalizedQuery);
                     
+                    // Match 2: All query tokens present in topic
+                    if (!match && queryTokens.length > 1)
+                    {
+                        bool allTokens = true;
+                        foreach (token; queryTokens)
+                        {
+                            if (!normalizedTopic.canFind(token))
+                            {
+                                allTokens = false;
+                                break;
+                            }
+                        }
+                        if (allTokens) match = true;
+                    }
+                    
+                    // Match 3: Summary contains query
+                    if (!match && summaryLower.length > 0)
+                        match = summaryLower.canFind(queryLower);
+                    
+                    // Match 4: Keywords
                     if (!match && "keywords" in data && data["keywords"].type == JSONType.array)
                     {
                         foreach (keyword; data["keywords"].array)
@@ -181,53 +284,49 @@ struct ExplainCommand
                     }
                 }
             }
-            
-            writeln();
-            if (matches.length == 0)
-            {
-                Logger.info("No topics found matching: " ~ query);
-                writeln("\nTry: builder explain list");
-            }
-            else
-            {
-                writeln("=== Search Results for: " ~ query ~ " ===");
-                writeln();
-                foreach (match; matches)
-                {
-                    writefln("  \x1b[36m%s\x1b[0m", match["topic"].str);
-                    writefln("    %s", match["summary"].str);
-                    writeln();
-                }
-                writefln("Found %d topic(s). Use 'builder explain <topic>' for details.", matches.length);
-            }
         }
         catch (Exception e)
         {
             Logger.error("Search failed: " ~ e.msg);
         }
+        
+        return matches;
     }
     
-    /// Show topic documentation
-    private static void showTopic(string topic) @system
+    /// Get path for a topic
+    private static string getTopicPath(string topic) @system
     {
-        // Resolve aliases
-        topic = resolveAlias(topic);
-        
-        const topicPath = buildPath(getDocsPath(), "ai", "concepts", topic ~ ".yaml");
-        
-        if (!exists(topicPath))
-        {
-            Logger.error("Topic not found: " ~ topic);
-            writeln("\nAvailable topics:");
-            writeln("  builder explain list");
-            return;
-        }
+        string topicPath;
+        auto indexPath = buildPath(getDocsPath(), "ai", "index.yaml");
         
         try
         {
-            auto content = readText(topicPath);
-            auto doc = parseSimpleYAML(content);
+            if (exists(indexPath))
+            {
+                auto index = parseYAMLIndex(indexPath);
+                if ("concepts" in index && topic in index["concepts"].object)
+                {
+                    auto entry = index["concepts"][topic];
+                    if ("file" in entry)
+                        topicPath = buildPath(getDocsPath(), "ai", entry["file"].str);
+                }
+            }
+        }
+        catch (Exception e) {}
+        
+        if (topicPath.length == 0)
+            topicPath = buildPath(getDocsPath(), "ai", "concepts", topic ~ ".yaml");
             
+        return topicPath;
+    }
+    
+    /// Display topic from file
+    private static void displayTopicFromFile(string path) @system
+    {
+        try
+        {
+            auto content = readText(path);
+            auto doc = parseSimpleYAML(content);
             displayTopic(doc);
         }
         catch (Exception e)
@@ -236,13 +335,19 @@ struct ExplainCommand
         }
     }
     
+    /// Show topic documentation (Legacy/Direct wrapper)
+    private static void showTopic(string topic) @system
+    {
+        smartLookup(topic);
+    }
+    
     /// Show examples for a topic
     private static void showExamples(string topic) @system
     {
         topic = resolveAlias(topic);
-        const topicPath = buildPath(getDocsPath(), "ai", "concepts", topic ~ ".yaml");
+        string topicPath = getTopicPath(topic);
         
-        if (!exists(topicPath))
+        if (topicPath.length == 0 || !exists(topicPath))
         {
             Logger.error("Topic not found: " ~ topic);
             return;
@@ -534,4 +639,3 @@ struct ExplainCommand
         return current;
     }
 }
-

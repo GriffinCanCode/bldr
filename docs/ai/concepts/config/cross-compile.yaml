@@ -1,0 +1,21 @@
+topic: cross-compile
+category: concepts
+summary: "Cross Compilation - Building for other platforms"
+definition: |
+  Building software for a different architecture or OS than the host machine.
+  Builder handles toolchain selection and sysroots.
+
+key_points:
+  - "Platforms: Define constraint sets (OS, CPU)"
+  - "Toolchains: Map platforms to compilers"
+  - "Transitions: Switch config for dependencies"
+
+usage_examples:
+  - command: "builder build --cpu=arm64"
+    description: "Cross compile for ARM64"
+
+related: [toolchains, languages, targets]
+
+next_steps: |
+  - Ensure you have the necessary cross-compilers installed
+

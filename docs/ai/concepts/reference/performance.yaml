@@ -1,0 +1,23 @@
+topic: performance
+category: concepts
+summary: "Performance Tuning - Making builds faster"
+definition: |
+  General guide to optimizing build performance with Builder.
+  Covers caching, parallelism, hardware usage, and configuration.
+
+key_points:
+  - "Cache hit rate: Maximize with hermetic builds"
+  - "Network: Optimize remote cache bandwidth"
+  - "IO: Use fast SSDs for workspace"
+  - "CPU: More cores = faster clean builds"
+
+usage_examples:
+  - description: "Analyze build profile"
+    command: "builder profile"
+
+related: [caching, concurrency, remote-cache]
+
+next_steps: |
+  - Profile before optimizing
+  - Ensure caching is working effective
+

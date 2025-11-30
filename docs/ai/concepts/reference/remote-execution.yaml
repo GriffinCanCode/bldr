@@ -1,0 +1,25 @@
+topic: remote-execution
+category: concepts
+summary: "Remote Execution - Running actions on a cluster"
+definition: |
+  Detailed view of the Remote Execution system. Allows build actions (compiles, tests)
+  to run on a separate fleet of worker machines.
+
+key_points:
+  - "REAPI: Standard Remote Execution API support"
+  - "Inputs: Transfers only necessary inputs to worker"
+  - "Outputs: Downloads results from worker"
+  - "Platform properties: Select workers by OS/arch"
+
+usage_examples:
+  - description: "Configuration"
+    code: |
+      remote_execution:
+        address: "grpc://..."
+        properties: { "OSFamily": "Linux" }
+
+related: [distributed, remote-cache, hermetic]
+
+next_steps: |
+  - Requires a compatible backend (Buildbarn, Buildfarm, etc.)
+

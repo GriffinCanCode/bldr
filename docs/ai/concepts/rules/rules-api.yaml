@@ -1,0 +1,27 @@
+topic: rules-api
+category: concepts
+summary: "Rules API - Creating custom rules"
+definition: |
+  The interface for defining new build rules in Starlark.
+  Includes declaring attributes, implementation functions, and providers.
+
+key_points:
+  - "rule(): Defines the rule"
+  - "ctx: The rule context (actions, files)"
+  - "Providers: Passing info between rules"
+
+usage_examples:
+  - description: "Simple rule"
+    code: |
+      def _impl(ctx):
+          out = ctx.actions.declare_file(ctx.label.name)
+          ctx.actions.write(out, "content")
+          return [DefaultInfo(files=[out])]
+      
+      my_rule = rule(implementation=_impl)
+
+related: [starlark, plugins, aspects]
+
+next_steps: |
+  - Read the 'Extension Guide'
+

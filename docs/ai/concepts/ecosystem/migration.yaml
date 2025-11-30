@@ -1,0 +1,22 @@
+topic: migration
+category: concepts
+summary: "Migration Tools - Moving to Builder"
+definition: |
+  Builder provides tools and guides to assist in migrating from other build systems
+  like Make, CMake, Gradle, or Maven.
+
+key_points:
+  - "Importers: Automatic conversion of existing configs"
+  - "Coexistence: Can run alongside other systems during transition"
+  - "Incremental adoption: Migrate one module at a time"
+
+usage_examples:
+  - command: "builder import cmake ."
+    description: "Attempt to import CMake configuration"
+
+related: [wizard, workspace, languages]
+
+next_steps: |
+  - Use 'builder import' to start migration
+  - Refine the generated config manually
+
