@@ -1,7 +1,7 @@
 module tests.unit.migration.common;
 
 import std.stdio;
-import infrastructure.migration.common;
+import infrastructure.migration.core.common;
 import infrastructure.config.schema.schema : TargetType, TargetLanguage, Target;
 
 /// Test MigrationTarget creation and conversion
@@ -108,9 +108,4 @@ unittest
     assert(WarningLevel.Warning != WarningLevel.Error);
 }
 
-void main()
-{
-    writeln("Running migration.common tests...");
-    writeln("All migration.common tests passed!");
-}
 

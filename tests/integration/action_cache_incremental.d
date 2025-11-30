@@ -10,7 +10,7 @@ import std.array;
 import std.range;
 import core.thread;
 import core.time;
-import core.caching.action;
+import engine.caching.actions.action;
 import tests.harness;
 import tests.fixtures;
 

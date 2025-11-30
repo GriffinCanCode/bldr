@@ -11,7 +11,7 @@ import std.string;
 import tests.harness;
 import tests.fixtures;
 import infrastructure.config.parsing.parser;
-import infrastructure.config.interpretation.dsl;
+import infrastructure.config.analysis.semantic;
 import infrastructure.config.schema.schema;
 import infrastructure.errors;
 
@@ -387,7 +387,7 @@ unittest
             {
                 auto targets = result.unwrap();
                 // Check if malicious paths were allowed
-                foreach (target; targets)
+                foreach (target; targets.targets)
                 {
                     foreach (source; target.sources)
                     {

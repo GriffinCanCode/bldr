@@ -32,8 +32,49 @@ unittest
     testParserRegistry();
     testSymbolTypeMapping();
     testConfigurationCompleteness();
+    testStubLoading();
     
     writeln("\x1b[32m  ✓ All tree-sitter validation tests passed\x1b[0m");
+}
+
+/// Test stub loading directly (implementation detail check)
+void testStubLoading()
+{
+    writeln("  Testing stub loader logic...");
+
+    // These functions are declared in the C stub and bound via extern(C)
+    // We can't easily call them directly here without redeclaring them or importing internal modules
+    // However, registerTreeSitterParsers() calls them indirectly.
+    // We'll just verify that invoking the registry doesn't crash.
+    
+    try {
+        // Check C grammar availability (should be false with stub unless installed)
+        import infrastructure.parsing.treesitter.grammars.c;
+        bool available = isCGrammarAvailable();
+        
+        if (available) {
+            writeln("    ✓ C grammar is available (system installed)");
+        } else {
+            writeln("    ✓ C grammar correctly reported as unavailable (using stub)");
+        }
+        
+        // Attempt to create a parser for C
+        auto result = TreeSitterRegistry.instance().createParser("c");
+        
+        if (result.isOk) {
+            writeln("    ✓ Parser created successfully");
+        } else {
+            // If grammar is missing, it should return error
+            Assert.equal(result.unwrapErr().code, ErrorCode.InternalError, 
+                "Should return InternalError when grammar is missing");
+            writeln("    ✓ Parser creation correctly failed (grammar missing)");
+        }
+
+    } catch (Exception e) {
+        Assert.fail("Stub loading caused crash: " ~ e.msg);
+    }
+    
+    writeln("    ✓ Stub loader logic validated");
 }
 
 /// Test JSON config loading mechanism
@@ -84,9 +125,9 @@ void testConfigValidation()
         Assert.isTrue(config.extensions.canFind(".pyi"));
         
         // Verify node type mappings
-        Assert.isTrue("class_definition" in config.nodeTypeMap);
+        Assert.isTrue(("class_definition" in config.nodeTypeMap) !is null);
         Assert.equal(config.nodeTypeMap["class_definition"], SymbolType.Class);
-        Assert.isTrue("function_definition" in config.nodeTypeMap);
+        Assert.isTrue(("function_definition" in config.nodeTypeMap) !is null);
         Assert.equal(config.nodeTypeMap["function_definition"], SymbolType.Function);
         
         // Verify imports
@@ -106,9 +147,9 @@ void testConfigValidation()
         auto config = loader.loadFromJSON(javaPath);
         
         Assert.equal(config.languageId, "java");
-        Assert.isTrue("class_declaration" in config.nodeTypeMap);
-        Assert.isTrue("interface_declaration" in config.nodeTypeMap);
-        Assert.isTrue("enum_declaration" in config.nodeTypeMap);
+        Assert.isTrue(("class_declaration" in config.nodeTypeMap) !is null);
+        Assert.isTrue(("interface_declaration" in config.nodeTypeMap) !is null);
+        Assert.isTrue(("enum_declaration" in config.nodeTypeMap) !is null);
         Assert.equal(config.nodeTypeMap["enum_declaration"], SymbolType.Enum);
         
         // Java has explicit modifiers
@@ -125,9 +166,9 @@ void testConfigValidation()
         
         Assert.equal(config.languageId, "cpp");
         Assert.isTrue(config.extensions.length >= 8); // Many C++ extensions
-        Assert.isTrue("class_specifier" in config.nodeTypeMap);
-        Assert.isTrue("struct_specifier" in config.nodeTypeMap);
-        Assert.isTrue("template_declaration" in config.nodeTypeMap);
+        Assert.isTrue(("class_specifier" in config.nodeTypeMap) !is null);
+        Assert.isTrue(("struct_specifier" in config.nodeTypeMap) !is null);
+        Assert.isTrue(("template_declaration" in config.nodeTypeMap) !is null);
         Assert.equal(config.nodeTypeMap["template_declaration"], SymbolType.Template);
         
         writeln("    ✓ C++ config validated");
@@ -249,9 +290,9 @@ void testSymbolTypeMapping()
     }
     
     // Verify we use diverse symbol types
-    Assert.isTrue(SymbolType.Class in usedTypes, "Should use Class");
-    Assert.isTrue(SymbolType.Function in usedTypes, "Should use Function");
-    Assert.isTrue(SymbolType.Method in usedTypes, "Should use Method");
+    Assert.isTrue((SymbolType.Class in usedTypes) !is null, "Should use Class");
+    Assert.isTrue((SymbolType.Function in usedTypes) !is null, "Should use Function");
+    Assert.isTrue((SymbolType.Method in usedTypes) !is null, "Should use Method");
     
     writeln("    Used symbol types: " ~ usedTypes.keys.length.to!string);
     writeln("    ✓ Symbol type mappings are diverse");
@@ -359,14 +400,14 @@ void testJSONFormat()
             auto json = parseJSON(content);
             
             // Verify required top-level keys
-            Assert.isTrue("language" in json, entry.name ~ " missing 'language' key");
-            Assert.isTrue("node_types" in json, entry.name ~ " missing 'node_types' key");
+            Assert.isTrue(("language" in json) !is null, entry.name ~ " missing 'language' key");
+            Assert.isTrue(("node_types" in json) !is null, entry.name ~ " missing 'node_types' key");
             
             // Verify language sub-keys
             auto lang = json["language"];
-            Assert.isTrue("id" in lang, entry.name ~ " missing 'language.id'");
-            Assert.isTrue("display" in lang, entry.name ~ " missing 'language.display'");
-            Assert.isTrue("extensions" in lang, entry.name ~ " missing 'language.extensions'");
+            Assert.isTrue(("id" in lang) !is null, entry.name ~ " missing 'language.id'");
+            Assert.isTrue(("display" in lang) !is null, entry.name ~ " missing 'language.display'");
+            Assert.isTrue(("extensions" in lang) !is null, entry.name ~ " missing 'language.extensions'");
             
         } catch (Exception e) {
             Assert.fail("JSON parse error in " ~ entry.name ~ ": " ~ e.msg);
@@ -393,6 +434,7 @@ void testConfigLoaderErrorHandling()
     
     // Create invalid JSON file
     auto invalidFile = buildPath(tempDir, "invalid.json");
+    import std.file : write;
     write(invalidFile, "{ invalid json }");
     
     auto loader2 = new ConfigLoader(tempDir);

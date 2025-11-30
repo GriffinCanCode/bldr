@@ -153,10 +153,4 @@ unittest
     assert(exists(outputFile));
 }
 
-void main()
-{
-    import std.conv : to;
-    writeln("Running migration.integration tests...");
-    writeln("All migration.integration tests passed!");
-}
 

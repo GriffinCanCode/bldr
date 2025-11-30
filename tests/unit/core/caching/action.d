@@ -10,8 +10,8 @@ import std.algorithm;
 import std.parallelism;
 import core.thread;
 import core.time;
-import core.caching.action;
-import core.caching.eviction;
+import engine.caching.actions.action;
+import engine.caching.policies.eviction;
 import tests.harness;
 import tests.fixtures;
 

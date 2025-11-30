@@ -4,8 +4,8 @@ import std.stdio;
 import std.conv;
 import core.thread;
 import core.atomic;
-import core.distributed.memory.arena;
-import core.distributed.memory.pool;
+import engine.distributed.memory.arena;
+import engine.distributed.memory.pool;
 import tests.harness;
 
 // ==================== ARENA BASIC TESTS ====================

@@ -1,11 +1,11 @@
 module tests.unit.core.hermetic_advanced;
 
 import std.stdio : writeln;
-import std.file : exists, mkdirRecurse, rmdirRecurse, writeText, tempDir;
+import std.file : exists, mkdirRecurse, rmdirRecurse, write, tempDir;
 import std.path : buildPath;
 import std.algorithm : canFind;
 import std.conv : to;
-import core.execution.hermetic;
+import engine.runtime.hermetic;
 import engine.runtime.hermetic.determinism.detector;
 import engine.runtime.hermetic.determinism.enforcer;
 import tests.harness;
@@ -13,7 +13,7 @@ import tests.harness;
 version(unittest):
 
 @("hermetic_advanced.edge_cases.empty_paths")
-@safe unittest
+@system unittest
 {
     writeln("\x1b[36m[TEST]\x1b[0m hermetic_advanced - edge case: empty path sets");
     
@@ -37,7 +37,7 @@ version(unittest):
 }
 
 @("hermetic_advanced.edge_cases.nested_paths")
-@safe unittest
+@system unittest
 {
     writeln("\x1b[36m[TEST]\x1b[0m hermetic_advanced - edge case: deeply nested paths");
     
@@ -59,7 +59,7 @@ version(unittest):
 }
 
 @("hermetic_advanced.edge_cases.special_characters")
-@safe unittest
+@system unittest
 {
     writeln("\x1b[36m[TEST]\x1b[0m hermetic_advanced - edge case: paths with special characters");
     
@@ -86,7 +86,7 @@ version(unittest):
 }
 
 @("hermetic_advanced.resource_limits.zero_limits")
-@safe unittest
+@system unittest
 {
     writeln("\x1b[36m[TEST]\x1b[0m hermetic_advanced - edge case: zero resource limits");
     
@@ -108,7 +108,7 @@ version(unittest):
 }
 
 @("hermetic_advanced.resource_limits.extreme_limits")
-@safe unittest
+@system unittest
 {
     writeln("\x1b[36m[TEST]\x1b[0m hermetic_advanced - edge case: extreme resource limits");
     
@@ -135,7 +135,7 @@ version(unittest):
 }
 
 @("hermetic_advanced.network_policy.partial_access")
-@safe unittest
+@system unittest
 {
     writeln("\x1b[36m[TEST]\x1b[0m hermetic_advanced - partial network access");
     
@@ -164,7 +164,7 @@ version(unittest):
 }
 
 @("hermetic_advanced.network_policy.localhost_access")
-@safe unittest
+@system unittest
 {
     writeln("\x1b[36m[TEST]\x1b[0m hermetic_advanced - localhost network access");
     
@@ -206,9 +206,9 @@ version(unittest):
     
     // Check that the last value wins
     bool foundCorrectPath = false;
-    foreach (envVar; s.environment)
+    foreach (envVar; s.environment.vars.byKeyValue)
     {
-        if (envVar.canFind("PATH=/usr/bin:/bin"))
+        if (envVar.key == "PATH" && envVar.value == "/usr/bin:/bin")
         {
             foundCorrectPath = true;
             break;
@@ -236,8 +236,10 @@ version(unittest):
     Assert.isTrue(spec.isOk, "Should handle empty env values");
     
     auto s = spec.unwrap();
-    Assert.isTrue(s.environment.canFind("EMPTY_VAR="), "Should include empty var");
-    Assert.isTrue(s.environment.canFind("NORMAL_VAR=value"), "Should include normal var");
+    Assert.isTrue(s.environment.has("EMPTY_VAR"), "Should include empty var");
+    Assert.equal(s.environment.vars["EMPTY_VAR"], "", "Empty var should be empty");
+    Assert.isTrue(s.environment.has("NORMAL_VAR"), "Should include normal var");
+    Assert.equal(s.environment.vars["NORMAL_VAR"], "value", "Normal var should have value");
     
     writeln("  \x1b[32m✓ Empty variables test passed\x1b[0m");
 }
@@ -385,7 +387,7 @@ Thread 0x7f8a9b2c3d4e started
 }
 
 @("hermetic_advanced.spec_builder.fluent_api")
-@safe unittest
+@system unittest
 {
     writeln("\x1b[36m[TEST]\x1b[0m hermetic_advanced - fluent API chaining");
     
@@ -417,7 +419,7 @@ Thread 0x7f8a9b2c3d4e started
 }
 
 @("hermetic_advanced.edge_cases.same_path_multiple_roles")
-@safe unittest
+@system unittest
 {
     writeln("\x1b[36m[TEST]\x1b[0m hermetic_advanced - same path in multiple roles (should fail)");
     
@@ -433,7 +435,7 @@ Thread 0x7f8a9b2c3d4e started
 }
 
 @("hermetic_advanced.performance.large_path_sets")
-@safe unittest
+@system unittest
 {
     writeln("\x1b[36m[TEST]\x1b[0m hermetic_advanced - performance with large path sets");
     
@@ -519,4 +521,3 @@ Thread 0x7f8a9b2c3d4e started
     
     writeln("  \x1b[32m✓ Resource monitoring test passed\x1b[0m");
 }
-

@@ -4,7 +4,7 @@ import std.stdio;
 import std.file;
 import std.path;
 import infrastructure.migration.systems.cmake;
-import infrastructure.migration.common;
+import infrastructure.migration.core.common;
 import infrastructure.config.schema.schema : TargetType, TargetLanguage;
 
 /// Test CMake migrator system name
@@ -122,10 +122,4 @@ target_link_libraries(app utils)
     }
 }
 
-void main()
-{
-    import std.conv : to;
-    writeln("Running migration.cmake tests...");
-    writeln("All migration.cmake tests passed!");
-}
 

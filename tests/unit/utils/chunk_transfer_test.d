@@ -376,13 +376,4 @@ unittest
             stats.chunksTransferred, " chunks)");
 }
 
-/// Run all tests
-void main()
-{
-    writeln("\n=== Chunk Transfer Unit Tests ===\n");
-    
-    // Tests run via unittest blocks
-    
-    writeln("\n=== All Tests Passed ✓ ===\n");
-}
 

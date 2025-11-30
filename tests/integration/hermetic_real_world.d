@@ -1,11 +1,13 @@
 module tests.integration.hermetic_real_world;
 
 import std.stdio : writeln;
-import std.file : exists, mkdirRecurse, rmdirRecurse, writeText, tempDir;
+import std.file : exists, mkdirRecurse, rmdirRecurse, write, tempDir;
 import std.path : buildPath;
 import std.process : execute;
 import std.algorithm : canFind;
-import core.execution.hermetic;
+import std.conv : to;
+import std.exception : collectException;
+import engine.runtime.hermetic;
 import engine.runtime.hermetic.determinism.detector;
 import engine.runtime.hermetic.determinism.enforcer;
 import tests.harness;
@@ -30,14 +32,16 @@ version(unittest):
     if (!exists(buildDir)) mkdirRecurse(buildDir);
     if (!exists(tempWorkDir)) mkdirRecurse(tempWorkDir);
     
-    scope(exit)
+    void cleanup() 
     {
         if (exists(testRoot))
-            try { rmdirRecurse(testRoot); } catch (Exception) {}
+            collectException(rmdirRecurse(testRoot));
     }
     
+    scope(exit) cleanup();
+    
     // Create realistic C project structure
-    writeText(buildPath(includeDir, "math_utils.h"), `
+    write(buildPath(includeDir, "math_utils.h"), `
 #ifndef MATH_UTILS_H
 #define MATH_UTILS_H
 
@@ -47,7 +51,7 @@ int multiply(int a, int b);
 #endif
 `);
     
-    writeText(buildPath(srcDir, "math_utils.c"), `
+    write(buildPath(srcDir, "math_utils.c"), `
 #include "math_utils.h"
 
 int add(int a, int b) {
@@ -59,7 +63,7 @@ int multiply(int a, int b) {
 }
 `);
     
-    writeText(buildPath(srcDir, "main.c"), `
+    write(buildPath(srcDir, "main.c"), `
 #include <stdio.h>
 #include "math_utils.h"
 
@@ -121,20 +125,22 @@ int main() {
     if (!exists(projectDir)) mkdirRecurse(projectDir);
     if (!exists(tempWorkDir)) mkdirRecurse(tempWorkDir);
     
-    scope(exit)
+    void cleanup() 
     {
         if (exists(testRoot))
-            try { rmdirRecurse(testRoot); } catch (Exception) {}
+            collectException(rmdirRecurse(testRoot));
     }
     
+    scope(exit) cleanup();
+    
     // Create Go project
-    writeText(buildPath(projectDir, "go.mod"), `
+    write(buildPath(projectDir, "go.mod"), `
 module example.com/myapp
 
 go 1.21
 `);
     
-    writeText(buildPath(projectDir, "main.go"), `
+    write(buildPath(projectDir, "main.go"), `
 package main
 
 import "fmt"
@@ -192,14 +198,16 @@ func main() {
     if (!exists(srcDir)) mkdirRecurse(srcDir);
     if (!exists(tempWorkDir)) mkdirRecurse(tempWorkDir);
     
-    scope(exit)
+    void cleanup() 
     {
         if (exists(testRoot))
-            try { rmdirRecurse(testRoot); } catch (Exception) {}
+            collectException(rmdirRecurse(testRoot));
     }
     
+    scope(exit) cleanup();
+    
     // Create Cargo project
-    writeText(buildPath(projectDir, "Cargo.toml"), `
+    write(buildPath(projectDir, "Cargo.toml"), `
 [package]
 name = "myapp"
 version = "0.1.0"
@@ -208,7 +216,7 @@ edition = "2021"
 [dependencies]
 `);
     
-    writeText(buildPath(srcDir, "main.rs"), `
+    write(buildPath(srcDir, "main.rs"), `
 fn main() {
     println!("Hello, hermetic Rust!");
 }
@@ -253,14 +261,16 @@ fn main() {
     if (!exists(buildDir)) mkdirRecurse(buildDir);
     if (!exists(tempWorkDir)) mkdirRecurse(tempWorkDir);
     
-    scope(exit)
+    void cleanup() 
     {
         if (exists(testRoot))
-            try { rmdirRecurse(testRoot); } catch (Exception) {}
+            collectException(rmdirRecurse(testRoot));
     }
     
+    scope(exit) cleanup();
+    
     // Create D project
-    writeText(buildPath(projectDir, "dub.json"), `
+    write(buildPath(projectDir, "dub.json"), `
 {
     "name": "myapp",
     "targetType": "executable",
@@ -268,7 +278,7 @@ fn main() {
 }
 `);
     
-    writeText(buildPath(srcDir, "app.d"), `
+    write(buildPath(srcDir, "app.d"), `
 import std.stdio;
 
 void main()
@@ -315,21 +325,23 @@ void main()
     if (!exists(buildDir)) mkdirRecurse(buildDir);
     if (!exists(tempWorkDir)) mkdirRecurse(tempWorkDir);
     
-    scope(exit)
+    void cleanup() 
     {
         if (exists(testRoot))
-            try { rmdirRecurse(testRoot); } catch (Exception) {}
+            collectException(rmdirRecurse(testRoot));
     }
     
+    scope(exit) cleanup();
+    
     // Create C file
-    writeText(buildPath(projectDir, "utils.c"), `
+    write(buildPath(projectDir, "utils.c"), `
 int c_add(int a, int b) {
     return a + b;
 }
 `);
     
     // Create C++ file
-    writeText(buildPath(projectDir, "main.cpp"), `
+    write(buildPath(projectDir, "main.cpp"), `
 #include <iostream>
 
 extern "C" int c_add(int a, int b);
@@ -382,14 +394,16 @@ int main() {
     if (!exists(projectDir)) mkdirRecurse(projectDir);
     if (!exists(tempWorkDir)) mkdirRecurse(tempWorkDir);
     
-    scope(exit)
+    void cleanup() 
     {
         if (exists(testRoot))
-            try { rmdirRecurse(testRoot); } catch (Exception) {}
+            collectException(rmdirRecurse(testRoot));
     }
     
+    scope(exit) cleanup();
+    
     // Create project that tries to download something
-    writeText(buildPath(projectDir, "build.sh"), `#!/bin/sh
+    write(buildPath(projectDir, "build.sh"), `#!/bin/sh
 # This build script tries to download dependencies
 curl -O https://example.com/library.tar.gz
 echo "Downloaded dependency"
@@ -434,11 +448,13 @@ echo "Downloaded dependency"
     if (!exists(build2Dir)) mkdirRecurse(build2Dir);
     if (!exists(tempWorkDir)) mkdirRecurse(tempWorkDir);
     
-    scope(exit)
+    void cleanup() 
     {
         if (exists(testRoot))
-            try { rmdirRecurse(testRoot); } catch (Exception) {}
+            collectException(rmdirRecurse(testRoot));
     }
+    
+    scope(exit) cleanup();
     
     // Create simple source
     auto sourceContent = `
@@ -446,7 +462,7 @@ int main() {
     return 42;
 }
 `;
-    writeText(buildPath(projectDir, "main.c"), sourceContent);
+    write(buildPath(projectDir, "main.c"), sourceContent);
     
     // Build with deterministic flags twice
     auto createDeterministicSpec = (string outputDir) {
@@ -472,7 +488,7 @@ int main() {
     auto s2 = spec2.unwrap();
     
     Assert.equal(s1.canNetwork(), s2.canNetwork(), "Network policies should match");
-    Assert.equal(s1.environment.length, s2.environment.length, 
+    Assert.equal(s1.environment.vars.length, s2.environment.vars.length, 
                  "Environment size should match");
     
     writeln("  \x1b[32m✓ Reproducibility test passed\x1b[0m");
@@ -493,17 +509,19 @@ int main() {
     if (!exists(buildDir)) mkdirRecurse(buildDir);
     if (!exists(tempWorkDir)) mkdirRecurse(tempWorkDir);
     
-    scope(exit)
+    void cleanup() 
     {
         if (exists(testRoot))
-            try { rmdirRecurse(testRoot); } catch (Exception) {}
+            collectException(rmdirRecurse(testRoot));
     }
+    
+    scope(exit) cleanup();
     
     // Create multiple source files
     foreach (i; 0 .. 20)
     {
         auto filename = buildPath(srcDir, "module" ~ i.to!string ~ ".c");
-        writeText(filename, `
+        write(filename, `
 int func` ~ i.to!string ~ `() {
     return ` ~ i.to!string ~ `;
 }
@@ -511,7 +529,7 @@ int func` ~ i.to!string ~ `() {
     }
     
     // Create main file
-    writeText(buildPath(srcDir, "main.c"), `
+    write(buildPath(srcDir, "main.c"), `
 int main() {
     return 0;
 }
@@ -558,11 +576,13 @@ int main() {
     if (!exists(tempWorkDir)) mkdirRecurse(tempWorkDir);
     if (!exists(forbiddenTemp)) mkdirRecurse(forbiddenTemp);
     
-    scope(exit)
+    void cleanup() 
     {
         if (exists(testRoot))
-            try { rmdirRecurse(testRoot); } catch (Exception) {}
+            collectException(rmdirRecurse(testRoot));
     }
+    
+    scope(exit) cleanup();
     
     // Create hermetic spec with specific temp directory
     auto spec = SandboxSpecBuilder.create()
@@ -583,7 +603,7 @@ int main() {
 }
 
 @("hermetic_real_world.compiler_flags.comprehensive_check")
-@safe unittest
+@system unittest
 {
     writeln("\x1b[36m[TEST]\x1b[0m hermetic_real_world - comprehensive compiler flag analysis");
     

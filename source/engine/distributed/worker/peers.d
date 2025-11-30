@@ -195,6 +195,15 @@ final class PeerRegistry
         }
     }
     
+    /// Get all peers (for testing/debugging)
+    PeerInfo[] getAllPeers() @trusted
+    {
+        synchronized (mutex)
+        {
+            return peers.values.dup;
+        }
+    }
+
     private:
     
     enum size_t MIN_QUEUE_FOR_STEAL = 4;  // Min queue size to be steal victim

@@ -5,10 +5,25 @@ import std.datetime;
 import std.conv;
 import core.thread;
 import core.atomic;
-import core.distributed.worker.steal;
-import core.distributed.worker.peers;
-import core.distributed.protocol.protocol;
+import engine.distributed.worker.steal;
+import engine.distributed.worker.peers;
+import engine.distributed.protocol.protocol;
+import engine.distributed.protocol.transport;
 import tests.harness;
+import infrastructure.errors;
+
+// Mock Transport
+class MockTransport : Transport
+{
+    override Result!DistributedError sendHeartBeat(WorkerId recipient, HeartBeat hb) { return Result!DistributedError.err(new DistributedError("Mock")); }
+    override Result!DistributedError sendStealRequest(WorkerId recipient, StealRequest req) { return Result!DistributedError.err(new DistributedError("Mock")); }
+    override Result!DistributedError sendStealResponse(WorkerId recipient, StealResponse res) { return Result!DistributedError.err(new DistributedError("Mock")); }
+    
+    override Result!(Envelope!StealResponse, DistributedError) receiveStealResponse(Duration timeout) { return Result!(Envelope!StealResponse, DistributedError).err(new DistributedError("Mock")); }
+    
+    override bool isConnected() { return true; }
+    override void close() {}
+}
 
 // ==================== STEAL STRATEGY TESTS ====================
 
@@ -186,8 +201,9 @@ unittest
     auto peers = new PeerRegistry(selfId);
     
     auto engine = new StealEngine(selfId, peers);
+    auto transport = new MockTransport();
     
-    auto result = engine.steal();
+    auto result = engine.steal(transport);
     Assert.isNull(result);
     
     auto metrics = engine.getMetrics();
@@ -210,7 +226,9 @@ unittest
     peers.updateMetrics(peerId, 0, 0.0);  // No work
     
     auto engine = new StealEngine(selfId, peers);
-    auto result = engine.steal();
+    auto transport = new MockTransport();
+    
+    auto result = engine.steal(transport);
     
     Assert.isNull(result);
     
@@ -235,9 +253,17 @@ unittest
     auto engine = new StealEngine(selfId, peers, config);
     
     auto thiefId = WorkerId(2);
-    auto result = engine.handleStealRequest(thiefId, 3);  // Only 3 items, need 5
+    StealRequest req;
+    req.thief = thiefId;
+    req.victim = selfId;
     
-    Assert.isNull(result);
+    // This simulates "insufficient work" by having the delegate return null
+    // The test description "Only 3 items, need 5" is logic internal to the delegate now
+    auto result = engine.handleStealRequest(req, delegate ActionRequest() { return null; });
+    
+    // Should respond with no work
+    Assert.isFalse(result.hasWork);
+    Assert.isNull(result.action);
     
     writeln("\x1b[32m  ✓ Handle steal request with insufficient work\x1b[0m");
 }
@@ -255,11 +281,19 @@ unittest
     auto engine = new StealEngine(selfId, peers, config);
     
     auto thiefId = WorkerId(2);
-    auto result = engine.handleStealRequest(thiefId, 10);  // 10 items, need 2
+    StealRequest req;
+    req.thief = thiefId;
+    req.victim = selfId;
     
-    // For now, returns null (will be implemented with full worker integration)
-    // But should not crash
-    Assert.isNull(result);
+    // Simulate finding an action
+    auto mockAction = new ActionRequest(
+        ActionId([0]), "cmd", null, [], [], Capabilities(), Priority.Normal, 1.seconds
+    );
+    
+    auto result = engine.handleStealRequest(req, delegate ActionRequest() { return mockAction; });
+    
+    Assert.isTrue(result.hasWork);
+    Assert.isTrue(result.action !is null);
     
     writeln("\x1b[32m  ✓ Handle steal request with sufficient work\x1b[0m");
 }
@@ -274,9 +308,10 @@ unittest
     auto peers = new PeerRegistry(selfId);
     
     auto engine = new StealEngine(selfId, peers);
+    auto transport = new MockTransport();
     
     // Attempt steal with no peers
-    engine.steal();
+    engine.steal(transport);
     
     auto metrics = engine.getMetrics();
     Assert.equal(atomicLoad(metrics.attempts), 1);
@@ -294,11 +329,12 @@ unittest
     auto peers = new PeerRegistry(selfId);
     
     auto engine = new StealEngine(selfId, peers);
+    auto transport = new MockTransport();
     
     // Attempt multiple steals
-    engine.steal();
-    engine.steal();
-    engine.steal();
+    engine.steal(transport);
+    engine.steal(transport);
+    engine.steal(transport);
     
     auto metrics = engine.getMetrics();
     Assert.equal(atomicLoad(metrics.attempts), 3);
@@ -328,10 +364,11 @@ unittest
     config.strategy = StealStrategy.PowerOfTwo;
     
     auto engine = new StealEngine(selfId, peers, config);
+    auto transport = new MockTransport();
     
     // Attempt steal - should select a victim
-    // (Will fail due to no transport, but tests victim selection)
-    engine.steal();
+    // (Will fail due to mock transport returning error or mock not finding work)
+    engine.steal(transport);
     
     auto metrics = engine.getMetrics();
     Assert.equal(atomicLoad(metrics.attempts), 1);
@@ -358,7 +395,10 @@ unittest
         // Multiple concurrent steal attempts
         foreach (i; parallel(iota(10)))
         {
-            engine.steal();
+            // Each thread needs its own transport or a thread-safe one
+            // MockTransport is stateless so it's fine
+            auto transport = new MockTransport();
+            engine.steal(transport);
         }
         
         auto metrics = engine.getMetrics();
@@ -390,7 +430,11 @@ unittest
         foreach (i; parallel(iota(10)))
         {
             auto thiefId = WorkerId(i + 10);
-            engine.handleStealRequest(thiefId, 5);
+            StealRequest req;
+            req.thief = thiefId;
+            req.victim = selfId;
+            
+            engine.handleStealRequest(req, delegate ActionRequest() { return null; });
         }
         
         // Should not crash
@@ -423,7 +467,9 @@ unittest
     }
     
     auto engine = new StealEngine(selfId, peers);
-    auto result = engine.steal();
+    auto transport = new MockTransport();
+    
+    auto result = engine.steal(transport);
     
     Assert.isNull(result);
     
@@ -443,17 +489,28 @@ unittest
     auto engine = new StealEngine(selfId, peers, config);
     
     auto thiefId = WorkerId(2);
+    StealRequest req;
+    req.thief = thiefId;
+    req.victim = selfId;
     
-    // Exactly at threshold - should reject
-    auto result1 = engine.handleStealRequest(thiefId, 5);
-    Assert.isNull(result1);
+    // Delegate returns work, but handleStealRequest should filter logic if it was implemented there.
+    // However, looking at the StealEngine source (which I read earlier):
+    // handleStealRequest(StealRequest req, ActionRequest delegate() tryStealLocal)
+    // JUST CALLS tryStealLocal() and returns the result.
+    // It does NOT check minLocalQueue or threshold.
+    // The caller of handleStealRequest (the Worker) is responsible for checking if it can give work.
+    // So this test is checking logic that doesn't exist in StealEngine.handleStealRequest anymore.
+    // I will update the test to reflect that it just delegates.
     
-    // Just above threshold - should allow
-    auto result2 = engine.handleStealRequest(thiefId, 6);
-    // Returns null for now (not implemented), but should not crash
-    Assert.isNull(result2);
+    auto result1 = engine.handleStealRequest(req, delegate ActionRequest() { return null; });
+    Assert.isFalse(result1.hasWork);
     
-    writeln("\x1b[32m  ✓ Handle steal request at threshold works\x1b[0m");
+    // Just above threshold - should allow (if delegate returns work)
+    auto mockAction = new ActionRequest(ActionId([0]), "cmd", null, [], [], Capabilities(), Priority.Normal, 1.seconds);
+    auto result2 = engine.handleStealRequest(req, delegate ActionRequest() { return mockAction; });
+    Assert.isTrue(result2.hasWork);
+    
+    writeln("\x1b[32m  ✓ Handle steal request delegation works\x1b[0m");
 }
 
 // ==================== CONFIG VALIDATION TESTS ====================
@@ -469,9 +526,10 @@ unittest
     config.maxRetries = 0;
     
     auto engine = new StealEngine(selfId, peers, config);
+    auto transport = new MockTransport();
     
     // Should handle gracefully
-    engine.steal();
+    engine.steal(transport);
     
     auto metrics = engine.getMetrics();
     Assert.equal(atomicLoad(metrics.attempts), 1);
@@ -491,13 +549,13 @@ unittest
     config.retryBackoff = 1.msecs;  // Fast backoff for test
     
     auto engine = new StealEngine(selfId, peers, config);
+    auto transport = new MockTransport();
     
     // Should handle gracefully (will try multiple times)
-    engine.steal();
+    engine.steal(transport);
     
     auto metrics = engine.getMetrics();
     Assert.equal(atomicLoad(metrics.attempts), 1);
     
     writeln("\x1b[32m  ✓ Config with high retry count handled\x1b[0m");
 }
-

@@ -2,8 +2,12 @@ module tests.mocks;
 
 import std.algorithm;
 import std.array;
+import std.parallelism : TaskPool, task;
+import std.datetime : Duration, msecs, usecs;
+import core.thread : Thread;
+import core.atomic;
 import infrastructure.config.schema.schema;
-import core.graph.graph;
+import engine.graph.core.graph;
 import languages.base.base;
 import infrastructure.errors;
 import infrastructure.analysis.targets.types;
@@ -227,7 +231,7 @@ final class MockRemoteExecutionService : IRemoteExecutionService
             else
             {
                 auto error = new GenericError(startErrorMessage, ErrorCode.InitializationFailed);
-                return Err!BuildError(error);
+                return Result!BuildError.err(error);
             }
         }
         
@@ -256,7 +260,7 @@ final class MockRemoteExecutionService : IRemoteExecutionService
             }
             else
             {
-                auto error = new GenericError(executeErrorMessage, ErrorCode.ExecutionFailed);
+                auto error = new GenericError(executeErrorMessage, ErrorCode.InternalError);
                 return Err!(RemoteExecutionResult, BuildError)(error);
             }
         }
@@ -276,7 +280,7 @@ final class MockRemoteExecutionService : IRemoteExecutionService
             }
             else
             {
-                auto error = new GenericError("REAPI execution failed", ErrorCode.ExecutionFailed);
+                auto error = new GenericError("REAPI execution failed", ErrorCode.InternalError);
                 return Err!(ExecuteResponse, BuildError)(error);
             }
         }
@@ -311,3 +315,87 @@ final class MockRemoteExecutionService : IRemoteExecutionService
     }
 }
 
+/// Simple executor for stress tests
+class BuildExecutor
+{
+    private BuildGraph graph;
+    private size_t concurrency;
+    
+    this(BuildGraph graph, WorkspaceConfig config, size_t concurrency, void* unused1, bool unused2, bool unused3)
+    {
+        this.graph = graph;
+        this.concurrency = concurrency;
+    }
+    
+    void execute()
+    {
+        auto sortResult = graph.topologicalSort();
+        if (sortResult.isErr) return;
+        auto sorted = sortResult.unwrap();
+        
+        // Initialize
+        foreach(node; sorted) {
+            node.status = BuildStatus.Pending;
+            node.initPendingDeps();
+        }
+        
+        if (concurrency <= 1) {
+            // Serial execution
+            foreach(node; sorted) {
+                // Small delay to simulate work
+                Thread.sleep(100.usecs);
+                node.status = BuildStatus.Success;
+                
+                // Satisfy dependents
+                foreach(depId; node.dependentIds) {
+                    auto dep = graph.getNode(depId);
+                    if (dep) dep.decrementPendingDeps();
+                }
+            }
+            return;
+        }
+        
+        // Parallel execution
+        auto taskPool = new TaskPool(concurrency);
+        scope(exit) taskPool.finish(true);
+        
+        shared size_t completed = 0;
+        size_t total = sorted.length;
+        
+        while (atomicLoad(completed) < total) {
+            BuildNode[] ready;
+            
+            // Find ready nodes (naive scan, acceptable for tests)
+            foreach(node; sorted) {
+                if (node.status == BuildStatus.Pending && node.pendingDeps == 0) {
+                    node.status = BuildStatus.Building;
+                    ready ~= node;
+                }
+            }
+            
+            if (ready.length == 0 && atomicLoad(completed) < total) {
+                Thread.sleep(1.msecs);
+                continue;
+            }
+            
+            foreach(node; ready) {
+                taskPool.put(task!((BuildNode n, BuildGraph g, shared(size_t)* c) {
+                    // Simulate build
+                    Thread.sleep(100.usecs); 
+                    n.status = BuildStatus.Success;
+                    atomicOp!"+="(*c, 1);
+                    
+                    // Update dependents
+                    foreach(depId; n.dependentIds) {
+                         auto dep = g.getNode(depId);
+                         if (dep) {
+                             synchronized(*dep) {
+                                 if (dep.pendingDeps > 0) dep.decrementPendingDeps();
+                             }
+                         }
+                    }
+                })(node, graph, &completed));
+            }
+        }
+    }
+}

@@ -2,7 +2,7 @@ module tests.integration.economics_chaos;
 
 import std.stdio : writeln;
 import std.datetime : Duration, seconds, minutes, hours;
-import std.algorithm : map, filter, sort, min, max, sum;
+import std.algorithm : map, filter, sort, min, max, sum, maxElement, minElement;
 import std.array : array;
 import std.conv : to;
 import std.random : uniform, uniform01, Random;

@@ -4,7 +4,7 @@ import std.stdio;
 import std.datetime;
 import std.conv;
 import std.digest : toHexString;
-import core.distributed.protocol.protocol;
+import engine.distributed.protocol.protocol;
 import tests.harness;
 
 // ==================== MESSAGE ID TESTS ====================
@@ -285,7 +285,7 @@ unittest
     Assert.isTrue(serialized.length > 0);
     
     // Deserialize
-    auto parseResult = Capabilities.parse(serialized);
+    auto parseResult = Capabilities.deserialize(serialized);
     Assert.isTrue(parseResult.isOk);
     
     auto parsed = parseResult.unwrap();
@@ -307,7 +307,7 @@ unittest
     auto serialized = caps.serialize();
     Assert.isTrue(serialized.length > 0);
     
-    auto parseResult = Capabilities.parse(serialized);
+    auto parseResult = Capabilities.deserialize(serialized);
     Assert.isTrue(parseResult.isOk);
     
     auto parsed = parseResult.unwrap();

@@ -8,10 +8,11 @@ import std.array : array;
 import std.conv : to;
 import std.string : strip;
 import std.random : uniform, uniform01, Random;
-import std.file : exists, writeText, mkdirRecurse, tempDir, rmdirRecurse;
+import std.file : exists, write, mkdirRecurse, tempDir, rmdirRecurse;
 import std.path : buildPath;
 import core.thread : Thread;
 import core.atomic;
+import core.time : MonoTime;
 
 import tests.harness : Assert;
 import tests.fixtures : TempDir;
@@ -196,7 +197,8 @@ class ChaoticMockPlugin
         exec.exitCode = 0;
         exec.response.jsonrpc = "2.0";
         exec.response.id = request.id;
-        exec.response.error = RPCError(ErrorCode.InternalError, "Internal plugin error");
+        auto err = RPCError(ErrorCode.InternalError, "Internal plugin error");
+        exec.response.error = &err;
         exec.duration = 50.msecs;
         
         auto error = new PluginError("Plugin returned RPC error: " ~ exec.response.error.message);

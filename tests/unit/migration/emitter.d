@@ -3,8 +3,8 @@ module tests.unit.migration.emitter;
 import std.stdio;
 import std.string;
 import std.algorithm;
-import infrastructure.migration.emitter;
-import infrastructure.migration.common;
+import infrastructure.migration.emission.emitter;
+import infrastructure.migration.core.common;
 import infrastructure.config.schema.schema : TargetType, TargetLanguage;
 
 /// Test basic Builderfile emission
@@ -182,9 +182,4 @@ unittest
     assert(output.indexOf("// Review and adjust as needed") >= 0);
 }
 
-void main()
-{
-    writeln("Running migration.emitter tests...");
-    writeln("All migration.emitter tests passed!");
-}
 

@@ -10,8 +10,8 @@ import std.datetime;
 import std.datetime.stopwatch;
 import tests.harness;
 import tests.fixtures;
-import core.caching.cache;
-import core.caching.eviction;
+import engine.caching.targets.cache;
+import engine.caching.policies.eviction;
 import infrastructure.config.schema.schema;
 
 /// Test cache eviction under memory pressure

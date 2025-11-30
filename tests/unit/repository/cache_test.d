@@ -1,7 +1,7 @@
 module tests.unit.repository.cache_test;
 
-import infrastructure.repository.cache;
-import infrastructure.repository.types;
+import infrastructure.repository.storage.cache;
+import infrastructure.repository.core.types;
 import std.file : write, mkdir, exists, remove, rmdirRecurse, tempDir;
 import std.path : buildPath;
 import std.datetime : Clock;

@@ -9,9 +9,9 @@ import std.algorithm;
 import std.array;
 import core.time;
 import core.thread;
-import core.caching.policies.eviction;
-import core.caching.targets.cache;
-import core.caching.actions.action;
+import engine.caching.policies.eviction;
+import engine.caching.targets.cache;
+import engine.caching.actions.action;
 import tests.harness;
 import tests.fixtures;
 

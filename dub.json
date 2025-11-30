@@ -66,6 +66,31 @@
             "libs": ["tree-sitter"],
             "lflags-osx": ["-L/opt/homebrew/lib", "-L/usr/local/lib"],
             "dflags": ["-I/opt/homebrew/include", "-I/usr/local/include"]
+        },
+        {
+            "name": "unittest",
+            "targetType": "executable",
+            "sourcePaths": ["source", "tests"],
+            "importPaths": ["source", "tests"],
+            "excludedSourceFiles": ["source/frontend/lsp/core/main.d", "source/app.d", "tests/bench/*", "tests/property.d"],
+            "mainSourceFile": "tests/runner.d",
+            "sourceFiles": [
+                "bin/obj/blake3.o",
+                "bin/obj/blake3_dispatch.o",
+                "bin/obj/blake3_avx2.o",
+                "bin/obj/blake3_avx512.o",
+                "bin/obj/blake3_sse2.o",
+                "bin/obj/blake3_sse41.o",
+                "bin/obj/blake3_neon.o",
+                "bin/obj/simd_ops.o",
+                "bin/obj/cpu_detect.o",
+                "bin/obj/ts_loader.o",
+                "source/infrastructure/utils/serialization/c/varint.o",
+                "source/infrastructure/utils/serialization/c/memops.o"
+            ],
+            "libs": ["tree-sitter"],
+            "lflags-osx": ["-L/opt/homebrew/lib", "-L/usr/local/lib"],
+            "dflags": ["-I/opt/homebrew/include", "-I/usr/local/include"]
         }
     ],
     

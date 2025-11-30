@@ -4,7 +4,7 @@ import std.stdio;
 import std.algorithm;
 import std.array;
 import std.conv : to, text;
-import core.graph.graph;
+import engine.graph.core.graph;
 import infrastructure.config.schema.schema;
 import tests.harness;
 import tests.fixtures;
@@ -19,12 +19,14 @@ unittest
         .withSources(["main.d"])
         .build();
     
-    auto node = new BuildNode("test-target", target);
+    // Use TargetId constructor
+    auto node = new BuildNode(TargetId("test-target"), target);
     
-    Assert.equal(node.id, "test-target");
+    Assert.equal(node.id.toString(), "test-target");
     Assert.equal(node.status, BuildStatus.Pending);
-    Assert.isEmpty(node.dependencies);
-    Assert.equal(node.depth(), 0);
+    Assert.isEmpty(node.dependencyIds);
+    // Need a graph for depth calculation, even if empty
+    Assert.equal(node.depth(new BuildGraph()), 0);
     
     writeln("\x1b[32m  ✓ Node creation works correctly\x1b[0m");
 }
@@ -46,10 +48,10 @@ unittest
     auto appNode = graph.nodes["app"];
     auto libNode = graph.nodes["lib"];
     
-    Assert.equal(appNode.dependencies.length, 1);
-    Assert.equal(appNode.dependencies[0].id, "lib");
-    Assert.equal(libNode.dependents.length, 1);
-    Assert.equal(libNode.dependents[0].id, "app");
+    Assert.equal(appNode.dependencyIds.length, 1);
+    Assert.equal(appNode.dependencyIds[0].toString(), "lib");
+    Assert.equal(libNode.dependentIds.length, 1);
+    Assert.equal(libNode.dependentIds[0].toString(), "app");
     
     writeln("\x1b[32m  ✓ Dependencies link correctly\x1b[0m");
 }
@@ -79,9 +81,9 @@ unittest
     Assert.equal(sorted.length, 3);
     
     // lib1 should come before app, app before exe
-    auto lib1Idx = sorted.countUntil!(n => n.id == "lib1");
-    auto appIdx = sorted.countUntil!(n => n.id == "app");
-    auto exeIdx = sorted.countUntil!(n => n.id == "exe");
+    auto lib1Idx = sorted.countUntil!(n => n.id.toString() == "lib1");
+    auto appIdx = sorted.countUntil!(n => n.id.toString() == "app");
+    auto exeIdx = sorted.countUntil!(n => n.id.toString() == "exe");
     
     Assert.isTrue(lib1Idx < appIdx);
     Assert.isTrue(appIdx < exeIdx);
@@ -130,9 +132,9 @@ unittest
     auto r2 = graph.addDependency("c", "b");
     Assert.isTrue(r1.isOk && r2.isOk);
     
-    Assert.equal(graph.nodes["a"].depth(), 0);
-    Assert.equal(graph.nodes["b"].depth(), 1);
-    Assert.equal(graph.nodes["c"].depth(), 2);
+    Assert.equal(graph.nodes["a"].depth(graph), 0);
+    Assert.equal(graph.nodes["b"].depth(graph), 1);
+    Assert.equal(graph.nodes["c"].depth(graph), 2);
     
     writeln("\x1b[32m  ✓ Node depth calculated correctly\x1b[0m");
 }
@@ -154,13 +156,13 @@ unittest
     // Initially only lib is ready
     auto ready1 = graph.getReadyNodes();
     Assert.equal(ready1.length, 1);
-    Assert.equal(ready1[0].id, "lib");
+    Assert.equal(ready1[0].id.toString(), "lib");
     
     // After lib succeeds, app becomes ready
     graph.nodes["lib"].status = BuildStatus.Success;
     auto ready2 = graph.getReadyNodes();
     Assert.equal(ready2.length, 1);
-    Assert.equal(ready2[0].id, "app");
+    Assert.equal(ready2[0].id.toString(), "app");
     
     writeln("\x1b[32m  ✓ Ready nodes detected correctly\x1b[0m");
 }
@@ -265,10 +267,10 @@ unittest
     
     // bottom must come before both left and right
     // left and right must come before top
-    auto bottomIdx = sorted.countUntil!(n => n.id == "bottom");
-    auto leftIdx = sorted.countUntil!(n => n.id == "left");
-    auto rightIdx = sorted.countUntil!(n => n.id == "right");
-    auto topIdx = sorted.countUntil!(n => n.id == "top");
+    auto bottomIdx = sorted.countUntil!(n => n.id.toString() == "bottom");
+    auto leftIdx = sorted.countUntil!(n => n.id.toString() == "left");
+    auto rightIdx = sorted.countUntil!(n => n.id.toString() == "right");
+    auto topIdx = sorted.countUntil!(n => n.id.toString() == "top");
     
     Assert.isTrue(bottomIdx < leftIdx);
     Assert.isTrue(bottomIdx < rightIdx);
@@ -302,10 +304,10 @@ unittest
     Assert.equal(sorted.length, 4);
     
     // Within each chain, order must be preserved
-    auto a1Idx = sorted.countUntil!(n => n.id == "a1");
-    auto a2Idx = sorted.countUntil!(n => n.id == "a2");
-    auto b1Idx = sorted.countUntil!(n => n.id == "b1");
-    auto b2Idx = sorted.countUntil!(n => n.id == "b2");
+    auto a1Idx = sorted.countUntil!(n => n.id.toString() == "a1");
+    auto a2Idx = sorted.countUntil!(n => n.id.toString() == "a2");
+    auto b1Idx = sorted.countUntil!(n => n.id.toString() == "b1");
+    auto b2Idx = sorted.countUntil!(n => n.id.toString() == "b2");
     
     Assert.isTrue(a1Idx < a2Idx);
     Assert.isTrue(b1Idx < b2Idx);
@@ -338,14 +340,14 @@ unittest
     // Verify each level comes after the previous
     foreach (i; 1 .. depth)
     {
-        auto prevIdx = sorted.countUntil!(n => n.id == "level" ~ (i-1).to!string);
-        auto currIdx = sorted.countUntil!(n => n.id == "level" ~ i.to!string);
+        auto prevIdx = sorted.countUntil!(n => n.id.toString() == "level" ~ (i-1).to!string);
+        auto currIdx = sorted.countUntil!(n => n.id.toString() == "level" ~ i.to!string);
         Assert.isTrue(prevIdx < currIdx);
     }
     
     // Verify depth calculation
-    Assert.equal(graph.nodes["level0"].depth(), 0);
-    Assert.equal(graph.nodes["level9"].depth(), 9);
+    Assert.equal(graph.nodes["level0"].depth(graph), 0);
+    Assert.equal(graph.nodes["level9"].depth(graph), 9);
     
     writeln("\x1b[32m  ✓ Deep dependency chain handled correctly\x1b[0m");
 }
@@ -395,9 +397,9 @@ unittest
     auto sorted = graph.topologicalSort().unwrap();
     
     // Should still produce valid order
-    auto cIdx = sorted.countUntil!(n => n.id == "c");
-    auto bIdx = sorted.countUntil!(n => n.id == "b");
-    auto aIdx = sorted.countUntil!(n => n.id == "a");
+    auto cIdx = sorted.countUntil!(n => n.id.toString() == "c");
+    auto bIdx = sorted.countUntil!(n => n.id.toString() == "b");
+    auto aIdx = sorted.countUntil!(n => n.id.toString() == "a");
     
     Assert.isTrue(cIdx < bIdx);
     Assert.isTrue(bIdx < aIdx);
@@ -425,7 +427,7 @@ unittest
     auto roots = graph.getRoots();
     Assert.equal(roots.length, 2);
     
-    auto rootIds = roots.map!(n => n.id).array.sort.array;
+    auto rootIds = roots.map!(n => n.id.toString()).array.sort.array;
     Assert.equal(rootIds, ["lib1", "lib2"]);
     
     writeln("\x1b[32m  ✓ Root node identification works correctly\x1b[0m");
@@ -461,19 +463,19 @@ unittest
     graph.nodes["lib1"].status = BuildStatus.Success;
     auto ready2 = graph.getReadyNodes();
     Assert.equal(ready2.length, 1);
-    Assert.equal(ready2[0].id, "lib2");
+    Assert.equal(ready2[0].id.toString(), "lib2");
     
     // After lib2 succeeds, app becomes ready
     graph.nodes["lib2"].status = BuildStatus.Success;
     auto ready3 = graph.getReadyNodes();
     Assert.equal(ready3.length, 1);
-    Assert.equal(ready3[0].id, "app");
+    Assert.equal(ready3[0].id.toString(), "app");
     
     // After app succeeds, exe becomes ready
     graph.nodes["app"].status = BuildStatus.Success;
     auto ready4 = graph.getReadyNodes();
     Assert.equal(ready4.length, 1);
-    Assert.equal(ready4[0].id, "exe");
+    Assert.equal(ready4[0].id.toString(), "exe");
     
     writeln("\x1b[32m  ✓ Ready nodes tracking through build process works\x1b[0m");
 }
@@ -497,7 +499,7 @@ unittest
     // App should be ready since cached satisfies dependencies
     auto ready = graph.getReadyNodes();
     Assert.equal(ready.length, 1);
-    Assert.equal(ready[0].id, "app");
+    Assert.equal(ready[0].id.toString(), "app");
     
     writeln("\x1b[32m  ✓ Cached status correctly satisfies dependencies\x1b[0m");
 }
@@ -620,19 +622,19 @@ unittest
     graph.addDependency("d", "e").unwrap();
     
     // First call computes depth
-    auto depth1 = graph.nodes["a"].depth();
+    auto depth1 = graph.nodes["a"].depth(graph);
     Assert.equal(depth1, 4);
     
     // Second call uses cached value (should be instant)
-    auto depth2 = graph.nodes["a"].depth();
+    auto depth2 = graph.nodes["a"].depth(graph);
     Assert.equal(depth2, 4);
     
     // All nodes should have correct depth
-    Assert.equal(graph.nodes["e"].depth(), 0);
-    Assert.equal(graph.nodes["d"].depth(), 1);
-    Assert.equal(graph.nodes["c"].depth(), 2);
-    Assert.equal(graph.nodes["b"].depth(), 3);
-    Assert.equal(graph.nodes["a"].depth(), 4);
+    Assert.equal(graph.nodes["e"].depth(graph), 0);
+    Assert.equal(graph.nodes["d"].depth(graph), 1);
+    Assert.equal(graph.nodes["c"].depth(graph), 2);
+    Assert.equal(graph.nodes["b"].depth(graph), 3);
+    Assert.equal(graph.nodes["a"].depth(graph), 4);
     
     writeln("\x1b[32m  ✓ Depth memoization produces correct results\x1b[0m");
 }
@@ -656,14 +658,14 @@ unittest
     graph.addDependency("b", "c").unwrap();
     
     // Cache depths
-    Assert.equal(graph.nodes["a"].depth(), 2);
-    Assert.equal(graph.nodes["b"].depth(), 1);
+    Assert.equal(graph.nodes["a"].depth(graph), 2);
+    Assert.equal(graph.nodes["b"].depth(graph), 1);
     
     // Add new dependency: a -> c (shortcut)
     graph.addDependency("a", "c").unwrap();
     
     // Depth should still be correct (cached or recomputed)
-    Assert.equal(graph.nodes["a"].depth(), 2); // max(b.depth, c.depth) + 1
+    Assert.equal(graph.nodes["a"].depth(graph), 2); // max(b.depth, c.depth) + 1
     
     writeln("\x1b[32m  ✓ Depth cache invalidation maintains correctness\x1b[0m");
 }
@@ -712,7 +714,7 @@ unittest
     // Verify depth calculation is also fast with memoization
     sw.reset();
     sw.start();
-    auto maxDepth = graph.nodes["node99"].depth();
+    auto maxDepth = graph.nodes["node99"].depth(graph);
     sw.stop();
     auto depthTime = sw.peek().total!"msecs";
     
@@ -750,11 +752,10 @@ unittest
     
     // Depth should be computed efficiently with memoization
     // bottom is shared, so its depth should only be computed once
-    Assert.equal(graph.nodes["bottom"].depth(), 0);
-    Assert.equal(graph.nodes["left"].depth(), 1);
-    Assert.equal(graph.nodes["right"].depth(), 1);
-    Assert.equal(graph.nodes["top"].depth(), 2);
+    Assert.equal(graph.nodes["bottom"].depth(graph), 0);
+    Assert.equal(graph.nodes["left"].depth(graph), 1);
+    Assert.equal(graph.nodes["right"].depth(graph), 1);
+    Assert.equal(graph.nodes["top"].depth(graph), 2);
     
     writeln("\x1b[32m  ✓ Diamond dependencies with memoization work correctly\x1b[0m");
 }
-

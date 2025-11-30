@@ -2,7 +2,7 @@ module tests.unit.core.health;
 
 import std.stdio;
 import std.datetime : dur;
-import core.telemetry.health;
+import infrastructure.telemetry.monitoring.health;
 
 /// Test suite for health checkpoint system
 void runHealthTests()

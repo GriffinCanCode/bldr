@@ -3,7 +3,7 @@ module tests.unit.core.eviction;
 import std.stdio;
 import std.datetime;
 import std.algorithm;
-import core.caching.eviction;
+import engine.caching.policies.eviction;
 import tests.harness;
 
 // Mock cache entry structure for testing

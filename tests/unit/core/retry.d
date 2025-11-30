@@ -3,7 +3,7 @@ module tests.unit.core.retry;
 import std.stdio;
 import std.datetime;
 import std.conv;
-import core.execution.recovery.retry;
+import engine.runtime.recovery.retry;
 import infrastructure.errors;
 
 /// Test retry policy creation

@@ -1,12 +1,12 @@
 module tests.unit.core.hermetic_builds;
 
 import std.stdio : writeln;
-import std.file : exists, mkdirRecurse, remove, writeText, readText, tempDir, rmdirRecurse, write;
+import std.file : exists, mkdirRecurse, remove, write, readText, tempDir, rmdirRecurse, write;
 import std.path : buildPath, absolutePath;
 import std.process : execute, executeShell;
 import std.algorithm : canFind;
 import std.conv : to;
-import core.execution.hermetic;
+import engine.runtime.hermetic;
 import engine.runtime.hermetic.determinism.detector;
 import engine.runtime.hermetic.determinism.enforcer;
 import tests.harness;
@@ -36,7 +36,7 @@ version(unittest):
     
     // Create simple C program
     auto srcFile = buildPath(srcDir, "hello.c");
-    writeText(srcFile, `
+    write(srcFile, `
 #include <stdio.h>
 
 int main() {
@@ -134,8 +134,8 @@ int main() {
     }
     
     // Create test files
-    writeText(buildPath(inputDir, "input.txt"), "input data");
-    writeText(buildPath(forbiddenDir, "forbidden.txt"), "forbidden data");
+    write(buildPath(inputDir, "input.txt"), "input data");
+    write(buildPath(forbiddenDir, "forbidden.txt"), "forbidden data");
     
     // Create hermetic spec
     auto spec = SandboxSpecBuilder.create()
@@ -188,7 +188,7 @@ int main() {
     
     // Create simple source file
     auto srcFile = buildPath(srcDir, "simple.txt");
-    writeText(srcFile, "reproducible content");
+    write(srcFile, "reproducible content");
     
     // Test that specs created identically are the same
     auto createSpec = () {
@@ -568,16 +568,16 @@ int main() {
     }
     
     // Create multiple source files
-    writeText(buildPath(srcDir, "main.c"), `
+    write(buildPath(srcDir, "main.c"), `
 #include "utils.h"
 int main() { return add(1, 2); }
 `);
     
-    writeText(buildPath(srcDir, "utils.h"), `
+    write(buildPath(srcDir, "utils.h"), `
 int add(int a, int b);
 `);
     
-    writeText(buildPath(srcDir, "utils.c"), `
+    write(buildPath(srcDir, "utils.c"), `
 int add(int a, int b) { return a + b; }
 `);
     

@@ -5,8 +5,8 @@ import std.datetime;
 import std.conv;
 import core.thread;
 import core.atomic;
-import core.distributed.worker.peers;
-import core.distributed.protocol.protocol;
+import engine.distributed.worker.peers;
+import engine.distributed.protocol.protocol;
 import tests.harness;
 
 // ==================== BASIC PEER REGISTRATION TESTS ====================
@@ -23,7 +23,7 @@ unittest
     
     Assert.isTrue(result.isOk);
     
-    auto peers = registry.allPeers();
+    auto peers = registry.getAllPeers();
     Assert.equal(peers.length, 1);
     Assert.equal(peers[0].id.value, peerId.value);
     Assert.equal(peers[0].address, "peer2:9100");
@@ -42,7 +42,7 @@ unittest
     auto result = registry.register(selfId, "self:9100");
     Assert.isTrue(result.isOk);  // Should succeed but not actually register
     
-    auto peers = registry.allPeers();
+    auto peers = registry.getAllPeers();
     Assert.equal(peers.length, 0);  // Should not include self
     
     writeln("\x1b[32m  ✓ Self registration ignored\x1b[0m");
@@ -59,7 +59,7 @@ unittest
     registry.register(WorkerId(3), "peer3:9100");
     registry.register(WorkerId(4), "peer4:9100");
     
-    auto peers = registry.allPeers();
+    auto peers = registry.getAllPeers();
     Assert.equal(peers.length, 3);
     
     writeln("\x1b[32m  ✓ Multiple peer registration works\x1b[0m");
@@ -76,12 +76,12 @@ unittest
     
     // Register initially
     registry.register(peerId, "peer2:9100");
-    auto peers1 = registry.allPeers();
+    auto peers1 = registry.getAllPeers();
     Assert.equal(peers1.length, 1);
     
     // Register again with different address
     registry.register(peerId, "peer2:9200");
-    auto peers2 = registry.allPeers();
+    auto peers2 = registry.getAllPeers();
     Assert.equal(peers2.length, 1);  // Should still be only 1 peer
     Assert.equal(peers2[0].address, "peer2:9200");  // Address updated
     
@@ -100,11 +100,11 @@ unittest
     auto peerId = WorkerId(2);
     registry.register(peerId, "peer2:9100");
     
-    Assert.equal(registry.allPeers().length, 1);
+    Assert.equal(registry.getAllPeers().length, 1);
     
     registry.unregister(peerId);
     
-    Assert.equal(registry.allPeers().length, 0);
+    Assert.equal(registry.getAllPeers().length, 0);
     
     writeln("\x1b[32m  ✓ Peer unregistration works\x1b[0m");
 }
@@ -137,7 +137,7 @@ unittest
     // Update metrics
     registry.updateMetrics(peerId, 10, 0.75);
     
-    auto peers = registry.allPeers();
+    auto peers = registry.getAllPeers();
     Assert.equal(peers.length, 1);
     Assert.equal(atomicLoad(peers[0].queueDepth), 10);
     Assert.equal(atomicLoad(peers[0].loadFactor), 0.75f);
@@ -168,14 +168,14 @@ unittest
     auto peerId = WorkerId(2);
     registry.register(peerId, "peer2:9100");
     
-    auto peers1 = registry.allPeers();
+    auto peers1 = registry.getAllPeers();
     auto firstSeen = peers1[0].lastSeen;
     
     Thread.sleep(50.msecs);
     
     registry.updateMetrics(peerId, 5, 0.5);
     
-    auto peers2 = registry.allPeers();
+    auto peers2 = registry.getAllPeers();
     auto secondSeen = peers2[0].lastSeen;
     
     Assert.isTrue(secondSeen > firstSeen);
@@ -195,12 +195,12 @@ unittest
     auto peerId = WorkerId(2);
     registry.register(peerId, "peer2:9100");
     
-    auto peers1 = registry.allPeers();
+    auto peers1 = registry.getAllPeers();
     Assert.isTrue(atomicLoad(peers1[0].alive));
     
     registry.markDead(peerId);
     
-    auto peers2 = registry.allPeers();
+    auto peers2 = registry.getAllPeers();
     Assert.isFalse(atomicLoad(peers2[0].alive));
     
     writeln("\x1b[32m  ✓ Mark peer dead works\x1b[0m");
@@ -218,13 +218,13 @@ unittest
     
     registry.markDead(peerId);
     
-    auto peers1 = registry.allPeers();
+    auto peers1 = registry.getAllPeers();
     Assert.isFalse(atomicLoad(peers1[0].alive));
     
     // Update metrics should revive peer
     registry.updateMetrics(peerId, 5, 0.5);
     
-    auto peers2 = registry.allPeers();
+    auto peers2 = registry.getAllPeers();
     Assert.isTrue(atomicLoad(peers2[0].alive));
     
     writeln("\x1b[32m  ✓ Metrics update revives peer\x1b[0m");
@@ -245,7 +245,7 @@ unittest
     registry.register(peerId1, "peer2:9100");
     registry.register(peerId2, "peer3:9100");
     
-    Assert.equal(registry.allPeers().length, 2);
+    Assert.equal(registry.getAllPeers().length, 2);
     
     // Keep peer2 alive
     Thread.sleep(30.msecs);
@@ -255,9 +255,9 @@ unittest
     Thread.sleep(40.msecs);
     
     // Prune stale peers
-    registry.pruneStalePeers();
+    registry.pruneStale();
     
-    auto peers = registry.allPeers();
+    auto peers = registry.getAllPeers();
     Assert.equal(peers.length, 1);
     Assert.equal(peers[0].id.value, peerId2.value);
     
@@ -274,9 +274,9 @@ unittest
     registry.register(WorkerId(2), "peer2:9100");
     registry.register(WorkerId(3), "peer3:9100");
     
-    registry.pruneStalePeers();
+    registry.pruneStale();
     
-    Assert.equal(registry.allPeers().length, 2);
+    Assert.equal(registry.getAllPeers().length, 2);
     
     writeln("\x1b[32m  ✓ Prune with no stale peers works\x1b[0m");
 }
@@ -417,7 +417,7 @@ unittest
     
     registry.markDead(peerId2);
     
-    auto alive = registry.alivePeers();
+    auto alive = registry.getAlivePeers();
     Assert.equal(alive.length, 2);
     
     // Check that dead peer is not included
@@ -442,8 +442,8 @@ unittest
     registry.register(WorkerId(2), "peer2:9100");
     registry.register(WorkerId(3), "peer3:9100");
     
-    auto alive = registry.alivePeers();
-    auto all = registry.allPeers();
+    auto alive = registry.getAlivePeers();
+    auto all = registry.getAllPeers();
     
     Assert.equal(alive.length, all.length);
     
@@ -527,7 +527,7 @@ unittest
             registry.updateMetrics(WorkerId(i), cast(size_t)i, cast(float)i / 20.0);
         }
         
-        auto peers = registry.allPeers();
+        auto peers = registry.getAllPeers();
         Assert.equal(peers.length, 10);
         
         writeln("\x1b[32m  ✓ Concurrent metrics update works\x1b[0m");

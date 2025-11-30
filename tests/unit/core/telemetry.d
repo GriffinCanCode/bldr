@@ -4,7 +4,7 @@ import std.stdio;
 import std.datetime : Clock, dur;
 import std.algorithm : all, canFind;
 import std.string : indexOf;
-import core.telemetry;
+import infrastructure.telemetry;
 import frontend.cli.events.events;
 import infrastructure.errors;
 

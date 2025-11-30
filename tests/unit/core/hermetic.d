@@ -1,10 +1,11 @@
 module tests.unit.core.hermetic;
 
 import std.stdio : writeln;
-import std.file : exists, mkdirRecurse, remove, writeText, readText, tempDir, rmdirRecurse;
+import std.file : exists, mkdirRecurse, remove, write, readText, tempDir, rmdirRecurse;
 import std.path : buildPath, absolutePath;
 import std.process : execute;
-import core.execution.hermetic;
+import std.exception : collectException;
+import engine.runtime.hermetic;
 import tests.harness;
 
 @("hermetic.spec.creation")
@@ -107,7 +108,7 @@ import tests.harness;
 }
 
 @("hermetic.spec.builder_helpers")
-@safe unittest
+@system unittest
 {
     writeln("Testing spec builder helpers...");
     
@@ -150,11 +151,11 @@ import tests.harness;
     
     auto executorResult = HermeticExecutor.create(spec.unwrap());
     assert(executorResult.isOk, "Should create executor: " ~ 
-        (executorResult.isErr ? executorResult.unwrapErr() : ""));
+        (executorResult.isErr ? executorResult.unwrapErr().toString() : ""));
 }
 
 @("hermetic.executor.platform")
-@safe unittest
+@system unittest
 {
     writeln("Testing platform detection...");
     
@@ -187,9 +188,9 @@ import tests.harness;
     scope(exit)
     {
         if (exists(outputDir))
-            try { rmdirRecurse(outputDir); } catch (Exception) {}
+            collectException(rmdirRecurse(outputDir));
         if (exists(tempWorkDir))
-            try { rmdirRecurse(tempWorkDir); } catch (Exception) {}
+            collectException(rmdirRecurse(tempWorkDir));
     }
     
     // Create spec
@@ -211,7 +212,7 @@ import tests.harness;
     auto executorResult = HermeticExecutor.create(spec.unwrap(), tempWorkDir);
     if (executorResult.isErr)
     {
-        Assert.fail("Failed to create executor: " ~ executorResult.unwrapErr());
+        Assert.fail("Failed to create executor: " ~ executorResult.unwrapErr().toString());
     }
     
     auto executor = executorResult.unwrap();
@@ -221,7 +222,7 @@ import tests.harness;
     
     if (result.isErr)
     {
-        Assert.fail("Execution failed: " ~ result.unwrapErr());
+        Assert.fail("Execution failed: " ~ result.unwrapErr().toString());
     }
     
     auto output = result.unwrap();
@@ -253,12 +254,12 @@ import tests.harness;
     scope(exit)
     {
         if (exists(testRoot))
-            try { rmdirRecurse(testRoot); } catch (Exception) {}
+            collectException(rmdirRecurse(testRoot));
     }
     
     // Create input file
     auto inputFile = buildPath(inputDir, "input.txt");
-    writeText(inputFile, "test input");
+    write(inputFile, "test input");
     
     // Create spec
     auto spec = SandboxSpecBuilder.create()
@@ -278,7 +279,7 @@ import tests.harness;
     auto executorResult = HermeticExecutor.create(spec.unwrap(), tempWorkDir);
     if (executorResult.isErr)
     {
-        Assert.fail("Failed to create executor: " ~ executorResult.unwrapErr());
+        Assert.fail("Failed to create executor: " ~ executorResult.unwrapErr().toString());
     }
     
     auto executor = executorResult.unwrap();
@@ -291,7 +292,7 @@ import tests.harness;
     }
     else
     {
-        writeln("  Read input: ", readResult.unwrapErr());
+        writeln("  Read input: ", readResult.unwrapErr().toString());
     }
     
     // Try to write to output (should work)
@@ -309,7 +310,7 @@ import tests.harness;
         }
         else
         {
-            writeln("  Write output: ", writeResult.unwrapErr());
+            writeln("  Write output: ", writeResult.unwrapErr().toString());
         }
     }
 }
@@ -327,7 +328,7 @@ import tests.harness;
     scope(exit)
     {
         if (exists(tempWorkDir))
-            try { rmdirRecurse(tempWorkDir); } catch (Exception) {}
+            collectException(rmdirRecurse(tempWorkDir));
     }
     
     auto spec = SandboxSpecBuilder.create()
@@ -380,4 +381,3 @@ version(unittest)
         writeln("=== Hermetic Execution Tests ===");
     }
 }
-

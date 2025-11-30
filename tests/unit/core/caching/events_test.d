@@ -3,8 +3,8 @@ module tests.unit.core.caching.events_test;
 import std.stdio;
 import std.datetime;
 import core.time;
-import core.caching.events;
-import core.caching.metrics;
+import engine.caching.events;
+import engine.caching.metrics;
 import frontend.cli.events.events;
 import tests.harness;
 import tests.fixtures;
@@ -170,8 +170,8 @@ unittest
     auto after = Clock.currTime();
     
     // Timestamp should be between before and after
-    Assert.isTrue(event.timestamp >= before);
-    Assert.isTrue(event.timestamp <= after);
+    Assert.isTrue(event.eventTime >= before);
+    Assert.isTrue(event.eventTime <= after);
     
     writeln("\x1b[32m  ✓ Event timestamp generation works\x1b[0m");
 }
@@ -181,14 +181,14 @@ unittest
     writeln("\x1b[36m[TEST]\x1b[0m CacheEvents - Multiple events ordering");
     
     auto event1 = new CacheMissEvent("target1", 1.msecs);
-    auto ts1 = event1.timestamp;
+    auto ts1 = event1.eventTime;
     
     // Small delay
     import core.thread : Thread;
     Thread.sleep(5.msecs);
     
     auto event2 = new CacheHitEvent("target2", 200, 2.msecs, false);
-    auto ts2 = event2.timestamp;
+    auto ts2 = event2.eventTime;
     
     // Second event should have later timestamp
     Assert.isTrue(ts2 > ts1, "Later events should have later timestamps");

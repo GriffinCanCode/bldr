@@ -5,7 +5,7 @@ import std.file;
 import std.path;
 import std.json;
 import infrastructure.migration.systems.npm;
-import infrastructure.migration.common;
+import infrastructure.migration.core.common;
 import infrastructure.config.schema.schema : TargetType, TargetLanguage;
 
 /// Test npm migrator system name
@@ -128,10 +128,4 @@ unittest
     assert(hasTestTarget);
 }
 
-void main()
-{
-    import std.conv : to;
-    writeln("Running migration.npm tests...");
-    writeln("All migration.npm tests passed!");
-}
 

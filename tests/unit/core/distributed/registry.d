@@ -4,8 +4,8 @@ import std.stdio;
 import std.datetime;
 import std.conv;
 import core.thread;
-import core.distributed.coordinator.registry;
-import core.distributed.protocol.protocol;
+import engine.distributed.coordinator.registry;
+import engine.distributed.protocol.protocol;
 import tests.harness;
 
 // ==================== BASIC REGISTRATION TESTS ====================
@@ -176,7 +176,7 @@ unittest
     
     // Create heartbeat
     HeartBeat hb;
-    hb.workerId = workerId;
+    hb.worker = workerId;
     hb.state = WorkerState.Executing;
     hb.metrics.queueDepth = 5;
     hb.metrics.cpuUsage = 0.75;
@@ -238,7 +238,7 @@ unittest
         Thread.sleep(30.msecs);
         
         HeartBeat hb;
-        hb.workerId = workerId;
+        hb.worker = workerId;
         hb.state = WorkerState.Idle;
         registry.updateHeartbeat(workerId, hb);
         
@@ -303,21 +303,21 @@ unittest
     
     // Set different loads
     HeartBeat hb1;
-    hb1.workerId = id1;
+    hb1.worker = id1;
     hb1.state = WorkerState.Executing;
     hb1.metrics.queueDepth = 10;  // High load
     hb1.metrics.cpuUsage = 0.9;
     registry.updateHeartbeat(id1, hb1);
     
     HeartBeat hb2;
-    hb2.workerId = id2;
+    hb2.worker = id2;
     hb2.state = WorkerState.Idle;
     hb2.metrics.queueDepth = 2;  // Low load
     hb2.metrics.cpuUsage = 0.2;
     registry.updateHeartbeat(id2, hb2);
     
     HeartBeat hb3;
-    hb3.workerId = id3;
+    hb3.worker = id3;
     hb3.state = WorkerState.Executing;
     hb3.metrics.queueDepth = 5;  // Medium load
     hb3.metrics.cpuUsage = 0.5;
@@ -348,7 +348,7 @@ unittest
     
     // Keep worker2 alive with heartbeat
     HeartBeat hb2;
-    hb2.workerId = id2;
+    hb2.worker = id2;
     hb2.state = WorkerState.Idle;
     registry.updateHeartbeat(id2, hb2);
     
@@ -464,7 +464,7 @@ unittest
         foreach (i; parallel(iota(10)))
         {
             HeartBeat hb;
-            hb.workerId = workerIds[i];
+            hb.worker = workerIds[i];
             hb.state = WorkerState.Idle;
             hb.metrics.queueDepth = cast(size_t)i;
             registry.updateHeartbeat(workerIds[i], hb);

@@ -3,7 +3,7 @@ module tests.unit.core.environment;
 import std.stdio;
 import std.algorithm : canFind;
 import std.conv : to;
-import core.telemetry.environment;
+import infrastructure.telemetry.collection.environment;
 
 unittest
 {

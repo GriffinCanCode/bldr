@@ -8,10 +8,12 @@ import std.array;
 import std.conv;
 import tests.harness;
 import tests.fixtures;
+import tests.mocks;
 import infrastructure.config.schema.schema;
-import core.graph.graph;
-import core.execution.core.engine;
+import engine.graph.core.graph;
+import engine.runtime.core.engine.executor;
 import languages.base.base;
+import infrastructure.errors;
 
 // Import all language handlers
 import languages.scripting.python;
@@ -40,6 +42,16 @@ import languages.compiled.haskell;
 import languages.compiled.ocaml;
 import languages.compiled.protobuf;
 import languages.web.elm;
+
+/// Helper to test build with a handler
+Result!(string, BuildError) testBuild(LanguageHandler handler, Target target, WorkspaceConfig config)
+{
+    BuildContext context;
+    context.target = target;
+    context.config = config;
+    // Other fields can be null/false for basic testing
+    return handler.buildWithContext(context);
+}
 
 /// Test fixture for language handler integration tests
 class LanguageHandlerFixture
@@ -969,4 +981,3 @@ unittest
         writeln("\x1b[33m  ~ Elm handler test skipped (elm not available)\x1b[0m");
     }
 }
-

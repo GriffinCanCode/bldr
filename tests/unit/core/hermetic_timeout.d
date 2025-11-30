@@ -1,7 +1,7 @@
 module tests.unit.core.hermetic_timeout;
 
 import std.datetime : seconds, msecs, Duration;
-import core.execution.hermetic.timeout;
+import engine.runtime.hermetic.security.timeout;
 import core.thread : Thread;
 
 @safe unittest

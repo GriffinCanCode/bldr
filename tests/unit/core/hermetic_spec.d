@@ -1,6 +1,6 @@
 module tests.unit.core.hermetic_spec;
 
-import core.execution.hermetic.spec;
+import engine.runtime.hermetic.core.spec;
 
 @safe unittest
 {

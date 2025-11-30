@@ -11,11 +11,11 @@ import std.parallelism;
 import std.exception;
 import core.thread;
 import core.time;
-import core.caching.targets.cache;
-import core.caching.actions.action;
-import core.caching.storage.cas;
-import core.caching.coordinator;
-import core.caching.policies.eviction;
+import engine.caching.targets.cache;
+import engine.caching.actions.action;
+import engine.caching.storage.cas;
+import engine.caching.coordinator.coordinator;
+import engine.caching.policies.eviction;
 import tests.harness;
 import tests.fixtures;
 import infrastructure.errors;
@@ -522,9 +522,9 @@ unittest
     Assert.notEqual(hash1, hash3);
     
     // Retrieving should return correct content
-    Assert.equals(cas.getBlob(hash1).unwrap(), data1);
-    Assert.equals(cas.getBlob(hash2).unwrap(), data2);
-    Assert.equals(cas.getBlob(hash3).unwrap(), data3);
+    Assert.equal(cas.getBlob(hash1).unwrap(), data1);
+    Assert.equal(cas.getBlob(hash2).unwrap(), data2);
+    Assert.equal(cas.getBlob(hash3).unwrap(), data3);
     
     writeln("\x1b[32m  ✓ Hash collision prevention verified\x1b[0m");
 }
@@ -606,7 +606,7 @@ unittest
     auto tempDir = scoped(new TempDir("edge-evict-access"));
     auto cacheDir = buildPath(tempDir.getPath(), ".cache");
     
-    CacheConfig config;
+    ActionCacheConfig config;
     config.maxEntries = 3;
     config.maxSize = 0;
     config.maxAge = 365;
@@ -784,7 +784,7 @@ unittest
     coordinator.update("mixed-target", [sourcePath], [], "target-hash");
     
     // Update action cache
-    import core.caching.actions.action : ActionId, ActionType;
+    import engine.caching.actions.action : ActionId, ActionType;
     auto actionId = ActionId("mixed-target", ActionType.Compile, "action-hash", "source.d");
     
     tempDir.createFile("output.o", "binary");
@@ -874,12 +874,12 @@ unittest
     Assert.isTrue(getResult.isOk, "Large blob retrieval should succeed");
     
     auto retrieved = getResult.unwrap();
-    Assert.equals(retrieved.length, largeData.length);
+    Assert.equal(retrieved.length, largeData.length);
     
     // Verify data integrity
     foreach (i; 0 .. 1000)  // Sample check
     {
-        Assert.equals(retrieved[i], largeData[i]);
+        Assert.equal(retrieved[i], largeData[i]);
     }
     
     writeln("\x1b[32m  ✓ Very large blob storage handled (", 

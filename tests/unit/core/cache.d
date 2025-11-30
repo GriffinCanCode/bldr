@@ -7,8 +7,8 @@ import std.datetime;
 import std.conv;
 import std.range;
 import std.parallelism;
-import core.caching.cache;
-import core.caching.eviction;
+import engine.caching.targets.cache;
+import engine.caching.policies.eviction;
 import tests.harness;
 import tests.fixtures;
 

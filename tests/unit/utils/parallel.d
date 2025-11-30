@@ -4,13 +4,8 @@ import std.stdio;
 import std.algorithm;
 import std.array;
 import std.range;
-<<<<<<< Updated upstream
 import std.conv;
 import core.atomic;
-=======
-import std.datetime.stopwatch;
-import infrastructure.utils.parallel;
->>>>>>> Stashed changes
 import tests.harness;
 import infrastructure.utils.concurrency.parallel;
 import infrastructure.utils.concurrency.pool;
@@ -19,7 +14,6 @@ unittest
 {
     writeln("\x1b[36m[TEST]\x1b[0m utils.parallel - ParallelExecutor basic operations");
     
-<<<<<<< Updated upstream
     // Test sequential execution with single item
     auto singleItem = [42];
     auto singleResult = ParallelExecutor.execute(singleItem, (int x) => cast(int)(x * 2), 1);
@@ -29,20 +23,9 @@ unittest
     // Test parallel execution with multiple items
     auto data = iota(10).array;
     auto result = ParallelExecutor.execute(data, (int x) => cast(int)(x * 2), 4);
-=======
-    // Test data transformation in parallel
-    auto data = iota(100).array;
->>>>>>> Stashed changes
     
-    auto result = ParallelExecutor.execute(
-        data,
-        (int x) => x * x,
-        4  // 4 threads
-    );
-    
-    Assert.equal(result.length, 100);
+    Assert.equal(result.length, 10);
     Assert.equal(result[0], 0);
-<<<<<<< Updated upstream
     Assert.equal(result[5], 10);
     Assert.equal(result[9], 18);
     
@@ -52,17 +35,10 @@ unittest
     Assert.equal(emptyResult.length, 0);
     
     writeln("\x1b[32m  ✓ ParallelExecutor operations\x1b[0m");
-=======
-    Assert.equal(result[5], 25);
-    Assert.equal(result[10], 100);
-    
-    writeln("\x1b[32m  ✓ Parallel map operation works correctly\x1b[0m");
->>>>>>> Stashed changes
 }
 
 unittest
 {
-<<<<<<< Updated upstream
     writeln("\x1b[36m[TEST]\x1b[0m utils.parallel - ParallelExecutor auto parallelism");
     
     // Test automatic parallelism based on CPU count
@@ -75,6 +51,28 @@ unittest
     Assert.equal(result[99], 9801);
     
     writeln("\x1b[32m  ✓ Auto parallelism\x1b[0m");
+}
+
+unittest
+{
+    writeln("\x1b[36m[TEST]\x1b[0m utils.parallel - ParallelExecutor sequential fallback");
+    
+    // Test that single-threaded execution works
+    auto data = iota(10).array;
+    
+    auto result = ParallelExecutor.execute(
+        data,
+        (int x) => x + 1,
+        1  // Single thread
+    );
+    
+    Assert.equal(result.length, 10);
+    foreach (i; 0 .. 10)
+    {
+        Assert.equal(result[i], i + 1);
+    }
+    
+    writeln("\x1b[32m  ✓ Sequential fallback works correctly\x1b[0m");
 }
 
 unittest
@@ -166,31 +164,10 @@ unittest
     }
     
     writeln("\x1b[32m  ✓ Parallel correctness\x1b[0m");
-=======
-    writeln("\x1b[36m[TEST]\x1b[0m utils.parallel - Sequential fallback");
-    
-    // Test that single-threaded execution works
-    auto data = iota(10).array;
-    
-    auto result = ParallelExecutor.execute(
-        data,
-        (int x) => x + 1,
-        1  // Single thread
-    );
-    
-    Assert.equal(result.length, 10);
-    foreach (i; 0 .. 10)
-    {
-        Assert.equal(result[i], i + 1);
-    }
-    
-    writeln("\x1b[32m  ✓ Sequential fallback works correctly\x1b[0m");
->>>>>>> Stashed changes
 }
 
 unittest
 {
-<<<<<<< Updated upstream
     writeln("\x1b[36m[TEST]\x1b[0m utils.parallel - ThreadPool with complex operations");
     
     auto pool = new ThreadPool(4);
@@ -228,28 +205,10 @@ unittest
     Assert.equal(result[999], (999 * 999) % 997);
     
     writeln("\x1b[32m  ✓ Stress test\x1b[0m");
-=======
-    writeln("\x1b[36m[TEST]\x1b[0m utils.parallel - Auto parallelism");
-    
-    // Test automatic parallelism based on CPU count
-    auto data = iota(50).array;
-    
-    auto result = ParallelExecutor.executeAuto(
-        data,
-        (int x) => x * 2
-    );
-    
-    Assert.equal(result.length, 50);
-    Assert.equal(result[0], 0);
-    Assert.equal(result[49], 98);
-    
-    writeln("\x1b[32m  ✓ Auto parallelism works correctly\x1b[0m");
->>>>>>> Stashed changes
 }
 
 unittest
 {
-<<<<<<< Updated upstream
     writeln("\x1b[36m[TEST]\x1b[0m utils.parallel - ThreadPool multiple operations");
     
     auto pool = new ThreadPool(4);
@@ -269,20 +228,4 @@ unittest
     Assert.equal(result3, [10, 20]);
     
     writeln("\x1b[32m  ✓ Multiple operations\x1b[0m");
-=======
-    writeln("\x1b[36m[TEST]\x1b[0m utils.parallel - Empty input handling");
-    
-    int[] emptyData = [];
-    
-    auto result = ParallelExecutor.execute(
-        emptyData,
-        (int x) => x * 2,
-        4
-    );
-    
-    Assert.isEmpty(result);
-    
-    writeln("\x1b[32m  ✓ Empty input handled correctly\x1b[0m");
->>>>>>> Stashed changes
 }
-

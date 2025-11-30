@@ -13,9 +13,9 @@ import core.sync.mutex : Mutex;
 
 import tests.harness : Assert;
 import tests.fixtures : TempDir;
-import core.distributed.coordinator.coordinator;
-import core.distributed.coordinator.registry;
-import core.distributed.protocol.protocol;
+import engine.distributed.coordinator.coordinator;
+import engine.distributed.coordinator.registry;
+import engine.distributed.protocol.protocol;
 import infrastructure.errors;
 import infrastructure.utils.logging.logger;
 

@@ -1,8 +1,8 @@
 module tests.unit.core.hermetic_monitor;
 
 import std.datetime : seconds, msecs;
-import core.execution.hermetic.monitor;
-import core.execution.hermetic.spec : ResourceLimits;
+import engine.runtime.hermetic.monitoring;
+import engine.runtime.hermetic.core.spec : ResourceLimits;
 
 @safe unittest
 {
@@ -63,7 +63,7 @@ version(linux)
 {
     @safe unittest
     {
-        import core.execution.hermetic.monitor.linux : LinuxMonitor;
+        import engine.runtime.hermetic.monitoring.linux : LinuxMonitor;
         
         // Test Linux-specific monitor creation
         auto limits = ResourceLimits.defaults();
@@ -82,7 +82,7 @@ version(OSX)
 {
     @safe unittest
     {
-        import core.execution.hermetic.monitor.macos : MacOSMonitor;
+        import engine.runtime.hermetic.monitoring.macos : MacOSMonitor;
         
         // Test macOS-specific monitor creation
         auto limits = ResourceLimits.defaults();
@@ -101,7 +101,7 @@ version(Windows)
 {
     @trusted unittest
     {
-        import core.execution.hermetic.monitor.windows : WindowsMonitor;
+        import engine.runtime.hermetic.monitoring.windows : WindowsMonitor;
         
         // Test Windows-specific monitor creation
         auto limits = ResourceLimits.defaults();

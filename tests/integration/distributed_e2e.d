@@ -1,7 +1,8 @@
 module tests.integration.distributed_e2e;
 
 import std.datetime : Duration, seconds, msecs;
-import std.socket : Socket, TcpSocket, InternetAddress, SocketShutdown;
+import std.socket : Socket, TcpSocket, InternetAddress, SocketShutdown, SocketOption, SocketOptionLevel;
+import engine.distributed.protocol.messages : WorkerRegistration, Registration = WorkerRegistration, serializeRegistration;
 import std.conv : to;
 import std.algorithm : map, filter, canFind;
 import std.array : array;
@@ -14,13 +15,13 @@ import core.time : MonoTime;
 
 import tests.harness : Assert;
 import tests.fixtures : TempDir, scoped;
-import core.distributed.coordinator.coordinator;
-import core.distributed.coordinator.registry;
-import core.distributed.coordinator.scheduler;
-import core.distributed.protocol.protocol;
-import core.distributed.protocol.messages;
-import core.distributed.protocol.transport;
-import core.graph.graph : BuildGraph, BuildNode, TargetId;
+import engine.distributed.coordinator.coordinator;
+import engine.distributed.coordinator.registry;
+import engine.distributed.coordinator.scheduler;
+import engine.distributed.protocol.protocol;
+import engine.distributed.protocol.messages;
+import engine.distributed.protocol.transport;
+import engine.graph.core.graph : BuildGraph, BuildNode;
 import infrastructure.errors;
 import infrastructure.utils.logging.logger;
 
@@ -86,7 +87,7 @@ class E2EWorker
             
             // Send registration
             auto registration = Registration(address, Capabilities());
-            auto regData = registration.serialize();
+            auto regData = serializeRegistration(registration);
             
             // Send message type + length + data
             ubyte[1] typeBytes = [cast(ubyte)MessageType.Registration];
@@ -145,11 +146,11 @@ class E2EWorker
     /// Handle client connection (action request)
     private void handleClient(Socket client) @trusted
     {
-        scope(exit)
-        {
+        void safeClose() {
             try { client.shutdown(SocketShutdown.BOTH); } catch (Exception) {}
             try { client.close(); } catch (Exception) {}
         }
+        scope(exit) safeClose();
         
         try
         {
@@ -360,9 +361,10 @@ unittest
     // Schedule a simple action
     ubyte[32] hash;
     hash[0] = 1;
-    auto action = ActionRequest(
+    auto action = new ActionRequest(
         ActionId(hash),
-        ["echo", "Hello from distributed build"],
+        "echo 'Hello from distributed build'",
+        cast(string[string])null,
         [],
         [],
         Capabilities(),
@@ -398,9 +400,10 @@ unittest
     {
         ubyte[32] hash;
         hash[0] = cast(ubyte)(10 + i);
-        auto action = ActionRequest(
+        auto action = new ActionRequest(
             ActionId(hash),
-            ["echo", "Action " ~ i.to!string],
+            "echo 'Action " ~ i.to!string ~ "'",
+            cast(string[string])null,
             [],
             [],
             Capabilities(),
@@ -446,9 +449,10 @@ unittest
     hashB[0] = 'B';
     hashC[0] = 'C';
     
-    auto actionC = ActionRequest(
+    auto actionC = new ActionRequest(
         ActionId(hashC),
-        ["echo", "Task C"],
+        "echo 'Task C'",
+        cast(string[string])null,
         [],
         [],
         Capabilities(),
@@ -456,9 +460,10 @@ unittest
         10.seconds
     );
     
-    auto actionB = ActionRequest(
+    auto actionB = new ActionRequest(
         ActionId(hashB),
-        ["echo", "Task B"],
+        "echo 'Task B'",
+        cast(string[string])null,
         [],
         [],
         Capabilities(),
@@ -466,9 +471,10 @@ unittest
         10.seconds
     );
     
-    auto actionA = ActionRequest(
+    auto actionA = new ActionRequest(
         ActionId(hashA),
-        ["echo", "Task A"],
+        "echo 'Task A'",
+        cast(string[string])null,
         [],
         [],
         Capabilities(),
@@ -504,9 +510,10 @@ unittest
     {
         ubyte[32] hash;
         hash[0] = cast(ubyte)(100 + i);
-        auto action = ActionRequest(
+        auto action = new ActionRequest(
             ActionId(hash),
-            ["echo", "Low priority"],
+            "echo 'Low priority'",
+            cast(string[string])null,
             [],
             [],
             Capabilities(),
@@ -521,9 +528,10 @@ unittest
     // Schedule critical priority action (should jump queue)
     ubyte[32] criticalHash;
     criticalHash[0] = 99;
-    auto criticalAction = ActionRequest(
+    auto criticalAction = new ActionRequest(
         ActionId(criticalHash),
-        ["echo", "CRITICAL"],
+        "echo 'CRITICAL'",
+        cast(string[string])null,
         [],
         [],
         Capabilities(),
@@ -555,9 +563,10 @@ unittest
     {
         ubyte[32] hash;
         hash[0] = cast(ubyte)(50 + i);
-        auto action = ActionRequest(
+        auto action = new ActionRequest(
             ActionId(hash),
-            ["sleep", "0.1"],  // Short sleep
+            "sleep 0.1",
+            cast(string[string])null,
             [],
             [],
             Capabilities(),
@@ -597,12 +606,12 @@ unittest
     hash[0] = 77;
     
     Capabilities caps;
-    caps.requireSandbox = true;
-    caps.requireNetwork = false;
+    caps.network = false;
     
-    auto action = ActionRequest(
+    auto action = new ActionRequest(
         ActionId(hash),
-        ["echo", "Requires sandbox"],
+        "echo 'Requires sandbox'",
+        cast(string[string])null,
         [],
         [],
         caps,
@@ -637,9 +646,10 @@ unittest
         ubyte[32] hash;
         hash[0] = cast(ubyte)i;
         hash[1] = cast(ubyte)(i >> 8);
-        auto action = ActionRequest(
+        auto action = new ActionRequest(
             ActionId(hash),
-            ["echo", "Stress test " ~ i.to!string],
+            "echo 'Stress test " ~ i.to!string ~ "'",
+            cast(string[string])null,
             [],
             [],
             Capabilities(),
@@ -694,9 +704,10 @@ unittest
     {
         ubyte[32] hash;
         hash[0] = cast(ubyte)(150 + i);
-        auto action = ActionRequest(
+        auto action = new ActionRequest(
             ActionId(hash),
-            ["echo", "Dynamic worker test"],
+            "echo 'Dynamic worker test'",
+            cast(string[string])null,
             [],
             [],
             Capabilities(),
@@ -729,9 +740,10 @@ unittest
     {
         ubyte[32] hash;
         hash[0] = cast(ubyte)(200 + i);
-        auto action = ActionRequest(
+        auto action = new ActionRequest(
             ActionId(hash),
-            ["echo", "Recovery test"],
+            "echo 'Recovery test'",
+            cast(string[string])null,
             [],
             [],
             Capabilities(),

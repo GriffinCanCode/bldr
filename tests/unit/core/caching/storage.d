@@ -3,7 +3,7 @@ module tests.unit.core.caching.storage;
 import std.stdio;
 import std.path;
 import std.file;
-import core.caching.storage;
+import engine.caching.storage;
 import tests.harness;
 import tests.fixtures;
 
@@ -27,7 +27,7 @@ unittest
     // Retrieve blob
     auto getResult = cas.getBlob(hash1);
     Assert.isTrue(getResult.isOk, "Get should succeed");
-    Assert.equals(getResult.unwrap(), data1);
+    Assert.equal(getResult.unwrap(), data1);
     
     // Check existence
     Assert.isTrue(cas.hasBlob(hash1));
@@ -52,12 +52,12 @@ unittest
     auto hash2 = cas.putBlob(data).unwrap();
     
     // Should have same hash (deduplicated)
-    Assert.equals(hash1, hash2);
+    Assert.equal(hash1, hash2);
     
     // Get stats
     auto stats = cas.getStats();
-    Assert.equals(stats.uniqueBlobs, 1, "Should have 1 unique blob");
-    Assert.equals(stats.totalBlobs, 2, "Should have 2 references");
+    Assert.equal(stats.uniqueBlobs, 1, "Should have 1 unique blob");
+    Assert.equal(stats.totalBlobs, 2, "Should have 2 references");
     Assert.isTrue(stats.deduplicationRatio > 0, "Should show deduplication");
     
     writeln("\x1b[32m  ✓ Deduplication works\x1b[0m");
@@ -115,8 +115,8 @@ unittest
     cas.putBlob(cast(ubyte[])"blob3");
     
     // Create caches
-    import core.caching.targets.cache : BuildCache;
-    import core.caching.actions.action : ActionCache;
+    import engine.caching.targets.cache : BuildCache;
+    import engine.caching.actions.action : ActionCache;
     
     auto targetCache = new BuildCache(cacheDir);
     auto actionCache = new ActionCache(cacheDir ~ "/actions");

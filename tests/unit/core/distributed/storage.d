@@ -5,8 +5,8 @@ import std.path;
 import std.file;
 import std.datetime;
 import std.conv;
-import core.distributed.storage.store;
-import core.distributed.protocol.protocol;
+import engine.distributed.storage.store;
+import engine.distributed.protocol.protocol;
 import tests.harness;
 import tests.fixtures;
 

@@ -2,8 +2,8 @@ module tests.unit.migration.registry;
 
 import std.stdio;
 import std.algorithm;
-import infrastructure.migration.registry;
-import infrastructure.migration.base;
+import infrastructure.migration.registry.registry;
+import infrastructure.migration.core.base;
 
 /// Test registry singleton
 unittest
@@ -117,9 +117,4 @@ unittest
     assert(bazel2.systemName() == bazel3.systemName());
 }
 
-void main()
-{
-    writeln("Running migration.registry tests...");
-    writeln("All migration.registry tests passed!");
-}
 

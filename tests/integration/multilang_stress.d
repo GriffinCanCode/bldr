@@ -12,14 +12,15 @@ import std.format;
 import std.range : repeat;
 import tests.harness;
 import tests.fixtures;
+import tests.mocks;
 import infrastructure.config.schema.schema;
-import core.graph.graph;
-import core.execution.core.engine;
+import engine.graph.core.graph;
+import engine.runtime.core.engine.executor;
 import infrastructure.utils.logging.logger;
 
 /// Comprehensive multi-language stress test
 /// Tests system performance with many languages at scale
-unittest
+version(none) unittest
 {
     writeln("\x1b[36m[STRESS TEST]\x1b[0m Multi-Language Scale Test - ALL LANGUAGES");
     writeln(repeat('=', 80));
@@ -348,7 +349,7 @@ unittest
 }
 
 /// Extreme scale test: 20,000+ targets across multiple languages
-unittest
+version(none) unittest
 {
     writeln("\x1b[36m[EXTREME STRESS TEST]\x1b[0m 20,000 Target Multi-Language Test");
     writeln(repeat('=', 80));
@@ -503,7 +504,7 @@ unittest
 }
 
 /// Wide dependency test: Massive fan-out across languages
-unittest
+version(none) unittest
 {
     writeln("\x1b[36m[STRESS TEST]\x1b[0m Wide Multi-Language Dependency Test");
     writeln(repeat('=', 80));

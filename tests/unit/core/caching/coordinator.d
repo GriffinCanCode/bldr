@@ -131,7 +131,7 @@ unittest
     
     // Get initial stats
     auto stats = coordinator.getStats();
-    Assert.equals(stats.targetCacheEntries, 0);
+    Assert.equal(stats.targetCacheEntries, 0);
     
     // Add some cache entries
     tempDir.createFile("file1.d", "content1");
@@ -145,7 +145,7 @@ unittest
     
     // Get updated stats
     stats = coordinator.getStats();
-    Assert.equals(stats.targetCacheEntries, 2);
+    Assert.equal(stats.targetCacheEntries, 2);
     
     coordinator.close();
     writeln("\x1b[32m  ✓ Statistics reporting works\x1b[0m");
@@ -188,15 +188,15 @@ unittest
     auto results = coordinator.batchValidate(requests);
     
     // Verify results
-    Assert.equals(results.totalTargets, 4);
-    Assert.equals(results.cachedTargets, 2);
+    Assert.equal(results.totalTargets, 4);
+    Assert.equal(results.cachedTargets, 2);
     Assert.isTrue(results.results["target1"].cached, "target1 should be cached");
     Assert.isTrue(results.results["target2"].cached, "target2 should be cached");
     Assert.isFalse(results.results["target3"].cached, "target3 should not be cached");
     Assert.isFalse(results.results["target4"].cached, "target4 should not be cached");
     
     // Check hit rate
-    Assert.equals(results.hitRate(), 50.0, "Hit rate should be 50%");
+    Assert.equal(results.hitRate(), 50.0, "Hit rate should be 50%");
     
     coordinator.close();
     writeln("\x1b[32m  ✓ Batch validation works correctly\x1b[0m");
@@ -251,14 +251,14 @@ unittest
     auto results = coordinator.batchValidateActions(requests);
     
     // Verify results
-    Assert.equals(results.totalActions, 3);
-    Assert.equals(results.cachedActions, 2);
+    Assert.equal(results.totalActions, 3);
+    Assert.equal(results.cachedActions, 2);
     Assert.isTrue(results.results[action1.toString()].cached, "action1 should be cached");
     Assert.isTrue(results.results[action2.toString()].cached, "action2 should be cached");
     Assert.isFalse(results.results[action3.toString()].cached, "action3 should not be cached");
     
     // Check hit rate
-    Assert.equals(results.hitRate(), 66.666664, "Hit rate should be ~66.67%");
+    Assert.equal(results.hitRate(), 66.666664, "Hit rate should be ~66.67%");
     
     coordinator.close();
     writeln("\x1b[32m  ✓ Batch action validation works correctly\x1b[0m");
@@ -300,9 +300,9 @@ unittest
     batchTimer.stop();
     
     // Verify correctness
-    Assert.equals(batchResults.totalTargets, numTargets);
-    Assert.equals(batchResults.cachedTargets, numTargets / 2);
-    Assert.equals(batchResults.hitRate(), 50.0, "Hit rate should be 50%");
+    Assert.equal(batchResults.totalTargets, numTargets);
+    Assert.equal(batchResults.cachedTargets, numTargets / 2);
+    Assert.equal(batchResults.hitRate(), 50.0, "Hit rate should be 50%");
     
     // Benchmark sequential validation
     auto seqTimer = StopWatch(AutoStart.yes);
@@ -314,7 +314,7 @@ unittest
     }
     seqTimer.stop();
     
-    Assert.equals(seqHits, numTargets / 2, "Sequential should find same results");
+    Assert.equal(seqHits, numTargets / 2, "Sequential should find same results");
     
     // Report performance
     auto batchMs = batchTimer.peek().total!"msecs";

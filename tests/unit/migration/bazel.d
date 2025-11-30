@@ -4,7 +4,7 @@ import std.stdio;
 import std.file;
 import std.path;
 import infrastructure.migration.systems.bazel;
-import infrastructure.migration.common;
+import infrastructure.migration.core.common;
 import infrastructure.config.schema.schema : TargetType, TargetLanguage;
 
 /// Test Bazel migrator system name
@@ -163,10 +163,4 @@ unittest
     assert(result.isErr);
 }
 
-void main()
-{
-    import std.conv : to;
-    writeln("Running migration.bazel tests...");
-    writeln("All migration.bazel tests passed!");
-}
 

@@ -13,9 +13,9 @@ import core.thread;
 import core.time;
 import core.atomic;
 import core.sync.mutex;
-import core.graph.graph;
-import core.caching.cache;
-import core.execution.core.engine;
+import engine.graph.core.graph;
+import engine.caching.targets.cache;
+import engine.runtime.core.engine.executor;
 import infrastructure.config.schema.schema;
 import tests.harness;
 import tests.fixtures;
@@ -68,7 +68,7 @@ unittest
     Assert.equal(readyNodes.length, 3);
     
     // Verify all can be marked as ready simultaneously
-    Assert.isTrue(readyNodes.all!(n => n.isReady()));
+    Assert.isTrue(readyNodes.all!(n => n.isReady(graph)));
     
     writeln("\x1b[32m  ✓ Parallel execution readiness verified\x1b[0m");
 }
@@ -110,8 +110,8 @@ unittest
     
     // App should not be ready due to failed dependency
     auto readyNodes = graph.getReadyNodes();
-    Assert.isFalse(readyNodes.canFind!(n => n.id == "app"));
-    Assert.isFalse(graph.nodes["app"].isReady());
+    Assert.isFalse(readyNodes.canFind!(n => n.id.toString() == "app"));
+    Assert.isFalse(graph.nodes["app"].isReady(graph));
     
     writeln("\x1b[32m  ✓ Fail-fast behavior verified\x1b[0m");
 }
@@ -132,7 +132,7 @@ unittest
     // Initially only lib is ready
     auto ready1 = graph.getReadyNodes();
     Assert.equal(ready1.length, 1);
-    Assert.equal(ready1[0].id, "lib");
+    Assert.equal(ready1[0].id.toString(), "lib");
     
     // Mark lib as building
     graph.nodes["lib"].status = BuildStatus.Building;
@@ -143,7 +143,7 @@ unittest
     graph.nodes["lib"].status = BuildStatus.Success;
     auto ready3 = graph.getReadyNodes();
     Assert.equal(ready3.length, 1);
-    Assert.equal(ready3[0].id, "app");
+    Assert.equal(ready3[0].id.toString(), "app");
     
     writeln("\x1b[32m  ✓ Dependency ordering enforced correctly\x1b[0m");
     // Create dependency tree with distinct waves:
@@ -154,28 +154,28 @@ unittest
     auto lib1 = TargetBuilder.create("lib1").build();
     auto lib2 = TargetBuilder.create("lib2").build();
     auto middleware = TargetBuilder.create("middleware").build();
-    auto app = TargetBuilder.create("app").build();
+    auto app2 = TargetBuilder.create("app2").build();
     
     graph.addTarget(lib1);
     graph.addTarget(lib2);
     graph.addTarget(middleware);
-    graph.addTarget(app);
+    graph.addTarget(app2);
     
     graph.addDependency("middleware", "lib1");
     graph.addDependency("middleware", "lib2");
-    graph.addDependency("app", "middleware");
+    graph.addDependency("app2", "middleware");
     
     // Verify depth-based waves
-    Assert.equal(graph.nodes["lib1"].depth(), 0);
-    Assert.equal(graph.nodes["lib2"].depth(), 0);
-    Assert.equal(graph.nodes["middleware"].depth(), 1);
-    Assert.equal(graph.nodes["app"].depth(), 2);
+    Assert.equal(graph.nodes["lib1"].depth(graph), 0);
+    Assert.equal(graph.nodes["lib2"].depth(graph), 0);
+    Assert.equal(graph.nodes["middleware"].depth(graph), 1);
+    Assert.equal(graph.nodes["app2"].depth(graph), 2);
     
     // Wave 0: lib1 and lib2 should be ready
     auto wave0 = graph.getReadyNodes();
     Assert.equal(wave0.length, 2);
-    Assert.isTrue(wave0.canFind!(n => n.id == "lib1"));
-    Assert.isTrue(wave0.canFind!(n => n.id == "lib2"));
+    Assert.isTrue(wave0.canFind!(n => n.id.toString() == "lib1"));
+    Assert.isTrue(wave0.canFind!(n => n.id.toString() == "lib2"));
     
     // Complete wave 0
     graph.nodes["lib1"].status = BuildStatus.Success;
@@ -184,7 +184,7 @@ unittest
     // Wave 1: middleware should be ready
     auto wave1 = graph.getReadyNodes();
     Assert.equal(wave1.length, 1);
-    Assert.equal(wave1[0].id, "middleware");
+    Assert.equal(wave1[0].id.toString(), "middleware");
     
     // Complete wave 1
     graph.nodes["middleware"].status = BuildStatus.Success;
@@ -192,7 +192,7 @@ unittest
     // Wave 2: app should be ready
     auto wave2 = graph.getReadyNodes();
     Assert.equal(wave2.length, 1);
-    Assert.equal(wave2[0].id, "app");
+    Assert.equal(wave2[0].id.toString(), "app2");
     
     writeln("\x1b[32m  ✓ Wave-based scheduling verified\x1b[0m");
 }
@@ -303,7 +303,7 @@ unittest
         {
             auto ready = graph.getReadyNodes();
             Assert.equal(ready.length, 1);
-            Assert.equal(ready[0].id, "app");
+            Assert.equal(ready[0].id.toString(), "app");
         }
         
         writeln("\x1b[32m  ✓ Race condition handling works correctly\x1b[0m");

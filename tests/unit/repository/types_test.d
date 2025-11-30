@@ -1,6 +1,6 @@
 module tests.unit.repository.types_test;
 
-import infrastructure.repository.types;
+import infrastructure.repository.core.types;
 import std.datetime : Clock;
 
 unittest

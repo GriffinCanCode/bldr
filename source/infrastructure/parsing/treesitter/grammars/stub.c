@@ -45,24 +45,41 @@ static void *load_dynamic(const char *lang, const char *symbol) {
     return NULL;
 }
 
+// Platform-specific constants
+#ifndef RTLD_DEFAULT
+#define RTLD_DEFAULT ((void *) -2)
+#endif
+
 // Macro for standard grammars
-// Uses weak linking for static builds, falls back to dynamic loading
+// Uses dlsym for both static (global) and dynamic lookup to avoid linker dependency
 #define DEFINE_LOADER(lang) \
-    extern void *tree_sitter_##lang(void) __attribute__((weak)); \
     void *ts_load_##lang(void) { \
-        if (tree_sitter_##lang) return tree_sitter_##lang(); \
         static void *cached = NULL; \
-        if (!cached) cached = load_dynamic(#lang, "tree_sitter_" #lang); \
+        if (cached) return cached; \
+        /* Try global symbol first (statically linked) */ \
+        void *func = dlsym(RTLD_DEFAULT, "tree_sitter_" #lang); \
+        if (func) { \
+            cached = ((void *(*)(void))func)(); \
+            return cached; \
+        } \
+        /* Try dynamic loading */ \
+        cached = load_dynamic(#lang, "tree_sitter_" #lang); \
         return cached; \
     }
 
 // Macro for grammars with non-standard symbol names
 #define DEFINE_LOADER_NAMED(lang, name) \
-    extern void *tree_sitter_##name(void) __attribute__((weak)); \
     void *ts_load_##lang(void) { \
-        if (tree_sitter_##name) return tree_sitter_##name(); \
         static void *cached = NULL; \
-        if (!cached) cached = load_dynamic(#lang, "tree_sitter_" #name); \
+        if (cached) return cached; \
+        /* Try global symbol first (statically linked) */ \
+        void *func = dlsym(RTLD_DEFAULT, "tree_sitter_" #name); \
+        if (func) { \
+            cached = ((void *(*)(void))func)(); \
+            return cached; \
+        } \
+        /* Try dynamic loading */ \
+        cached = load_dynamic(#lang, "tree_sitter_" #name); \
         return cached; \
     }
 

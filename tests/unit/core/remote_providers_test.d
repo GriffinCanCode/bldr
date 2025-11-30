@@ -344,13 +344,4 @@ import infrastructure.errors;
     provider.terminateWorker(workerId);
 }
 
-/// Run all tests
-void main()
-{
-    writeln("\n=== Cloud Provider Tests ===\n");
-    
-    // Tests run automatically via unittest blocks
-    
-    writeln("\n=== All Tests Passed ===\n");
-}
 
