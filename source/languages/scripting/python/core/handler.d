@@ -82,7 +82,7 @@ class PythonHandler : BaseLanguageHandler
             {
                 result.error = "Failed to install dependencies";
                 return result;
-        }
+            }
         
         if (pyConfig.autoFormat && pyConfig.formatter != PyFormatter.None)
         {
@@ -132,7 +132,27 @@ class PythonHandler : BaseLanguageHandler
             wrapperConfig.hasMainGuard = mainFileResult.hasMainGuard;
             wrapperConfig.isExecutable = mainFileResult.isExecutable;
             
-            PyWrapperGenerator.generate(wrapperConfig);
+            try
+            {
+                auto outputDir = dirName(outputPath);
+                if (!exists(outputDir))
+                    mkdirRecurse(outputDir);
+            }
+            catch (Exception e)
+            {
+                result.error = "Invalid output directory: " ~ e.msg;
+                return result;
+            }
+
+            try
+            {
+                PyWrapperGenerator.generate(wrapperConfig);
+            }
+            catch (Throwable e)
+            {
+                result.error = "Failed to generate wrapper: " ~ e.msg;
+                return result;
+            }
         }
         
         if (pyConfig.compileBytecode)
@@ -158,7 +178,7 @@ class PythonHandler : BaseLanguageHandler
             {
                 result.error = "Failed to install dependencies";
                 return result;
-        }
+            }
         
         if (pyConfig.typeCheck.enabled)
         {

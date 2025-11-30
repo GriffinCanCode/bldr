@@ -39,8 +39,11 @@ class PyWrapperGenerator
         {
             import core.sys.posix.sys.stat;
             import std.string : toStringz;
-            chmod(toStringz(config.outputPath), 
-                  S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+            if (exists(config.outputPath))
+            {
+                chmod(toStringz(config.outputPath), 
+                      S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+            }
         }
     }
     

@@ -386,4 +386,3 @@ unittest
     
     writeln("✓ Bundler mode detection works correctly");
 }
-

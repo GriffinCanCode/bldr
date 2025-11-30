@@ -36,6 +36,7 @@ mixin template CachingHandlerMixin(string languageName)
                 actionCache.close();
             }
             catch (Exception) {}
+            catch (Throwable) {}
         }
     }
     

@@ -30,52 +30,62 @@ class JavaScriptHandler : BaseLanguageHandler
     
     protected override LanguageBuildResult buildImplWithContext(in BuildContext context)
     {
-        // Extract target and config from context for convenience
-        auto target = context.target;
-        auto config = context.config;
-        
-        LanguageBuildResult result;
-        
-        Logger.debugLog("Building JavaScript target: " ~ target.name);
-        
-        // Parse JavaScript configuration
-        JSConfig jsConfig = parseJSConfig(target);
-        
-        // Validate: JavaScript handler should only process .js/.jsx files, not TypeScript
-        bool hasTypeScript = target.sources.any!(s => s.endsWith(".ts") || s.endsWith(".tsx") || s.endsWith(".mts") || s.endsWith(".cts"));
-        if (hasTypeScript)
+        try
         {
-            result.error = "JavaScript handler received TypeScript files (.ts/.tsx). " ~
-                          "Please use language: typescript for this target. " ~
-                          "Files: " ~ target.sources.filter!(s => s.endsWith(".ts") || s.endsWith(".tsx")).join(", ");
+            // Extract target and config from context for convenience
+            auto target = context.target;
+            auto config = context.config;
+            
+            LanguageBuildResult result;
+            
+            Logger.debugLog("Building JavaScript target: " ~ target.name);
+            
+            // Parse JavaScript configuration
+            JSConfig jsConfig = parseJSConfig(target);
+            
+            // Validate: JavaScript handler should only process .js/.jsx files, not TypeScript
+            bool hasTypeScript = target.sources.any!(s => s.endsWith(".ts") || s.endsWith(".tsx") || s.endsWith(".mts") || s.endsWith(".cts"));
+            if (hasTypeScript)
+            {
+                result.error = "JavaScript handler received TypeScript files (.ts/.tsx). " ~
+                              "Please use language: typescript for this target. " ~
+                              "Files: " ~ target.sources.filter!(s => s.endsWith(".ts") || s.endsWith(".tsx")).join(", ");
+                return result;
+            }
+            
+            // Detect JSX/React (only .jsx for JavaScript, not .tsx)
+            bool hasJSX = target.sources.any!(s => s.endsWith(".jsx"));
+            if (hasJSX && !jsConfig.jsx)
+            {
+                Logger.debugLog("Detected JSX sources, enabling JSX support");
+                jsConfig.jsx = true;
+            }
+            
+            final switch (target.type)
+            {
+                case TargetType.Executable:
+                    result = buildExecutable(target, config, jsConfig);
+                    break;
+                case TargetType.Library:
+                    result = buildLibrary(target, config, jsConfig);
+                    break;
+                case TargetType.Test:
+                    result = runTests(target, config, jsConfig);
+                    break;
+                case TargetType.Custom:
+                    result = buildCustom(target, config, jsConfig);
+                    break;
+            }
+            
             return result;
         }
-        
-        // Detect JSX/React (only .jsx for JavaScript, not .tsx)
-        bool hasJSX = target.sources.any!(s => s.endsWith(".jsx"));
-        if (hasJSX && !jsConfig.jsx)
+        catch (Throwable e)
         {
-            Logger.debugLog("Detected JSX sources, enabling JSX support");
-            jsConfig.jsx = true;
+            LanguageBuildResult result;
+            result.success = false;
+            result.error = "Internal error in JavaScript handler: " ~ e.msg;
+            return result;
         }
-        
-        final switch (target.type)
-        {
-            case TargetType.Executable:
-                result = buildExecutable(target, config, jsConfig);
-                break;
-            case TargetType.Library:
-                result = buildLibrary(target, config, jsConfig);
-                break;
-            case TargetType.Test:
-                result = runTests(target, config, jsConfig);
-                break;
-            case TargetType.Custom:
-                result = buildCustom(target, config, jsConfig);
-                break;
-        }
-        
-        return result;
     }
     
     override string[] getOutputs(in Target target, in WorkspaceConfig config)
@@ -116,7 +126,7 @@ class JavaScriptHandler : BaseLanguageHandler
         if (target.sources.length == 0)
         {
             result.success = false;
-            result.error = "No source files specified for target " ~ target.name;
+            result.error = "No source files specified for target"; // Removed concatenation
             return result;
         }
         
