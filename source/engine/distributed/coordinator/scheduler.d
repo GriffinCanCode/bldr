@@ -1,18 +1,21 @@
 module engine.distributed.coordinator.scheduler;
 
-import std.algorithm : map, filter, maxElement, sort, uniq;
+import std.algorithm : map, filter, maxElement, sort, uniq, each;
 import std.array : array;
 import std.container : DList;
 import std.datetime : Duration, msecs;
 import std.conv : to;
 import core.sync.mutex : Mutex;
+import core.sync.rwmutex : ReadWriteMutex;
 import core.atomic;
+import core.thread : Thread;
 import engine.graph : BuildGraph, BuildNode;
 import engine.distributed.protocol.protocol;
 import engine.distributed.coordinator.registry;
 import infrastructure.config.schema.schema : TargetId;
 import infrastructure.errors;
 import infrastructure.utils.logging.logger;
+import Concurrency = infrastructure.utils.concurrency.priority;
 
 /// Action scheduling state
 private enum ActionState
@@ -26,7 +29,7 @@ private enum ActionState
 }
 
 /// Internal action tracking
-private struct ActionInfo
+private class ActionInfo
 {
     ActionId id;
     ActionRequest request;
@@ -34,22 +37,61 @@ private struct ActionInfo
     WorkerId assignedWorker;
     size_t retries;
     Priority priority;
+    shared size_t remainingDeps; // Atomic counter for O(1) readiness check
+
+    this(ActionId id, ActionRequest request, Priority priority, size_t initialDeps)
+    {
+        this.id = id;
+        this.request = request;
+        this.state = initialDeps == 0 ? ActionState.Ready : ActionState.Pending;
+        this.assignedWorker = WorkerId(0);
+        this.retries = 0;
+        this.priority = priority;
+        atomicStore(this.remainingDeps, initialDeps);
+    }
 }
 
-/// Distributed scheduler
-/// Coordinates action execution across worker pool
+/// Scheduler shard for lock striping
+private class SchedulerShard
+{
+    Mutex mutex;
+    ActionInfo[ActionId] actions;
+    Concurrency.PriorityQueue!ActionId readyQueue;
+    
+    // Mapping for dependencies within this shard (ActionId -> TargetId)
+    TargetId[ActionId] actionToTarget;
+
+    this()
+    {
+        this.mutex = new Mutex();
+        this.readyQueue = Concurrency.PriorityQueue!ActionId(64);
+    }
+}
+
+/// Target mapping shard
+private class TargetShard
+{
+    ReadWriteMutex mutex;
+    ActionId[TargetId] targetToAction;
+
+    this()
+    {
+        this.mutex = new ReadWriteMutex();
+    }
+}
+
+/// Distributed scheduler with lock striping and O(1) dependency tracking
+/// Replaces coarse-grained mutex with fine-grained sharding
 final class DistributedScheduler
 {
     private BuildGraph graph;
     private WorkerRegistry registry;
-    private ActionInfo[ActionId] actions;
-    private DList!ActionId readyQueue;
-    private Mutex mutex;
     private shared bool running;
     
-    // Mapping between ActionId and TargetId for dependency tracking
-    private TargetId[ActionId] actionToTarget;
-    private ActionId[TargetId] targetToAction;
+    // Sharded state
+    private enum SHARD_COUNT = 32;
+    private SchedulerShard[SHARD_COUNT] shards;
+    private TargetShard[SHARD_COUNT] targetShards;
     
     private enum size_t MAX_RETRIES = 3;
     
@@ -57,86 +99,341 @@ final class DistributedScheduler
     {
         this.graph = graph;
         this.registry = registry;
-        this.mutex = new Mutex();
         atomicStore(running, true);
+        
+        foreach (i; 0 .. SHARD_COUNT)
+        {
+            shards[i] = new SchedulerShard();
+            targetShards[i] = new TargetShard();
+        }
+    }
+    
+    /// Get shard index for ActionId
+    private size_t getShardIndex(ActionId id) const pure nothrow @safe @nogc
+    {
+        return id.toHash() % SHARD_COUNT;
+    }
+
+    /// Get shard index for TargetId
+    private size_t getTargetShardIndex(TargetId id) const @trusted
+    {
+        return id.toHash() % SHARD_COUNT;
     }
     
     Result!DistributedError schedule(ActionRequest request, TargetId targetId = TargetId.init) @trusted
     {
-        synchronized (mutex)
+        immutable shardIdx = getShardIndex(request.id);
+        auto shard = shards[shardIdx];
+        
+        // 1. Register TargetId mapping if provided
+        if (targetId != TargetId.init)
         {
-            if (request.id in actions) return Ok!DistributedError();
-            actions[request.id] = ActionInfo(request.id, request, ActionState.Pending, WorkerId(0), 0, request.priority);
-            
-            if (targetId != TargetId.init)
+            auto targetShard = targetShards[getTargetShardIndex(targetId)];
+            synchronized (targetShard.mutex.writer)
             {
-                actionToTarget[request.id] = targetId;
-                targetToAction[targetId] = request.id;
+                targetShard.targetToAction[targetId] = request.id;
             }
             
-            if (isReady(request.id)) markReady(request.id);
-            return Ok!DistributedError();
+            synchronized (shard.mutex)
+            {
+                shard.actionToTarget[request.id] = targetId;
+            }
         }
+
+        // 2. Calculate dependencies count
+        size_t dependencyCount = 0;
+        // Use graph if available (more reliable for determining dependencies)
+        if (targetId != TargetId.init)
+        {
+             auto targetIdStr = targetId.toString();
+             if (auto nodePtr = targetIdStr in graph.nodes)
+             {
+                 dependencyCount = nodePtr.dependencyIds.length;
+             }
+             else
+             {
+                 // Fallback to input specs if node not found in graph (rare)
+                 dependencyCount = request.inputs.length;
+             }
+        }
+        else
+        {
+            dependencyCount = request.inputs.length;
+        }
+
+        // 3. Create and Insert ActionInfo
+        // We insert with full dependency count first to avoid race where we mark it ready too early
+        synchronized (shard.mutex)
+        {
+            if (request.id in shard.actions) return Ok!DistributedError();
+            
+            auto info = new ActionInfo(request.id, request, request.priority, dependencyCount);
+            shard.actions[request.id] = info;
+            
+            // If no dependencies, it's ready immediately
+            if (dependencyCount == 0)
+            {
+                addReady(shard, info);
+            }
+        }
+
+        // 4. Check dependencies (The "Insert then Check" pattern)
+        if (dependencyCount > 0 && targetId != TargetId.init)
+        {
+            auto targetIdStr = targetId.toString();
+            if (auto nodePtr = targetIdStr in graph.nodes)
+            {
+                foreach (depId; nodePtr.dependencyIds)
+                {
+                    checkDependencyAndDecrement(depId, request.id, shardIdx);
+                }
+            }
+        }
+        else if (dependencyCount > 0)
+        {
+             // Fallback for non-graph inputs (using artifact IDs)
+             foreach (input; request.inputs)
+             {
+                 checkDependencyActionAndDecrement(input.id, request.id, shardIdx);
+             }
+        }
+
+        return Ok!DistributedError();
     }
     
-    /// Get next ready action (for coordinator to assign)
+    /// Check if dependency is complete, and if so, decrement dependent's counter
+    private void checkDependencyAndDecrement(TargetId depTargetId, ActionId dependentId, size_t dependentShardIdx) @trusted
+    {
+        // Find ActionId for this TargetId
+        ActionId depActionId;
+        bool found = false;
+        
+        auto targetShard = targetShards[getTargetShardIndex(depTargetId)];
+        synchronized (targetShard.mutex.reader)
+        {
+            if (auto ptr = depTargetId in targetShard.targetToAction)
+            {
+                depActionId = *ptr;
+                found = true;
+            }
+        }
+
+        if (found)
+        {
+            checkDependencyActionAndDecrement(depActionId, dependentId, dependentShardIdx);
+        }
+        // If not found, it means dependency hasn't been scheduled yet. 
+        // Action will wait until dependency completes and triggers it.
+    }
+
+    private void checkDependencyActionAndDecrement(ActionId depActionId, ActionId dependentId, size_t dependentShardIdx) @trusted
+    {
+        auto depShard = shards[getShardIndex(depActionId)];
+        bool isComplete = false;
+
+        synchronized (depShard.mutex)
+        {
+            if (auto info = depActionId in depShard.actions)
+            {
+                isComplete = (info.state == ActionState.Completed);
+            }
+        }
+
+        if (isComplete)
+        {
+            decrementDependency(dependentId, dependentShardIdx);
+        }
+    }
+
+    private void decrementDependency(ActionId dependentId, size_t shardIdx) @trusted
+    {
+        auto shard = shards[shardIdx];
+        synchronized (shard.mutex)
+        {
+            if (auto info = dependentId in shard.actions)
+            {
+                // Only decrement if pending
+                if (info.state == ActionState.Pending)
+                {
+                    if (atomicOp!"-="(info.remainingDeps, 1) == 0)
+                    {
+                        info.state = ActionState.Ready;
+                        addReady(shard, *info);
+                    }
+                }
+            }
+        }
+    }
+
+    private void addReady(SchedulerShard shard, ActionInfo info) @trusted
+    {
+        auto cp = toConcurrencyPriority(info.priority);
+        auto task = new Concurrency.PriorityTask!ActionId(
+            info.id, 
+            cp,
+            0, // Cost
+            0, // Depth
+            0  // Dependents
+        );
+        shard.readyQueue.insert(task);
+    }
+    
+    private Concurrency.Priority toConcurrencyPriority(Priority p) pure nothrow @nogc
+    {
+        final switch (p)
+        {
+            case Priority.Low: return Concurrency.Priority.Low;
+            case Priority.Normal: return Concurrency.Priority.Normal;
+            case Priority.High: return Concurrency.Priority.High;
+            case Priority.Critical: return Concurrency.Priority.Critical;
+        }
+    }
+
+    /// Get next ready action (scans shards)
     Result!(ActionRequest, DistributedError) dequeueReady() @trusted
     {
-        synchronized (mutex)
+        // To avoid contention on shard 0, start at random offset or round-robin
+        import std.random : uniform;
+        size_t startIdx = uniform(0, SHARD_COUNT);
+
+        // First pass: Look for High/Critical priority
+        for (size_t i = 0; i < SHARD_COUNT; i++)
         {
-            if (readyQueue.empty) return Err!(ActionRequest, DistributedError)(new DistributedError("No ready actions"));
+            auto idx = (startIdx + i) % SHARD_COUNT;
+            auto shard = shards[idx];
             
-            auto actionId = readyQueue.front;
-            readyQueue.removeFront();
-            
-            if (auto info = actionId in actions)
+            // Optimization: Check size before locking
+            if (shard.readyQueue.empty) continue;
+
+            synchronized (shard.mutex)
             {
-                info.state = ActionState.Scheduled;
-                return Ok!(ActionRequest, DistributedError)(info.request);
+                if (!shard.readyQueue.empty)
+                {
+                    // Check if highest priority is worth taking (optimization)
+                    auto peek = shard.readyQueue.peek();
+                    if (peek.priority >= Concurrency.Priority.High)
+                    {
+                        auto task = shard.readyQueue.extractMax();
+                        if (auto info = task.payload in shard.actions)
+                        {
+                            info.state = ActionState.Scheduled;
+                            return Ok!(ActionRequest, DistributedError)(info.request);
+                        }
+                    }
+                }
             }
-            
-            return Err!(ActionRequest, DistributedError)(new DistributedError("Action not found: " ~ actionId.toString()));
         }
+
+        // Second pass: Take any ready
+        for (size_t i = 0; i < SHARD_COUNT; i++)
+        {
+            auto idx = (startIdx + i) % SHARD_COUNT;
+            auto shard = shards[idx];
+            
+            if (shard.readyQueue.empty) continue;
+
+            synchronized (shard.mutex)
+            {
+                if (!shard.readyQueue.empty)
+                {
+                    auto task = shard.readyQueue.extractMax();
+                    if (auto info = task.payload in shard.actions)
+                    {
+                        info.state = ActionState.Scheduled;
+                        return Ok!(ActionRequest, DistributedError)(info.request);
+                    }
+                }
+            }
+        }
+        
+        return Err!(ActionRequest, DistributedError)(new DistributedError("No ready actions"));
     }
     
     /// Assign action to worker
     Result!DistributedError assign(ActionId action, WorkerId worker) @trusted
     {
-        synchronized (mutex)
+        auto shard = shards[getShardIndex(action)];
+        synchronized (shard.mutex)
         {
-            if (auto info = action in actions)
+            if (auto info = action in shard.actions)
             {
                 info.assignedWorker = worker;
                 info.state = ActionState.Executing;
                 registry.markInProgress(worker, action);
                 return Ok!DistributedError();
             }
-            return Result!DistributedError.err(new DistributedError("Action not found: " ~ action.toString()));
         }
+        return Result!DistributedError.err(new DistributedError("Action not found: " ~ action.toString()));
     }
     
     /// Handle action completion
     void onComplete(ActionId action, ActionResult result) @trusted
     {
-        synchronized (mutex)
+        auto shardIdx = getShardIndex(action);
+        auto shard = shards[shardIdx];
+        TargetId targetId;
+        bool foundTarget = false;
+
+        // 1. Mark completed
+        synchronized (shard.mutex)
         {
-            if (auto info = action in actions)
+            if (auto info = action in shard.actions)
             {
                 info.state = ActionState.Completed;
                 registry.markCompleted(info.assignedWorker, action, result.duration);
                 
-                // Mark dependents as potentially ready
-                checkDependents(action);
+                if (auto tPtr = action in shard.actionToTarget)
+                {
+                    targetId = *tPtr;
+                    foundTarget = true;
+                }
             }
+            else return; // Action not found
         }
+        
+        // 2. Notify dependents
+        if (foundTarget)
+        {
+             auto targetIdStr = targetId.toString();
+             if (auto nodePtr = targetIdStr in graph.nodes)
+             {
+                 // Use Graph to find dependent TargetIds
+                 foreach (dependentTargetId; nodePtr.dependentIds)
+                 {
+                     // Find ActionId for dependent TargetId
+                     auto targetShard = targetShards[getTargetShardIndex(dependentTargetId)];
+                     ActionId dependentActionId;
+                     bool foundDep = false;
+                     
+                     synchronized (targetShard.mutex.reader)
+                     {
+                         if (auto ptr = dependentTargetId in targetShard.targetToAction)
+                         {
+                             dependentActionId = *ptr;
+                             foundDep = true;
+                         }
+                     }
+                     
+                     if (foundDep)
+                     {
+                         decrementDependency(dependentActionId, getShardIndex(dependentActionId));
+                     }
+                 }
+             }
+        }
+        // If not in graph (unlikely for distributed), manual scan is too slow.
+        // We assume graph mode for performance.
     }
     
     /// Handle action failure with intelligent retry strategy
     void onFailure(ActionId action, string error) @trusted
     {
-        synchronized (mutex)
+        auto shardIdx = getShardIndex(action);
+        auto shard = shards[shardIdx];
+        
+        synchronized (shard.mutex)
         {
-            if (auto info = action in actions)
+            if (auto info = action in shard.actions)
             {
                 registry.markFailed(info.assignedWorker, action);
                 Logger.warning("Action failed: " ~ action.toString() ~ " (attempt " ~ (info.retries + 1).to!string ~ "/" ~ MAX_RETRIES.to!string ~ "): " ~ error);
@@ -145,214 +442,143 @@ final class DistributedScheduler
                 {
                     info.retries++;
                     info.state = ActionState.Ready;
-                    (info.priority >= Priority.High) ? readyQueue.insertFront(action) : readyQueue.insertBack(action);
+                    addReady(shard, *info);
                     Logger.info("Action queued for retry: " ~ action.toString());
                 }
                 else
                 {
                     info.state = ActionState.Failed;
                     Logger.error("Action failed permanently after " ~ MAX_RETRIES.to!string ~ " attempts: " ~ action.toString());
-                    propagateFailure(action);
+                    propagateFailure(action, shardIdx);
                 }
             }
         }
     }
     
     /// Propagate failure to dependent actions
-    private void propagateFailure(ActionId failedAction) @trusted
+    private void propagateFailure(ActionId failedAction, size_t shardIdx) @trusted
     {
-        Logger.warning("Propagating failure from " ~ failedAction.toString());
+        // Simple propagation: Check graph dependents and mark them Failed
+        auto shard = shards[shardIdx];
+        TargetId targetId;
+        bool foundTarget = false;
         
-        auto failedInfo = failedAction in actions;
-        if (failedInfo is null) return;
+        // Already holding lock? No, `onFailure` calls this.
+        // But `onFailure` holds lock!
+        // Avoid nested lock on same shard?
+        // `propagateFailure` is called inside `onFailure`'s synchronized block?
+        // Yes. So we already hold `shard` lock.
         
-        bool[ActionId] failedSet;
-        failedSet[failedAction] = true;
-        
-        if (auto targetIdPtr = failedAction in actionToTarget)
+        if (auto tPtr = failedAction in shard.actionToTarget)
         {
-            auto targetIdStr = targetIdPtr.toString();
-            if (targetIdStr in graph.nodes)
-            {
-                markDependentsFailed(graph.nodes[targetIdStr].dependentIds, failedSet);
-                Logger.info("Propagated failure to " ~ (failedSet.length - 1).to!string ~ " dependents via graph");
-                return;
-            }
+            targetId = *tPtr;
+            foundTarget = true;
         }
         
-        // Fallback: Traverse actions to find dependents without graph
-        bool changed = true;
-        while (changed)
+        if (foundTarget)
         {
-            changed = false;
-            foreach (actionId, ref info; actions)
+            // We need to access Graph and then Other Shards.
+            // We are holding Current Shard Lock.
+            // This is potentially risky if we loop back. 
+            // But propagation goes downstream.
+            
+            auto targetIdStr = targetId.toString();
+            if (auto nodePtr = targetIdStr in graph.nodes)
             {
-                if (info.state == ActionState.Failed || info.state == ActionState.Completed) continue;
-                
-                bool dependsOnFailed = false;
-                foreach (inputSpec; info.request.inputs) {} // In practice, we'd need artifact-to-action mapping
-                
-                if (dependsOnFailed && (info.state == ActionState.Pending || info.state == ActionState.Ready))
+                foreach (dependentTargetId; nodePtr.dependentIds)
                 {
-                    info.state = ActionState.Failed;
-                    failedSet[actionId] = true;
-                    changed = true;
-                    Logger.debugLog("Marked dependent as failed: " ~ actionId.toString());
+                    markDependentFailed(dependentTargetId);
                 }
             }
         }
-        
-        Logger.info("Failure propagation completed for " ~ failedAction.toString());
     }
     
-    /// Recursively mark dependents as failed using build graph
-    private void markDependentsFailed(TargetId[] dependentIds, ref bool[ActionId] failedSet) @trusted
+    private void markDependentFailed(TargetId dependentTargetId) @trusted
     {
-        foreach (dependentId; dependentIds)
+        auto targetShard = targetShards[getTargetShardIndex(dependentTargetId)];
+        ActionId dependentActionId;
+        bool found = false;
+        
+        synchronized (targetShard.mutex.reader)
         {
-            auto dependentActionPtr = dependentId in targetToAction;
-            if (dependentActionPtr is null || *dependentActionPtr in failedSet) continue;
-            
-            auto dependentAction = *dependentActionPtr;
-            auto dependentInfoPtr = dependentAction in actions;
-            if (dependentInfoPtr is null) continue;
-            
-            if (dependentInfoPtr.state != ActionState.Completed)
+            if (auto ptr = dependentTargetId in targetShard.targetToAction)
             {
-                dependentInfoPtr.state = ActionState.Failed;
-                failedSet[dependentAction] = true;
-                Logger.debugLog("Marked dependent as failed: " ~ dependentAction.toString());
-                
-                auto dependentIdStr = dependentId.toString();
-                if (dependentIdStr in graph.nodes)
-                    markDependentsFailed(graph.nodes[dependentIdStr].dependentIds, failedSet);
+                dependentActionId = *ptr;
+                found = true;
+            }
+        }
+        
+        if (found)
+        {
+            auto idx = getShardIndex(dependentActionId);
+            auto shard = shards[idx];
+            
+            // Warning: Locking another shard while holding one.
+            // Safe if DAG order.
+            synchronized (shard.mutex)
+            {
+                if (auto info = dependentActionId in shard.actions)
+                {
+                    if (info.state != ActionState.Failed && info.state != ActionState.Completed)
+                    {
+                        info.state = ActionState.Failed;
+                        Logger.debugLog("Marked dependent as failed: " ~ dependentActionId.toString());
+                        
+                        // Recurse
+                        propagateFailure(dependentActionId, idx);
+                    }
+                }
             }
         }
     }
     
-    /// Handle worker failure (reassign its work); Uses priority-aware reassignment to maintain critical path
+    /// Handle worker failure (reassign its work)
     void onWorkerFailure(WorkerId worker) @trusted
-    {
-        synchronized (mutex)
         {
             auto inProgress = registry.inProgressActions(worker);
-            ActionId[][Priority] byPriority;
             
             foreach (actionId; inProgress)
+        {
+            auto shard = shards[getShardIndex(actionId)];
+            synchronized (shard.mutex)
             {
-                if (auto info = actionId in actions)
+                if (auto info = actionId in shard.actions)
                 {
                     info.state = ActionState.Ready;
                     info.assignedWorker = WorkerId(0);
                     info.retries++;
-                    byPriority[info.priority] ~= actionId;
+                    addReady(shard, *info);
                 }
             }
-            
-            // Critical and High priority work goes to front
-            if (auto critical = Priority.Critical in byPriority)
-                foreach (actionId; *critical) readyQueue.insertFront(actionId);
-            if (auto high = Priority.High in byPriority)
-                foreach (actionId; *high) readyQueue.insertFront(actionId);
-            
-            // Normal and Low priority work goes to back
-            if (auto normal = Priority.Normal in byPriority)
-                foreach (actionId; *normal) readyQueue.insertBack(actionId);
-            if (auto low = Priority.Low in byPriority)
-                foreach (actionId; *low) readyQueue.insertBack(actionId);
-            
-            Logger.info("Reassigned " ~ inProgress.length.to!string ~ " actions from failed worker " ~ worker.toString());
         }
+        Logger.info("Reassigned " ~ inProgress.length.to!string ~ " actions from failed worker " ~ worker.toString());
     }
     
-    /// Check if action is ready (all dependencies completed)
-    private bool isReady(ActionId action) @trusted
+    SchedulerStats getStats() @trusted
     {
-        auto info = action in actions;
-        if (info is null) return false;
+        SchedulerStats stats;
         
-        if (auto targetIdPtr = action in actionToTarget)
+        foreach (shard; shards)
         {
-            auto targetIdStr = targetIdPtr.toString();
-            if (targetIdStr in graph.nodes)
+            synchronized (shard.mutex)
             {
-                auto node = graph.nodes[targetIdStr];
-                foreach (depId; node.dependencyIds)
+                foreach (info; shard.actions.values)
                 {
-                    auto depActionPtr = depId in targetToAction;
-                    if (depActionPtr is null) return false;
-                    
-                    auto depInfoPtr = *depActionPtr in actions;
-                    if (depInfoPtr is null || depInfoPtr.state != ActionState.Completed) return false;
+                    final switch (info.state)
+                    {
+                        case ActionState.Pending: stats.pending++; break;
+                        case ActionState.Ready:
+                        case ActionState.Scheduled: stats.ready++; break;
+                        case ActionState.Executing: stats.executing++; break;
+                        case ActionState.Completed: stats.completed++; break;
+                        case ActionState.Failed: stats.failed++; break;
+                    }
                 }
-                return true;
             }
         }
-        
-        // Fallback: Check InputSpecs for artifact dependencies
-        foreach (inputSpec; info.request.inputs)
-        {
-            bool found = false;
-            foreach (otherActionId, otherInfo; actions)
-            {
-                if (otherInfo.state != ActionState.Completed) continue;
-                // In a full implementation, we'd compare OutputSpec paths with InputSpec; for now, optimistically assume inputs are available
-                found = true;
-                break;
-            }
-            if (!found && info.request.inputs.length > 0) return false;
-        }
-        return true;
+        return stats;
     }
     
-    /// Mark action as ready and add to queue with priority-aware insertion
-    private void markReady(ActionId action) @trusted
-    {
-        if (auto info = action in actions)
-        {
-            info.state = ActionState.Ready;
-            (readyQueue.empty || info.priority >= Priority.High) ? readyQueue.insertFront(action) : readyQueue.insertBack(action);
-            Logger.debugLog("Action marked ready: " ~ action.toString() ~ " (priority: " ~ info.priority.to!string ~ ")");
-        }
-    }
-    
-    /// Check dependents of completed action
-    private void checkDependents(ActionId action) @trusted
-    {
-        ActionId[] nowReady;
-        
-        if (auto targetIdPtr = action in actionToTarget)
-        {
-            auto targetIdStr = targetIdPtr.toString();
-            if (targetIdStr in graph.nodes)
-            {
-                auto node = graph.nodes[targetIdStr];
-                foreach (dependentId; node.dependentIds)
-                {
-                    auto dependentActionPtr = dependentId in targetToAction;
-                    if (dependentActionPtr is null) continue;
-                    
-                    auto dependentAction = *dependentActionPtr;
-                    auto dependentInfoPtr = dependentAction in actions;
-                    if (dependentInfoPtr is null) continue;
-                    
-                    if (dependentInfoPtr.state == ActionState.Pending && isReady(dependentAction))
-                        nowReady ~= dependentAction;
-                }
-                Logger.debugLog("Checked " ~ node.dependentIds.length.to!string ~ " direct dependents of " ~ action.toString());
-            }
-        }
-        else
-        {
-            foreach (id, info; actions)
-                if (info.state == ActionState.Pending && isReady(id)) nowReady ~= id;
-        }
-        
-        foreach (id; nowReady) markReady(id);
-        if (nowReady.length > 0) Logger.debugLog("Marked " ~ nowReady.length.to!string ~ " actions as ready");
-    }
-    
-    /// Get scheduler statistics
     struct SchedulerStats
     {
         size_t pending;
@@ -362,236 +588,6 @@ final class DistributedScheduler
         size_t failed;
     }
     
-    SchedulerStats getStats() @trusted
-    {
-        synchronized (mutex)
-        {
-            SchedulerStats stats;
-            
-            foreach (info; actions.values)
-            {
-                final switch (info.state)
-                {
-                    case ActionState.Pending:
-                        stats.pending++;
-                        break;
-                    case ActionState.Ready:
-                    case ActionState.Scheduled:
-                        stats.ready++;
-                        break;
-                    case ActionState.Executing:
-                        stats.executing++;
-                        break;
-                    case ActionState.Completed:
-                        stats.completed++;
-                        break;
-                    case ActionState.Failed:
-                        stats.failed++;
-                        break;
-                }
-            }
-            
-            return stats;
-        }
-    }
-    
     void shutdown() @trusted { atomicStore(running, false); }
     bool isRunning() @trusted { return atomicLoad(running); }
 }
-
-/// Critical path analyzer (for priority scheduling)
-final class CriticalPathAnalyzer
-{
-    private BuildGraph graph;
-    private Duration[ActionId] estimatedDurations;
-    private Duration[ActionId] criticalPaths;
-    private size_t[ActionId] depthCache;
-    private size_t[ActionId] dependentsCache;
-    
-    this(BuildGraph graph) @safe
-    {
-        this.graph = graph;
-    }
-    
-    /// Compute priority based on critical path heuristic
-    Priority computePriority(ActionId action) @safe
-    {
-        // 1. Estimate depth (longest path from roots)
-        immutable depth = estimateDepth(action);
-        
-        // 2. Count transitive dependents (fan-out)
-        immutable dependents = countDependents(action);
-        
-        // 3. Estimate critical path duration
-        immutable criticalPath = estimateCriticalPath(action);
-        
-        // 4. Weighted scoring
-        immutable score = 
-            depth * 1.0 +
-            dependents * 0.5 +
-            criticalPath.total!"msecs" * 0.001;
-        
-        // 5. Map to priority enum
-        if (score > 100)
-            return Priority.Critical;
-        else if (score > 50)
-            return Priority.High;
-        else if (score > 10)
-            return Priority.Normal;
-        else
-            return Priority.Low;
-    }
-    
-    /// Estimate action depth in graph
-    /// Since ActionId (distributed) doesn't directly map to BuildNode,
-    /// we use a heuristic based on graph statistics
-    private size_t estimateDepth(ActionId action) @safe
-    {
-        // Check cache
-        if (auto cached = action in depthCache)
-            return *cached;
-        
-        // Without direct ActionId->TargetId mapping, estimate based on graph structure
-        // Use average depth of targets in the build graph as baseline
-        try
-        {
-            auto nodes = graph.nodes.values;
-            if (nodes.length == 0)
-                return 1;
-            
-            // Calculate average depth by doing a BFS from roots
-            size_t totalDepth = 0;
-            size_t nodeCount = 0;
-            bool[string] visited;
-            
-            foreach (node; nodes)
-            {
-                if (node.dependencyIds.length == 0)
-                {
-                    // This is a root node
-                    immutable depth = calculateNodeDepth(node, visited);
-                    totalDepth += depth;
-                    nodeCount++;
-                }
-            }
-            
-            // Return average depth (reasonable estimate for unknown action)
-            immutable result = nodeCount > 0 ? totalDepth / nodeCount : 1;
-            depthCache[action] = result;
-            return result;
-        }
-        catch (Exception)
-        {
-            return 1;
-        }
-    }
-    
-    /// Calculate depth of a specific node from roots
-    private size_t calculateNodeDepth(BuildNode node, ref bool[string] visited) @trusted
-    {
-        immutable nodeKey = node.id.toString();
-        if (nodeKey in visited)
-            return 0;
-        
-        visited[nodeKey] = true;
-        
-        if (node.dependencyIds.length == 0)
-            return 0;
-        
-        size_t maxDepth = 0;
-        foreach (depId; node.dependencyIds)
-        {
-            auto depKey = depId.toString();
-            if (depKey in graph.nodes)
-            {
-                immutable depth = 1 + calculateNodeDepth(graph.nodes[depKey], visited);
-                if (depth > maxDepth)
-                    maxDepth = depth;
-            }
-        }
-        
-        return maxDepth;
-    }
-    
-    /// Count transitive dependents
-    /// Estimate fan-out using graph statistics
-    private size_t countDependents(ActionId action) @safe
-    {
-        // Check cache
-        if (auto cached = action in dependentsCache)
-            return *cached;
-        
-        // Without direct mapping, estimate based on graph average
-        try
-        {
-            auto nodes = graph.nodes.values;
-            if (nodes.length == 0)
-                return 0;
-            
-            size_t totalDependents = 0;
-            foreach (node; nodes)
-            {
-                totalDependents += node.dependentIds.length;
-            }
-            
-            // Return average fan-out
-            immutable result = totalDependents / nodes.length;
-            dependentsCache[action] = result;
-            return result;
-        }
-        catch (Exception)
-        {
-            return 0;
-        }
-    }
-    
-    /// Estimate critical path duration (longest path to leaves)
-    private Duration estimateCriticalPath(ActionId action) @safe
-    {
-        // Check cache
-        if (auto cached = action in criticalPaths)
-            return *cached;
-        
-        // Estimate based on graph depth and average action duration
-        immutable depth = estimateDepth(action);
-        immutable avgDuration = estimateDuration(action);
-        
-        // Critical path estimate: depth * average duration
-        immutable result = avgDuration * depth;
-        
-        criticalPaths[action] = result;
-        return result;
-    }
-    
-    /// Estimate action duration (from historical data)
-    Duration estimateDuration(ActionId action) @safe
-    {
-        if (auto cached = action in estimatedDurations)
-            return *cached;
-        
-        // Default estimate (1 second baseline)
-        // In a production system, this would query historical execution data
-        return 1000.msecs;
-    }
-    
-    /// Record actual execution time for future estimates
-    void recordExecution(ActionId action, Duration actualDuration) @safe
-    {
-        // Update duration estimate (simple moving average)
-        if (auto existing = action in estimatedDurations)
-        {
-            // Weighted average: 70% old, 30% new
-            immutable oldMs = existing.total!"msecs";
-            immutable newMs = actualDuration.total!"msecs";
-            immutable avgMs = cast(long)(oldMs * 0.7 + newMs * 0.3);
-            estimatedDurations[action] = msecs(avgMs);
-        }
-        else
-        {
-            estimatedDurations[action] = actualDuration;
-        }
-    }
-}
-
-
-
