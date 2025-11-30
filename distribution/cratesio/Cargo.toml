@@ -1,11 +1,15 @@
 [package]
-name = "builder"
-version = "1.0.6"
+name = "builder-rs"
+version = "2.0.0"
 edition = "2021"
 description = "High-performance build system for mixed-language monorepos"
 authors = ["Griffin"]
 license = "MIT"
 build = "build.rs"
+
+[[bin]]
+name = "builder"
+path = "src/main.rs"
 
 [dependencies]
 libc = "0.2"

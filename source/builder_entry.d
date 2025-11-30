@@ -62,12 +62,8 @@ int runBuilder(string[] args)
     immutable bool isVerboseMode = args.canFind("--verbose") || args.canFind("-v") || 
         args.canFind("--mode=verbose");
     
-    if (!isQuietCommand) {
-        if (isVerboseMode) {
-            CPU.printBanner();
-        } else {
-            CPU.printCompactBanner();
-        }
+    if (!isQuietCommand && isVerboseMode) {
+        CPU.printBanner();
     }
     
     string command = "build";
@@ -105,7 +101,7 @@ int runBuilder(string[] args)
     
     if (showVersion)
     {
-        writeln("Builder version 1.0.6");
+        writeln("Builder version 2.0.0");
         writeln("High-performance build system for mixed-language monorepos");
         return 0;
     }
@@ -238,10 +234,10 @@ int runBuilder(string[] args)
                 HelpCommand.execute(helpCommand);
                 break;
             case "explain":
-                ExplainCommand.execute(args);
+                ExplainCommand.execute(args[1 .. $]);
                 break;
             case "version":
-                writeln("Builder version 1.0.6");
+                writeln("Builder version 2.0.0");
                 writeln("High-performance build system for mixed-language monorepos");
                 break;
             default:
