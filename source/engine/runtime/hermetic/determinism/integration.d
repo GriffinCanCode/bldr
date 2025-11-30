@@ -6,6 +6,7 @@ import std.file : exists, mkdirRecurse, write, read, tempDir;
 import std.path : buildPath;
 import std.algorithm : map;
 import std.array : array;
+import infrastructure.utils.files.directories : ensureDirectoryWithGitignore;
 import engine.runtime.hermetic.determinism.enforcer;
 import engine.runtime.hermetic.determinism.verifier;
 import engine.runtime.hermetic.determinism.detector;
@@ -113,8 +114,7 @@ struct DeterminismIntegration
         integration.config = config;
         
         // Create output directory
-        if (!exists(config.outputDir))
-            mkdirRecurse(config.outputDir);
+        ensureDirectoryWithGitignore(config.outputDir);
         
         // Create verifier
         integration.verifier = DeterminismVerifier.create(config.strategy);

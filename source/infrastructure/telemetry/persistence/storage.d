@@ -10,6 +10,7 @@ import infrastructure.telemetry.collection.collector;
 import infrastructure.telemetry.collection.environment : BuildEnvironment;
 import infrastructure.telemetry.persistence.schema;
 import infrastructure.utils.serialization;
+import infrastructure.utils.files.directories : ensureDirectoryWithGitignore;
 import infrastructure.errors;
 
 /// High-performance binary storage for telemetry data
@@ -30,8 +31,7 @@ final class TelemetryStorage
         this.storageMutex = new Mutex();
         this.config = config;
         
-        if (!exists(storageDir))
-            mkdirRecurse(storageDir);
+        ensureDirectoryWithGitignore(storageDir);
         
         loadSessions();
     }

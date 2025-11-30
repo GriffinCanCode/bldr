@@ -13,6 +13,7 @@ import engine.graph.caching.storage;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.simd.hash;
 import infrastructure.utils.security.integrity;
+import infrastructure.utils.files.directories : ensureDirectoryWithGitignore;
 import infrastructure.errors;
 
 /// High-performance dependency graph cache with incremental invalidation
@@ -63,8 +64,7 @@ final class GraphCache
         import std.file : getcwd;
         this.validator = IntegrityValidator.fromEnvironment(getcwd());
         
-        if (!exists(cacheDir))
-            mkdirRecurse(cacheDir);
+        ensureDirectoryWithGitignore(cacheDir);
     }
     
     /// Get cached graph if configuration unchanged, null otherwise

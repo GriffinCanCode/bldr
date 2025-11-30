@@ -15,6 +15,7 @@ import engine.caching.events;
 import frontend.cli.events.events : EventPublisher;
 import infrastructure.errors;
 import infrastructure.utils.logging.logger;
+import infrastructure.utils.files.directories : ensureDirectoryWithGitignore;
 
 /// Unified cache coordinator orchestrating all caching tiers
 /// Single source of truth for cache operations with:
@@ -48,6 +49,9 @@ final class CacheCoordinator
         this.config = config;
         this.publisher = publisher;
         this.coordinatorMutex = new Mutex();
+        
+        // Ensure cache directory exists and is ignored by git
+        ensureDirectoryWithGitignore(cacheDir);
         
         // Initialize content-addressable storage
         this.cas = new ContentAddressableStorage(cacheDir ~ "/blobs");

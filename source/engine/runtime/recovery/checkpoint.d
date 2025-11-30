@@ -9,6 +9,7 @@ import std.array;
 import std.conv;
 import engine.graph;
 import infrastructure.utils.files.hash;
+import infrastructure.utils.files.directories : ensureDirectoryWithGitignore;
 import infrastructure.errors.handling.result;
 
 /// Build checkpoint - persists build state for resumption
@@ -92,8 +93,7 @@ final class CheckpointManager
         this.checkpointDir = buildPath(workspaceRoot, ".builder-cache");
         this.checkpointPath = buildPath(checkpointDir, "checkpoint.bin");
         
-        if (!std.file.exists(checkpointDir))
-            mkdirRecurse(checkpointDir);
+        ensureDirectoryWithGitignore(checkpointDir);
     }
     
     /// Create checkpoint from build graph
