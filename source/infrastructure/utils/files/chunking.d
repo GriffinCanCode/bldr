@@ -69,8 +69,8 @@ struct ContentChunker
         
         auto combinedHasher = Blake3(0);  // SIMD-accelerated BLAKE3
         
-        // Use SIMD rolling hash for window
-        ubyte[WINDOW_SIZE] window;
+        // Use rolling hash window
+        ubyte[WINDOW_SIZE] window = 0;
         size_t windowPos = 0;
         
         while (!file.eof())
@@ -81,17 +81,18 @@ struct ContentChunker
             
             foreach (i, b; bytesRead)
             {
-                // Update window for SIMD rolling hash
+                // Get byte sliding out of window
+                ubyte oldByte = window[windowPos];
+                
+                // Update window
                 window[windowPos] = b;
                 windowPos = (windowPos + 1) % WINDOW_SIZE;
                 
-                // Use SIMD-accelerated rolling hash when window is full
-                if (offset + i >= WINDOW_SIZE) {
-                    fingerprint = SIMDOps.rollingHash(window, WINDOW_SIZE);
-                } else {
-                    // Fallback for initial bytes
-                fingerprint = ((fingerprint << 1) | (fingerprint >> 63)) ^ b;
-                }
+                // Rolling hash update (Rotate-XOR)
+                // This is shift-invariant and efficient
+                // fingerprint = rotl(fingerprint, 1) ^ b ^ rotl(oldByte, 64)
+                // Since period is 64, rotl(oldByte, 64) == oldByte
+                fingerprint = ((fingerprint << 1) | (fingerprint >> 63)) ^ b ^ oldByte;
                 
                 size_t currentPos = offset + i;
                 size_t chunkLen = currentPos - chunkStart + 1;
@@ -122,7 +123,6 @@ struct ContentChunker
                     combinedHasher.put(cast(ubyte[])chunk.hash);
                     
                     chunkStart = currentPos + 1;
-                    fingerprint = 0;
                 }
             }
             
@@ -149,6 +149,10 @@ struct ContentChunker
     @system // File I/O and hashing operations
     private static string hashChunk(ref File file, size_t offset, size_t length)
     {
+        // Save file position to restore later, as this method is called during iteration
+        auto savedPos = file.tell();
+        scope(exit) file.seek(savedPos);
+
         file.seek(offset);
         
         auto hasher = Blake3(0);  // SIMD-accelerated BLAKE3
@@ -166,21 +170,23 @@ struct ContentChunker
         return hasher.finishHex();
     }
     
-    /// Compare two chunk results and identify changed chunks (SIMD-accelerated)
+    /// Compare two chunk results and identify changed chunks (deduplication)
     static size_t[] findChangedChunks(ChunkResult oldChunks, ChunkResult newChunks)
     {
         size_t[] changedIndices;
         
-        // Simple comparison - in practice you'd use a more sophisticated algorithm
-        size_t maxLen = max(oldChunks.chunks.length, newChunks.chunks.length);
-        
-        foreach (i; 0 .. maxLen)
+        // Build a set of old chunk hashes for fast lookup
+        // This handles shifted chunks (insertions/deletions) correctly by ignoring index
+        bool[string] oldHashes;
+        foreach (chunk; oldChunks.chunks)
         {
-            if (i >= oldChunks.chunks.length || i >= newChunks.chunks.length)
-            {
-                changedIndices ~= i;
-            }
-            else if (oldChunks.chunks[i].hash != newChunks.chunks[i].hash)
+            oldHashes[chunk.hash] = true;
+        }
+        
+        foreach (i, chunk; newChunks.chunks)
+        {
+            // If hash exists in old chunks, we don't need to re-upload
+            if (chunk.hash !in oldHashes)
             {
                 changedIndices ~= i;
             }
@@ -548,4 +554,3 @@ struct RollingHash
         hash = 0;
     }
 }
-

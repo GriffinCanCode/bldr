@@ -146,24 +146,16 @@ final class StringPool
     /// Intern a string (thread-safe)
     Intern intern(string s) @system
     {
-        // Fast path: check if already interned (lock-free read)
-        if (auto existing = s in pool)
-        {
-            atomicOp!"+="(totalInterns, 1);
-            return Intern(*existing);
-        }
-        
-        // Slow path: add to pool (synchronized)
         synchronized(this)
         {
-            // Double-check after acquiring lock
+            // Check if already interned
             if (auto existing = s in pool)
             {
                 atomicOp!"+="(totalInterns, 1);
                 return Intern(*existing);
             }
             
-            // Add to pool (string is now GC-managed and永久)
+            // Add to pool (string is now GC-managed and permanent)
             pool[s] = s;
             atomicOp!"+="(totalInterns, 1);
             return Intern(s);

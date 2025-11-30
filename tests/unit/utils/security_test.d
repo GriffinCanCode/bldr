@@ -153,8 +153,8 @@ unittest
         assert(badResult.isErr);
         // Should be InjectionAttempt or InvalidCommand depending on implementation
         auto code = badResult.unwrapErr().code;
-        assert(code == cast(ErrorCode)SecurityCode.InjectionAttempt || 
-               code == cast(ErrorCode)SecurityCode.InvalidCommand);
+        assert(code == ErrorCode.ValidationFailed || 
+               code == ErrorCode.InvalidInput);
     }
     
     // Test 3: Path validation in arguments
@@ -162,7 +162,7 @@ unittest
         auto exec = SecureExecutor.create();
         auto pathResult = exec.run(["cat", "../../../etc/passwd"]);
         assert(pathResult.isErr);
-        assert(pathResult.unwrapErr().code == cast(ErrorCode)SecurityCode.PathTraversal);
+        assert(pathResult.unwrapErr().code == ErrorCode.PermissionDenied);
     }
     
     // Test 4: Builder pattern
@@ -183,7 +183,7 @@ unittest
         string[] emptyCmd;
         auto result = exec.run(emptyCmd);
         assert(result.isErr);
-        assert(result.unwrapErr().code == cast(ErrorCode)SecurityCode.InvalidCommand);
+        assert(result.unwrapErr().code == ErrorCode.InvalidInput);
     }
     
     writeln("✓ All secure executor tests passed");

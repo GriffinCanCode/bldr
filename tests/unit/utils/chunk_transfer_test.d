@@ -13,13 +13,15 @@ unittest
 {
     writeln("Testing: Basic file chunking");
     
-    // Create test file
+    // Create test file with random data
     immutable testFile = "test_chunk_basic.bin";
     scope(exit) if (exists(testFile)) remove(testFile);
     
     ubyte[] data = new ubyte[100_000];
-    foreach (i, ref b; data)
-        b = cast(ubyte)(i % 256);
+    import std.random : Xorshift32, uniform;
+    auto rng = Xorshift32(12345);
+    foreach (ref b; data)
+        b = cast(ubyte)uniform(0, 256, rng);
     std.file.write(testFile, data);
     
     // Chunk the file
@@ -48,13 +50,17 @@ unittest
 {
     writeln("Testing: Chunk change detection");
     
-    // Create test file
+    // Create test file with pseudo-random data to ensure natural chunk boundaries
     immutable testFile = "test_chunk_change.bin";
     scope(exit) if (exists(testFile)) remove(testFile);
     
-    ubyte[] data = new ubyte[100_000];
-    foreach (i, ref b; data)
-        b = cast(ubyte)((i * 13) % 256);
+    ubyte[] data = new ubyte[300_000];
+    import std.random : Xorshift32, uniform;
+    auto rng = Xorshift32(12345); // Fixed seed for determinism
+    
+    foreach (ref b; data)
+        b = cast(ubyte)uniform(0, 256, rng);
+        
     std.file.write(testFile, data);
     
     // Chunk original
@@ -93,8 +99,10 @@ unittest
     scope(exit) if (exists(testFile)) remove(testFile);
     
     ubyte[] data = new ubyte[50_000];
-    foreach (i, ref b; data)
-        b = cast(ubyte)(i % 256);
+    import std.random : Xorshift32, uniform;
+    auto rng = Xorshift32(12345);
+    foreach (ref b; data)
+        b = cast(ubyte)uniform(0, 256, rng);
     std.file.write(testFile, data);
     
     // Chunk and serialize
@@ -139,13 +147,16 @@ unittest
         if (exists(testFile2)) remove(testFile2);
     }
     
-    ubyte[] data1 = new ubyte[100_000];
-    ubyte[] data2 = new ubyte[100_000];
+    ubyte[] data1 = new ubyte[300_000];
+    ubyte[] data2 = new ubyte[300_000];
     
-    foreach (i, ref b; data1)
-        b = cast(ubyte)(i % 256);
-    foreach (i, ref b; data2)
-        b = cast(ubyte)(i % 256);
+    import std.random : Xorshift32, uniform;
+    auto rng = Xorshift32(12345);
+    
+    foreach (ref b; data1) {
+        b = cast(ubyte)uniform(0, 256, rng);
+        data2[&b - data1.ptr] = b; // Copy to data2
+    }
     
     // Modify second file slightly
     data2[50_000 .. 55_000] = 0xFF;
@@ -219,8 +230,10 @@ unittest
     scope(exit) if (exists(testFile)) remove(testFile);
     
     ubyte[] data = new ubyte[100_000];
-    foreach (i, ref b; data)
-        b = cast(ubyte)((i * 17) % 256);
+    import std.random : Xorshift32, uniform;
+    auto rng = Xorshift32(12345);
+    foreach (ref b; data)
+        b = cast(ubyte)uniform(0, 256, rng);
     std.file.write(testFile, data);
     
     // Mock upload function
@@ -253,9 +266,11 @@ unittest
     immutable testFile = "test_incremental.bin";
     scope(exit) if (exists(testFile)) remove(testFile);
     
-    ubyte[] data = new ubyte[100_000];
-    foreach (i, ref b; data)
-        b = cast(ubyte)(i % 256);
+    ubyte[] data = new ubyte[300_000];
+    import std.random : Xorshift32, uniform;
+    auto rng = Xorshift32(12345);
+    foreach (ref b; data)
+        b = cast(ubyte)uniform(0, 256, rng);
     std.file.write(testFile, data);
     
     // Chunk original
@@ -324,8 +339,10 @@ unittest
     }
     
     ubyte[] data = new ubyte[100_000];
-    foreach (i, ref b; data)
-        b = cast(ubyte)((i * 23) % 256);
+    import std.random : Xorshift32, uniform;
+    auto rng = Xorshift32(12345);
+    foreach (ref b; data)
+        b = cast(ubyte)uniform(0, 256, rng);
     std.file.write(testFile, data);
     
     // Chunk the file
