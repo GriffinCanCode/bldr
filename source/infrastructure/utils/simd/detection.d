@@ -232,28 +232,6 @@ struct CPU
         
         writeln("╶─────────────────────────────────────────────────────────────╴\n");
     }
-    
-    /// Print minimal one-line startup banner
-    static void printCompactBanner()
-    {
-        import std.stdio : writefln;
-        import std.format : format;
-        
-        immutable level = simdLevel();
-        immutable speedupMap = [
-            SIMDLevel.None: 1.0, SIMDLevel.SSE2: 1.5, SIMDLevel.SSE41: 2.0,
-            SIMDLevel.AVX2: 4.0, SIMDLevel.AVX512: 6.0, SIMDLevel.NEON: 3.0
-        ];
-        
-        immutable speedup = speedupMap[level];
-        
-        if (level != SIMDLevel.None) {
-            writefln("⚡ SIMD: %s detected (%.1fx speedup expected) | %s", 
-                     simdLevelName(), speedup, brand());
-        } else {
-            writefln("ℹ️  SIMD: Portable mode | %s", brand());
-        }
-    }
 }
 
 // Unit tests

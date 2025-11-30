@@ -554,13 +554,80 @@ struct ExplainCommand
         string[] sectionStack;
         int[] indentStack = [0];
         
+        string currentMultilineKey = null;
+        bool multilineIsArray = false;
+        int multilineIndent = -1;
+        
         foreach (line; lines)
         {
-            if (line.strip().length == 0 || line.strip().startsWith("#"))
+            auto stripped = line.strip();
+            
+            // Handle blank lines
+            if (stripped.length == 0)
+            {
+                if (currentMultilineKey !is null || multilineIsArray)
+                {
+                    string text = "\n";
+                    if (multilineIsArray)
+                    {
+                        auto arr = (*currentSection).array;
+                        if (arr.length > 0)
+                        {
+                            // Check if last item is string
+                            if (arr[$-1].type == JSONType.string)
+                            {
+                                string current = arr[$-1].str;
+                                arr[$-1] = JSONValue(current ~ text);
+                                (*currentSection).array = arr;
+                            }
+                        }
+                    }
+                    else if (currentMultilineKey in (*currentSection).object)
+                    {
+                        string current = (*currentSection).object[currentMultilineKey].str;
+                        (*currentSection).object[currentMultilineKey] = JSONValue(current ~ text);
+                    }
+                }
+                continue;
+            }
+            
+            if (stripped.startsWith("#"))
                 continue;
             
             auto indent = line.length - line.stripLeft().length;
-            auto stripped = line.strip();
+            
+            // Check continuation of multiline string
+            if ((currentMultilineKey !is null || multilineIsArray) && multilineIndent != -1)
+            {
+                if (indent > multilineIndent)
+                {
+                    string text = stripped ~ "\n";
+                    
+                    if (multilineIsArray)
+                    {
+                        auto arr = (*currentSection).array;
+                        if (arr.length > 0 && arr[$-1].type == JSONType.string)
+                        {
+                            string current = arr[$-1].str;
+                            arr[$-1] = JSONValue(current ~ text);
+                            (*currentSection).array = arr;
+                        }
+                    }
+                    else if (currentMultilineKey in (*currentSection).object)
+                    {
+                        string current = (*currentSection).object[currentMultilineKey].str;
+                        (*currentSection).object[currentMultilineKey] = JSONValue(current ~ text);
+                    }
+                    continue;
+                }
+                else
+                {
+                    // End of block
+                    currentMultilineKey = null;
+                    multilineIsArray = false;
+                    multilineIndent = -1;
+                }
+            }
             
             if (stripped.endsWith(":"))
             {
@@ -588,15 +655,54 @@ struct ExplainCommand
             else if (stripped.startsWith("- "))
             {
                 // Array item
-                auto value = stripped[2 .. $].strip();
+                auto valueStr = stripped[2 .. $].strip();
+                JSONValue val;
                 
-                if (value.startsWith("\"") && value.endsWith("\""))
-                    value = value[1 .. $ - 1];
+                // Check for object in array (e.g. "- key: value")
+                // But ignore : inside quotes
+                long sepIndex = -1;
+                bool inQuote = false;
+                for (size_t i = 0; i < valueStr.length - 1; i++)
+                {
+                    if (valueStr[i] == '"' && (i == 0 || valueStr[i-1] != '\\'))
+                        inQuote = !inQuote;
+                    
+                    if (!inQuote && valueStr[i] == ':' && valueStr[i+1] == ' ')
+                    {
+                        sepIndex = i;
+                        break;
+                    }
+                }
+                
+                if (sepIndex != -1)
+                {
+                    auto key = valueStr[0 .. sepIndex].strip();
+                    auto v = valueStr[sepIndex + 2 .. $].strip();
+                    if (v.startsWith("\"") && v.endsWith("\""))
+                        v = v[1 .. $ - 1];
+                        
+                    val = JSONValue([key: JSONValue(v)]);
+                }
+                else
+                {
+                    if (valueStr.startsWith("\"") && valueStr.endsWith("\""))
+                        valueStr = valueStr[1 .. $ - 1];
+                        
+                    val = JSONValue(valueStr);
+                    
+                    // Handle multiline array item
+                    if (valueStr == "|")
+                    {
+                        val = JSONValue("");
+                        multilineIsArray = true;
+                        multilineIndent = cast(int)indent;
+                    }
+                }
                 
                 if ((*currentSection).type != JSONType.array)
                     (*currentSection).array = null;
                 
-                (*currentSection).array ~= JSONValue(value);
+                (*currentSection).array ~= val;
             }
             else if (stripped.canFind(": "))
             {
@@ -610,14 +716,33 @@ struct ExplainCommand
                     // Handle multiline strings (|)
                     if (value == "|")
                     {
-                        (*currentSection).object[key] = JSONValue("");
+                        JSONValue empty = JSONValue("");
+                        currentMultilineKey = key;
+                        multilineIsArray = false;
+                        multilineIndent = cast(int)indent;
+                        
+                        if ((*currentSection).type == JSONType.array && (*currentSection).array.length > 0 && 
+                            (*currentSection).array[$ - 1].type == JSONType.object)
+                            (*currentSection).array[$ - 1].object[key] = empty;
+                        else
+                            (*currentSection).object[key] = empty;
                         continue;
                     }
                     
                     if (value.startsWith("\"") && value.endsWith("\""))
                         value = value[1 .. $ - 1];
                     
-                    (*currentSection).object[key] = JSONValue(value);
+                    // If we're in an array and the last item is an object, assume this key belongs to it
+                    // This handles YAML list of objects where keys are on subsequent lines
+                    if ((*currentSection).type == JSONType.array && (*currentSection).array.length > 0 && 
+                        (*currentSection).array[$ - 1].type == JSONType.object)
+                    {
+                        (*currentSection).array[$ - 1].object[key] = JSONValue(value);
+                    }
+                    else
+                    {
+                        (*currentSection).object[key] = JSONValue(value);
+                    }
                 }
             }
         }
