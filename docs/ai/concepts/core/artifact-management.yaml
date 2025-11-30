@@ -2,8 +2,8 @@ topic: artifact-management
 category: concepts
 summary: "Artifact Management - Handling build outputs"
 definition: |
-  How Builder manages the 'bazel-out' / 'build-out' directory.
-  Symlink forests, output layout, and garbage collection.
+  How Builder manages the 'bin' directory.
+  Output layout and garbage collection.
 
 key_points:
   - "Layout: Structured by config (debug/release)"

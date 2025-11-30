@@ -11,7 +11,7 @@ key_points:
   - "Traversal: How Builder walks the graph"
 
 usage_examples:
-  - command: "builder query --graph"
+  - command: "builder graph //target"
     description: "Visualize the graph"
 
 related: [bldrquery, targets, dependencies]

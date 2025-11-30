@@ -12,8 +12,10 @@ key_points:
   - "Configurable: Adjust concurrency level with flags"
 
 usage_examples:
-  - command: "builder build -j 8"
-    description: "Build with 8 parallel jobs"
+  - command: "builder build"
+    description: "Build with auto-detected concurrency (work-stealing)"
+  - command: "export BUILDER_JOBS=8"
+    description: "Manually throttle concurrency (via environment variable, if supported)"
 
 related: [performance, graphcache, coordinator]
 

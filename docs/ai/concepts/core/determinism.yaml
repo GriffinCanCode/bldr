@@ -65,7 +65,7 @@ how_builder_enforces:
       - "gettimeofday() → Returns fixed time"
       - "clock_gettime() → Returns fixed time"
       - "random() / rand() → Returns seeded PRNG"
-      - "getpid() → Returns fixed PID (42)"
+      - "getpid() → Returns fixed PID (12345)"
     overhead: "~1-2% performance cost"
   
   compiler_flags:
@@ -111,13 +111,13 @@ usage:
     builder build //app --determinism=strict
     
     # Verify across 5 builds
-    builder verify-determinism //app --iterations=5
+    builder verify //app --iterations=5
     
-    # Detect non-determinism sources
-    builder detect-non-determinism //app
+    # Detect non-determinism sources (quick check)
+    builder verify //app --quick
     
-    # Get repair suggestions
-    builder repair-plan //app
+    # Get repair suggestions (automatic with verify)
+    builder verify //app
 
 verification_strategies:
   - name: "Content Hash (default)"
@@ -170,7 +170,7 @@ examples:
       }
   
   - description: "Verify determinism"
-    command: "builder verify-determinism //app:app --iterations=5"
+    command: "builder verify //app:app --iterations=5"
     expected_output: |
       Build 1/5: hash=abc123...
       Build 2/5: hash=abc123...

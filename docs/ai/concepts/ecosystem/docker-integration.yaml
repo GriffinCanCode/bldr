@@ -1,9 +1,11 @@
 topic: docker-integration
 category: concepts
-summary: "Docker Integration - Building containers"
+summary: "Docker Integration - Building containers (Planned)"
 definition: |
   Building Docker/OCI images deterministically without a Docker daemon.
   Images are just tarballs of layers.
+  
+  NOTE: This feature is currently in planning.
 
 key_points:
   - "Deterministic: Same inputs = same image hash"

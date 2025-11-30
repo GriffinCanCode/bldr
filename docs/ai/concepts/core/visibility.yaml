@@ -1,18 +1,21 @@
 topic: visibility
 category: concepts
-summary: "Visibility - Access control for targets"
+summary: "Visibility - Access control for targets (Planned)"
 definition: |
   Controls which other packages can depend on a given target.
   Enforces architectural boundaries.
+  
+  NOTE: This feature is currently in design/planning phase and not yet enforced by the build engine.
 
 key_points:
-  - "Public: //visibility:public"
-  - "Private: //visibility:private (default)"
+  - "Public: //visibility:public (Planned)"
+  - "Private: //visibility:private (Default - Planned)"
   - "Package group: specific lists of packages"
 
 usage_examples:
-  - description: "Public library"
+  - description: "Public library (Future Syntax)"
     code: |
+      // Future syntax - not yet implemented
       cc_library(
         name = "util",
         visibility = ["//visibility:public"],

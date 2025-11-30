@@ -60,7 +60,6 @@ setup:
         remote_cache: {
             enabled: true;
             url: "http://cache-server:8080";
-            read_only: false;  # Allow uploads
             timeout: 30s;
         };
     }
@@ -109,7 +108,6 @@ performance:
 security:
   optional_hmac: "BLAKE3-based HMAC signatures prevent tampering"
   workspace_isolation: "Different workspaces use different keys"
-  read_only_mode: "CI can use cache but not pollute it"
   expiration: "Artifacts expire after 30 days (configurable)"
 
 key_points:
@@ -127,13 +125,9 @@ configuration:
   - var: "BUILDER_REMOTE_CACHE_TIMEOUT"
     default: "30s"
     description: "Network timeout"
-  
-  - var: "BUILDER_REMOTE_CACHE_READ_ONLY"
-    default: "false"
-    description: "Only download, never upload"
-  
+
   - var: "BUILDER_REMOTE_CACHE_MAX_SIZE"
-    default: "10GB"
+    default: "100MB"
     description: "Max artifact size to cache remotely"
 
 monitoring:

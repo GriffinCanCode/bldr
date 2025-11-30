@@ -125,9 +125,7 @@ performance_impact:
 usage:
   automatic: "Enabled by default for all builds"
   
-  force_full: "builder build --incremental=false"
-  
-  force_minimal: "builder build --incremental=minimal"
+  configuration: "Use BUILDER_INCREMENTAL_STRATEGY environment variable"
   
   view_analysis: |
     builder build //target --explain-rebuild
@@ -169,7 +167,7 @@ troubleshooting:
   
   - problem: "Incremental build incorrect"
     cause: "Missing dependency (hidden include)"
-    solution: "Run full build: builder build --incremental=false"
+    solution: "Run full build: export BUILDER_INCREMENTAL_STRATEGY=full"
   
   - problem: "Dependency analysis slow"
     cause: "Tracking system headers"

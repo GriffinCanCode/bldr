@@ -6,12 +6,12 @@ definition: |
   This topic explains similarities and differences.
 
 key_points:
-  - "Starlark: Same configuration language"
+  - "Starlark-like: Similar configuration DSL"
   - "Workspace: Similar layout"
-  - "Migration: Easy to move between them"
+  - "Migration: Automated tools to convert BUILD files"
 
 usage_examples:
-  - description: "Many Bazel BUILD files work in Builder"
+  - description: "Use 'builder migrate' to convert Bazel projects"
 
 related: [migration, starlark, ecosystem]
 

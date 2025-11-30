@@ -11,8 +11,12 @@ key_points:
   - "Transitions: Switch config for dependencies"
 
 usage_examples:
-  - command: "builder build --cpu=arm64"
-    description: "Cross compile for ARM64"
+  - description: "Define platform target"
+    code: |
+      target("app-arm64") {
+        platform: "linux-arm64";
+        ...
+      }
 
 related: [toolchains, languages, targets]
 

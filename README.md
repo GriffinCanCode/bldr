@@ -25,6 +25,7 @@ Builder advances the state of build systems through novel architectural approach
 | Language Support | ✅ Production | 27 language handlers |
 | Distributed Execution | ⚠️ Beta | Architecture complete, production hardening in progress |
 | Plugin System | ⚠️ Beta | Core works, external SDKs in development |
+| Explain System | ✅ Production | AI-optimized documentation engine |
 
 > **Performance Note:** Performance figures in this document are from internal benchmarks. Hardware: Modern x86_64/ARM64. Your results may vary based on workload, hardware, and configuration.
 
@@ -309,6 +310,22 @@ builder migrate info bazel
 
 **Design:** Parse-once strategy extracts targets to system-agnostic IR, then emits idiomatic Builderfile DSL. Warnings categorized by severity (info/warning/error). Metadata preservation for manual review of complex features.
 
+## AI-Native Documentation
+
+Integrated explanation engine designed for the LLM era, providing semantic understanding of build concepts directly in the terminal:
+
+```bash
+builder explain caching              # Explain multi-tier architecture
+builder explain determinism          # Understanding reproducibility
+builder explain "remote execution"   # Fuzzy search for concepts
+```
+
+**Features:**
+- **Semantic Concepts**: Explains *why* and *how*, not just flag syntax (e.g., `hermetic` vs `sandboxed`).
+- **RAG-Optimized**: Underlying data stored in granular, context-rich YAML optimized for LLM retrieval.
+- **Smart Resolution**: Handles aliases, fuzzy matching, and related topic suggestions.
+- **Architecture-Aware**: Documentation stays in sync with code via strict validation.
+
 ## Observability
 
 **Distributed Tracing:** OpenTelemetry-compatible with W3C Trace Context. Span tracking, context propagation, multiple exporters (Jaeger, Zipkin, Console).
@@ -376,6 +393,10 @@ builder query 'deps(//src:app)'
 
 # View analytics
 builder telemetry recent 10
+
+# Explain concepts
+builder explain caching
+builder explain "remote execution"
 
 # Install VS Code extension
 code --install-extension tools/vscode/builder-lang-2.0.0.vsix
@@ -505,76 +526,6 @@ The codebase follows clean architectural principles with modular separation:
 - **User Guides:** [docs/user-guides/](docs/user-guides/)
 - **Features:** [docs/features/](docs/features/)
 - **Examples:** [examples/](examples/)
-
-## Roadmap & Feature Checklist
-
-### Core Build System
-- [x] Dynamic build graphs with runtime discovery
-- [x] Process-based plugin architecture
-- [x] Lock-free work-stealing scheduler
-- [x] Three-tier programmability (DSL, macros, plugins)
-- [x] SIMD-accelerated BLAKE3 hashing
-- [x] Multi-level caching (5 tiers)
-- [x] Incremental everything (analysis, compilation, tests)
-- [x] 27 language support with unified architecture
-- [x] Set-theoretic hermetic builds
-- [x] Complete LSP implementation
-- [x] Distributed execution with native sandboxing
-- [x] Enterprise-grade test framework
-- [x] Bazel-compatible query language
-- [x] OpenTelemetry observability
-- [x] Event-driven CLI rendering
-
-### Advanced Features
-- [x] Content-defined chunking with Rabin fingerprinting
-- [x] Bayesian flaky test detection
-- [x] Adaptive test sharding
-- [x] Remote caching with CDN integration
-- [x] JUnit XML for CI/CD
-- [x] Watch mode with native file watching
-- [x] **Repository Rules System** ✨
-  - [x] HTTP archive fetching with integrity verification
-  - [x] Git repository support with commit/tag pinning
-  - [x] Local filesystem repositories
-  - [x] Content-addressable caching
-  - [x] BLAKE3 cryptographic verification
-  - [x] Lazy fetching (on-demand download)
-  - [x] `@repo//path:target` syntax
-  - [x] Integration with dependency resolver
-  - [x] LSP autocomplete support
-- [x] **Build System Migration** ✨
-  - [x] Bazel BUILD file migration
-  - [x] CMake CMakeLists.txt migration
-  - [x] Maven pom.xml migration
-  - [x] Gradle build.gradle migration
-  - [x] Make Makefile migration
-  - [x] Cargo Cargo.toml migration
-  - [x] npm package.json migration
-  - [x] Go modules go.mod migration
-  - [x] DUB dub.json migration
-  - [x] SBT build.sbt migration
-  - [x] Meson meson.build migration
-  - [x] Auto-detection from file name/content
-  - [x] Dry-run preview mode
-  - [x] Rich warnings with suggestions
-  - [x] Unified IR-based architecture
-  - [x] Comprehensive unit tests
-
-### Future Enhancements
-- [ ] Patch support for repositories
-- [ ] Repository mirrors for reliability
-- [ ] Optional package registry (like crates.io)
-- [ ] Semantic versioning and constraints
-- [ ] Workspace overlays for repositories
-- [ ] Compressed repository caching
-- [ ] Auto-generation of build files for external deps
-- [ ] Build-time code generation plugins
-- [ ] Custom action types
-- [ ] Remote execution autoscaling
-- [ ] Multi-platform cross-compilation
-- [ ] Docker/container integration
-- [ ] Kubernetes deployment plugin
-- [ ] Advanced dependency visualization
 
 ## Contributing
 

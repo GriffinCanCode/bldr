@@ -37,6 +37,8 @@ example: |
           max_age_days: 30;
       };
       
+      output_dir: "bin";
+
       distributed: {
           remote_execution: false;
           coordinator_url: "http://localhost:9000";

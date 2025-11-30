@@ -1,9 +1,11 @@
 topic: genrule
 category: concepts
-summary: "Genrule - Generic build rule"
+summary: "Genrule - Generic build rule (Planned)"
 definition: |
   A flexible rule to run arbitrary shell commands to generate outputs.
   Useful when no specific rule exists for a task.
+  
+  NOTE: This feature is currently in planning.
 
 key_points:
   - "Bash: Runs in bash shell"
