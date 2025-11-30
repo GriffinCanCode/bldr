@@ -27,8 +27,8 @@ import infrastructure.errors;
     assert(provisionResult.isOk, "Mock provision should succeed");
     
     auto workerId = provisionResult.unwrap();
-    assert(workerId.id.length > 0, "Worker ID should not be empty");
-    writeln("  ✓ Provisioned mock worker: ", workerId.id);
+    assert(workerId.value > 0, "Worker ID should not be empty");
+    writeln("  ✓ Provisioned mock worker: ", workerId.value);
     
     // Test getting worker status
     auto statusResult = provider.getWorkerStatus(workerId);

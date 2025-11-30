@@ -3,6 +3,7 @@ module tests.unit.migration.cmake;
 import std.stdio;
 import std.file;
 import std.path;
+import std.conv;
 import infrastructure.migration.systems.cmake;
 import infrastructure.migration.core.common;
 import infrastructure.config.schema.schema : TargetType, TargetLanguage;

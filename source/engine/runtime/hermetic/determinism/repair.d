@@ -174,6 +174,9 @@ struct RepairEngine
                 case NonDeterminismSource.PointerAddress:
                     suggestion.title = "Pointer Addresses";
                     break;
+                case NonDeterminismSource.OutputMismatch:
+                    suggestion.title = "Output Mismatch";
+                    break;
                 case NonDeterminismSource.Unknown:
                     suggestion.title = "Unknown Source";
                     break;

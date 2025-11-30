@@ -284,10 +284,8 @@ int main() {
     
     // Environment should be controlled
     auto s = spec.unwrap();
-    Assert.isTrue(s.environment.canFind("PATH=/usr/bin:/bin"), 
-                  "Should have controlled PATH");
-    Assert.isTrue(s.environment.canFind("SOURCE_DATE_EPOCH=1640995200"), 
-                  "Should have SOURCE_DATE_EPOCH");
+    Assert.equal(s.environment.get("PATH"), "/usr/bin:/bin", "Should have controlled PATH");
+    Assert.equal(s.environment.get("SOURCE_DATE_EPOCH"), "1640995200", "Should have SOURCE_DATE_EPOCH");
     
     writeln("  \x1b[32m✓ Environment isolation test passed\x1b[0m");
 }
@@ -405,18 +403,18 @@ int main() {
     
     // Test UUID detection
     Assert.isTrue(
-        NonDeterminismDetector.containsUUID("ID: 550e8400-e29b-41d4-a716-446655440000"),
+        NonDeterminismDetector.hasUUIDPattern("ID: 550e8400-e29b-41d4-a716-446655440000"),
         "Should detect valid UUID"
     );
     Assert.isTrue(
-        NonDeterminismDetector.containsUUID("UUID: a1b2c3d4-e5f6-4789-a1b2-c3d4e5f67890"),
+        NonDeterminismDetector.hasUUIDPattern("UUID: a1b2c3d4-e5f6-4789-a1b2-c3d4e5f67890"),
         "Should detect another UUID format"
     );
     
     // Test non-UUIDs
-    Assert.isFalse(NonDeterminismDetector.containsUUID("No UUIDs here"), 
+    Assert.isFalse(NonDeterminismDetector.hasUUIDPattern("No UUIDs here"), 
                    "Should not false positive");
-    Assert.isFalse(NonDeterminismDetector.containsUUID("123-456-789"), 
+    Assert.isFalse(NonDeterminismDetector.hasUUIDPattern("123-456-789"), 
                    "Should not detect non-UUID patterns");
     
     writeln("  \x1b[32m✓ UUID detection test passed\x1b[0m");
@@ -514,7 +512,7 @@ int main() {
         if (result.source == NonDeterminismSource.FileOrdering)
         {
             foundIncremental = true;
-            Assert.notEmpty(result.explanation, "Should explain incremental issue");
+            Assert.notEmpty(result.description, "Should explain incremental issue");
         }
     }
     

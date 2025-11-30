@@ -2,7 +2,7 @@ module tests.unit.core.hermetic_spec;
 
 import engine.runtime.hermetic.core.spec;
 
-@safe unittest
+@system unittest
 {
     // Test basic spec validation - non-overlapping paths
     auto builder = SandboxSpecBuilder.create()
@@ -19,7 +19,7 @@ import engine.runtime.hermetic.core.spec;
     assert(!spec.canWrite("/workspace/src"), "Should not allow writing input path");
 }
 
-@safe unittest
+@system unittest
 {
     // Test hermeticity violation - overlapping input/output
     auto builder = SandboxSpecBuilder.create()

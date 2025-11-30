@@ -215,6 +215,19 @@ struct TargetBuilder
         return this;
     }
     
+    TargetBuilder withOutputs(string[] outputs)
+    {
+        if (outputs.length > 0)
+            target.outputPath = outputs[0];
+        return this;
+    }
+
+    TargetBuilder withCommand(string cmd)
+    {
+        target.langConfig["command"] = cmd;
+        return this;
+    }
+    
     TargetBuilder withLanguage(string lang)
     {
         target.language = lang.to!TargetLanguage;

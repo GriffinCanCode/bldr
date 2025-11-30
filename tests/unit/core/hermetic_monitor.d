@@ -1,6 +1,6 @@
 module tests.unit.core.hermetic_monitor;
 
-import std.datetime : seconds, msecs;
+import std.datetime : seconds, msecs, Duration;
 import engine.runtime.hermetic.monitoring;
 import engine.runtime.hermetic.core.spec : ResourceLimits;
 

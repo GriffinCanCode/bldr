@@ -82,7 +82,7 @@ unittest
     
     auto config = TelemetryConfig();
     config.maxSessions = 100;
-    config.retentionDays = 30;
+    config.maxAge = dur!"days"(30);
     
     auto storage = new TelemetryStorage(testDir, config);
     
@@ -313,14 +313,14 @@ unittest
     writeln("Testing TelemetryConfig...");
     
     auto config = TelemetryConfig();
-    assert(config.maxSessions == 1000, "Default max sessions");
-    assert(config.retentionDays == 90, "Default retention days");
+    assert(config.maxSessions == 100, "Default max sessions");
+    assert(config.maxAge == dur!"days"(30), "Default max age");
     assert(config.enabled == true, "Default enabled");
     
     // Test environment loading (values should come from environment)
     auto envConfig = TelemetryConfig.fromEnvironment();
     assert(envConfig.maxSessions > 0);
-    assert(envConfig.retentionDays > 0);
+    assert(envConfig.maxAge > dur!"days"(0));
     
     writeln("  ✓ TelemetryConfig tests passed");
 }

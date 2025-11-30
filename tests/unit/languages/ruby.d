@@ -10,6 +10,7 @@ import infrastructure.config.schema.schema;
 import infrastructure.errors;
 import tests.harness;
 import tests.fixtures;
+import tests.mocks;
 
 /// Test Ruby require detection
 unittest

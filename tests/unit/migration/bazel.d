@@ -3,6 +3,8 @@ module tests.unit.migration.bazel;
 import std.stdio;
 import std.file;
 import std.path;
+import std.string;
+import std.conv;
 import infrastructure.migration.systems.bazel;
 import infrastructure.migration.core.common;
 import infrastructure.config.schema.schema : TargetType, TargetLanguage;
@@ -83,7 +85,7 @@ cc_binary(
     string tempFile = tempDir() ~ "/test_BUILD_" ~ __LINE__.to!string;
     scope(exit) if (exists(tempFile)) remove(tempFile);
     
-    write(tempFile, buildContent);
+    std.file.write(tempFile, buildContent);
     
     auto result = migrator.migrate(tempFile);
     

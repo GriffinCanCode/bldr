@@ -3,6 +3,8 @@ module tests.unit.migration.integration;
 import std.stdio;
 import std.file;
 import std.path;
+import std.conv;
+import std.string;
 import infrastructure.migration;
 import infrastructure.config.schema.schema : TargetType, TargetLanguage;
 
@@ -22,7 +24,7 @@ cc_binary(
     string tempFile = tempDir() ~ "/test_BUILD_integration_" ~ __LINE__.to!string;
     scope(exit) if (exists(tempFile)) remove(tempFile);
     
-    write(tempFile, buildContent);
+    std.file.write(tempFile, buildContent);
     
     // Migrate
     auto result = migrator.migrate(tempFile);
@@ -47,7 +49,7 @@ unittest
     string buildFile = tempDir() ~ "/test_BUILD_autodetect_" ~ __LINE__.to!string;
     scope(exit) if (exists(buildFile)) remove(buildFile);
     
-    write(buildFile, `cc_binary(name = "app", srcs = ["main.cpp"])`);
+    std.file.write(buildFile, `cc_binary(name = "app", srcs = ["main.cpp"])`);
     
     auto migrator = MigratorFactory.autoDetect(buildFile);
     assert(migrator !is null);
@@ -57,7 +59,7 @@ unittest
     string cmakeFile = tempDir() ~ "/CMakeLists_autodetect_" ~ __LINE__.to!string ~ ".txt";
     scope(exit) if (exists(cmakeFile)) remove(cmakeFile);
     
-    write(cmakeFile, `add_executable(app main.cpp)`);
+    std.file.write(cmakeFile, `add_executable(app main.cpp)`);
     
     auto cmakeMigrator = MigratorFactory.autoDetect(cmakeFile);
     assert(cmakeMigrator !is null);
@@ -77,7 +79,7 @@ target_compile_options(app PRIVATE -Wall)
     string tempFile = tempDir() ~ "/test_CMake_warnings_" ~ __LINE__.to!string ~ ".txt";
     scope(exit) if (exists(tempFile)) remove(tempFile);
     
-    write(tempFile, cmakeContent);
+    std.file.write(tempFile, cmakeContent);
     
     auto result = migrator.migrate(tempFile);
     assert(result.isOk);
@@ -125,7 +127,7 @@ unittest
     string tempFile = tempDir() ~ "/test_package_workflow_" ~ __LINE__.to!string ~ ".json";
     scope(exit) if (exists(tempFile)) remove(tempFile);
     
-    write(tempFile, pkgJson);
+    std.file.write(tempFile, pkgJson);
     
     // Step 1: Migrate
     auto migrateResult = migrator.migrate(tempFile);
@@ -149,7 +151,7 @@ unittest
     string outputFile = tempDir() ~ "/test_Builderfile_" ~ __LINE__.to!string;
     scope(exit) if (exists(outputFile)) remove(outputFile);
     
-    write(outputFile, builderfile);
+    std.file.write(outputFile, builderfile);
     assert(exists(outputFile));
 }
 

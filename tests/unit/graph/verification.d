@@ -6,6 +6,7 @@ import engine.graph;
 import engine.graph.verification;
 import infrastructure.config.schema.schema;
 import tests.harness;
+import tests.fixtures;
 
 @("verification.acyclicity.simple")
 @system unittest

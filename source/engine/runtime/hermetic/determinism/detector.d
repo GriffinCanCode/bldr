@@ -198,6 +198,21 @@ struct NonDeterminismDetector
         }
     }
 
+    /// Check for UUID patterns in output
+    static bool hasUUIDPattern(string text) @safe
+    {
+        // Pattern: 8-4-4-4-12 hex format
+        try
+        {
+            auto uuidPattern = regex(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
+            return !matchFirst(text, uuidPattern).empty;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
     private:
     
     /// Detect GCC/GDC issues
@@ -361,21 +376,6 @@ struct NonDeterminismDetector
         detections ~= d;
         
         return detections;
-    }
-    
-    /// Check for UUID patterns in output
-    static bool hasUUIDPattern(string text) @safe
-    {
-        // Pattern: 8-4-4-4-12 hex format
-        try
-        {
-            auto uuidPattern = regex(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
-            return !matchFirst(text, uuidPattern).empty;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
     }
 }
 
