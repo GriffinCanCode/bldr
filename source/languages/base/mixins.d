@@ -37,6 +37,7 @@ mixin template CachingHandlerMixin(string languageName)
             }
             catch (Exception) {}
             catch (Throwable) {}
+            actionCache = null;
         }
     }
     

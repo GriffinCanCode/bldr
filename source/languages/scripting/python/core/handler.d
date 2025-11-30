@@ -135,12 +135,22 @@ class PythonHandler : BaseLanguageHandler
             try
             {
                 auto outputDir = dirName(outputPath);
+                if (exists(outputDir) && !isDir(outputDir))
+                {
+                    result.error = "Output directory path component is a file: " ~ outputDir;
+                    return result;
+                }
                 if (!exists(outputDir))
                     mkdirRecurse(outputDir);
             }
             catch (Exception e)
             {
                 result.error = "Invalid output directory: " ~ e.msg;
+                return result;
+            }
+            catch (Throwable e)
+            {
+                result.error = "Critical error creating output directory: " ~ e.msg;
                 return result;
             }
 

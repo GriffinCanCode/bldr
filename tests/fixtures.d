@@ -36,8 +36,15 @@ class TempDir : Fixture
     
     void teardown()
     {
-        if (exists(path))
-            rmdirRecurse(path);
+        try
+        {
+            if (exists(path))
+                rmdirRecurse(path);
+        }
+        catch (Throwable e)
+        {
+            try { stderr.writeln("Warning: Failed to cleanup temp dir ", path, ": ", e.msg); } catch (Throwable) {}
+        }
     }
     
     string getPath() const
