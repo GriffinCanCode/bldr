@@ -4,6 +4,7 @@ import std.stdio;
 import std.datetime : dur;
 import std.conv : to;
 import std.algorithm : canFind;
+import core.memory;
 import infrastructure.utils.memory.profiler;
 
 unittest
@@ -37,6 +38,7 @@ unittest
 {
     writeln("TEST: MemoryDelta calculation");
     
+    GC.collect();
     auto before = MemorySnapshot.take("before");
     
     // Allocate 1MB

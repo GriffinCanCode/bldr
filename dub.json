@@ -68,11 +68,29 @@
             "dflags": ["-I/opt/homebrew/include", "-I/usr/local/include"]
         },
         {
+            "name": "library",
+            "targetType": "staticLibrary",
+            "targetName": "builder-core",
+            "mainSourceFile": "source/app.d",
+            "versions": ["BuilderLib"],
+            "excludedSourceFiles": ["source/frontend/lsp/core/main.d"],
+            "sourceFiles": [],
+            "dflags": ["-I/opt/homebrew/include", "-I/usr/local/include"]
+        },
+        {
             "name": "unittest",
             "targetType": "executable",
             "sourcePaths": ["source", "tests"],
             "importPaths": ["source", "tests"],
-            "excludedSourceFiles": ["source/frontend/lsp/core/main.d", "source/app.d", "tests/bench/*", "tests/property.d"],
+            "excludedSourceFiles": [
+                "source/frontend/lsp/core/main.d", 
+                "source/app.d", 
+                "tests/bench/*_bench.d", 
+                "tests/bench/*_benchmark.d",
+                "tests/bench/comparative/*",
+                "tests/bench/benchmark_config.example.d",
+                "tests/bench/realworld.d"
+            ],
             "mainSourceFile": "tests/runner.d",
             "sourceFiles": [
                 "bin/obj/blake3.o",

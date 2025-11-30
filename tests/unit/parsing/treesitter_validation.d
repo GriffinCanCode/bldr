@@ -65,8 +65,8 @@ void testStubLoading()
             writeln("    ✓ Parser created successfully");
         } else {
             // If grammar is missing, it should return error
-            Assert.equal(result.unwrapErr().code, ErrorCode.InternalError, 
-                "Should return InternalError when grammar is missing");
+            Assert.equal(result.unwrapErr().code, ErrorCode.UnsupportedLanguage, 
+                "Should return UnsupportedLanguage when grammar is missing");
             writeln("    ✓ Parser creation correctly failed (grammar missing)");
         }
 

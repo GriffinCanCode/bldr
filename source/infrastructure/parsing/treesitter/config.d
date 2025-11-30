@@ -129,6 +129,20 @@ final class LanguageConfigs {
         return configs.keys;
     }
     
+    static LanguageConfig[] getByExtension(string extension) @system {
+        if (!initialized)
+            initialize();
+            
+        import std.algorithm : canFind;
+        LanguageConfig[] matching;
+        foreach (config; configs) {
+            if (config.extensions.canFind(extension)) {
+                matching ~= config;
+            }
+        }
+        return matching;
+    }
+    
     // Legacy: Built-in configs (replaced by JSON configs)
     // Kept for backward compatibility if JSON files not available
     

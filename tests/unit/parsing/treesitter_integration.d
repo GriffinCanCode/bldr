@@ -1,6 +1,7 @@
 module tests.unit.parsing.treesitter_integration;
 
 import std.algorithm;
+import std.array;
 import std.conv;
 import std.file;
 import std.path;
@@ -222,9 +223,9 @@ unittest {
 
 /// Test summary
 unittest {
-    writeln("\n" ~ "=".repeat(60));
+    writeln("\n" ~ "=".replicate(60));
     writeln("Tree-sitter Integration Test Summary");
-    writeln("=".repeat(60));
+    writeln("=".replicate(60));
     
     auto configs = LanguageConfigs.available();
     auto registry = TreeSitterRegistry.instance();
@@ -249,6 +250,6 @@ unittest {
         writeln("  4. Rebuild Builder: dub build");
     }
     
-    writeln("\n" ~ "=".repeat(60));
+    writeln("\n" ~ "=".replicate(60));
 }
 

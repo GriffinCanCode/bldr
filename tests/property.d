@@ -73,7 +73,7 @@ class PropertyTest(Args...)
                     // Attempt to shrink
                     if (config.shrink)
                     {
-                        args = shrinkToMinimal(property, generators, args);
+                        args = shrinkToMinimal!property(generators, args);
                         counterexample = formatArgs(args);
                     }
                     
@@ -92,7 +92,7 @@ class PropertyTest(Args...)
                 // Attempt to shrink
                 if (config.shrink)
                 {
-                    args = shrinkToMinimal(property, generators, args);
+                    args = shrinkToMinimal!property(generators, args);
                     counterexample = formatArgs(args);
                 }
                 

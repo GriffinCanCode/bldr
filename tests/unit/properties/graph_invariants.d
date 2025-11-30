@@ -12,14 +12,14 @@ version(unittest):
 
 /// Test that build graphs maintain acyclicity through all operations
 @("property.graph.acyclicity.add_node")
-@safe unittest
+unittest
 {
     writeln("\x1b[36m[PROPERTY TEST]\x1b[0m Build graph acyclicity - add_node");
     
     auto config = PropertyConfig(numTests: 50);
     auto test = property!string(config);
     
-    bool acyclicAfterAddNode(string nodeName)
+    static bool acyclicAfterAddNode(string nodeName)
     {
         auto graph = new BuildGraph();
         
@@ -45,13 +45,13 @@ version(unittest):
 
 /// Test that adding edges maintains acyclicity or fails appropriately
 @("property.graph.acyclicity.add_edge")
-@safe unittest
+unittest
 {
     writeln("\x1b[36m[PROPERTY TEST]\x1b[0m Build graph acyclicity - add_edge");
     
     auto config = PropertyConfig(numTests: 50);
     
-    bool noCyclesIntroduced(int[][] adjacency)
+    static bool noCyclesIntroduced(int[][] adjacency)
     {
         // Skip empty graphs
         if (adjacency.length == 0) return true;
@@ -96,13 +96,13 @@ version(unittest):
 
 /// Test topological sort always produces valid ordering for acyclic graphs
 @("property.graph.topological_sort.valid_ordering")
-@safe unittest
+unittest
 {
     writeln("\x1b[36m[PROPERTY TEST]\x1b[0m Build graph topological sort validity");
     
     auto config = PropertyConfig(numTests: 30);
     
-    bool topologicalSortValid(int[][] adjacency)
+    static bool topologicalSortValid(int[][] adjacency)
     {
         // Skip empty graphs
         if (adjacency.length < 2) return true;
@@ -167,13 +167,13 @@ version(unittest):
 
 /// Test that removing nodes maintains acyclicity
 @("property.graph.acyclicity.remove_node")
-@safe unittest
+unittest
 {
     writeln("\x1b[36m[PROPERTY TEST]\x1b[0m Build graph acyclicity - remove_node");
     
     auto config = PropertyConfig(numTests: 50);
     
-    bool acyclicAfterRemove(int[][] adjacency)
+    static bool acyclicAfterRemove(int[][] adjacency)
     {
         // Need at least 2 nodes
         if (adjacency.length < 2) return true;
@@ -223,13 +223,13 @@ version(unittest):
 
 /// Test that graph operations are idempotent
 @("property.graph.idempotence.add_node")
-@safe unittest
+unittest
 {
     writeln("\x1b[36m[PROPERTY TEST]\x1b[0m Build graph add_node idempotence");
     
     auto config = PropertyConfig(numTests: 50);
     
-    bool addNodeIdempotent(string nodeName)
+    static bool addNodeIdempotent(string nodeName)
     {
         if (nodeName.length == 0) nodeName = "node";
         
@@ -259,13 +259,13 @@ version(unittest):
 
 /// Test transitive dependency closure correctness
 @("property.graph.transitive_closure")
-@safe unittest
+unittest
 {
     writeln("\x1b[36m[PROPERTY TEST]\x1b[0m Build graph transitive closure");
     
     auto config = PropertyConfig(numTests: 30);
     
-    bool transitiveClosureValid(int[][] adjacency)
+    static bool transitiveClosureValid(int[][] adjacency)
     {
         // Need at least 3 nodes for interesting transitivity
         if (adjacency.length < 3) return true;

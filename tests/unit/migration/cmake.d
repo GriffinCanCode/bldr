@@ -52,7 +52,7 @@ add_executable(hello main.cpp utils.cpp)
     string tempFile = tempDir() ~ "/test_CMakeLists_" ~ __LINE__.to!string ~ ".txt";
     scope(exit) if (exists(tempFile)) remove(tempFile);
     
-    write(tempFile, cmakeContent);
+    std.file.write(tempFile, cmakeContent);
     
     auto result = migrator.migrate(tempFile);
     
@@ -77,7 +77,7 @@ add_library(mylib STATIC lib.cpp lib.h)
     string tempFile = tempDir() ~ "/test_CMakeLists_" ~ __LINE__.to!string ~ ".txt";
     scope(exit) if (exists(tempFile)) remove(tempFile);
     
-    write(tempFile, cmakeContent);
+    std.file.write(tempFile, cmakeContent);
     
     auto result = migrator.migrate(tempFile);
     
@@ -103,7 +103,7 @@ target_link_libraries(app utils)
     string tempFile = tempDir() ~ "/test_CMakeLists_" ~ __LINE__.to!string ~ ".txt";
     scope(exit) if (exists(tempFile)) remove(tempFile);
     
-    write(tempFile, cmakeContent);
+    std.file.write(tempFile, cmakeContent);
     
     auto result = migrator.migrate(tempFile);
     

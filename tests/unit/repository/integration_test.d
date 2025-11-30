@@ -109,17 +109,19 @@ unittest
         }
         
         // Register multiple repositories
+        string[] createdRepos;
+        scope(exit)
+        {
+            foreach (repo; createdRepos)
+                if (exists(repo)) rmdirRecurse(repo);
+        }
+
         for (int i = 0; i < 3; i++)
         {
             string repoPath = buildPath(tempDir(), "builder-test-repo-multi-" ~ i.to!string);
             if (!exists(repoPath))
                 mkdir(repoPath);
-            
-            scope(exit)
-            {
-                if (exists(repoPath))
-                    rmdirRecurse(repoPath);
-            }
+            createdRepos ~= repoPath;
             
             RepositoryRule rule;
             rule.name = "repo-" ~ i.to!string;

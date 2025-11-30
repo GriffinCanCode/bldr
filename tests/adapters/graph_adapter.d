@@ -58,6 +58,17 @@ class TestGraph
         return result.isErr;
     }
     
+    bool wouldCreateCycle(TestNode from, TestNode to)
+    {
+        auto fromNode = nodeMap.get(from.name, null);
+        auto toNode = nodeMap.get(to.name, null);
+        
+        if (fromNode is null || toNode is null)
+            return false;
+            
+        return wouldCreateCycle(fromNode, toNode);
+    }
+
     bool wouldCreateCycle(RealGraph.BuildNode from, RealGraph.BuildNode to)
     {
         // DFS to check if adding edge from->to creates cycle

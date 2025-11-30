@@ -4,6 +4,7 @@ import std.stdio;
 import std.file;
 import std.path;
 import std.json;
+import std.conv;
 import infrastructure.migration.systems.npm;
 import infrastructure.migration.core.common;
 import infrastructure.config.schema.schema : TargetType, TargetLanguage;
@@ -53,7 +54,7 @@ unittest
     string tempFile = tempDir() ~ "/test_package_" ~ __LINE__.to!string ~ ".json";
     scope(exit) if (exists(tempFile)) remove(tempFile);
     
-    write(tempFile, pkg.toJSON());
+    std.file.write(tempFile, pkg.toJSON());
     
     auto result = migrator.migrate(tempFile);
     
@@ -82,7 +83,7 @@ unittest
     string tempFile = tempDir() ~ "/test_package_" ~ __LINE__.to!string ~ ".json";
     scope(exit) if (exists(tempFile)) remove(tempFile);
     
-    write(tempFile, pkg.toJSON());
+    std.file.write(tempFile, pkg.toJSON());
     
     auto result = migrator.migrate(tempFile);
     
@@ -108,7 +109,7 @@ unittest
     string tempFile = tempDir() ~ "/test_package_" ~ __LINE__.to!string ~ ".json";
     scope(exit) if (exists(tempFile)) remove(tempFile);
     
-    write(tempFile, pkg.toJSON());
+    std.file.write(tempFile, pkg.toJSON());
     
     auto result = migrator.migrate(tempFile);
     

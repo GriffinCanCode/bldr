@@ -21,9 +21,9 @@ struct ContentChunker
     private enum uint WINDOW_SIZE = 64;
     
     // Chunk size constraints
-    private enum size_t MIN_CHUNK = 2_048;      // 2 KB minimum
-    private enum size_t AVG_CHUNK = 16_384;     // 16 KB average
-    private enum size_t MAX_CHUNK = 65_536;     // 64 KB maximum
+    enum size_t MIN_CHUNK = 2_048;      // 2 KB minimum
+    enum size_t AVG_CHUNK = 16_384;     // 16 KB average
+    enum size_t MAX_CHUNK = 65_536;     // 64 KB maximum
     
     // Boundary detection mask (determines average chunk size)
     private enum uint MASK_BITS = 14;           // Number of bits for mask

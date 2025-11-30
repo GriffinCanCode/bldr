@@ -4,6 +4,7 @@ import infrastructure.repository.acquisition.verifier;
 import infrastructure.repository.core.types;
 import std.file : write, remove, exists;
 import std.path : buildPath;
+import std.string;
 
 unittest
 {

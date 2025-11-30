@@ -14,13 +14,13 @@ version(unittest):
 
 /// Test that path canonicalization is idempotent
 @("property.path.canonicalization.idempotence")
-@safe unittest
+unittest
 {
     writeln("\x1b[36m[PROPERTY TEST]\x1b[0m Path canonicalization idempotence");
     
     auto config = PropertyConfig(numTests: 100);
     
-    bool canonicalizationIdempotent(string path)
+    static bool canonicalizationIdempotent(string path)
     {
         if (path.length == 0) return true;
         
@@ -43,13 +43,13 @@ version(unittest):
 
 /// Test that path normalization removes redundant separators
 @("property.path.normalization.separators")
-@safe unittest
+unittest
 {
     writeln("\x1b[36m[PROPERTY TEST]\x1b[0m Path normalization removes redundant separators");
     
     auto config = PropertyConfig(numTests: 100);
     
-    bool noRedundantSeparators(string path)
+    static bool noRedundantSeparators(string path)
     {
         if (path.length == 0) return true;
         
@@ -68,13 +68,13 @@ version(unittest):
 
 /// Test path resolution is deterministic
 @("property.path.resolution.determinism")
-@safe unittest
+unittest
 {
     writeln("\x1b[36m[PROPERTY TEST]\x1b[0m Path resolution determinism");
     
     auto config = PropertyConfig(numTests: 100);
     
-    bool resolutionDeterministic(string path)
+    static bool resolutionDeterministic(string path)
     {
         if (path.length == 0) return true;
         
@@ -95,13 +95,13 @@ version(unittest):
 
 /// Test relative path computation is inverse of joining
 @("property.path.relative.inverse")
-@safe unittest
+unittest
 {
     writeln("\x1b[36m[PROPERTY TEST]\x1b[0m Path relative computation inverse property");
     
     auto config = PropertyConfig(numTests: 50);
     
-    bool relativeIsInverse(string base, string target)
+    static bool relativeIsInverse(string base, string target)
     {
         if (base.length == 0 || target.length == 0) return true;
         
@@ -125,9 +125,9 @@ version(unittest):
     
     // Note: This is a simplified test - full implementation would need composite generator
     // For now, test with generated paths
-    auto testFn = (string path) {
+    static bool testFn(string path) {
         return relativeIsInverse(path, path ~ "/subdir");
-    };
+    }
     
     auto simpleTest = property!string(config);
     auto result = simpleTest.forAll!testFn(pathGen);
@@ -138,13 +138,13 @@ version(unittest):
 
 /// Test path joining associativity
 @("property.path.join.associative")
-@safe unittest
+unittest
 {
     writeln("\x1b[36m[PROPERTY TEST]\x1b[0m Path join associativity");
     
     auto config = PropertyConfig(numTests: 100);
     
-    bool joinAssociative(string[] parts)
+    static bool joinAssociative(string[] parts)
     {
         if (parts.length < 3) return true;
         
@@ -170,13 +170,13 @@ version(unittest):
 
 /// Test path component extraction consistency
 @("property.path.components.consistency")
-@safe unittest
+unittest
 {
     writeln("\x1b[36m[PROPERTY TEST]\x1b[0m Path component extraction consistency");
     
     auto config = PropertyConfig(numTests: 100);
     
-    bool componentsConsistent(string path)
+    static bool componentsConsistent(string path)
     {
         if (path.length == 0) return true;
         
@@ -210,13 +210,13 @@ version(unittest):
 
 /// Test that normalization preserves absolute/relative nature
 @("property.path.normalization.preserves_type")
-@safe unittest
+unittest
 {
     writeln("\x1b[36m[PROPERTY TEST]\x1b[0m Path normalization preserves absolute/relative");
     
     auto config = PropertyConfig(numTests: 100);
     
-    bool preservesType(string path)
+    static bool preservesType(string path)
     {
         if (path.length == 0) return true;
         
@@ -237,13 +237,13 @@ version(unittest):
 
 /// Test path comparison normalization
 @("property.path.comparison.normalized")
-@safe unittest
+unittest
 {
     writeln("\x1b[36m[PROPERTY TEST]\x1b[0m Path comparison normalization");
     
     auto config = PropertyConfig(numTests: 100);
     
-    bool comparisonConsistent(string path)
+    static bool comparisonConsistent(string path)
     {
         if (path.length == 0) return true;
         
@@ -267,13 +267,13 @@ version(unittest):
 
 /// Test path containment transitivity
 @("property.path.containment.transitive")
-@safe unittest
+unittest
 {
     writeln("\x1b[36m[PROPERTY TEST]\x1b[0m Path containment transitivity");
     
     auto config = PropertyConfig(numTests: 50);
     
-    bool containmentTransitive(string base)
+    static bool containmentTransitive(string base)
     {
         if (base.length == 0) base = "/base";
         

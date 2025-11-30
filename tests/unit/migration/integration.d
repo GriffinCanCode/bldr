@@ -45,10 +45,12 @@ cc_binary(
 /// Test auto-detection
 unittest
 {
-    // Create BUILD file
-    string buildFile = tempDir() ~ "/test_BUILD_autodetect_" ~ __LINE__.to!string;
-    scope(exit) if (exists(buildFile)) remove(buildFile);
+    // Create BUILD file in a directory
+    string buildDir = tempDir() ~ "/bazel_test_" ~ __LINE__.to!string;
+    if (!exists(buildDir)) mkdir(buildDir);
+    scope(exit) if (exists(buildDir)) rmdirRecurse(buildDir);
     
+    string buildFile = buildDir ~ "/BUILD";
     std.file.write(buildFile, `cc_binary(name = "app", srcs = ["main.cpp"])`);
     
     auto migrator = MigratorFactory.autoDetect(buildFile);
@@ -56,9 +58,11 @@ unittest
     assert(migrator.systemName() == "bazel");
     
     // Create CMakeLists.txt file
-    string cmakeFile = tempDir() ~ "/CMakeLists_autodetect_" ~ __LINE__.to!string ~ ".txt";
-    scope(exit) if (exists(cmakeFile)) remove(cmakeFile);
+    string cmakeDir = tempDir() ~ "/cmake_test_" ~ __LINE__.to!string;
+    if (!exists(cmakeDir)) mkdir(cmakeDir);
+    scope(exit) if (exists(cmakeDir)) rmdirRecurse(cmakeDir);
     
+    string cmakeFile = cmakeDir ~ "/CMakeLists.txt";
     std.file.write(cmakeFile, `add_executable(app main.cpp)`);
     
     auto cmakeMigrator = MigratorFactory.autoDetect(cmakeFile);

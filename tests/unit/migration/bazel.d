@@ -115,7 +115,7 @@ cc_library(
     string tempFile = tempDir() ~ "/test_BUILD_" ~ __LINE__.to!string;
     scope(exit) if (exists(tempFile)) remove(tempFile);
     
-    write(tempFile, buildContent);
+    std.file.write(tempFile, buildContent);
     
     auto result = migrator.migrate(tempFile);
     
@@ -143,7 +143,7 @@ py_binary(
     string tempFile = tempDir() ~ "/test_BUILD_" ~ __LINE__.to!string;
     scope(exit) if (exists(tempFile)) remove(tempFile);
     
-    write(tempFile, buildContent);
+    std.file.write(tempFile, buildContent);
     
     auto result = migrator.migrate(tempFile);
     

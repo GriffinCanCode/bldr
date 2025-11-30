@@ -15,13 +15,13 @@ version(unittest):
 
 /// Test that cache keys are deterministic (same inputs = same key)
 @("property.cache.determinism.same_input")
-@safe unittest
+unittest
 {
     writeln("\x1b[36m[PROPERTY TEST]\x1b[0m Cache key determinism");
     
     auto config = PropertyConfig(numTests: 100);
     
-    bool cacheKeyDeterministic(string input)
+    static bool cacheKeyDeterministic(string input)
     {
         if (input.length == 0) return true;
         
@@ -42,13 +42,13 @@ version(unittest):
 
 /// Test that cache keys are unique for different inputs
 @("property.cache.uniqueness")
-@safe unittest
+unittest
 {
     writeln("\x1b[36m[PROPERTY TEST]\x1b[0m Cache key uniqueness");
     
     auto config = PropertyConfig(numTests: 50);
     
-    bool cacheKeysUnique(string[] inputs)
+    static bool cacheKeysUnique(string[] inputs)
     {
         // Skip if we don't have at least 2 inputs
         if (inputs.length < 2) return true;
@@ -80,13 +80,13 @@ version(unittest):
 
 /// Test that cache key generation is platform-independent
 @("property.cache.platform_independence")
-@safe unittest
+unittest
 {
     writeln("\x1b[36m[PROPERTY TEST]\x1b[0m Cache key platform independence");
     
     auto config = PropertyConfig(numTests: 100);
     
-    bool platformIndependent(string input)
+    static bool platformIndependent(string input)
     {
         if (input.length == 0) return true;
         
@@ -109,13 +109,13 @@ version(unittest):
 
 /// Test content hash stability
 @("property.cache.content_hash.stability")
-@safe unittest
+unittest
 {
     writeln("\x1b[36m[PROPERTY TEST]\x1b[0m Cache content hash stability");
     
     auto config = PropertyConfig(numTests: 100);
     
-    bool contentHashStable(string content)
+    static bool contentHashStable(string content)
     {
         // Hash same content multiple times
         auto hash1 = ContentHasher.hashString(content);
@@ -135,13 +135,13 @@ version(unittest):
 
 /// Test cache key composition (combining multiple inputs)
 @("property.cache.composition")
-@safe unittest
+unittest
 {
     writeln("\x1b[36m[PROPERTY TEST]\x1b[0m Cache key composition");
     
     auto config = PropertyConfig(numTests: 50);
     
-    bool compositionDeterministic(string[] parts)
+    static bool compositionDeterministic(string[] parts)
     {
         if (parts.length == 0) return true;
         
@@ -164,13 +164,13 @@ version(unittest):
 
 /// Test cache key ordering sensitivity
 @("property.cache.order_sensitivity")
-@safe unittest
+unittest
 {
     writeln("\x1b[36m[PROPERTY TEST]\x1b[0m Cache key order sensitivity");
     
     auto config = PropertyConfig(numTests: 50);
     
-    bool orderMatters(string[] parts)
+    static bool orderMatters(string[] parts)
     {
         // Need at least 2 different parts
         if (parts.length < 2) return true;
@@ -204,13 +204,13 @@ version(unittest):
 
 /// Test cache key collision resistance
 @("property.cache.collision_resistance")
-@safe unittest
+unittest
 {
     writeln("\x1b[36m[PROPERTY TEST]\x1b[0m Cache key collision resistance");
     
     auto config = PropertyConfig(numTests: 100);
     
-    bool noEasyCollisions(int seed)
+    static bool noEasyCollisions(int seed)
     {
         // Generate many keys with slight variations
         string[] keys;
