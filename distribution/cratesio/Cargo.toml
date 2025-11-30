@@ -1,0 +1,17 @@
+[package]
+name = "builder"
+version = "1.0.6"
+edition = "2021"
+description = "High-performance build system for mixed-language monorepos"
+authors = ["Griffin"]
+license = "MIT"
+build = "build.rs"
+
+[dependencies]
+libc = "0.2"
+
+[build-dependencies]
+pkg-config = "0.3"
+cc = "1.0"
+walkdir = "2"
+which = "4.4"

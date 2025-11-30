@@ -18,6 +18,7 @@ build-c:
 	@cd source/infrastructure/utils/crypto/c && $(MAKE) clean && $(MAKE)
 	@cp source/infrastructure/utils/crypto/c/*.o bin/obj/ 2>/dev/null || true
 	@cd source/infrastructure/utils/serialization/c && $(MAKE) clean && $(MAKE)
+	@cp source/infrastructure/utils/serialization/c/*.o bin/obj/ 2>/dev/null || true
 	@cd source/infrastructure/parsing/treesitter/grammars && $(MAKE) clean && $(MAKE) stub
 	@mkdir -p bin/obj/treesitter
 	@cp bin/obj/treesitter/stub.o bin/obj/ts_loader.o

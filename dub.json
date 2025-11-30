@@ -71,10 +71,9 @@
             "name": "library",
             "targetType": "staticLibrary",
             "targetName": "builder-core",
-            "mainSourceFile": "source/app.d",
             "versions": ["BuilderLib"],
             "excludedSourceFiles": ["source/frontend/lsp/core/main.d"],
-            "sourceFiles": [],
+            "sourceFiles": ["source/app.d"],
             "dflags": ["-I/opt/homebrew/include", "-I/usr/local/include"]
         },
         {

@@ -1,0 +1,8 @@
+source/
+bin/
+dub.json
+Makefile
+LICENSE
+README.md
+target/
+.builder-cache/
