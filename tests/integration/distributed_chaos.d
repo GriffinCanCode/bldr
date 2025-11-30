@@ -12,13 +12,13 @@ import core.time : MonoTime;
 
 import tests.harness : Assert;
 import tests.fixtures : TempDir, scoped;
-import core.distributed.coordinator.coordinator;
-import core.distributed.coordinator.registry;
-import core.distributed.coordinator.scheduler;
-import core.distributed.protocol.protocol;
-import core.distributed.protocol.messages;
-import core.distributed.protocol.transport;
-import core.graph.graph : BuildGraph;
+import engine.distributed.coordinator.coordinator;
+import engine.distributed.coordinator.registry;
+import engine.distributed.coordinator.scheduler;
+import engine.distributed.protocol.protocol;
+import engine.distributed.protocol.messages;
+import engine.distributed.protocol.transport;
+import engine.graph.core.graph : BuildGraph;
 import infrastructure.errors;
 import infrastructure.utils.logging.logger;
 
@@ -326,9 +326,10 @@ unittest
     // Schedule some actions
     ubyte[32] hash1;
     hash1[0] = 1;
-    auto action1 = ActionRequest(
+    auto action1 = new ActionRequest(
         ActionId(hash1),
-        ["echo", "test1"],
+        "echo test1",
+        null, // env
         [],
         [],
         Capabilities(),
@@ -396,9 +397,10 @@ unittest
     {
         ubyte[32] hash;
         hash[0] = cast(ubyte)i;
-        auto action = ActionRequest(
+        auto action = new ActionRequest(
             ActionId(hash),
-            ["echo", "test" ~ i.to!string],
+            "echo test" ~ i.to!string,
+            null,
             [],
             [],
             Capabilities(),
@@ -444,9 +446,10 @@ unittest
     // Schedule action
     ubyte[32] hash;
     hash[0] = 42;
-    auto action = ActionRequest(
+    auto action = new ActionRequest(
         ActionId(hash),
-        ["echo", "delayed"],
+        "echo delayed",
+        null,
         [],
         [],
         Capabilities(),
@@ -487,9 +490,10 @@ unittest
     {
         ubyte[32] hash;
         hash[0] = cast(ubyte)(100 + i);
-        auto action = ActionRequest(
+        auto action = new ActionRequest(
             ActionId(hash),
-            ["echo", "hang_test"],
+            "echo hang_test",
+            null,
             [],
             [],
             Capabilities(),
@@ -523,9 +527,10 @@ unittest
     {
         ubyte[32] hash;
         hash[0] = cast(ubyte)(200 + i);
-        auto action = ActionRequest(
+        auto action = new ActionRequest(
             ActionId(hash),
-            ["echo", "cascade_test"],
+            "echo cascade_test",
+            null,
             [],
             [],
             Capabilities(),
@@ -575,9 +580,10 @@ unittest
     {
         ubyte[32] hash;
         hash[0] = cast(ubyte)(50 + i);
-        auto action = ActionRequest(
+        auto action = new ActionRequest(
             ActionId(hash),
-            ["echo", "partition_test"],
+            "echo partition_test",
+            null,
             [],
             [],
             Capabilities(),
@@ -647,9 +653,10 @@ unittest
         ubyte[32] hash;
         hash[0] = cast(ubyte)i;
         hash[1] = cast(ubyte)(i >> 8);
-        auto action = ActionRequest(
+        auto action = new ActionRequest(
             ActionId(hash),
-            ["echo", "load_test"],
+            "echo load_test",
+            null,
             [],
             [],
             Capabilities(),
@@ -688,9 +695,10 @@ unittest
     // Schedule action with very short timeout
     ubyte[32] hash;
     hash[0] = 99;
-    auto action = ActionRequest(
+    auto action = new ActionRequest(
         ActionId(hash),
-        ["sleep", "10"],  // Sleep longer than timeout
+        "sleep 10",  // Sleep longer than timeout
+        null,
         [],
         [],
         Capabilities(),
@@ -707,4 +715,3 @@ unittest
     
     Assert.isTrue(true, "System handles timeouts");
 }
-

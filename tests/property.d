@@ -7,7 +7,17 @@ import std.random;
 import std.range;
 import std.stdio;
 import std.traits;
+import std.typecons : Tuple;
 import tests.harness;
+
+/// Helper to determine return type
+template RetType(T...)
+{
+    static if (T.length == 1)
+        alias RetType = T[0];
+    else
+        alias RetType = Tuple!T;
+}
 
 /// Property-based test configuration
 struct PropertyConfig
@@ -45,12 +55,16 @@ class PropertyTest(Args...)
         foreach (i; 0 .. config.numTests)
         {
             // Generate random inputs
-            Args args = generators.generate(rng);
+            auto args = generators.generate(rng);
             
             try
             {
                 // Run property check
-                bool holds = property(args);
+                bool holds;
+                static if (Args.length == 1)
+                    holds = property(args);
+                else
+                    holds = property(args.expand);
                 
                 if (!holds)
                 {
@@ -103,14 +117,14 @@ class PropertyTest(Args...)
         return PropertyResult(true, "All " ~ config.numTests.to!string ~ " tests passed", 0, "");
     }
     
-    private Args shrinkToMinimal(alias property)(Generator!Args generators, Args args)
+    private RetType!Args shrinkToMinimal(alias property)(Generator!Args generators, RetType!Args args)
     {
-        Args minimal = args;
+        auto minimal = args;
         size_t attempts = 0;
         
         while (attempts < config.maxShrinkAttempts)
         {
-            Args shrunk = generators.shrink(minimal);
+            auto shrunk = generators.shrink(minimal);
             
             // If shrinking didn't change anything, we're done
             if (shrunk == minimal)
@@ -118,7 +132,13 @@ class PropertyTest(Args...)
             
             try
             {
-                if (!property(shrunk))
+                bool result;
+                static if (Args.length == 1)
+                    result = property(shrunk);
+                else
+                    result = property(shrunk.expand);
+
+                if (!result)
                 {
                     // Shrunk value still fails, use it
                     minimal = shrunk;
@@ -141,17 +161,17 @@ class PropertyTest(Args...)
         return minimal;
     }
     
-    private string formatArgs(Args args)
+    private string formatArgs(RetType!Args args)
     {
         static if (Args.length == 1)
         {
-            return args[0].to!string;
+            return args.to!string;
         }
         else
         {
             string[] parts;
-            foreach (arg; args)
-                parts ~= arg.to!string;
+            foreach (i, _; Args)
+                parts ~= args[i].to!string;
             return "(" ~ parts.join(", ") ~ ")";
         }
     }
@@ -160,8 +180,8 @@ class PropertyTest(Args...)
 /// Base generator interface
 interface Generator(T...)
 {
-    T generate(ref Mt19937 rng);
-    T shrink(T value);
+    RetType!T generate(ref Mt19937 rng);
+    RetType!T shrink(RetType!T value);
 }
 
 /// Integer generator
@@ -376,4 +396,3 @@ void checkProperty(PropertyResult result, string propertyName = "property",
         throw new AssertionError(msg, file, line);
     }
 }
-

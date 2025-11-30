@@ -336,9 +336,9 @@ struct Assert
     }
 }
 
-/// Compile-time test registration via mixin template
-mixin template TestCase(string name)
+/// Compile-time test registration via UDA
+struct TestCase
 {
-    private static immutable testCaseName = name;
+    string name;
 }
 

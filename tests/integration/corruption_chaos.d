@@ -2,10 +2,10 @@ module tests.integration.corruption_chaos;
 
 import std.stdio : writeln, File;
 import std.datetime : Duration, seconds, msecs, MonoTime;
-import std.file : exists, write, read, remove, mkdirRecurse, rmdirRecurse, tempDir, readText, writeText;
-import std.path : buildPath;
-import std.algorithm : map, filter, canFind;
-import std.array : array;
+import std.file : exists, write, read, remove, mkdirRecurse, rmdirRecurse, tempDir, readText, write;
+import std.path : buildPath, dirName;
+import std.algorithm : map, filter, canFind, min;
+import std.array : array, replicate;
 import std.conv : to;
 import std.random : uniform, uniform01, Random;
 import std.string : strip;
@@ -369,35 +369,35 @@ class WorkerKiller
         {
             case WorkerKillType.SigTerm:
                 Logger.info("CHAOS: Sending SIGTERM to worker " ~ workerId);
-                return Err!BuildError(new InternalError("Worker terminated (SIGTERM)"));
+                return Result!BuildError.err(cast(BuildError)new InternalError("Worker terminated (SIGTERM)"));
             
             case WorkerKillType.SigKill:
                 Logger.info("CHAOS: Sending SIGKILL to worker " ~ workerId);
-                return Err!BuildError(new InternalError("Worker killed (SIGKILL)"));
+                return Result!BuildError.err(cast(BuildError)new InternalError("Worker killed (SIGKILL)"));
             
             case WorkerKillType.OutOfMemory:
                 Logger.info("CHAOS: Worker " ~ workerId ~ " OOM");
-                return Err!BuildError(new InternalError("Worker out of memory"));
+                return Result!BuildError.err(cast(BuildError)new InternalError("Worker out of memory"));
             
             case WorkerKillType.DiskIOError:
                 Logger.info("CHAOS: Worker " ~ workerId ~ " disk I/O error");
-                return Err!BuildError(new InternalError("Disk I/O error"));
+                return Result!BuildError.err(cast(BuildError)new InternalError("Disk I/O error"));
             
             case WorkerKillType.NetworkDisconnect:
                 Logger.info("CHAOS: Worker " ~ workerId ~ " network disconnect");
-                return Err!BuildError(new InternalError("Network disconnected"));
+                return Result!BuildError.err(cast(BuildError)new InternalError("Network disconnected"));
             
             case WorkerKillType.CPUExhaustion:
                 Logger.info("CHAOS: Worker " ~ workerId ~ " CPU exhaustion");
-                return Err!BuildError(new InternalError("CPU exhausted"));
+                return Result!BuildError.err(cast(BuildError)new InternalError("CPU exhausted"));
             
             case WorkerKillType.DeadlockDetected:
                 Logger.info("CHAOS: Worker " ~ workerId ~ " deadlock detected");
-                return Err!BuildError(new InternalError("Deadlock detected"));
+                return Result!BuildError.err(cast(BuildError)new InternalError("Deadlock detected"));
             
             case WorkerKillType.Timeout:
                 Logger.info("CHAOS: Worker " ~ workerId ~ " execution timeout");
-                return Err!BuildError(new InternalError("Execution timeout"));
+                return Result!BuildError.err(cast(BuildError)new InternalError("Execution timeout"));
         }
     }
     
@@ -453,7 +453,7 @@ class ChaosSimulator
             
             // Create some cache files
             auto cacheFile = buildPath(cacheDir, buildId ~ "_step" ~ step.to!string ~ ".cache");
-            writeText(cacheFile, "step " ~ step.to!string ~ " data");
+            write(cacheFile, "step " ~ step.to!string ~ " data");
             
             // Maybe corrupt the cache file
             corruptor.maybeCorrupt(cacheFile);
@@ -497,7 +497,7 @@ class ChaosSimulator
     for (size_t i = 0; i < 20; i++)
     {
         auto filepath = buildPath(tempDir, "file" ~ i.to!string ~ ".txt");
-        writeText(filepath, "original content " ~ i.to!string);
+        write(filepath, "original content " ~ i.to!string);
         
         auto originalContent = readText(filepath);
         
@@ -575,7 +575,7 @@ class ChaosSimulator
     // Create file with content
     auto filepath = buildPath(tempDir, "large.txt");
     auto originalContent = "x" ~ "a".replicate(1000) ~ "y";
-    writeText(filepath, originalContent);
+    write(filepath, originalContent);
     
     auto originalSize = read(filepath).length;
     
@@ -610,7 +610,7 @@ class ChaosSimulator
     corruptor.addChaos(CorruptionChaosConfig(CorruptionType.FileDeletion, 1.0, true));
     
     auto filepath = buildPath(tempDir, "delete_me.txt");
-    writeText(filepath, "content");
+    write(filepath, "content");
     
     Assert.isTrue(exists(filepath), "File should exist before corruption");
     
@@ -730,4 +730,3 @@ class ChaosSimulator
     
     writeln("  \x1b[32m✓ Combined chaos test passed\x1b[0m");
 }
-

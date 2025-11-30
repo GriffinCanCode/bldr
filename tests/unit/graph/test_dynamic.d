@@ -241,7 +241,7 @@ void testConcurrentDiscovery()
     TargetId[] targetIds;
     foreach (i; 0..10)
     {
-        auto id = TargetId("target-" ~ i.to!string);
+        auto id = TargetId("target-" ~ std.conv.to!string(i));
         targetIds ~= id;
         dynamicGraph.markDiscoverable(id);
     }
@@ -250,8 +250,8 @@ void testConcurrentDiscovery()
     foreach (i, targetId; parallel(targetIds))
     {
         auto discovery = DiscoveryBuilder.forTarget(targetId)
-            .addOutputs(["file" ~ i.to!string ~ ".cpp"])
-            .withMetadata("index", i.to!string)
+            .addOutputs(["file" ~ std.conv.to!string(i) ~ ".cpp"])
+            .withMetadata("index", std.conv.to!string(i))
             .build();
         
         dynamicGraph.recordDiscovery(discovery);
@@ -322,6 +322,11 @@ void runDynamicGraphTests()
     testDiscoveryWithCycleDetection();
     
     writeln("All Dynamic Graph Tests Passed! ✓");
+}
+
+unittest
+{
+    runDynamicGraphTests();
 }
 
 

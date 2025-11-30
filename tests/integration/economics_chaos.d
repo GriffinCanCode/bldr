@@ -2,11 +2,11 @@ module tests.integration.economics_chaos;
 
 import std.stdio : writeln;
 import std.datetime : Duration, seconds, minutes, hours;
-import std.algorithm : map, filter, sort, min, max;
+import std.algorithm : map, filter, sort, min, max, sum;
 import std.array : array;
 import std.conv : to;
 import std.random : uniform, uniform01, Random;
-import std.math : abs, isNaN, isInfinite;
+import std.math : abs, isNaN, isInfinity;
 import core.thread : Thread;
 
 import tests.harness : Assert;
@@ -82,7 +82,7 @@ class ChaoticCostEstimator
             if (uniform01(rng) < config.probability)
             {
                 faultsInjected++;
-                estimate = applyChao(config.type, estimate, config.multiplier);
+                estimate = applyChaos(config.type, estimate, config.multiplier);
             }
         }
         
@@ -95,56 +95,63 @@ class ChaoticCostEstimator
         {
             case EconomicsChaosType.PriceSpike:
                 Logger.info("CHAOS: Price spike (×" ~ multiplier.to!string ~ ")");
-                estimate.usage.cpuCost *= multiplier;
-                estimate.usage.memoryCost *= multiplier;
+                // Simulate price spike by increasing usage (mathematically equivalent for linear pricing)
+                estimate.usage.cores = cast(size_t)(estimate.usage.cores * multiplier);
+                estimate.usage.memoryBytes = cast(size_t)(estimate.usage.memoryBytes * multiplier);
                 break;
             
             case EconomicsChaosType.PriceDrop:
                 Logger.info("CHAOS: Price drop (/" ~ multiplier.to!string ~ ")");
-                estimate.usage.cpuCost /= multiplier;
-                estimate.usage.memoryCost /= multiplier;
+                estimate.usage.cores = cast(size_t)(estimate.usage.cores / multiplier);
+                estimate.usage.memoryBytes = cast(size_t)(estimate.usage.memoryBytes / multiplier);
                 break;
             
             case EconomicsChaosType.NetworkCostSurge:
                 Logger.info("CHAOS: Network cost surge");
-                estimate.usage.networkCost *= (multiplier * 10);
+                estimate.usage.networkBytes = cast(size_t)(estimate.usage.networkBytes * multiplier * 10);
                 break;
             
             case EconomicsChaosType.SpotTermination:
                 Logger.info("CHAOS: Spot termination penalty");
                 estimate.duration += 300.seconds;  // 5 min restart penalty
+                estimate.usage.duration = estimate.duration;
                 break;
             
             case EconomicsChaosType.CostEstimateError:
                 Logger.info("CHAOS: Cost estimate error");
                 // Wildly incorrect estimate
-                estimate.usage.cpuCost *= uniform(0.1f, 10.0f, rng);
+                estimate.usage.cores = cast(size_t)(estimate.usage.cores * uniform(0.1f, 10.0f, rng));
                 break;
             
             case EconomicsChaosType.BudgetViolation:
                 Logger.info("CHAOS: Budget violation");
-                estimate.usage.cpuCost *= 100.0f;  // Blow the budget
+                estimate.usage.cores = cast(size_t)(estimate.usage.cores * 100.0f);  // Blow the budget
                 break;
             
             case EconomicsChaosType.InfiniteCost:
-                Logger.info("CHAOS: Infinite cost");
-                estimate.usage.cpuCost = float.infinity;
+                Logger.info("CHAOS: Infinite cost (Simulated as Max)");
+                estimate.usage.cores = size_t.max / 100; // Prevent overflow elsewhere
                 break;
             
             case EconomicsChaosType.NegativeCost:
-                Logger.info("CHAOS: Negative cost");
-                estimate.usage.cpuCost = -100.0f;
+                Logger.info("CHAOS: Negative cost (Simulated as Zero)");
+                estimate.usage.cores = 0;
+                estimate.usage.memoryBytes = 0;
+                estimate.usage.networkBytes = 0;
+                estimate.usage.diskIOBytes = 0;
                 break;
             
             case EconomicsChaosType.ZeroTime:
                 Logger.info("CHAOS: Zero execution time");
                 estimate.duration = Duration.zero;
+                estimate.usage.duration = Duration.zero;
                 break;
             
             case EconomicsChaosType.TimeoutPenalty:
                 Logger.info("CHAOS: Timeout penalty");
                 estimate.duration += 3600.seconds;  // 1 hour penalty
-                estimate.usage.cpuCost *= 5.0f;
+                estimate.usage.duration = estimate.duration;
+                estimate.usage.cores = cast(size_t)(estimate.usage.cores * 5.0f);
                 break;
         }
         
@@ -176,10 +183,10 @@ class VolatileCloudPricing
         // Apply random fluctuation
         float fluctuation = uniform(-volatility, volatility, rng);
         
-        pricing.cpuPerCoreHour *= (1.0f + fluctuation);
-        pricing.memoryPerGBHour *= (1.0f + fluctuation);
-        pricing.networkPerGB *= (1.0f + fluctuation * 2.0f);  // Network more volatile
-        pricing.storageIOPerOperation *= (1.0f + fluctuation);
+        pricing.costPerCoreHour *= (1.0f + fluctuation);
+        pricing.costPerGBHour *= (1.0f + fluctuation);
+        pricing.costPerNetworkGB *= (1.0f + fluctuation * 2.0f);  // Network more volatile
+        pricing.costPerDiskIOGB *= (1.0f + fluctuation);
         
         return pricing;
     }
@@ -191,8 +198,8 @@ class VolatileCloudPricing
         
         // Spot is 60-90% cheaper but unstable
         float discount = uniform(0.6f, 0.9f, rng);
-        pricing.cpuPerCoreHour *= discount;
-        pricing.memoryPerGBHour *= discount;
+        pricing.costPerCoreHour *= discount;
+        pricing.costPerGBHour *= discount;
         
         return pricing;
     }
@@ -251,11 +258,11 @@ unittest
     Assert.isTrue(result.isOk, "Should estimate despite price spike");
     
     auto estimate = result.unwrap();
-    float totalCost = estimate.usage.totalCost();
+    float totalCost = pricing.effectivePricing().totalCost(estimate.usage);
     
     Logger.info("Cost with price spike: $" ~ totalCost.to!string);
     Assert.isTrue(totalCost > 0.0f, "Should have positive cost");
-    Assert.isFalse(isInfinite(totalCost), "Cost should be finite");
+    Assert.isFalse(isInfinity(totalCost), "Cost should be finite");
     
     writeln("  \x1b[32m✓ Price spike test passed\x1b[0m");
 }
@@ -300,7 +307,7 @@ unittest
     Assert.isTrue(durations.length > 0, "Should get some estimates");
     
     // Some builds should have termination penalty
-    auto maxDuration = durations.map!(d => d.total!"seconds").array.maxElement;
+    auto maxDuration = durations.map!(d => d.total!"seconds").maxElement;
     Logger.info("Max duration with terminations: " ~ maxDuration.to!string ~ "s");
     
     writeln("  \x1b[32m✓ Spot termination test passed\x1b[0m");
@@ -341,7 +348,7 @@ unittest
     if (result.isOk)
     {
         auto estimate = result.unwrap();
-        float cost = estimate.usage.totalCost();
+        float cost = pricing.effectivePricing().totalCost(estimate.usage);
         
         Logger.info("Estimated cost: $" ~ cost.to!string);
         
@@ -396,9 +403,9 @@ unittest
         if (result.isOk)
         {
             auto estimate = result.unwrap();
-            float cost = estimate.usage.totalCost();
+            float cost = pricing.effectivePricing().totalCost(estimate.usage);
             
-            if (isInfinite(cost) || isNaN(cost) || cost < 0)
+            if (isInfinity(cost) || isNaN(cost) || cost < 0)
             {
                 invalidCount++;
                 Logger.info("  Invalid cost detected: " ~ cost.to!string);
@@ -450,7 +457,7 @@ unittest
     if (result.isOk)
     {
         auto estimate = result.unwrap();
-        float networkCost = estimate.usage.networkCost;
+        float networkCost = pricing.effectivePricing().networkCost(estimate.usage.networkBytes);
         
         Logger.info("Network cost with surge: $" ~ networkCost.to!string);
         
@@ -479,9 +486,9 @@ unittest
     // Sample pricing every hour
     for (size_t hour = 0; hour < 24; hour++)
     {
-        awsPrices ~= awsVolatile.getCurrentPricing().cpuPerCoreHour;
-        gcpPrices ~= gcpVolatile.getCurrentPricing().cpuPerCoreHour;
-        azurePrices ~= azureVolatile.getCurrentPricing().cpuPerCoreHour;
+        awsPrices ~= awsVolatile.getCurrentPricing().costPerCoreHour;
+        gcpPrices ~= gcpVolatile.getCurrentPricing().costPerCoreHour;
+        azurePrices ~= azureVolatile.getCurrentPricing().costPerCoreHour;
     }
     
     // Calculate price variance
@@ -536,7 +543,7 @@ unittest
     {
         auto result = chaosEstimator.estimateGraph(baseGraph);
         if (result.isOk)
-            estimates ~= result.unwrap().usage.totalCost();
+            estimates ~= pricing.effectivePricing().totalCost(result.unwrap().usage);
     }
     
     Assert.isTrue(estimates.length > 0, "Should get estimates");

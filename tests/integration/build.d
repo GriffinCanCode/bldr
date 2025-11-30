@@ -4,8 +4,8 @@ import std.stdio;
 import std.path;
 import std.file;
 import std.algorithm;
-import core.graph.graph;
-import core.execution.core.engine;
+import engine.graph.core.graph;
+import engine.runtime.core.engine.executor;
 import infrastructure.config.schema.schema;
 import infrastructure.config.parsing.parser;
 import tests.harness;
@@ -91,8 +91,8 @@ unittest
     Assert.equal(sorted.length, 2);
     
     // lib should come before app
-    auto libIdx = sorted.countUntil!(n => n.id.canFind("lib"));
-    auto appIdx = sorted.countUntil!(n => n.id.canFind("app"));
+    auto libIdx = sorted.countUntil!(n => n.id.toString().canFind("lib"));
+    auto appIdx = sorted.countUntil!(n => n.id.toString().canFind("app"));
     Assert.isTrue(libIdx < appIdx);
     
     writeln("\x1b[32m  ✓ Multi-target build integration test verified\x1b[0m");
@@ -205,18 +205,18 @@ unittest
     Assert.equal(sorted.length, 5);
     
     // util should come before lib2
-    auto utilIdx = sorted.countUntil!(n => n.id.canFind("util"));
-    auto lib2Idx = sorted.countUntil!(n => n.id.canFind("lib2"));
+    auto utilIdx = sorted.countUntil!(n => n.id.toString().canFind("util"));
+    auto lib2Idx = sorted.countUntil!(n => n.id.toString().canFind("lib2"));
     Assert.isTrue(utilIdx < lib2Idx);
     
     // middleware should come after lib1 and lib2
-    auto midIdx = sorted.countUntil!(n => n.id.canFind("middleware"));
-    auto lib1Idx = sorted.countUntil!(n => n.id.canFind("lib1"));
+    auto midIdx = sorted.countUntil!(n => n.id.toString().canFind("middleware"));
+    auto lib1Idx = sorted.countUntil!(n => n.id.toString().canFind("lib1"));
     Assert.isTrue(lib1Idx < midIdx);
     Assert.isTrue(lib2Idx < midIdx);
     
     // app should be last
-    auto appIdx = sorted.countUntil!(n => n.id.canFind("app"));
+    auto appIdx = sorted.countUntil!(n => n.id.toString().canFind("app"));
     Assert.isTrue(midIdx < appIdx);
     
     writeln("\x1b[32m  ✓ Complex dependency graph integration test verified\x1b[0m");

@@ -6,32 +6,33 @@ module tests.adapters.graph_adapter;
 import std.algorithm;
 import std.array;
 import infrastructure.config.schema.schema;
-import engine.graph.core.graph;
+import RealGraph = engine.graph.core.graph;
 import infrastructure.errors;
 
 /// Simplified graph interface for property tests
 class TestGraph
 {
-    private BuildGraph graph;
-    private BuildNode[string] nodeMap;
+    private RealGraph.BuildGraph graph;
+    private RealGraph.BuildNode[string] nodeMap;
     
     this()
     {
-        graph = new BuildGraph();
+        graph = new RealGraph.BuildGraph();
     }
     
     void addNode(TestNode node)
     {
         auto target = Target();
         target.name = node.name;
-        target.kind = TargetKind.Binary;
+        target.type = TargetType.Executable; // Was TargetKind.Binary
         
         auto result = graph.addTarget(target);
         if (result.isOk)
         {
-            auto graphNode = graph.getNode(node.name);
-            if (graphNode !is null)
-                nodeMap[node.name] = graphNode;
+            auto targetId = TargetId(node.name);
+            auto graphNodePtr = graph.getNode(targetId);
+            if (graphNodePtr !is null)
+                nodeMap[node.name] = *graphNodePtr;
         }
     }
     
@@ -57,20 +58,20 @@ class TestGraph
         return result.isErr;
     }
     
-    bool wouldCreateCycle(BuildNode from, BuildNode to)
+    bool wouldCreateCycle(RealGraph.BuildNode from, RealGraph.BuildNode to)
     {
         // DFS to check if adding edge from->to creates cycle
         // A cycle exists if there's already a path from to->from
         return hasPath(to, from);
     }
     
-    private bool hasPath(BuildNode from, BuildNode to)
+    private bool hasPath(RealGraph.BuildNode from, RealGraph.BuildNode to)
     {
-        bool[BuildNode] visited;
+        bool[RealGraph.BuildNode] visited;
         return dfsHasPath(from, to, visited);
     }
     
-    private bool dfsHasPath(BuildNode current, BuildNode target, ref bool[BuildNode] visited)
+    private bool dfsHasPath(RealGraph.BuildNode current, RealGraph.BuildNode target, ref bool[RealGraph.BuildNode] visited)
     {
         if (current is target)
             return true;
@@ -82,9 +83,14 @@ class TestGraph
         
         foreach (depId; current.dependencyIds)
         {
-            auto dep = graph.getNode(depId);
-            if (dep !is null && dfsHasPath(dep, target, visited))
-                return true;
+            // Need to resolve ID to node
+            auto depPtr = graph.getNode(depId);
+            if (depPtr !is null)
+            {
+                auto dep = *depPtr;
+                if (dfsHasPath(dep, target, visited))
+                    return true;
+            }
         }
         
         return false;
@@ -109,7 +115,8 @@ class TestGraph
     
     void removeNode(TestNode node)
     {
-        graph.removeTarget(node.name);
+        if (node.name in graph.nodes)
+            graph.nodes.remove(node.name);
         nodeMap.remove(node.name);
     }
     
@@ -125,7 +132,7 @@ class TestGraph
         return deps;
     }
     
-    private void collectAllDeps(BuildNode node, ref TestNode[] deps, ref bool[string] visited)
+    private void collectAllDeps(RealGraph.BuildNode node, ref TestNode[] deps, ref bool[string] visited)
     {
         if (node.target.name in visited)
             return;
@@ -134,9 +141,10 @@ class TestGraph
         
         foreach (depId; node.dependencyIds)
         {
-            auto dep = graph.getNode(depId);
-            if (dep !is null)
+            auto depPtr = graph.getNode(depId);
+            if (depPtr !is null)
             {
+                auto dep = *depPtr;
                 deps ~= new TestNode(dep.target.name);
                 collectAllDeps(dep, deps, visited);
             }
@@ -181,4 +189,3 @@ class TestNode
 // Aliases for cleaner test code
 alias BuildGraph = TestGraph;
 alias BuildNode = TestNode;
-
