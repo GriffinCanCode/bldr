@@ -2,7 +2,7 @@ class Bldr < Formula
   desc "High-performance build system for mixed-language monorepos"
   homepage "https://github.com/GriffinCanCode/bldr"
   url "https://github.com/GriffinCanCode/bldr/archive/refs/tags/v2.0.3.tar.gz"
-  sha256 "PLACEHOLDER_SHA256"
+  sha256 "f8c3808984cb1e6a7c102a60d396398e0301e36134988aefd02b460279b7b31c"
   license "MIT"
   head "https://github.com/GriffinCanCode/bldr.git", branch: "master"
 
