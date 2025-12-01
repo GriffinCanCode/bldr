@@ -33,6 +33,11 @@ struct ExplainCommand
                 listTopics();
                 break;
             
+            case "directory":
+            case "dir":
+                showDirectory();
+                break;
+            
             case "search":
                 if (args.length < 3)
                 {
@@ -75,24 +80,18 @@ struct ExplainCommand
         writeln("=== Builder Explain - AI-Optimized Documentation ===");
         writeln();
         writeln("USAGE:");
-        writeln("  bldr explain <topic>              Show topic documentation (smart match)");
-        writeln("  bldr explain list                 List all available topics");
+        writeln("  bldr explain <topic>              Show topic documentation");
+        writeln("  bldr explain directory            Browse all topics by category");
+        writeln("  bldr explain list                 List all topics alphabetically");
         writeln("  bldr explain search <query>       Search across all topics");
         writeln("  bldr explain example <topic>      Show working examples");
-        writeln("  bldr explain workflow <name>      Show step-by-step workflow");
         writeln();
-        writeln("AVAILABLE TOPICS:");
-        writeln("  blake3           BLAKE3 hash function - 3-5x faster than SHA-256");
-        writeln("  caching          Multi-tier caching: target, action, remote");
-        writeln("  determinism      Bit-for-bit reproducible builds");
-        writeln("  incremental      Module-level incremental compilation");
-        writeln("  action-cache     Fine-grained action caching");
-        writeln("  remote-cache     Distributed cache for teams/CI");
+        writeln("QUICK START:");
+        writeln("  bldr explain caching              Learn about build caching");
+        writeln("  bldr explain determinism          Reproducible builds");
+        writeln("  bldr explain targets              Build target basics");
         writeln();
-        writeln("EXAMPLES:");
-        writeln("  bldr explain blake3");
-        writeln("  bldr explain \"fast builds\"");
-        writeln("  bldr explain example caching");
+        writeln("TIP: Run 'bldr explain directory' to see all available topics.");
         writeln();
     }
     
@@ -138,6 +137,99 @@ struct ExplainCommand
         catch (Exception e)
         {
             Logger.error("Failed to read index: " ~ e.msg);
+        }
+    }
+    
+    /// Show directory of all topics grouped by category
+    private static void showDirectory() @system
+    {
+        auto indexPath = buildPath(getDocsPath(), "ai", "index.yaml");
+        
+        if (!exists(indexPath))
+        {
+            Logger.error("AI documentation index not found");
+            return;
+        }
+        
+        try
+        {
+            auto index = parseYAMLIndex(indexPath);
+            
+            writeln();
+            writeln("=== Builder Documentation Directory ===");
+            writeln();
+            
+            if ("concepts" !in index || index["concepts"].type != JSONType.object)
+            {
+                Logger.error("No topics found in index");
+                return;
+            }
+            
+            // Group topics by category based on file path
+            string[][string] byCategory;
+            string[string] summaries;
+            
+            foreach (topic, data; index["concepts"].object)
+            {
+                if (data.type != JSONType.object) continue;
+                
+                string file = "file" in data ? data["file"].str : "";
+                string summary = "summary" in data ? data["summary"].str : "";
+                summaries[topic] = summary;
+                
+                // Extract category from file path (e.g., "concepts/core/caching.yaml" -> "core")
+                string category = "other";
+                if (file.length > 0)
+                {
+                    auto parts = file.split("/");
+                    if (parts.length >= 2)
+                        category = parts[1];  // concepts/CATEGORY/file.yaml
+                }
+                
+                if (category !in byCategory)
+                    byCategory[category] = [];
+                byCategory[category] ~= topic;
+            }
+            
+            // Category display order and names
+            string[string] categoryNames = [
+                "core": "Core Concepts",
+                "config": "Configuration",
+                "languages": "Language Support", 
+                "rules": "Rules & Starlark",
+                "ecosystem": "Ecosystem & Tools",
+                "reference": "Reference"
+            ];
+            
+            string[] categoryOrder = ["core", "config", "languages", "rules", "ecosystem", "reference", "other"];
+            
+            foreach (cat; categoryOrder)
+            {
+                if (cat !in byCategory) continue;
+                
+                auto topics = byCategory[cat];
+                topics.sort();
+                
+                string catName = cat in categoryNames ? categoryNames[cat] : cat.toUpper();
+                writeln("\x1b[1m" ~ catName ~ "\x1b[0m");
+                
+                foreach (topic; topics)
+                {
+                    string summary = topic in summaries ? summaries[topic] : "";
+                    // Truncate summary if too long
+                    if (summary.length > 50)
+                        summary = summary[0..47] ~ "...";
+                    writefln("  \x1b[36m%-22s\x1b[0m %s", topic, summary);
+                }
+                writeln();
+            }
+            
+            writeln("Use 'bldr explain <topic>' to view any topic.");
+            writeln();
+        }
+        catch (Exception e)
+        {
+            Logger.error("Failed to read directory: " ~ e.msg);
         }
     }
 
@@ -378,71 +470,105 @@ struct ExplainCommand
     {
         writeln();
         
+        // === TOPIC ===
         if ("topic" in doc)
         {
             writeln("=== " ~ doc["topic"].str.toUpper() ~ " ===");
             writeln();
         }
         
-        if ("summary" in doc)
+        // SUMMARY: Use definition if available (fuller explanation), fallback to summary
+        string summaryText;
+        if ("definition" in doc)
+            summaryText = doc["definition"].str;
+        else if ("summary" in doc)
+            summaryText = doc["summary"].str;
+            
+        if (summaryText.length > 0)
         {
             writeln("\x1b[1mSUMMARY:\x1b[0m");
-            writeln("  " ~ doc["summary"].str);
             writeln();
-        }
-        
-        if ("definition" in doc)
-        {
-            writeln("\x1b[1mDEFINITION:\x1b[0m");
-            foreach (line; doc["definition"].str.split("\n"))
+            foreach (line; summaryText.split("\n"))
                 if (line.strip().length > 0)
-                    writeln("  " ~ line.strip());
+                    writeln(line.strip());
             writeln();
         }
         
+        // KEY POINTS:
         if ("key_points" in doc && doc["key_points"].type == JSONType.array)
         {
             writeln("\x1b[1mKEY POINTS:\x1b[0m");
+            writeln();
             foreach (point; doc["key_points"].array)
-                writeln("  • " ~ point.str);
+                writeln("• " ~ point.str);
             writeln();
         }
         
+        // USAGE: Show code example - try multiple sources
+        string usageCode;
+        
+        // 1. Try usage_examples with code field
         if ("usage_examples" in doc && doc["usage_examples"].type == JSONType.array)
         {
-            writeln("\x1b[1mUSAGE:\x1b[0m");
             foreach (example; doc["usage_examples"].array)
             {
-                if (example.type == JSONType.object)
+                if (example.type == JSONType.object && "code" in example)
                 {
-                    if ("description" in example)
-                        writeln("  " ~ example["description"].str ~ ":");
-                    if ("code" in example)
+                    usageCode = example["code"].str;
+                    break;
+                }
+            }
+        }
+        
+        // 2. Try example field (some YAML files use this)
+        if (usageCode.length == 0 && "example" in doc)
+            usageCode = doc["example"].str;
+        
+        // 3. Try usage field (can be string or object with sub-fields)
+        if (usageCode.length == 0 && "usage" in doc)
+        {
+            if (doc["usage"].type == JSONType.string)
+                usageCode = doc["usage"].str;
+            else if (doc["usage"].type == JSONType.object)
+            {
+                // Try first sub-field of usage object
+                foreach (key, val; doc["usage"].object)
+                {
+                    if (val.type == JSONType.string)
                     {
-                        foreach (line; example["code"].str.split("\n"))
-                            if (line.strip().length > 0)
-                                writeln("    " ~ line);
-                        writeln();
+                        usageCode = val.str;
+                        break;
                     }
                 }
             }
         }
         
-        if ("related" in doc && doc["related"].type == JSONType.array)
+        // Display if we found code
+        if (usageCode.length > 0)
         {
-            writeln("\x1b[1mRELATED:\x1b[0m");
-            auto related = doc["related"].array.map!(r => r.str).array;
-            writeln("  " ~ related.join(", "));
+            writeln("\x1b[1mUSAGE:\x1b[0m");
+            writeln();
+            foreach (line; usageCode.split("\n"))
+                if (line.length > 0)
+                    writeln(line);
             writeln();
         }
         
-        if ("next_steps" in doc)
+        // RELATED:
+        if ("related" in doc)
         {
-            writeln("\x1b[1mNEXT STEPS:\x1b[0m");
-            foreach (line; doc["next_steps"].str.split("\n"))
-                if (line.strip().length > 0)
-                    writeln("  " ~ line.strip());
-            writeln();
+            string relatedStr;
+            if (doc["related"].type == JSONType.array)
+                relatedStr = doc["related"].array.map!(r => r.str).array.join(", ");
+            else if (doc["related"].type == JSONType.string)
+                // Handle inline array syntax [a, b, c] stored as string
+                relatedStr = doc["related"].str.strip("[]").replace(", ", ", ");
+            
+            if (relatedStr.length > 0)
+            {
+                writeln("\x1b[1mRELATED:\x1b[0m " ~ relatedStr);
+                writeln();
+            }
         }
     }
     
@@ -546,8 +672,7 @@ struct ExplainCommand
     /// This is a minimal parser for the specific YAML structure we use
     private static JSONValue parseSimpleYAML(string content) @system
     {
-        JSONValue result;
-        result.object = null;
+        JSONValue result = parseJSON("{}");  // Initialize as empty object
         
         string[] lines = content.split("\n");
         JSONValue* currentSection = &result;
@@ -556,6 +681,7 @@ struct ExplainCommand
         
         string currentMultilineKey = null;
         bool multilineIsArray = false;
+        bool multilineInArrayItem = false;  // Track if multiline key is in an array item
         int multilineIndent = -1;
         
         foreach (line; lines)
@@ -571,21 +697,25 @@ struct ExplainCommand
                     if (multilineIsArray)
                     {
                         auto arr = (*currentSection).array;
-                        if (arr.length > 0)
+                        if (arr.length > 0 && arr[$-1].type == JSONType.string)
                         {
-                            // Check if last item is string
-                            if (arr[$-1].type == JSONType.string)
-                            {
-                                string current = arr[$-1].str;
-                                arr[$-1] = JSONValue(current ~ text);
-                                (*currentSection).array = arr;
-                            }
+                            arr[$-1] = JSONValue(arr[$-1].str ~ text);
+                            (*currentSection).array = arr;
                         }
                     }
-                    else if (currentMultilineKey in (*currentSection).object)
+                    else if (multilineInArrayItem && (*currentSection).type == JSONType.array)
                     {
-                        string current = (*currentSection).object[currentMultilineKey].str;
-                        (*currentSection).object[currentMultilineKey] = JSONValue(current ~ text);
+                        // Multiline key in array item
+                        auto arr = (*currentSection).array;
+                        if (arr.length > 0 && arr[$-1].type == JSONType.object && currentMultilineKey in arr[$-1].object)
+                        {
+                            arr[$-1].object[currentMultilineKey] = JSONValue(arr[$-1].object[currentMultilineKey].str ~ text);
+                            (*currentSection).array = arr;
+                        }
+                    }
+                    else if ((*currentSection).type == JSONType.object && currentMultilineKey in (*currentSection).object)
+                    {
+                        (*currentSection).object[currentMultilineKey] = JSONValue((*currentSection).object[currentMultilineKey].str ~ text);
                     }
                 }
                 continue;
@@ -601,22 +731,33 @@ struct ExplainCommand
             {
                 if (indent > multilineIndent)
                 {
-                    string text = stripped ~ "\n";
+                    // Preserve relative indentation (content indent - base indent)
+                    auto relativeIndent = cast(int)indent - multilineIndent - 2;  // -2 for typical YAML indent
+                    string indentStr = relativeIndent > 0 ? replicate(" ", relativeIndent) : "";
+                    string text = indentStr ~ stripped ~ "\n";
                     
                     if (multilineIsArray)
                     {
                         auto arr = (*currentSection).array;
                         if (arr.length > 0 && arr[$-1].type == JSONType.string)
                         {
-                            string current = arr[$-1].str;
-                            arr[$-1] = JSONValue(current ~ text);
+                            arr[$-1] = JSONValue(arr[$-1].str ~ text);
                             (*currentSection).array = arr;
                         }
                     }
-                    else if (currentMultilineKey in (*currentSection).object)
+                    else if (multilineInArrayItem && (*currentSection).type == JSONType.array)
                     {
-                        string current = (*currentSection).object[currentMultilineKey].str;
-                        (*currentSection).object[currentMultilineKey] = JSONValue(current ~ text);
+                        // Multiline key in array item
+                        auto arr = (*currentSection).array;
+                        if (arr.length > 0 && arr[$-1].type == JSONType.object && currentMultilineKey in arr[$-1].object)
+                        {
+                            arr[$-1].object[currentMultilineKey] = JSONValue(arr[$-1].object[currentMultilineKey].str ~ text);
+                            (*currentSection).array = arr;
+                        }
+                    }
+                    else if ((*currentSection).type == JSONType.object && currentMultilineKey in (*currentSection).object)
+                    {
+                        (*currentSection).object[currentMultilineKey] = JSONValue((*currentSection).object[currentMultilineKey].str ~ text);
                     }
                     continue;
                 }
@@ -625,6 +766,7 @@ struct ExplainCommand
                     // End of block
                     currentMultilineKey = null;
                     multilineIsArray = false;
+                    multilineInArrayItem = false;
                     multilineIndent = -1;
                 }
             }
@@ -634,19 +776,23 @@ struct ExplainCommand
                 // Section or key
                 auto key = stripped[0 .. $ - 1];
                 
-                if (indent <= indentStack[$ - 1] && sectionStack.length > 0)
+                // Always check indentation and pop as needed
+                while (sectionStack.length > 0 && indent <= indentStack[$ - 1])
                 {
-                    // Pop stack
-                    while (indentStack.length > 1 && indent <= indentStack[$ - 1])
-                    {
-                        sectionStack = sectionStack[0 .. $ - 1];
-                        indentStack = indentStack[0 .. $ - 1];
-                        currentSection = navigateToSection(&result, sectionStack);
-                    }
+                    sectionStack = sectionStack[0 .. $ - 1];
+                    indentStack = indentStack[0 .. $ - 1];
+                }
+                currentSection = navigateToSection(&result, sectionStack);
+                
+                // Safety: if current section became an array, go to root
+                if ((*currentSection).type != JSONType.object)
+                {
+                    currentSection = &result;
+                    sectionStack = [];
+                    indentStack = [0];
                 }
                 
-                (*currentSection).object[key] = JSONValue();
-                (*currentSection)[key].object = null;
+                (*currentSection).object[key] = parseJSON("{}");
                 
                 sectionStack ~= key;
                 indentStack ~= cast(int)indent;
@@ -700,7 +846,7 @@ struct ExplainCommand
                 }
                 
                 if ((*currentSection).type != JSONType.array)
-                    (*currentSection).array = null;
+                    *currentSection = parseJSON("[]");
                 
                 (*currentSection).array ~= val;
             }
@@ -723,9 +869,15 @@ struct ExplainCommand
                         
                         if ((*currentSection).type == JSONType.array && (*currentSection).array.length > 0 && 
                             (*currentSection).array[$ - 1].type == JSONType.object)
+                        {
                             (*currentSection).array[$ - 1].object[key] = empty;
-                        else
+                            multilineInArrayItem = true;
+                        }
+                        else if ((*currentSection).type == JSONType.object)
+                        {
                             (*currentSection).object[key] = empty;
+                            multilineInArrayItem = false;
+                        }
                         continue;
                     }
                     
@@ -739,7 +891,7 @@ struct ExplainCommand
                     {
                         (*currentSection).array[$ - 1].object[key] = JSONValue(value);
                     }
-                    else
+                    else if ((*currentSection).type == JSONType.object)
                     {
                         (*currentSection).object[key] = JSONValue(value);
                     }
@@ -756,11 +908,17 @@ struct ExplainCommand
         JSONValue* current = root;
         foreach (segment; path)
         {
-            if (segment in current.object)
+            // Only navigate if current is an object
+            if ((*current).type != JSONType.object)
+                return root;
+            if (segment in (*current).object)
                 current = &(*current)[segment];
             else
                 return root;
         }
+        // Return root if final destination is not an object
+        if ((*current).type != JSONType.object)
+            return root;
         return current;
     }
 }

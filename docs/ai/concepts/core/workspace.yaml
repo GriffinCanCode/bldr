@@ -50,6 +50,26 @@ example: |
       };
   }
 
+key_points:
+  - "Single file at project root: Builderspace"
+  - "Project-wide settings: Applies to all targets"
+  - "Caching configuration: Enable/disable, size limits"
+  - "Distributed builds: Remote execution settings"
+  - "Determinism: Control reproducibility enforcement"
+
+usage_examples:
+  - description: "Basic workspace configuration"
+    code: |
+      workspace {
+          name: "my-project";
+          version: "2.0.0";
+      }
+      
+      options {
+          caching: { enabled: true; };
+          determinism: { enabled: true; };
+      }
+
 vs_builderfile:
   builderspace: "Project-wide configuration, single file at root"
   builderfile: "Target definitions, can be multiple files in subdirectories"

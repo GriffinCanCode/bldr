@@ -50,15 +50,16 @@ target_structure:
     required: false
     description: "Compiler/linker flags"
 
-example: |
-  target("myapp") {
-      type: executable;
-      language: cpp;
-      sources: ["main.cpp", "utils.cpp"];
-      deps: ["//lib:utils"];
-      flags: ["-O2", "-Wall"];
-      output: "bin/myapp";
-  }
+usage_examples:
+  - description: "Define a C++ executable target"
+    code: |
+      target("myapp") {
+          type: executable;
+          language: cpp;
+          sources: ["main.cpp", "utils.cpp"];
+          deps: ["//lib:utils"];
+          flags: ["-O2", "-Wall"];
+      }
 
 target_addressing:
   absolute: "//path/to:target - From workspace root"

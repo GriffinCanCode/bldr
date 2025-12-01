@@ -3,26 +3,30 @@ module tests.unit.graph.test_dynamic;
 import std.stdio;
 import std.algorithm;
 import std.array;
-import std.conv;
+import std.conv : to;
 import engine.graph;
 import infrastructure.config.schema.schema;
 import tests.harness;
 
 /// Test dynamic graph creation and basic operations
-@TestCase("DynamicGraph.Creation")
-void testDynamicGraphCreation()
+unittest
 {
+    writeln("\x1b[36m[TEST]\x1b[0m graph.dynamic - Creation and basic operations");
+    
     auto baseGraph = new BuildGraph();
     auto dynamicGraph = new DynamicBuildGraph(baseGraph);
     
     assert(dynamicGraph.graph is baseGraph, "Base graph should be accessible");
     assert(!dynamicGraph.hasPendingDiscoveries(), "New graph should have no discoveries");
+    
+    writeln("\x1b[32m  ✓ Dynamic graph creation works correctly\x1b[0m");
 }
 
 /// Test marking targets as discoverable
-@TestCase("DynamicGraph.MarkDiscoverable")
-void testMarkDiscoverable()
+unittest
 {
+    writeln("\x1b[36m[TEST]\x1b[0m graph.dynamic - Mark discoverable");
+    
     auto baseGraph = new BuildGraph();
     auto dynamicGraph = new DynamicBuildGraph(baseGraph);
     
@@ -33,12 +37,15 @@ void testMarkDiscoverable()
     dynamicGraph.markDiscoverable(targetId);
     
     assert(dynamicGraph.isDiscoverable(targetId), "Target should be discoverable after marking");
+    
+    writeln("\x1b[32m  ✓ Mark discoverable works correctly\x1b[0m");
 }
 
 /// Test recording discoveries
-@TestCase("DynamicGraph.RecordDiscovery")
-void testRecordDiscovery()
+unittest
 {
+    writeln("\x1b[36m[TEST]\x1b[0m graph.dynamic - Record discovery");
+    
     auto baseGraph = new BuildGraph();
     auto dynamicGraph = new DynamicBuildGraph(baseGraph);
     
@@ -57,12 +64,15 @@ void testRecordDiscovery()
     
     auto stats = dynamicGraph.getDiscoveryStats();
     assert(stats.totalDiscoveries == 1, "Should have one discovery recorded");
+    
+    writeln("\x1b[32m  ✓ Record discovery works correctly\x1b[0m");
 }
 
 /// Test applying discoveries and extending graph
-@TestCase("DynamicGraph.ApplyDiscoveries")
-void testApplyDiscoveries()
+unittest
 {
+    writeln("\x1b[36m[TEST]\x1b[0m graph.dynamic - Apply discoveries");
+    
     // Create base graph with one target
     auto baseGraph = new BuildGraph();
     
@@ -111,12 +121,15 @@ void testApplyDiscoveries()
     assert(compileNode.dependencyIds.length == 1, "Compile target should have one dependency");
     assert(compileNode.dependencyIds[0].toString() == protoTarget.name, 
            "Dependency should be proto target");
+    
+    writeln("\x1b[32m  ✓ Apply discoveries works correctly\x1b[0m");
 }
 
 /// Test discovered target creation with language inference
-@TestCase("DynamicGraph.CreateDiscoveredTarget")
-void testCreateDiscoveredTarget()
+unittest
 {
+    writeln("\x1b[36m[TEST]\x1b[0m graph.dynamic - Create discovered target");
+    
     auto target = DynamicBuildGraph.createDiscoveredTarget(
         "test-generated",
         ["file1.cpp", "file2.cpp"],
@@ -129,12 +142,15 @@ void testCreateDiscoveredTarget()
     assert(target.type == TargetType.Library, "Should be library type");
     assert(target.sources.length == 2, "Should have two sources");
     assert(target.deps.length == 1, "Should have one dependency");
+    
+    writeln("\x1b[32m  ✓ Create discovered target works correctly\x1b[0m");
 }
 
 /// Test code generation discovery pattern
-@TestCase("DiscoveryPatterns.CodeGeneration")
-void testCodeGenerationPattern()
+unittest
 {
+    writeln("\x1b[36m[TEST]\x1b[0m graph.dynamic - Code generation pattern");
+    
     auto originId = TargetId("proto-target");
     string[] generatedFiles = [
         "gen/message.pb.cc",
@@ -164,12 +180,15 @@ void testCodeGenerationPattern()
             foundCc = true;
     }
     assert(foundH || foundCc, "Should create targets for generated files");
+    
+    writeln("\x1b[32m  ✓ Code generation pattern works correctly\x1b[0m");
 }
 
 /// Test library discovery pattern
-@TestCase("DiscoveryPatterns.LibraryDiscovery")
-void testLibraryDiscoveryPattern()
+unittest
 {
+    writeln("\x1b[36m[TEST]\x1b[0m graph.dynamic - Library discovery pattern");
+    
     auto originId = TargetId("link-target");
     string[] libraries = [
         "/usr/lib/libfoo.so",
@@ -181,12 +200,15 @@ void testLibraryDiscoveryPattern()
     assert(discovery.originTarget == originId, "Origin should match");
     assert(discovery.discoveredOutputs == libraries, "Libraries should match");
     assert(discovery.metadata["discovery_type"] == "libraries", "Should have correct metadata");
+    
+    writeln("\x1b[32m  ✓ Library discovery pattern works correctly\x1b[0m");
 }
 
 /// Test test discovery pattern
-@TestCase("DiscoveryPatterns.TestDiscovery")
-void testTestDiscoveryPattern()
+unittest
 {
+    writeln("\x1b[36m[TEST]\x1b[0m graph.dynamic - Test discovery pattern");
+    
     auto originId = TargetId("test-generator");
     string[] testFiles = [
         "tests/test_foo.cpp",
@@ -205,12 +227,15 @@ void testTestDiscoveryPattern()
         assert(target.type == TargetType.Test, "Should be test type");
         assert(target.deps.length == 1, "Should depend on origin");
     }
+    
+    writeln("\x1b[32m  ✓ Test discovery pattern works correctly\x1b[0m");
 }
 
 /// Test discovery builder fluent interface
-@TestCase("DiscoveryBuilder.FluentAPI")
-void testDiscoveryBuilderFluent()
+unittest
 {
+    writeln("\x1b[36m[TEST]\x1b[0m graph.dynamic - Discovery builder fluent API");
+    
     auto targetId = TargetId("test-target");
     
     auto discovery = DiscoveryBuilder.forTarget(targetId)
@@ -225,12 +250,15 @@ void testDiscoveryBuilderFluent()
     assert(discovery.discoveredDependents.length == 2, "Should have two dependents");
     assert(discovery.metadata.length == 2, "Should have two metadata entries");
     assert(discovery.metadata["key1"] == "value1", "Metadata should match");
+    
+    writeln("\x1b[32m  ✓ Discovery builder fluent API works correctly\x1b[0m");
 }
 
 /// Test concurrent discovery recording (thread safety)
-@TestCase("DynamicGraph.ConcurrentDiscovery")
-void testConcurrentDiscovery()
+unittest
 {
+    writeln("\x1b[36m[TEST]\x1b[0m graph.dynamic - Concurrent discovery (thread safety)");
+    
     import core.thread;
     import std.parallelism;
     
@@ -241,17 +269,17 @@ void testConcurrentDiscovery()
     TargetId[] targetIds;
     foreach (i; 0..10)
     {
-        auto id = TargetId("target-" ~ std.conv.to!string(i));
+        auto id = TargetId("target-" ~ i.to!string);
         targetIds ~= id;
         dynamicGraph.markDiscoverable(id);
     }
     
     // Record discoveries concurrently
-    foreach (i, targetId; parallel(targetIds))
+    foreach (idx, targetId; parallel(targetIds))
     {
         auto discovery = DiscoveryBuilder.forTarget(targetId)
-            .addOutputs(["file" ~ std.conv.to!string(i) ~ ".cpp"])
-            .withMetadata("index", std.conv.to!string(i))
+            .addOutputs(["file" ~ idx.to!string ~ ".cpp"])
+            .withMetadata("index", idx.to!string)
             .build();
         
         dynamicGraph.recordDiscovery(discovery);
@@ -260,12 +288,15 @@ void testConcurrentDiscovery()
     // Verify all discoveries recorded
     auto stats = dynamicGraph.getDiscoveryStats();
     assert(stats.totalDiscoveries == 10, "Should have all discoveries recorded");
+    
+    writeln("\x1b[32m  ✓ Concurrent discovery (thread safety) works correctly\x1b[0m");
 }
 
 /// Test discovery with cycle detection
-@TestCase("DynamicGraph.CycleDetection")
-void testDiscoveryWithCycleDetection()
+unittest
 {
+    writeln("\x1b[36m[TEST]\x1b[0m graph.dynamic - Cycle detection");
+    
     auto baseGraph = new BuildGraph();
     
     // Create two targets
@@ -302,31 +333,6 @@ void testDiscoveryWithCycleDetection()
     // Apply discoveries - should succeed as target1-generated -> target2 doesn't create cycle
     auto applyResult = dynamicGraph.applyDiscoveries();
     assert(applyResult.isOk, "Should apply non-cyclic discovery");
-}
-
-/// Run all dynamic graph tests
-void runDynamicGraphTests()
-{
-    writeln("Running Dynamic Graph Tests...");
     
-    testDynamicGraphCreation();
-    testMarkDiscoverable();
-    testRecordDiscovery();
-    testApplyDiscoveries();
-    testCreateDiscoveredTarget();
-    testCodeGenerationPattern();
-    testLibraryDiscoveryPattern();
-    testTestDiscoveryPattern();
-    testDiscoveryBuilderFluent();
-    testConcurrentDiscovery();
-    testDiscoveryWithCycleDetection();
-    
-    writeln("All Dynamic Graph Tests Passed! ✓");
+    writeln("\x1b[32m  ✓ Cycle detection works correctly\x1b[0m");
 }
-
-unittest
-{
-    runDynamicGraphTests();
-}
-
-

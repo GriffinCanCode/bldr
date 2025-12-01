@@ -88,6 +88,16 @@ configuration:
       description: "Remote cache server URL"
 
 usage_examples:
+  - description: "Enable caching in Builderspace"
+    code: |
+      // Enable in Builderspace
+      workspace {
+          cache {
+              enabled: true;
+              directory: ".builder-cache";
+          }
+      }
+  
   - description: "Check if build is cached"
     command: "bldr build //target"
     output: |
