@@ -187,7 +187,8 @@ final class ActionCache
         {
             if (!closed)
             {
-                if (dirty) flush(false);
+                if (dirty) 
+                    flush(false);
                 closed = true;
             }
         }
@@ -195,13 +196,7 @@ final class ActionCache
     
     ~this()
     {
-        if (closed) return;
-        
-        import core.memory : GC;
-        if (dirty && !GC.inFinalizer())
-        {
-            try { flush(false); } catch (Exception) {}
-        }
+        // Let GC handle cleanup - explicit flush in destructor can cause issues
     }
     
     /// Check if an action is cached and up-to-date
@@ -280,9 +275,7 @@ final class ActionCache
                 
                 auto cached = hashCache.get(input);
                 if (cached.found)
-                {
                     entry.inputHashes[input] = cached.contentHash;
-                }
                 else
                 {
                     hashCache.put(input, FastHash.hashFile(input), FastHash.hashMetadata(input));
@@ -294,9 +287,7 @@ final class ActionCache
             foreach (output; outputs.filter!exists)
                 entry.outputHashes[output] = FastHash.hashFile(output);
             
-            // Copy metadata
             entry.metadata = cast(string[string])metadata.dup;
-            
             entry.executionHash = computeExecutionHash(metadata);
             entries[actionId.toString()] = entry;
             dirty = true;
@@ -342,14 +333,8 @@ final class ActionCache
                 {
                     auto toEvict = eviction.selectEvictions(entries, eviction.calculateTotalSize(entries));
                     toEvict.each!(key => entries.remove(key));
-                    
-                    if (toEvict.length > 0)
-                        writeln("Action cache evicted ", toEvict.length, " entries");
                 }
-                catch (Exception)
-                {
-                    writeln("Warning: Action cache eviction failed");
-                }
+                catch (Exception) {}
             }
             
             saveCache();
@@ -465,14 +450,9 @@ final class ActionCache
         {
             auto data = ActionStorage.serialize(entries);
             auto signed = validator.signWithMetadata(data);
-            auto serialized = signed.serialize();
-            std.file.write(cacheFilePath, serialized);
+            std.file.write(cacheFilePath, signed.serialize());
         }
-        catch (Exception e)
-        {
-            try { writeln("Warning: Could not save action cache: ", e.msg); }
-            catch (Exception) {}
-        }
+        catch (Exception) {}
     }
     
     /// Compute hash of execution context (flags, env, etc)

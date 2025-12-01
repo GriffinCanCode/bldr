@@ -14,7 +14,6 @@ import infrastructure.utils.logging.logger : Logger;
 mixin template CachingHandlerMixin(string languageName)
 {
     import engine.caching.actions.action : ActionCache, ActionCacheConfig;
-    import engine.runtime.shutdown.shutdown : ShutdownCoordinator;
     
     private ActionCache actionCache;
     
@@ -22,23 +21,11 @@ mixin template CachingHandlerMixin(string languageName)
     {
         auto cacheConfig = ActionCacheConfig.fromEnvironment();
         actionCache = new ActionCache(".builder-cache/actions/" ~ languageName, cacheConfig);
-        
-        // Note: BuildServices handles cache cleanup via shutdown coordinator
     }
     
     ~this()
     {
-        import core.memory : GC;
-        if (actionCache && !GC.inFinalizer())
-        {
-            try
-            {
-                actionCache.close();
-            }
-            catch (Exception) {}
-            catch (Throwable) {}
-            actionCache = null;
-        }
+        // Let GC handle ActionCache cleanup
     }
     
     /// Get access to the action cache

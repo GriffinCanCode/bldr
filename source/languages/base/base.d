@@ -315,4 +315,3 @@ abstract class BaseLanguageHandler : LanguageHandler
     ///   context.recordDependencies(sourceFile, deps);
     protected abstract LanguageBuildResult buildImplWithContext(in BuildContext context);
 }
-

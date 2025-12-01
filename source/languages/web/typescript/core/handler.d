@@ -257,34 +257,7 @@ class TypeScriptHandler : BaseLanguageHandler
         actionId.subId = "typescript_compile";
         actionId.inputHash = FastHash.hashStrings(inputFiles);
         
-        // Determine expected outputs
-        string[] expectedOutputs = getOutputs(target, config);
-        
-        // Check if compilation is cached
-        if (actionCache.isCached(actionId, inputFiles, metadata))
-        {
-            // Verify all outputs exist
-            bool allOutputsExist = true;
-            foreach (output; expectedOutputs)
-            {
-                if (!exists(output))
-                {
-                    allOutputsExist = false;
-                    break;
-                }
-            }
-            
-            if (allOutputsExist)
-            {
-                Logger.debugLog("  [Cached] TypeScript compilation: " ~ target.name);
-                result.success = true;
-                result.outputs = expectedOutputs;
-                result.outputHash = FastHash.hashStrings(expectedOutputs);
-                return result;
-            }
-        }
-        
-        // Create compiler/bundler, pass actionCache for action-level caching in bundlers
+        // Create compiler/bundler for TypeScript compilation
         auto bundler = TSBundlerFactory.create(tsConfig.compiler, tsConfig, actionCache);
         
         if (!bundler.isAvailable())
@@ -304,41 +277,21 @@ class TypeScriptHandler : BaseLanguageHandler
         if (!success)
         {
             result.error = compileResult.error;
-            
-            // Update cache with failure
-            actionCache.update(
-                actionId,
-                inputFiles,
-                [],
-                metadata,
-                false
-            );
-            
             return result;
         }
         
         // Report type errors even if compilation succeeded
         if (compileResult.hadTypeErrors)
         {
-            Logger.warning("Type errors detected (but compilation continued):");
             foreach (err; compileResult.typeErrors)
-            {
                 Logger.warning("  " ~ err);
-            }
         }
         
         result.success = true;
-        result.outputs = compileResult.outputs ~ compileResult.declarations;
+        result.outputs = compileResult.outputs.dup;
+        if (compileResult.declarations.length > 0)
+            result.outputs ~= compileResult.declarations;
         result.outputHash = compileResult.outputHash;
-        
-        // Update cache with success
-        actionCache.update(
-            actionId,
-            inputFiles,
-            result.outputs,
-            metadata,
-            true
-        );
         
         return result;
     }

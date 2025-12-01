@@ -1,6 +1,5 @@
 module languages.scripting.python.core.handler;
 
-import std.stdio;
 import std.file;
 import std.path;
 import std.algorithm;
@@ -79,11 +78,11 @@ class PythonHandler : BaseLanguageHandler
         LanguageBuildResult result;
         
         if (pyConfig.installDeps && !installDependencies(pyConfig, config.root, pythonCmd))
-            {
-                result.error = "Failed to install dependencies";
-                return result;
-            }
-        
+        {
+            result.error = "Failed to install dependencies";
+            return result;
+        }
+
         if (pyConfig.autoFormat && pyConfig.formatter != PyFormatter.None)
         {
             Logger.info("Auto-formatting code");
@@ -91,13 +90,13 @@ class PythonHandler : BaseLanguageHandler
             if (!fmtResult.success)
                 Logger.warning("Formatting failed, continuing anyway");
         }
-        
+
         if (pyConfig.autoLint && pyConfig.linter != PyLinter.None)
         {
             Logger.info("Auto-linting code");
             lintWithCaching(target.sources, pyConfig, target.name, pythonCmd);
         }
-        
+
         if (pyConfig.typeCheck.enabled)
         {
             Logger.info("Running type checking");
@@ -109,14 +108,14 @@ class PythonHandler : BaseLanguageHandler
                 return result;
             }
         }
-        
+
         auto validationResult = PyValidator.validate(target.sources);
         if (!validationResult.success)
         {
             result.error = validationResult.firstError();
             return result;
         }
-        
+
         auto outputs = getOutputs(target, config);
         if (!outputs.empty && !target.sources.empty)
         {
@@ -164,10 +163,10 @@ class PythonHandler : BaseLanguageHandler
                 return result;
             }
         }
-        
+
         if (pyConfig.compileBytecode)
             compileToBytecodeWithCaching(target.sources, pyConfig, target.name, pythonCmd);
-        
+
         result.success = true;
         result.outputs = outputs;
         result.outputHash = FastHash.hashStrings(target.sources);
@@ -281,10 +280,7 @@ class PythonHandler : BaseLanguageHandler
             string venvPath = VirtualEnv.ensureVenv(config.venv, projectRoot, pythonCmd);
             
             if (!venvPath.empty)
-            {
                 pythonCmd = VirtualEnv.getVenvPython(venvPath);
-                Logger.debugLog("Using virtual environment: " ~ venvPath);
-            }
         }
         
         return pythonCmd;
