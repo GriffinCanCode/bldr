@@ -4,7 +4,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::{Command, exit};
 
-const VERSION: &str = "2.0.0";
+const VERSION: &str = "2.0.3";
 
 fn main() {
     let binary_path = get_or_download_binary();
