@@ -9,9 +9,9 @@ Builder provides comprehensive migration tools to help you transition from other
 The simplest way to migrate is to let Builder auto-detect your build system:
 
 ```bash
-builder migrate --auto BUILD
-builder migrate --auto CMakeLists.txt
-builder migrate --auto pom.xml
+bldr migrate --auto BUILD
+bldr migrate --auto CMakeLists.txt
+bldr migrate --auto pom.xml
 ```
 
 ### Specify Build System
@@ -19,9 +19,9 @@ builder migrate --auto pom.xml
 For explicit control or when auto-detection isn't available:
 
 ```bash
-builder migrate --from=bazel --input=BUILD --output=Builderfile
-builder migrate --from=cmake --input=CMakeLists.txt
-builder migrate --from=maven --input=pom.xml
+bldr migrate --from=bazel --input=BUILD --output=Builderfile
+bldr migrate --from=cmake --input=CMakeLists.txt
+bldr migrate --from=maven --input=pom.xml
 ```
 
 ### Preview Before Writing
@@ -29,7 +29,7 @@ builder migrate --from=maven --input=pom.xml
 Use dry-run mode to see the migration output without creating files:
 
 ```bash
-builder migrate --auto BUILD --dry-run
+bldr migrate --auto BUILD --dry-run
 ```
 
 ## Supported Build Systems
@@ -51,7 +51,7 @@ builder migrate --auto BUILD --dry-run
 
 **Example:**
 ```bash
-builder migrate --from=bazel --input=BUILD
+bldr migrate --from=bazel --input=BUILD
 ```
 
 **Limitations:**
@@ -74,7 +74,7 @@ builder migrate --from=bazel --input=BUILD
 
 **Example:**
 ```bash
-builder migrate --from=cmake --input=CMakeLists.txt
+bldr migrate --from=cmake --input=CMakeLists.txt
 ```
 
 **Limitations:**
@@ -94,7 +94,7 @@ builder migrate --from=cmake --input=CMakeLists.txt
 
 **Example:**
 ```bash
-builder migrate --from=maven --input=pom.xml
+bldr migrate --from=maven --input=pom.xml
 ```
 
 **Limitations:**
@@ -114,7 +114,7 @@ builder migrate --from=maven --input=pom.xml
 
 **Example:**
 ```bash
-builder migrate --from=gradle --input=build.gradle
+bldr migrate --from=gradle --input=build.gradle
 ```
 
 **Limitations:**
@@ -133,7 +133,7 @@ builder migrate --from=gradle --input=build.gradle
 
 **Example:**
 ```bash
-builder migrate --from=make --input=Makefile
+bldr migrate --from=make --input=Makefile
 ```
 
 **Limitations:**
@@ -153,7 +153,7 @@ builder migrate --from=make --input=Makefile
 
 **Example:**
 ```bash
-builder migrate --from=cargo --input=Cargo.toml
+bldr migrate --from=cargo --input=Cargo.toml
 ```
 
 **Limitations:**
@@ -172,7 +172,7 @@ builder migrate --from=cargo --input=Cargo.toml
 
 **Example:**
 ```bash
-builder migrate --from=npm --input=package.json
+bldr migrate --from=npm --input=package.json
 ```
 
 **Limitations:**
@@ -191,7 +191,7 @@ builder migrate --from=npm --input=package.json
 
 **Example:**
 ```bash
-builder migrate --from=gomod --input=go.mod
+bldr migrate --from=gomod --input=go.mod
 ```
 
 **Limitations:**
@@ -210,7 +210,7 @@ builder migrate --from=gomod --input=go.mod
 
 **Example:**
 ```bash
-builder migrate --from=dub --input=dub.json
+bldr migrate --from=dub --input=dub.json
 ```
 
 **Limitations:**
@@ -229,7 +229,7 @@ builder migrate --from=dub --input=dub.json
 
 **Example:**
 ```bash
-builder migrate --from=sbt --input=build.sbt
+bldr migrate --from=sbt --input=build.sbt
 ```
 
 **Limitations:**
@@ -249,7 +249,7 @@ builder migrate --from=sbt --input=build.sbt
 
 **Example:**
 ```bash
-builder migrate --from=meson --input=meson.build
+bldr migrate --from=meson --input=meson.build
 ```
 
 **Limitations:**
@@ -269,10 +269,10 @@ Before migrating:
 
 ```bash
 # Auto-detect (recommended)
-builder migrate --auto <build-file>
+bldr migrate --auto <build-file>
 
 # Or specify explicitly
-builder migrate --from=<system> --input=<file>
+bldr migrate --from=<system> --input=<file>
 ```
 
 ### 3. Review Generated Builderfile
@@ -287,7 +287,7 @@ Open the generated `Builderfile` and review:
 ### 4. Test the Build
 
 ```bash
-builder build
+bldr build
 ```
 
 ### 5. Iterate and Refine
@@ -361,9 +361,9 @@ target("myapp") {
 If migration fails:
 
 1. Check the input file is valid for the source build system
-2. Try auto-detection: `builder migrate --auto <file>`
+2. Try auto-detection: `bldr migrate --auto <file>`
 3. Review error messages for specific issues
-4. Check system-specific limitations: `builder migrate info <system>`
+4. Check system-specific limitations: `bldr migrate info <system>`
 
 ### Missing Targets
 
@@ -445,11 +445,11 @@ For projects with multiple targets:
 
 ```bash
 # Migrate main build file
-builder migrate --auto BUILD
+bldr migrate --auto BUILD
 
 # Review and test each target
-builder build //component1:lib
-builder build //component2:app
+bldr build //component1:lib
+bldr build //component2:app
 ```
 
 ### Language-Specific Configuration
@@ -476,20 +476,20 @@ Refer to language-specific documentation for available options.
 ### List All Systems
 
 ```bash
-builder migrate list
+bldr migrate list
 ```
 
 ### Get System Info
 
 ```bash
-builder migrate info bazel
-builder migrate info cmake
+bldr migrate info bazel
+bldr migrate info cmake
 ```
 
 ### General Help
 
 ```bash
-builder migrate --help
+bldr migrate --help
 ```
 
 ### Community Support

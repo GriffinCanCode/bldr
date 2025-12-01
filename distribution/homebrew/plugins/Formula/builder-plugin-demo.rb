@@ -1,12 +1,12 @@
 class BuilderPluginDemo < Formula
   desc "Demo plugin for Builder build system"
-  homepage "https://github.com/GriffinCanCode/Builder"
-  url "https://github.com/GriffinCanCode/Builder/archive/v1.0.0.tar.gz"
+  homepage "https://github.com/GriffinCanCode/bldr"
+  url "https://github.com/GriffinCanCode/bldr/archive/v2.0.0.tar.gz"
   sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   license "MIT"
-  head "https://github.com/GriffinCanCode/Builder.git", branch: "master"
+  head "https://github.com/GriffinCanCode/bldr.git", branch: "master"
 
-  depends_on "builder"
+  depends_on "bldr"
   depends_on "python@3.11"
 
   def install

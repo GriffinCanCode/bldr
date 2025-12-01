@@ -31,7 +31,7 @@ ocaml-project/
 Builder will automatically detect and use the best available OCaml compiler:
 
 ```bash
-builder build ocaml-app
+bldr build ocaml-app
 ```
 
 This will:
@@ -42,7 +42,7 @@ This will:
 ### Build Native Executable
 
 ```bash
-builder build ocaml-app
+bldr build ocaml-app
 ```
 
 Compiles to native code using ocamlopt for best performance.
@@ -50,7 +50,7 @@ Compiles to native code using ocamlopt for best performance.
 ### Build Bytecode Executable
 
 ```bash
-builder build ocaml-bytecode
+bldr build ocaml-bytecode
 ```
 
 Compiles to bytecode using ocamlc for portability.
@@ -58,7 +58,7 @@ Compiles to bytecode using ocamlc for portability.
 ### Build All Targets
 
 ```bash
-builder build
+bldr build
 ```
 
 ## Running
@@ -155,7 +155,7 @@ If you have a `dune` file in your project, Builder will automatically detect and
 
 ```bash
 # Builder will detect dune-project or dune file
-builder build
+bldr build
 ```
 
 ## Prerequisites

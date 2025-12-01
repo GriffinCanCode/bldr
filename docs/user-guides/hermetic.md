@@ -7,7 +7,7 @@
 Hermetic builds are enabled by default on Linux and macOS. To verify:
 
 ```bash
-builder build --verbose
+bldr build --verbose
 ```
 
 Look for output like:
@@ -21,7 +21,7 @@ If you need to disable hermetic builds:
 
 ```bash
 # One-time
-BUILDER_HERMETIC=false builder build
+BUILDER_HERMETIC=false bldr build
 
 # Permanently (add to .builderrc)
 echo 'BUILDER_HERMETIC=false' >> .builderrc
@@ -35,7 +35,7 @@ If your build needs to download dependencies, temporarily allow network:
 
 ```bash
 # Not recommended for production
-BUILDER_HERMETIC_NETWORK=true builder build
+BUILDER_HERMETIC_NETWORK=true bldr build
 ```
 
 Better approach: Pre-download dependencies and add to inputs:
@@ -70,12 +70,12 @@ If hermetic builds fail:
 
 1. **Check available paths:**
    ```bash
-   builder build --hermetic-debug
+   bldr build --hermetic-debug
    ```
 
 2. **Run without sandbox:**
    ```bash
-   BUILDER_HERMETIC=false builder build
+   BUILDER_HERMETIC=false bldr build
    ```
 
 3. **Compare outputs:**
@@ -226,7 +226,7 @@ Don't rely on network during builds:
 builder deps fetch
 
 # Then build hermetically
-builder build
+bldr build
 ```
 
 ### 5. Verify Reproducibility
@@ -235,8 +235,8 @@ Test that builds are truly reproducible:
 
 ```bash
 # Build twice
-builder clean && builder build
-builder clean && builder build
+bldr clean && bldr build
+bldr clean && bldr build
 
 # Compare outputs
 diff -r bin-1/ bin-2/
@@ -309,7 +309,7 @@ unittest
 
 **Solution**: Test locally with same sandbox settings:
 ```bash
-BUILDER_HERMETIC=true builder build --verbose
+BUILDER_HERMETIC=true bldr build --verbose
 ```
 
 ### "Permission denied" errors
@@ -337,7 +337,7 @@ hermetic: {
 **Cause**: Hermetic builds block network by default
 
 **Solutions:**
-1. Pre-fetch dependencies: `builder deps fetch`
+1. Pre-fetch dependencies: `bldr deps fetch`
 2. Add dependencies to inputs
 3. For testing only: `BUILDER_HERMETIC_NETWORK=true`
 

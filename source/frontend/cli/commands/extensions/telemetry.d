@@ -213,7 +213,7 @@ struct TelemetryCommand
     
     private static void printUsage()
     {
-        writeln("Usage: builder telemetry <subcommand> [options]\n");
+        writeln("Usage: bldr telemetry <subcommand> [options]\n");
         writeln("Subcommands:");
         writeln("  summary       Show comprehensive analytics (default)");
         writeln("  recent [n]    Show recent n builds (default: 10)");

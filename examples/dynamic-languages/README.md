@@ -41,7 +41,7 @@ examples/dynamic-languages/
 
 ```bash
 # If Crystal is installed
-builder build //examples/dynamic-languages/crystal:hello
+bldr build //examples/dynamic-languages/crystal:hello
 builder run //examples/dynamic-languages/crystal:hello
 ```
 
@@ -49,7 +49,7 @@ builder run //examples/dynamic-languages/crystal:hello
 
 ```bash
 # If Dart is installed
-builder build //examples/dynamic-languages/dart:hello
+bldr build //examples/dynamic-languages/dart:hello
 builder run //examples/dynamic-languages/dart:hello
 ```
 
@@ -57,7 +57,7 @@ builder run //examples/dynamic-languages/dart:hello
 
 ```bash
 # If V is installed
-builder build //examples/dynamic-languages/v:hello
+bldr build //examples/dynamic-languages/v:hello
 builder run //examples/dynamic-languages/v:hello
 ```
 
@@ -67,7 +67,7 @@ builder run //examples/dynamic-languages/v:hello
 # First, install your custom compiler to $PATH as 'mylang'
 # Or modify mylang.json to point to your compiler
 
-builder build //examples/dynamic-languages/custom:hello
+bldr build //examples/dynamic-languages/custom:hello
 ```
 
 ## How It Works
@@ -165,7 +165,7 @@ target("app") {
 ```
 
 ```bash
-builder build //path/to:app
+bldr build //path/to:app
 ```
 
 ## Template Variables

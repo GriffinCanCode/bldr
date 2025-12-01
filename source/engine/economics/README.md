@@ -24,7 +24,7 @@ Builder treats build resources as **economic assets** and provides three optimiz
 Find the fastest build within a budget:
 
 ```bash
-$ builder build --budget=5.00
+$ bldr build --budget=5.00
 Computing optimal build plan...
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Economic Build Plan
@@ -39,7 +39,7 @@ Est. Time: 5m 20s
 Find the cheapest build within a time limit:
 
 ```bash
-$ builder build --time-limit=120
+$ bldr build --time-limit=120
 Computing optimal build plan...
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Economic Build Plan
@@ -54,7 +54,7 @@ Est. Time: 1m 55s
 Optimize for cost, time, or balanced:
 
 ```bash
-$ builder build --optimize=cost
+$ bldr build --optimize=cost
 Computing optimal build plan...
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Economic Build Plan

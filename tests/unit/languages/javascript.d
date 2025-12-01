@@ -164,6 +164,7 @@ unittest
     // auto result = handler.build(target, config);
     // For now, just test that handler initializes
     assert(handler !is null, "Handler should initialize");
+    destroy(handler);
     
     writeln("✓ JavaScript handler works in Node.js mode");
 }
@@ -285,6 +286,7 @@ unittest
     
     auto handler = new JavaScriptHandler();
     auto result = testBuild(handler, target, config);
+    destroy(handler);
     
     Assert.isTrue(result.isErr, "Build should fail with missing source file");
     
@@ -330,6 +332,7 @@ unittest
     
     auto handler = new JavaScriptHandler();
     auto result = testBuild(handler, target, config);
+    destroy(handler);
     
     // Test Result type - should be either Ok or Err
     Assert.isTrue(result.isOk || result.isErr, "Result should be valid");
@@ -356,6 +359,7 @@ unittest
     
     auto handler = new JavaScriptHandler();
     auto result = testBuild(handler, target, config);
+    destroy(handler);
     
     Assert.isTrue(result.isErr, "Build should fail with no sources");
     

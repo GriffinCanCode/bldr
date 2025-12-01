@@ -162,31 +162,31 @@ struct QueryCommand
         terminal.writeColored("  Examples:", Color.Cyan, Style.Bold);
         terminal.writeln();
         terminal.write("    ");
-        terminal.writeColored("builder query", Color.Green);
+        terminal.writeColored("bldr query", Color.Green);
         terminal.write(" ");
         terminal.writeColored("'deps(//src:app)'", Color.Yellow);
         terminal.writeln();
         
         terminal.write("    ");
-        terminal.writeColored("builder query", Color.Green);
+        terminal.writeColored("bldr query", Color.Green);
         terminal.write(" ");
         terminal.writeColored("'rdeps(//lib:utils) & kind(test, //...)'", Color.Yellow);
         terminal.writeln();
         
         terminal.write("    ");
-        terminal.writeColored("builder query", Color.Green);
+        terminal.writeColored("bldr query", Color.Green);
         terminal.write(" ");
         terminal.writeColored("'shortest(//a:x, //b:y)'", Color.Yellow);
         terminal.writeln();
         
         terminal.write("    ");
-        terminal.writeColored("builder query", Color.Green);
+        terminal.writeColored("bldr query", Color.Green);
         terminal.write(" ");
         terminal.writeColored("'//src/... - //src/test/...'", Color.Yellow);
         terminal.writeln();
         
         terminal.write("    ");
-        terminal.writeColored("builder query", Color.Green);
+        terminal.writeColored("bldr query", Color.Green);
         terminal.write(" ");
         terminal.writeColored("'filter(\"name\", \".*test.*\", //...)' --format=json", Color.Yellow);
         terminal.writeln();

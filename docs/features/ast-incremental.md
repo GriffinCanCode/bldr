@@ -122,13 +122,13 @@ auto builder = new IncrementalCppBuilder(config, null, null, false); // false = 
 
 ```bash
 # Build with AST-level incremental compilation
-builder build //my_app
+bldr build //my_app
 
 # Check AST cache statistics
-builder query //my_app --ast-stats
+bldr query //my_app --ast-stats
 
 # Clear AST cache
-builder clean --ast-cache
+bldr clean --ast-cache
 ```
 
 ## Supported Languages

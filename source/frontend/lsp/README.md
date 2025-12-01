@@ -133,7 +133,7 @@ Build and run the LSP server:
 make lsp
 
 # Run manually (communicates via stdin/stdout)
-./bin/builder-lsp
+./bin/bldr-lsp
 ```
 
 ## 🔌 LSP Features Supported

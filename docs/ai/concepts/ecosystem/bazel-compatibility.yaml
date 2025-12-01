@@ -11,7 +11,7 @@ key_points:
   - "Migration: Automated tools to convert BUILD files"
 
 usage_examples:
-  - description: "Use 'builder migrate' to convert Bazel projects"
+  - description: "Use 'bldr migrate' to convert Bazel projects"
 
 related: [migration, starlark, ecosystem]
 

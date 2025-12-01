@@ -382,7 +382,7 @@ These require programmatic logic beyond template expansion.
 1. **Create JSON file** in `source/languages/specs/`
 2. **Test locally**:
    ```bash
-   builder build //test/mylang:simple
+   bldr build //test/mylang:simple
    ```
 3. **Submit PR** with just the JSON file
 4. **Include example** Builderfile in PR description
@@ -404,8 +404,8 @@ These require programmatic logic beyond template expansion.
 
 1. **TOML Support**: Alternative to JSON for specs
 2. **Embedded Scripts**: Lua snippets for custom logic
-3. **Spec Validation Tool**: `builder validate-spec mylang.json`
-4. **Spec Generator**: `builder generate-spec --lang=mylang`
+3. **Spec Validation Tool**: `bldr validate-spec mylang.json`
+4. **Spec Generator**: `bldr generate-spec --lang=mylang`
 5. **Registry Website**: Browse community specs
 
 ---

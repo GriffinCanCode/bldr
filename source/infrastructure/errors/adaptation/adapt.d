@@ -31,7 +31,7 @@ BuildError fromException(Exception e, ErrorCode code = ErrorCode.InternalError)
     ));
     error.addSuggestion(ErrorSuggestion.command(
         "Run with verbose output for more details",
-        "builder build --verbose"
+        "bldr build --verbose"
     ));
     
     return error;
@@ -53,7 +53,7 @@ Result!(string, BuildError) toResult(LanguageBuildResult buildResult, string tar
             .withSuggestion("Review the build output above for specific errors")
             .withFileCheck("Check that all dependencies are installed")
             .withFileCheck("Verify the build configuration is correct")
-            .withCommand("Run with verbose logging", "builder build --verbose")
+            .withCommand("Run with verbose logging", "bldr build --verbose")
             .build();
         
         return Err!(string, BuildError)(error);

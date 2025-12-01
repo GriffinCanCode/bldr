@@ -140,7 +140,7 @@ make test-tsan
 
 # Or manually:
 dub build --compiler=ldc2 --build=tsan
-./bin/builder build --parallel
+./bin/bldr build --parallel
 ```
 
 ### Interpreting Results

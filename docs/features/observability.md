@@ -404,13 +404,13 @@ writefln("Max depth: %d", stats.maxDepth);
 
 ```bash
 # Generate flamegraph for last build
-builder telemetry flamegraph > flamegraph.svg
+bldr telemetry flamegraph > flamegraph.svg
 
 # Generate for multiple builds
-builder telemetry flamegraph --recent 10 > flamegraph.svg
+bldr telemetry flamegraph --recent 10 > flamegraph.svg
 
 # Export folded stacks
-builder telemetry flamegraph --format folded > stacks.folded
+bldr telemetry flamegraph --format folded > stacks.folded
 ```
 
 ---
@@ -510,7 +510,7 @@ if (listResult.isOk) {
 
 ```bash
 # Record a build
-builder build --record
+bldr build --record
 
 # List recordings
 builder replay list
@@ -532,7 +532,7 @@ builder replay clean --older-than 30d
 ```bash
 # Record multiple builds
 for i in {1..10}; do
-  builder build --record
+  bldr build --record
 done
 
 # Find the failed one
@@ -546,7 +546,7 @@ builder replay <failed-recording-id>
 
 ```bash
 # On CI: Record the failing build
-builder build --record
+bldr build --record
 builder replay export <recording-id> > build-recording.json
 
 # Locally: Import and replay
@@ -558,13 +558,13 @@ builder replay <recording-id>
 
 ```bash
 # Record baseline
-builder build --record
+bldr build --record
 mv .builder-cache/recordings/latest.json baseline.json
 
 # Make changes...
 
 # Record new build
-builder build --record
+bldr build --record
 mv .builder-cache/recordings/latest.json current.json
 
 # Compare
@@ -781,7 +781,7 @@ tracer.finishSpan(span);
   run: |
     export BUILDER_TRACING_ENABLED=1
     export BUILDER_LOG_LEVEL=debug
-    builder build --record
+    bldr build --record
     
 - name: Upload traces
   if: failure()
@@ -809,14 +809,14 @@ tracer.finishSpan(span);
 
 ```bash
 # Generate weekly performance report
-builder telemetry flamegraph --since 7d > weekly-flame.svg
+bldr telemetry flamegraph --since 7d > weekly-flame.svg
 
 # Identify bottlenecks
 grep "duration.*ms" weekly-flame.svg | sort -rn | head -10
 
 # Compare before/after optimization
-builder telemetry flamegraph --before 2025-10-20 > before.svg
-builder telemetry flamegraph --after 2025-10-20 > after.svg
+bldr telemetry flamegraph --before 2025-10-20 > before.svg
+bldr telemetry flamegraph --after 2025-10-20 > after.svg
 ```
 
 ---

@@ -254,10 +254,11 @@ def main():
     
     auto handler = new PythonHandler();
     auto result = testBuild(handler, target, config);
-    destroy(handler);
     
     // Build may succeed (interpreted language) but imports exist
     auto imports = handler.analyzeImports([buildPath(tempDir.getPath(), "needs_dep.py")]);
+    destroy(handler);
+    
     Assert.notEmpty(imports, "Should detect import statements");
     
     writeln("\x1b[32m  ✓ Python missing dependency handling works\x1b[0m");

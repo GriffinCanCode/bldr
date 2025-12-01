@@ -59,19 +59,19 @@ brew install mingw-w64
 
 ### Build all targets
 ```bash
-builder build //...
+bldr build //...
 ```
 
 ### Build specific target
 ```bash
 # Native build
-builder build :app-native
+bldr build :app-native
 
 # ARM64 build
-builder build :app-arm64
+bldr build :app-arm64
 
 # WebAssembly build
-builder build :app-wasm
+bldr build :app-wasm
 ```
 
 ### List available toolchains

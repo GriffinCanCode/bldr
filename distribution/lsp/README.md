@@ -39,28 +39,28 @@ Download the appropriate binary for your platform:
 
 ```bash
 # macOS ARM64
-curl -L -o builder-lsp https://github.com/GriffinCanCode/Builder/releases/latest/download/builder-lsp-darwin-arm64
+curl -L -o builder-lsp https://github.com/GriffinCanCode/Builder/releases/latest/download/bldr-lsp-darwin-arm64
 chmod +x builder-lsp
 sudo mv builder-lsp /usr/local/bin/
 ```
 
 ```bash
 # Linux x86_64
-curl -L -o builder-lsp https://github.com/GriffinCanCode/Builder/releases/latest/download/builder-lsp-linux-x86_64
+curl -L -o builder-lsp https://github.com/GriffinCanCode/Builder/releases/latest/download/bldr-lsp-linux-x86_64
 chmod +x builder-lsp
 sudo mv builder-lsp /usr/local/bin/
 ```
 
 ```powershell
 # Windows (PowerShell)
-curl -L -o builder-lsp.exe https://github.com/GriffinCanCode/Builder/releases/latest/download/builder-lsp-windows-x86_64.exe
+curl -L -o builder-lsp.exe https://github.com/GriffinCanCode/Builder/releases/latest/download/bldr-lsp-windows-x86_64.exe
 # Add to PATH or place in system directory
 ```
 
 #### 2. Via Homebrew (macOS/Linux)
 
 ```bash
-brew install builder
+brew install bldr
 # LSP is included with Builder installation
 ```
 
@@ -83,7 +83,7 @@ yay -S builder-lsp
 git clone https://github.com/GriffinCanCode/Builder.git
 cd Builder
 dub build --build=release
-# Binary will be in bin/builder-lsp
+# Binary will be in bin/bldr-lsp
 ```
 
 ## Editor Integration
@@ -297,7 +297,7 @@ cd Builder
 dub build :lsp --build=release --compiler=ldc2
 ```
 
-The binary will be output to `bin/builder-lsp`.
+The binary will be output to `bin/bldr-lsp`.
 
 ### Cross-compilation
 
@@ -380,7 +380,7 @@ cd tests
 
 2. Copy binaries to distribution folder:
    ```bash
-   cp bin/builder-lsp-* distribution/lsp/binaries/
+   cp bin/bldr-lsp-* distribution/lsp/binaries/
    ```
 
 3. Create release on GitHub with binaries attached

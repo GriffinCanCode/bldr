@@ -104,7 +104,7 @@ xdg-open benchmark-scale-report.md  # Linux
 
 ```bash
 # Check Builder binary
-ls -lh bin/builder
+ls -lh bin/bldr
 
 # Clean everything
 rm -rf bench-workspace integration-bench-workspace benchmark-*.md
@@ -223,7 +223,7 @@ dub run --single scale_benchmark.d
 
 **Usage**:
 ```bash
-dub run --single integration_bench.d -- --builder=./bin/builder
+dub run --single integration_bench.d -- --builder=./bin/bldr
 ```
 
 ### run-scale-benchmarks.sh

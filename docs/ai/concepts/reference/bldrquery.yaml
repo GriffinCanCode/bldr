@@ -12,10 +12,10 @@ key_points:
   - "Scriptable: Output in JSON/text for tools"
 
 usage_examples:
-  - command: "builder query 'deps(//main)'"
+  - command: "bldr query 'deps(//main)'"
     description: "List all dependencies of //main"
   
-  - command: "builder query 'rdeps(//common/lib)'"
+  - command: "bldr query 'rdeps(//common/lib)'"
     description: "List all targets depending on //common/lib"
 
 related: [cli, targets, dependencies]

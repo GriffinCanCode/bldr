@@ -11,7 +11,7 @@ key_points:
   - "Selection: --config=name"
 
 usage_examples:
-  - command: "builder build --config=asan"
+  - command: "bldr build --config=asan"
     description: "Build with Address Sanitizer"
 
 related: [cli, workspace, performance]

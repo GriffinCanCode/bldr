@@ -3,7 +3,7 @@ category: concepts
 summary: "Command Line Interface - The primary way to interact with Builder"
 definition: |
   The Builder CLI provides a unified interface for all build, test, and management operations.
-  It follows a consistent `builder <command> [subcommand] [flags]` structure.
+  It follows a consistent `bldr <command> [subcommand] [flags]` structure.
 
 key_points:
   - "Unified entry point: One tool for all languages"
@@ -12,18 +12,18 @@ key_points:
   - "Intelligent defaults: Zero-config for most common tasks"
 
 usage_examples:
-  - command: "builder build"
+  - command: "bldr build"
     description: "Build the current project"
   
-  - command: "builder test"
+  - command: "bldr test"
     description: "Run all tests"
 
-  - command: "builder explain list"
+  - command: "bldr explain list"
     description: "List all documentation topics"
 
 related: [workspace, targets, wizard]
 
 next_steps: |
-  - Run 'builder --help' to see all available commands
-  - Try 'builder explain <command>' for specific command help
+  - Run 'bldr --help' to see all available commands
+  - Try 'bldr explain <command>' for specific command help
 

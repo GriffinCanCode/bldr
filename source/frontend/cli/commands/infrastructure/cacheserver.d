@@ -89,7 +89,7 @@ struct CacheServerCommand
     {
         writeln("Builder Cache Server");
         writeln();
-        writeln("Usage: builder cache-server [options]");
+        writeln("Usage: bldr cache-server [options]");
         writeln();
         writeln("Options:");
         writeln("  -h, --host <host>         Host to bind to (default: 0.0.0.0)");
@@ -101,13 +101,13 @@ struct CacheServerCommand
         writeln();
         writeln("Examples:");
         writeln("  # Start server on default port");
-        writeln("  builder cache-server");
+        writeln("  bldr cache-server");
         writeln();
         writeln("  # Start server with authentication");
-        writeln("  builder cache-server --auth my-secret-token --port 8080");
+        writeln("  bldr cache-server --auth my-secret-token --port 8080");
         writeln();
         writeln("  # Start server with custom storage");
-        writeln("  builder cache-server --storage /var/cache/builder --max-size 50000000000");
+        writeln("  bldr cache-server --storage /var/cache/bldr --max-size 50000000000");
         writeln();
         writeln("Client Configuration:");
         writeln("  Set environment variables to use remote cache:");

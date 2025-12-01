@@ -120,7 +120,7 @@ struct VerifyCommand
         if (targetSpec.empty)
         {
             stderr.writeln("Error: No target specified");
-            stderr.writeln("Usage: builder verify <target> [options]");
+            stderr.writeln("Usage: bldr verify <target> [options]");
             return 1;
         }
         
@@ -404,7 +404,7 @@ struct VerifyCommand
     
     private static void printHelp() @system
     {
-        writeln("Usage: builder verify <target> [options]");
+        writeln("Usage: bldr verify <target> [options]");
         writeln();
         writeln("Verify build determinism by comparing outputs across multiple builds");
         writeln();
@@ -422,10 +422,10 @@ struct VerifyCommand
         writeln("  -h, --help            Show this help");
         writeln();
         writeln("Examples:");
-        writeln("  builder verify //main:app");
-        writeln("  builder verify //main:app --iterations 5");
-        writeln("  builder verify //main:app --quick");
-        writeln("  builder verify //main:app --strict --strategy bitwise");
+        writeln("  bldr verify //main:app");
+        writeln("  bldr verify //main:app --iterations 5");
+        writeln("  bldr verify //main:app --quick");
+        writeln("  bldr verify //main:app --strict --strategy bitwise");
     }
 }
 

@@ -12,15 +12,15 @@ key_points:
   - "Rich reporting: Detailed pass/fail output and timing"
 
 usage_examples:
-  - command: "builder test"
+  - command: "bldr test"
     description: "Run all tests in the workspace"
   
-  - command: "builder test //core:..."
+  - command: "bldr test //core:..."
     description: "Run tests for specific targets"
 
 related: [cli, targets, caching]
 
 next_steps: |
   - Define test targets in your builder.yml
-  - Run 'builder test' to verify your code
+  - Run 'bldr test' to verify your code
 

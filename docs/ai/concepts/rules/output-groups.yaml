@@ -11,7 +11,7 @@ key_points:
   - "Selection: --output_groups=name"
 
 usage_examples:
-  - command: "builder build --output_groups=debug_symbols //:app"
+  - command: "bldr build --output_groups=debug_symbols //:app"
     description: "Build only debug symbols"
 
 related: [artifact-management, targets, cli]

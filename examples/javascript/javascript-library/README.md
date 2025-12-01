@@ -14,12 +14,12 @@ Demonstrates building a distributable JavaScript library with multiple output fo
 
 ```bash
 # Build all formats
-../../bin/builder build //.:lib-esm //.:lib-cjs //.:lib-umd
+../../bin/bldr build //.:lib-esm //.:lib-cjs //.:lib-umd
 
 # Or build individually
-../../bin/builder build //.:lib-esm
-../../bin/builder build //.:lib-cjs
-../../bin/builder build //.:lib-umd
+../../bin/bldr build //.:lib-esm
+../../bin/bldr build //.:lib-cjs
+../../bin/bldr build //.:lib-umd
 ```
 
 ## Output

@@ -69,7 +69,7 @@ abstract class BaseMigrator : IMigrator
         if (context.length > 0)
             error.addContext(ErrorContext("migration_context", context));
         error.addSuggestion("Check the input file syntax is valid for " ~ systemName());
-        error.addSuggestion("Review migration limitations using 'builder migrate --help'");
+        error.addSuggestion("Review migration limitations using 'bldr migrate --help'");
         return error;
     }
     

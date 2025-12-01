@@ -21,7 +21,7 @@ npm install
 ## Build
 
 ```bash
-../../bin/builder build
+../../bin/bldr build
 ```
 
 ## Run
@@ -34,7 +34,7 @@ For development with live reload, you could use:
 
 ```bash
 # Build on file changes
-../../bin/builder build --watch
+../../bin/bldr build --watch
 ```
 
 ## Configuration
@@ -59,7 +59,7 @@ For production builds with optimization:
 
 ```bash
 # Already configured for production with minify: true
-../../bin/builder build
+../../bin/bldr build
 ```
 
 The bundle is automatically minified and optimized.

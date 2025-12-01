@@ -8,7 +8,7 @@ NPM packages for distributing Builder and related tools.
 
 ## Planned Packages
 
-### @builder-cli/builder
+### @builder-cli/bldr
 
 Main Builder build system as an NPM package.
 
@@ -16,14 +16,14 @@ Main Builder build system as an NPM package.
 
 **Installation**:
 ```bash
-npm install -g @builder-cli/builder
+npm install -g @builder-cli/bldr
 # or project-local
-npm install --save-dev @builder-cli/builder
+npm install --save-dev @builder-cli/bldr
 ```
 
 **Usage**:
 ```bash
-npx builder build
+npx bldr build
 ```
 
 **Implementation approach**:
@@ -46,7 +46,7 @@ npm install -g @builder-cli/lsp
 **Usage**:
 ```javascript
 // VSCode extension
-const serverPath = require.resolve('@builder-cli/lsp/bin/builder-lsp');
+const serverPath = require.resolve('@builder-cli/lsp/bin/bldr-lsp');
 ```
 
 **Implementation approach**:
@@ -269,7 +269,7 @@ jobs:
         run: ./tools/build-npm-packages.sh
       - name: Publish
         run: |
-          cd distribution/npm/@builder-cli/builder
+          cd distribution/npm/@builder-cli/bldr
           npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -314,14 +314,14 @@ npm pack
 npm install -g ./builder-cli-builder-1.0.0.tgz
 
 # Test functionality
-builder --version
-builder build
+bldr --version
+bldr build
 
 # Test in project
 mkdir test-project && cd test-project
 npm init -y
 npm install ../builder-cli-builder-1.0.0.tgz
-npx builder --help
+npx bldr --help
 ```
 
 ## Maintenance

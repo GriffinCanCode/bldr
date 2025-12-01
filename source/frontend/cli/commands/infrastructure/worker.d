@@ -97,7 +97,7 @@ void printWorkerHelp()
     writeln("Builder Worker - Distributed build worker");
     writeln();
     writeln("USAGE:");
-    writeln("  builder worker [OPTIONS]");
+    writeln("  bldr worker [OPTIONS]");
     writeln();
     writeln("OPTIONS:");
     writeln("  --coordinator <URL>    Coordinator URL (required)");
@@ -108,13 +108,13 @@ void printWorkerHelp()
     writeln();
     writeln("EXAMPLES:");
     writeln("  # Connect to local coordinator");
-    writeln("  builder worker --coordinator http://localhost:9000");
+    writeln("  bldr worker --coordinator http://localhost:9000");
     writeln();
     writeln("  # Custom parallelism");
-    writeln("  builder worker --coordinator http://coordinator:9000 --parallelism 16");
+    writeln("  bldr worker --coordinator http://coordinator:9000 --parallelism 16");
     writeln();
     writeln("  # Disable sandboxing (for development)");
-    writeln("  builder worker --coordinator http://localhost:9000 --no-sandbox");
+    writeln("  bldr worker --coordinator http://localhost:9000 --no-sandbox");
 }
 
 

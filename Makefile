@@ -80,27 +80,27 @@ clean:
 # Install to system
 install: build
 	@echo "Installing to /usr/local/bin..."
-	@cp bin/builder /usr/local/bin/
+	@cp bin/bldr /usr/local/bin/
 	@echo "Installed successfully!"
 
 # Install LSP server
 install-lsp: build-lsp
-	@echo "Installing Builder LSP to /usr/local/bin..."
-	@cp bin/builder-lsp /usr/local/bin/
+	@echo "Installing bldr LSP to /usr/local/bin..."
+	@cp bin/bldr-lsp /usr/local/bin/
 	@echo "LSP server installed successfully!"
 
-# Install both builder and LSP server
+# Install both bldr and LSP server
 install-all: build-all
 	@echo "Installing to /usr/local/bin..."
-	@cp bin/builder /usr/local/bin/
-	@cp bin/builder-lsp /usr/local/bin/
+	@cp bin/bldr /usr/local/bin/
+	@cp bin/bldr-lsp /usr/local/bin/
 	@echo "Installed successfully!"
 
 # Uninstall from system
 uninstall:
 	@echo "Uninstalling..."
-	@rm -f /usr/local/bin/builder
-	@rm -f /usr/local/bin/builder-lsp
+	@rm -f /usr/local/bin/bldr
+	@rm -f /usr/local/bin/bldr-lsp
 	@echo "Uninstalled successfully!"
 
 # Run benchmarks
@@ -150,7 +150,7 @@ docs-clean:
 extension: build-lsp
 	@echo "Packaging VS Code extension..."
 	@mkdir -p tools/vscode/builder-lang/bin
-	@cp bin/builder-lsp tools/vscode/builder-lang/bin/
+	@cp bin/bldr-lsp tools/vscode/builder-lang/bin/
 	@cd tools/vscode/builder-lang && npm install && npx vsce package
 	@echo "Extension packaged: tools/vscode/builder-lang/builder-lang-*.vsix"
 
@@ -162,13 +162,13 @@ install-extension: extension
 
 # Show help
 help:
-	@echo "Builder Makefile"
+	@echo "bldr Makefile"
 	@echo ""
 	@echo "Targets:"
 	@echo "  make build             - Build release version"
 	@echo "  make build-lsp         - Build LSP server"
 	@echo "  make lsp               - Alias for build-lsp"
-	@echo "  make build-all         - Build both builder and LSP server"
+	@echo "  make build-all         - Build both bldr and LSP server"
 	@echo "  make debug             - Build debug version"
 	@echo "  make test              - Run tests (basic)"
 	@echo "  make tests             - Run full test suite"
@@ -179,9 +179,9 @@ help:
 	@echo "  make bench             - Run benchmarks"
 	@echo "  make examples          - Test all example projects"
 	@echo "  make clean             - Clean build artifacts"
-	@echo "  make install           - Install builder to /usr/local/bin"
+	@echo "  make install           - Install bldr to /usr/local/bin"
 	@echo "  make install-lsp       - Install LSP server to /usr/local/bin"
-	@echo "  make install-all       - Install both builder and LSP server"
+	@echo "  make install-all       - Install both bldr and LSP server"
 	@echo "  make uninstall         - Uninstall from system"
 	@echo "  make extension         - Package VS Code extension with LSP"
 	@echo "  make install-extension - Build and install VS Code extension"

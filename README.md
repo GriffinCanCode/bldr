@@ -1,4 +1,4 @@
-# Builder
+# bldr
 
 A high-performance build system for polyglot monorepos, featuring runtime dependency discovery, lock-free parallel execution, and comprehensive incremental compilation. Built in D for maximum performance with zero-cost compile-time abstractions.
 
@@ -56,7 +56,7 @@ Plugins are standalone executables communicating via JSON-RPC 2.0 over stdin/std
 **Why This Matters:**
 - **Language Agnostic**: Write plugins in Python, Go, Rust, JavaScript—anything
 - **Zero ABI Coupling**: No shared library compatibility nightmares
-- **Fault Isolation**: Plugin crashes don't affect Builder
+- **Fault Isolation**: Plugin crashes don't affect bldr
 - **Simple Distribution**: Each plugin is a separate Homebrew formula
 - **Easy Testing**: Plugins are just executables with stdin/stdout
 
@@ -255,11 +255,11 @@ Enterprise-grade test execution beyond industry standards:
 Bazel-compatible query DSL for exploring dependency graphs:
 
 ```bash
-builder query 'deps(//src:app)'              # All dependencies
-builder query 'rdeps(//lib:utils)'           # Reverse dependencies  
-builder query 'shortest(//a:x, //b:y)'       # Shortest path
-builder query 'kind(test, //...)'            # Filter by type
-builder query 'deps(//...) & kind(library)'  # Set operations
+bldr query 'deps(//src:app)'              # All dependencies
+bldr query 'rdeps(//lib:utils)'           # Reverse dependencies  
+bldr query 'shortest(//a:x, //b:y)'       # Shortest path
+bldr query 'kind(test, //...)'            # Filter by type
+bldr query 'deps(//...) & kind(library)'  # Set operations
 ```
 
 **Implementation:** Algebraic query language with visitor pattern AST, optimized graph algorithms (BFS/DFS), multiple output formats (pretty, JSON, DOT).
@@ -291,19 +291,19 @@ Comprehensive migration tools support moving from any major build system to Buil
 **Usage:**
 ```bash
 # Auto-detect and migrate
-builder migrate --auto BUILD
+bldr migrate --auto BUILD
 
 # Specify source system
-builder migrate --from=cmake --input=CMakeLists.txt
+bldr migrate --from=cmake --input=CMakeLists.txt
 
 # Preview without writing
-builder migrate --auto pom.xml --dry-run
+bldr migrate --auto pom.xml --dry-run
 
 # List all supported systems
-builder migrate list
+bldr migrate list
 
 # Get system-specific info
-builder migrate info bazel
+bldr migrate info bazel
 ```
 
 **Architecture:** Composable parser architecture with unified intermediate representation. Each migrator implements `IMigrator` interface, registered via central `MigratorRegistry` (follows `LanguageRegistry` pattern). Clean separation: parse → transform → emit.
@@ -315,9 +315,9 @@ builder migrate info bazel
 Integrated explanation engine designed for the LLM era, providing semantic understanding of build concepts directly in the terminal:
 
 ```bash
-builder explain caching              # Explain multi-tier architecture
-builder explain determinism          # Understanding reproducibility
-builder explain "remote execution"   # Fuzzy search for concepts
+bldr explain caching              # Explain multi-tier architecture
+bldr explain determinism          # Understanding reproducibility
+bldr explain "remote execution"   # Fuzzy search for concepts
 ```
 
 **Features:**
@@ -351,8 +351,8 @@ Event-driven rendering with lock-free progress tracking:
 ```bash
 # macOS
 brew install ldc dub
-git clone https://github.com/YourUsername/Builder.git
-cd Builder
+git clone https://github.com/GriffinCanCode/bldr.git
+cd bldr
 dub build --build=release
 
 # Linux
@@ -360,43 +360,43 @@ sudo apt install ldc dub  # or equivalent
 dub build --build=release
 
 # Verify
-./bin/builder --version
+./bin/bldr --version
 ```
 
 ## Quick Start
 
 ```bash
 # Initialize new project
-builder init
+bldr init
 
 # Use interactive wizard
-builder wizard
+bldr wizard
 
 # Migrate from other build systems
-builder migrate --from=bazel --input=BUILD --output=Builderfile
-builder migrate --auto CMakeLists.txt  # Auto-detect build system
+bldr migrate --from=bazel --input=BUILD --output=Builderfile
+bldr migrate --auto CMakeLists.txt  # Auto-detect build system
 
 # Build all targets
-builder build
+bldr build
 
 # Build specific target
-builder build //path/to:target
+bldr build //path/to:target
 
 # Run tests with JUnit output
-builder test --junit results.xml
+bldr test --junit results.xml
 
 # Watch mode for development
-builder build --watch
+bldr build --watch
 
 # Query dependencies
-builder query 'deps(//src:app)'
+bldr query 'deps(//src:app)'
 
 # View analytics
-builder telemetry recent 10
+bldr telemetry recent 10
 
 # Explain concepts
-builder explain caching
-builder explain "remote execution"
+bldr explain caching
+bldr explain "remote execution"
 
 # Install VS Code extension
 code --install-extension tools/vscode/builder-lang-2.0.0.vsix
@@ -462,8 +462,8 @@ target("tests") {
 
 ## Industry Comparison
 
-| Feature | Bazel | Buck2 | CMake | Builder |
-|---------|-------|-------|-------|---------|
+| Feature | Bazel | Buck2 | CMake | bldr |
+|---------|-------|-------|-------|------|
 | Dynamic Build Graphs | ❌ | ❌ | ❌ | ✅ |
 | Cost Optimization | ❌ | ❌ | ❌ | ✅ |
 | SIMD Serialization | ⚠️ Protobuf | ⚠️ bincode | ❌ | ✅ |

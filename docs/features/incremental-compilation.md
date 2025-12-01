@@ -331,7 +331,7 @@ context.depRecorder = (source, deps) {
 
 Combine with watch mode for optimal developer experience:
 ```bash
-builder build --watch --incremental
+bldr build --watch --incremental
 ```
 
 ### 3. Configure Include/Import Paths
@@ -349,7 +349,7 @@ auto analyzer = new CppDependencyAnalyzer([
 
 Dependency caches can grow over time. Clear periodically:
 ```bash
-builder clean --incremental-cache
+bldr clean --incremental-cache
 ```
 
 ### 5. CI/CD Integration
@@ -357,10 +357,10 @@ builder clean --incremental-cache
 For CI builds, consider full rebuilds with caching:
 ```bash
 # Development: incremental
-builder build --incremental
+bldr build --incremental
 
 # CI: full with caching for reproducibility
-builder build --strategy=full
+bldr build --strategy=full
 ```
 
 ## Limitations

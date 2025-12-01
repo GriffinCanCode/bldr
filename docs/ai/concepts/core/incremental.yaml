@@ -128,7 +128,7 @@ usage:
   configuration: "Use BUILDER_INCREMENTAL_STRATEGY environment variable"
   
   view_analysis: |
-    builder build //target --explain-rebuild
+    bldr build //target --explain-rebuild
     Output:
       Rebuilding 8/100 files:
         main.cpp: dependency changed (types.h)
@@ -174,7 +174,7 @@ troubleshooting:
     solution: "Set BUILDER_TRACK_SYSTEM_HEADERS=false"
 
 next_steps: |
-  - See 'builder explain action-cache' for complementary optimization
-  - See 'builder explain caching' for overall caching strategy
-  - See 'builder explain example incremental' for code examples
+  - See 'bldr explain action-cache' for complementary optimization
+  - See 'bldr explain caching' for overall caching strategy
+  - See 'bldr explain example incremental' for code examples
 

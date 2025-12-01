@@ -11,7 +11,7 @@ key_points:
   - "Audit report: detailed diff of non-matching artifacts"
 
 usage_examples:
-  - command: "builder verify --reproducible"
+  - command: "bldr verify --reproducible"
     description: "Run reproducibility check"
 
 related: [determinism, verification, hermetic]

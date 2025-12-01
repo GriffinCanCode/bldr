@@ -49,6 +49,6 @@ hermetic_vs_deterministic:
 related: [determinism, caching, remote-execution, sandbox]
 
 next_steps: |
-  - See 'builder explain determinism' for the next level of reproducibility
-  - See 'builder explain remote-execution' for how hermeticity enables distributed builds
+  - See 'bldr explain determinism' for the next level of reproducibility
+  - See 'bldr explain remote-execution' for how hermeticity enables distributed builds
 

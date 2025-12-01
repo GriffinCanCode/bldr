@@ -82,7 +82,7 @@ struct SuggestionGenerator
                 break;
                 
             case ErrorCode.InvalidBuildFile:
-                suggestions ~= ErrorSuggestion.command("Create a valid Builderfile", "builder init");
+                suggestions ~= ErrorSuggestion.command("Create a valid Builderfile", "bldr init");
                 suggestions ~= ErrorSuggestion.docs("See Builderfile examples", "docs/user-guides/examples.md");
                 suggestions ~= ErrorSuggestion("Check for required fields: name, type, language");
                 break;
@@ -104,13 +104,13 @@ struct SuggestionGenerator
                 break;
                 
             case ErrorCode.InvalidConfiguration:
-                suggestions ~= ErrorSuggestion.command("Reinitialize configuration", "builder init");
+                suggestions ~= ErrorSuggestion.command("Reinitialize configuration", "bldr init");
                 suggestions ~= ErrorSuggestion.docs("Review configuration guide", "docs/user-guides/examples.md");
                 break;
                 
             // Analysis Errors (3000-3999)
             case ErrorCode.AnalysisFailed:
-                suggestions ~= ErrorSuggestion.command("Run with verbose output", "builder build --verbose");
+                suggestions ~= ErrorSuggestion.command("Run with verbose output", "bldr build --verbose");
                 suggestions ~= ErrorSuggestion("Check for syntax errors in source files");
                 break;
                 
@@ -121,13 +121,13 @@ struct SuggestionGenerator
                 break;
                 
             case ErrorCode.CircularDependency:
-                suggestions ~= ErrorSuggestion.command("Visualize dependency graph to identify cycle", "builder query --graph");
+                suggestions ~= ErrorSuggestion.command("Visualize dependency graph to identify cycle", "bldr query --graph");
                 suggestions ~= ErrorSuggestion("Break the cycle by removing or refactoring dependencies");
                 break;
                 
             case ErrorCode.MissingDependency:
                 suggestions ~= ErrorSuggestion.config("Add missing dependency to target configuration");
-                suggestions ~= ErrorSuggestion.command("Check available targets", "builder query --targets");
+                suggestions ~= ErrorSuggestion.command("Check available targets", "bldr query --targets");
                 break;
                 
             case ErrorCode.InvalidImport:
@@ -137,8 +137,8 @@ struct SuggestionGenerator
                 
             // Build Errors (1000-1999)
             case ErrorCode.BuildFailed:
-                suggestions ~= ErrorSuggestion.command("Run with verbose output for details", "builder build --verbose");
-                suggestions ~= ErrorSuggestion.command("Clean and rebuild", "builder clean && builder build");
+                suggestions ~= ErrorSuggestion.command("Run with verbose output for details", "bldr build --verbose");
+                suggestions ~= ErrorSuggestion.command("Clean and rebuild", "bldr clean && bldr build");
                 suggestions ~= ErrorSuggestion("Check compiler/tool output for specific errors");
                 break;
                 
@@ -149,13 +149,13 @@ struct SuggestionGenerator
                 
             case ErrorCode.TargetNotFound:
                 suggestions ~= ErrorSuggestion("Check if the target name is spelled correctly (typos detected automatically)");
-                suggestions ~= ErrorSuggestion.command("List available targets", "builder query --targets");
+                suggestions ~= ErrorSuggestion.command("List available targets", "bldr query --targets");
                 suggestions ~= ErrorSuggestion.fileCheck("Check target name spelling in Builderfile");
                 break;
                 
             case ErrorCode.HandlerNotFound:
                 suggestions ~= ErrorSuggestion("Verify language handler is installed for this file type");
-                suggestions ~= ErrorSuggestion.command("List supported languages", "builder query --languages");
+                suggestions ~= ErrorSuggestion.command("List supported languages", "bldr query --languages");
                 break;
                 
             case ErrorCode.OutputMissing:
@@ -165,7 +165,7 @@ struct SuggestionGenerator
                 
             // Cache Errors (4000-4999)
             case ErrorCode.CacheLoadFailed:
-                suggestions ~= ErrorSuggestion.command("Clear cache and retry", "builder clean --cache");
+                suggestions ~= ErrorSuggestion.command("Clear cache and retry", "bldr clean --cache");
                 suggestions ~= ErrorSuggestion.fileCheck("Check cache directory permissions");
                 break;
                 
@@ -175,7 +175,7 @@ struct SuggestionGenerator
                 break;
                 
             case ErrorCode.CacheCorrupted:
-                suggestions ~= ErrorSuggestion.command("Clear the corrupted cache", "builder clean --cache");
+                suggestions ~= ErrorSuggestion.command("Clear the corrupted cache", "bldr clean --cache");
                 suggestions ~= ErrorSuggestion("Rebuild from clean state");
                 break;
                 
@@ -185,7 +185,7 @@ struct SuggestionGenerator
                 break;
                 
             case ErrorCode.CacheTooLarge:
-                suggestions ~= ErrorSuggestion.command("Clean old cache entries", "builder clean --cache");
+                suggestions ~= ErrorSuggestion.command("Clean old cache entries", "bldr clean --cache");
                 suggestions ~= ErrorSuggestion.config("Configure cache size limits");
                 break;
                 
@@ -226,7 +226,7 @@ struct SuggestionGenerator
                 break;
                 
             case ErrorCode.UnsupportedLanguage:
-                suggestions ~= ErrorSuggestion.command("List supported languages", "builder query --languages");
+                suggestions ~= ErrorSuggestion.command("List supported languages", "bldr query --languages");
                 suggestions ~= ErrorSuggestion.docs("See language support docs", "docs/features/languages.md");
                 suggestions ~= ErrorSuggestion("Consider adding a custom language handler");
                 break;
@@ -239,18 +239,18 @@ struct SuggestionGenerator
                 
             // Plugin Errors (13000-13999)
             case ErrorCode.PluginNotFound:
-                suggestions ~= ErrorSuggestion.command("List available plugins", "builder plugin list");
-                suggestions ~= ErrorSuggestion.command("Install plugin if needed", "builder plugin install <name>");
+                suggestions ~= ErrorSuggestion.command("List available plugins", "bldr plugin list");
+                suggestions ~= ErrorSuggestion.command("Install plugin if needed", "bldr plugin install <name>");
                 suggestions ~= ErrorSuggestion.fileCheck("Check plugin path configuration");
                 break;
                 
             case ErrorCode.PluginLoadFailed:
                 suggestions ~= ErrorSuggestion("Check plugin file permissions and format");
-                suggestions ~= ErrorSuggestion.command("Verify plugin with", "builder plugin validate <plugin>");
+                suggestions ~= ErrorSuggestion.command("Verify plugin with", "bldr plugin validate <plugin>");
                 break;
                 
             case ErrorCode.PluginVersionMismatch:
-                suggestions ~= ErrorSuggestion.command("Update plugin to compatible version", "builder plugin update <name>");
+                suggestions ~= ErrorSuggestion.command("Update plugin to compatible version", "bldr plugin update <name>");
                 suggestions ~= ErrorSuggestion.docs("Check plugin compatibility docs");
                 break;
                 
@@ -279,7 +279,7 @@ struct SuggestionGenerator
                 
             // Config Errors (16000-16999)
             case ErrorCode.InvalidWorkspace:
-                suggestions ~= ErrorSuggestion.command("Initialize workspace", "builder init --workspace");
+                suggestions ~= ErrorSuggestion.command("Initialize workspace", "bldr init --workspace");
                 suggestions ~= ErrorSuggestion.fileCheck("Check Builderspace file syntax");
                 break;
                 
@@ -300,7 +300,7 @@ struct SuggestionGenerator
                 
             // Migration Errors (17000-17999)
             case ErrorCode.MigrationFailed:
-                suggestions ~= ErrorSuggestion.command("Try migration wizard", "builder migrate");
+                suggestions ~= ErrorSuggestion.command("Try migration wizard", "bldr migrate");
                 suggestions ~= ErrorSuggestion.docs("See migration guide", "docs/user-guides/migration.md");
                 suggestions ~= ErrorSuggestion("Report complex migrations on issue tracker");
                 break;
@@ -326,7 +326,7 @@ struct SuggestionGenerator
             case ErrorCode.InternalError:
                 suggestions ~= ErrorSuggestion("This is likely a bug in Builder");
                 suggestions ~= ErrorSuggestion.docs("Please report this issue", "https://github.com/griffinstormer/Builder/issues");
-                suggestions ~= ErrorSuggestion.command("Run with verbose output for more details", "builder build --verbose");
+                suggestions ~= ErrorSuggestion.command("Run with verbose output for more details", "bldr build --verbose");
                 break;
                 
             case ErrorCode.NotImplemented:

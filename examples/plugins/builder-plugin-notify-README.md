@@ -100,7 +100,7 @@ export BUILDER_NOTIFY_THRESHOLD_MS="30000"  # 30 seconds
     BUILDER_GIT_BRANCH: ${{ github.ref_name }}
     BUILDER_GIT_COMMIT: ${{ github.sha }}
     BUILDER_USER: ${{ github.actor }}
-  run: builder build //app:main
+  run: bldr build //app:main
 ```
 
 ### GitLab CI
@@ -111,7 +111,7 @@ build:
     - export BUILDER_SLACK_WEBHOOK="${SLACK_WEBHOOK}"
     - export BUILDER_GIT_BRANCH="${CI_COMMIT_REF_NAME}"
     - export BUILDER_GIT_COMMIT="${CI_COMMIT_SHA}"
-    - builder build //app:main
+    - bldr build //app:main
 ```
 
 ## Test

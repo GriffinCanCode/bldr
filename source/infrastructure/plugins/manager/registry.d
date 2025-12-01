@@ -96,8 +96,8 @@ class PluginRegistry : IPluginRegistry {
             ErrorCode.ToolNotFound
         );
         err.addSuggestion("Install the plugin: brew install builder-plugin-" ~ name);
-        err.addSuggestion("List available plugins: builder plugin list");
-        err.addSuggestion("Refresh plugin registry: builder plugin refresh");
+        err.addSuggestion("List available plugins: bldr plugin list");
+        err.addSuggestion("Refresh plugin registry: bldr plugin refresh");
         return Err!(PluginInfo, BuildError)(err);
     }
     

@@ -11,7 +11,7 @@ key_points:
   - "Bash: Requires MSYS2 or Git Bash for some rules"
 
 usage_examples:
-  - command: "builder build //..."
+  - command: "bldr build //..."
     description: "Works natively in PowerShell/CMD"
 
 related: [platforms, cpp-support, cli]

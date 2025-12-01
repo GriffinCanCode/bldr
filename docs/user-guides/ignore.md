@@ -103,7 +103,7 @@ Builder will also read patterns from `.gitignore` files in your project root. Th
 The `.builderignore` file is automatically created when you run:
 
 ```bash
-builder init
+bldr init
 ```
 
 The generated file will include patterns specific to the languages detected in your project.

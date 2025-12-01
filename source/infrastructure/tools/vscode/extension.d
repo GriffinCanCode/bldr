@@ -7,16 +7,16 @@ import std.string : strip, split;
 import infrastructure.utils.logging.logger;
 
 /// VS Code Extension Manager
-/// Handles automatic installation of Builder's VS Code extension
+/// Handles automatic installation of bldr's VS Code extension
 struct VSCodeExtension
 {
-    private static immutable string EXTENSION_NAME = "builder-lang-1.0.0.vsix";
+    private static immutable string EXTENSION_NAME = "builder-lang-2.0.0.vsix";
     
-    /// Install the Builder VS Code extension
+    /// Install the bldr VS Code extension
     /// Returns: true if installation succeeded, false otherwise
     static bool install()
     {
-        Logger.info("Installing Builder VS Code extension...");
+        Logger.info("Installing bldr VS Code extension...");
         
         auto vsixPath = findExtensionVSIX();
         if (vsixPath.length == 0)

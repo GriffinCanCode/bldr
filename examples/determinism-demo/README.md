@@ -22,7 +22,7 @@ Demonstrates how Builder achieves bit-for-bit reproducible builds by:
 
 ```bash
 # Build with determinism enforcement
-builder build //demo-app:demo-app
+bldr build //demo-app:demo-app
 
 # The build will use:
 # - Fixed timestamp (SOURCE_DATE_EPOCH=1640995200)
@@ -35,7 +35,7 @@ builder build //demo-app:demo-app
 
 ```bash
 # Build without determinism
-builder build //demo-app:non-deterministic-app
+bldr build //demo-app:non-deterministic-app
 
 # This build will vary between runs
 ```
@@ -46,7 +46,7 @@ builder build //demo-app:non-deterministic-app
 
 ```bash
 # Build 3 times and verify outputs match
-builder verify-determinism //demo-app:demo-app --iterations=3
+bldr verify-determinism //demo-app:demo-app --iterations=3
 ```
 
 ### Expected Output
@@ -63,9 +63,9 @@ Build 3/3: hash=abc123...
 
 ```bash
 # Build twice
-builder build //demo-app:demo-app -o bin/app1
-builder clean
-builder build //demo-app:demo-app -o bin/app2
+bldr build //demo-app:demo-app -o bin/app1
+bldr clean
+bldr build //demo-app:demo-app -o bin/app2
 
 # Compare outputs
 sha256sum bin/app1 bin/app2
@@ -220,8 +220,8 @@ go build -trimpath -buildmode=default
 
 HASHES=()
 for i in {1..10}; do
-    builder clean //demo-app:demo-app
-    builder build //demo-app:demo-app
+    bldr clean //demo-app:demo-app
+    bldr build //demo-app:demo-app
     HASH=$(sha256sum bin/demo-app | cut -d' ' -f1)
     HASHES+=("$HASH")
     echo "Build $i: $HASH"
@@ -241,11 +241,11 @@ fi
 
 ```bash
 # Build on machine A
-ssh machineA "cd project && builder build //demo-app:demo-app"
+ssh machineA "cd project && bldr build //demo-app:demo-app"
 scp machineA:project/bin/demo-app /tmp/demo-app-A
 
 # Build on machine B
-ssh machineB "cd project && builder build //demo-app:demo-app"
+ssh machineB "cd project && bldr build //demo-app:demo-app"
 scp machineB:project/bin/demo-app /tmp/demo-app-B
 
 # Verify they match
@@ -264,14 +264,14 @@ cmp /tmp/demo-app-A /tmp/demo-app-B && echo "Builds match!"
 2. **Enable debug mode:**
    ```bash
    export DETSHIM_DEBUG=1
-   builder build //demo-app:demo-app
+   bldr build //demo-app:demo-app
    ```
 
 3. **Analyze differences:**
    ```bash
    # Build twice
-   builder build //demo-app:demo-app -o bin/app1
-   builder clean && builder build //demo-app:demo-app -o bin/app2
+   bldr build //demo-app:demo-app -o bin/app1
+   bldr clean && bldr build //demo-app:demo-app -o bin/app2
    
    # Use diffoscope for detailed comparison
    diffoscope bin/app1 bin/app2

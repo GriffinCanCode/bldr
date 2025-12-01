@@ -60,7 +60,7 @@ for project in "${TEST_PROJECTS[@]}"; do
     rm -rf bin/ .builder-cache/ 2>/dev/null || true
     
     # Run builder with TSan
-    if ../../bin/builder build --parallel; then
+    if ../../bin/bldr build --parallel; then
         echo "  ✓ Passed (no data races detected)"
         ((SUCCESS_COUNT++))
     else

@@ -57,7 +57,7 @@ for pkg in packages {
 ### Run example:
 ```bash
 cd tier1-simple
-builder build :app
+bldr build :app
 ```
 
 ## Tier 2: D Macros
@@ -138,7 +138,7 @@ target("docker-image") {
 ### Run example:
 ```bash
 cd tier3-plugin
-builder build :docker-image
+bldr build :docker-image
 ```
 
 ## Combined: All Three Tiers
@@ -166,7 +166,7 @@ Tier 1 (DSL)
 ### Run example:
 ```bash
 cd combined
-builder build :app
+bldr build :app
 ```
 
 ## Comparison
@@ -271,7 +271,7 @@ Test each tier independently:
 builder check tier1-simple/Builderfile
 
 # Dry-run to see generated targets
-builder build --dry-run :all
+bldr build --dry-run :all
 ```
 
 ### Tier 2
@@ -289,7 +289,7 @@ dmd tier2-macros/Builderfile.d
 builder plugin list
 
 # Test plugin execution
-builder build :docker-image --verbose
+bldr build :docker-image --verbose
 ```
 
 ## Migration Guide
@@ -395,7 +395,7 @@ Fix: Use str() to convert: "version-" + str(1)
 which ldc2
 
 # Verbose compilation
-builder build --macro-verbose
+bldr build --macro-verbose
 ```
 
 **Import errors:**

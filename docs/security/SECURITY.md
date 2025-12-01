@@ -236,14 +236,14 @@ dub test --build=asan  # Memory safety
 
 ```bash
 # Test command injection resistance
-builder build target="'; rm -rf /"
+bldr build target="'; rm -rf /"
 
 # Test path traversal
-builder build sources="../../../etc/passwd"
+bldr build sources="../../../etc/passwd"
 
 # Test cache tampering
 hex /Users/griffinstrier/projects/Builder/.builder-cache/cache.bin | modify
-builder build  # Should detect tampering
+bldr build  # Should detect tampering
 ```
 
 ---

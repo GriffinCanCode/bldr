@@ -86,7 +86,7 @@ To verify runtime linking:
 dub build
 
 # Check what libraries the binary links to
-otool -L bin/builder | grep tree-sitter
+otool -L bin/bldr | grep tree-sitter
 
 # Should output something like:
 # /opt/homebrew/lib/libtree-sitter.0.dylib (compatibility version 0.0.0)
@@ -119,7 +119,7 @@ The library is found at compile time but not runtime. Solutions:
 ```bash
 # Option 1: Add to DYLD_LIBRARY_PATH (temporary)
 export DYLD_LIBRARY_PATH=/opt/homebrew/lib:$DYLD_LIBRARY_PATH
-./bin/builder
+./bin/bldr
 
 # Option 2: Add rpath to binary (permanent)
 # This is handled by the Makefile's -Wl,-rpath flags
@@ -197,7 +197,7 @@ To verify:
 
 ```bash
 # Check binary dependencies
-ldd bin/builder | grep tree-sitter
+ldd bin/bldr | grep tree-sitter
 
 # Should show:
 # libtree-sitter.so.0 => /usr/lib/x86_64-linux-gnu/libtree-sitter.so.0
@@ -287,7 +287,7 @@ dub build
 
 # Should succeed without linker errors
 # If successful, the binary should run:
-./bin/builder --version
+./bin/bldr --version
 ```
 
 ### Full Integration Test

@@ -86,10 +86,10 @@ auto engine = new ExecutionEngine(
 
 **Commands:**
 
-#### `builder discover`
+#### `bldr discover`
 Preview what will be discovered without building:
 ```bash
-$ builder discover
+$ bldr discover
 Targets with discovery capability: 3
   • my-proto (protobuf)
     └─ Will discover: Generated source files + compile targets
@@ -97,10 +97,10 @@ Targets with discovery capability: 3
     └─ Will discover: Custom generated targets
 ```
 
-#### `builder discover --history`
+#### `bldr discover --history`
 View discovery history from previous builds:
 ```bash
-$ builder discover --history
+$ bldr discover --history
 Discovery #1:
   Origin: my-proto
   Time: 2024-01-15T10:30:00Z
@@ -369,7 +369,7 @@ Discovery integrates with all features:
    - Example: Python imports generated protobuf
 
 3. **Discovery Visualization**
-   - `builder graph --show-discovery-flow`
+   - `bldr graph --show-discovery-flow`
    - Animated graph showing discovery over time
 
 4. **Discovery Profiling**
@@ -426,7 +426,7 @@ Discovery integrates with all features:
 
 **Protobuf workflow:**
 1. Write `.proto` files
-2. Run `builder build`
+2. Run `bldr build`
 
 **Benefits:**
 - ✅ Automatic

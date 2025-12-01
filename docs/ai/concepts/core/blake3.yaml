@@ -79,7 +79,7 @@ references:
   - "Builder docs: docs/features/blake3.md"
 
 next_steps: |
-  - See 'builder explain caching' to understand how BLAKE3 enables fast cache validation
-  - See 'builder explain determinism' to learn how hashing ensures reproducible builds
-  - See 'builder explain example blake3' for complete code examples
+  - See 'bldr explain caching' to understand how BLAKE3 enables fast cache validation
+  - See 'bldr explain determinism' to learn how hashing ensures reproducible builds
+  - See 'bldr explain example blake3' for complete code examples
 

@@ -326,13 +326,13 @@ string compilerPath = compiler.path;
 dub test --filter="toolchain"
 
 # Detect available toolchains
-./bin/builder detect --toolchains
+./bin/bldr detect --toolchains
 
 # List registered toolchains
-./bin/builder toolchains list
+./bin/bldr toolchains list
 
 # Show toolchain details
-./bin/builder toolchains show gcc-11
+./bin/bldr toolchains show gcc-11
 ```
 
 ## Module Statistics

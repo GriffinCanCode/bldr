@@ -12,7 +12,7 @@ Simple Node.js script demonstrating Builder's JavaScript support without bundlin
 ## Build
 
 ```bash
-../../bin/builder build
+../../bin/bldr build
 ```
 
 ## Run

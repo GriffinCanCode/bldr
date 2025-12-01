@@ -15,19 +15,19 @@ The query language enables you to:
 
 ```bash
 # Find all dependencies of a target
-builder query 'deps(//src:app)'
+bldr query 'deps(//src:app)'
 
 # Find what depends on a library
-builder query 'rdeps(//lib:utils)'
+bldr query 'rdeps(//lib:utils)'
 
 # Find shortest path between targets
-builder query 'shortest(//a:x, //b:y)'
+bldr query 'shortest(//a:x, //b:y)'
 
 # Filter test targets
-builder query 'kind(test, //...)'
+bldr query 'kind(test, //...)'
 
 # Combine queries
-builder query 'deps(//src:app) & kind(library, //...)'
+bldr query 'deps(//src:app) & kind(library, //...)'
 ```
 
 ## Syntax Reference
@@ -48,10 +48,10 @@ Returns all transitive dependencies of targets matched by `expr`.
 
 ```bash
 # All dependencies of app
-builder query 'deps(//src:app)'
+bldr query 'deps(//src:app)'
 
 # Dependencies up to depth 2
-builder query 'deps(//src:app, 2)'
+bldr query 'deps(//src:app, 2)'
 ```
 
 **Complexity:** O(V + E) using BFS
@@ -61,10 +61,10 @@ Returns all reverse dependencies (what depends on these targets).
 
 ```bash
 # What depends on utils
-builder query 'rdeps(//lib:utils)'
+bldr query 'rdeps(//lib:utils)'
 
 # Reverse deps up to depth 3
-builder query 'rdeps(//lib:utils, 3)'
+bldr query 'rdeps(//lib:utils, 3)'
 ```
 
 **Complexity:** O(V + E) using reverse BFS
@@ -75,7 +75,7 @@ builder query 'rdeps(//lib:utils, 3)'
 Finds all nodes that lie on any path between `from` and `to`.
 
 ```bash
-builder query 'allpaths(//a:x, //b:y)'
+bldr query 'allpaths(//a:x, //b:y)'
 ```
 
 **Complexity:** O(V! × E) worst case - use with caution on large graphs
@@ -84,7 +84,7 @@ builder query 'allpaths(//a:x, //b:y)'
 Finds any single path between targets (faster than `allpaths`).
 
 ```bash
-builder query 'somepath(//a:x, //b:y)'
+bldr query 'somepath(//a:x, //b:y)'
 ```
 
 **Complexity:** O(V + E) using DFS
@@ -93,7 +93,7 @@ builder query 'somepath(//a:x, //b:y)'
 Finds the shortest path using BFS (unweighted).
 
 ```bash
-builder query 'shortest(//a:x, //b:y)'
+bldr query 'shortest(//a:x, //b:y)'
 ```
 
 **Complexity:** O(V + E) using BFS with parent tracking
@@ -107,10 +107,10 @@ Types: `executable`, `binary`, `library`, `lib`, `test`, `custom`
 
 ```bash
 # All test targets
-builder query 'kind(test, //...)'
+bldr query 'kind(test, //...)'
 
 # Library dependencies of app
-builder query 'kind(library, deps(//src:app))'
+bldr query 'kind(library, deps(//src:app))'
 ```
 
 **Complexity:** O(n) where n = result set size
@@ -120,7 +120,7 @@ Filters targets by exact attribute match.
 
 ```bash
 # Targets with specific language
-builder query 'attr("language", "d", //...)'
+bldr query 'attr("language", "d", //...)'
 ```
 
 **Complexity:** O(n) where n = result set size
@@ -130,10 +130,10 @@ Filters targets using regular expressions.
 
 ```bash
 # Targets with "test" in name
-builder query 'filter("name", ".*test.*", //...)'
+bldr query 'filter("name", ".*test.*", //...)'
 
 # Specific compiler flags
-builder query 'filter("flags", "-O3", //...)'
+bldr query 'filter("flags", "-O3", //...)'
 ```
 
 **Complexity:** O(n × m) where n = result set size, m = avg attr length
@@ -147,7 +147,7 @@ Returns all targets in either set.
 
 ```bash
 # All sources and tests
-builder query '//src/... + //test/...'
+bldr query '//src/... + //test/...'
 ```
 
 **Complexity:** O(|A| + |B|)
@@ -157,7 +157,7 @@ Returns targets present in both sets.
 
 ```bash
 # Test targets that depend on utils
-builder query 'deps(//lib:utils) & kind(test, //...)'
+bldr query 'deps(//lib:utils) & kind(test, //...)'
 ```
 
 **Complexity:** O(|A| + |B|)
@@ -167,7 +167,7 @@ Returns targets in first set but not second.
 
 ```bash
 # Source targets excluding tests
-builder query '//src/... - //src/test/...'
+bldr query '//src/... - //src/test/...'
 ```
 
 **Complexity:** O(|A| + |B|)
@@ -178,7 +178,7 @@ builder query '//src/... - //src/test/...'
 Returns all targets in the same directory as matched targets.
 
 ```bash
-builder query 'siblings(//src:app)'
+bldr query 'siblings(//src:app)'
 ```
 
 **Complexity:** O(V) where V = total targets
@@ -188,10 +188,10 @@ Finds all targets in Builderfiles matching pattern.
 
 ```bash
 # All targets in src directory
-builder query 'buildfiles("src")'
+bldr query 'buildfiles("src")'
 
 # All targets with Builderfiles
-builder query 'buildfiles("...")'
+bldr query 'buildfiles("...")'
 ```
 
 **Complexity:** O(V) where V = total targets
@@ -201,7 +201,7 @@ Binds a variable for reuse in queries.
 
 ```bash
 # Reuse a complex query
-builder query 'let(mylibs, kind(library, //...), deps(//src:app) & mylibs)'
+bldr query 'let(mylibs, kind(library, //...), deps(//src:app) & mylibs)'
 ```
 
 **Complexity:** O(evaluation of body)
@@ -214,16 +214,16 @@ bldrquery supports multiple output formats for different use cases.
 Human-readable format with colors and metadata.
 
 ```bash
-builder query 'deps(//src:app)'
+bldr query 'deps(//src:app)'
 # or
-builder query 'deps(//src:app)' --format=pretty
+bldr query 'deps(//src:app)' --format=pretty
 ```
 
 ### List
 Simple newline-separated list of target names.
 
 ```bash
-builder query 'deps(//src:app)' --format=list
+bldr query 'deps(//src:app)' --format=list
 ```
 
 **Use case:** Piping to other tools
@@ -232,7 +232,7 @@ builder query 'deps(//src:app)' --format=list
 Machine-readable structured format.
 
 ```bash
-builder query 'deps(//src:app)' --format=json
+bldr query 'deps(//src:app)' --format=json
 ```
 
 Output structure:
@@ -260,7 +260,7 @@ Output structure:
 GraphViz DOT format for visualization.
 
 ```bash
-builder query 'deps(//src:app)' --format=dot > graph.dot
+bldr query 'deps(//src:app)' --format=dot > graph.dot
 dot -Tpng graph.dot -o graph.png
 ```
 
@@ -271,37 +271,37 @@ dot -Tpng graph.dot -o graph.png
 ### Find circular dependencies
 ```bash
 # Find targets that depend on themselves (cycles)
-builder query 'let($x, //..., $x & deps($x))'
+bldr query 'let($x, //..., $x & deps($x))'
 ```
 
 ### Find leaf libraries
 ```bash
 # Libraries with no dependencies
-builder query 'kind(library, //...) - deps(kind(library, //...))'
+bldr query 'kind(library, //...) - deps(kind(library, //...))'
 ```
 
 ### Test coverage analysis
 ```bash
 # Find untested code
-builder query '//src/... - rdeps(kind(test, //...))'
+bldr query '//src/... - rdeps(kind(test, //...))'
 ```
 
 ### Critical path analysis
 ```bash
 # Targets with most dependents
-builder query --format=json '//...' | jq 'sort_by(.dependents|length)'
+bldr query --format=json '//...' | jq 'sort_by(.dependents|length)'
 ```
 
 ### Monorepo workspace analysis
 ```bash
 # Services depending on shared libraries
-builder query 'rdeps(//shared/...) & kind(executable, //services/...)'
+bldr query 'rdeps(//shared/...) & kind(executable, //services/...)'
 ```
 
 ### Find duplicate dependencies
 ```bash
 # Targets that both depend on
-builder query 'rdeps(//lib:a) & rdeps(//lib:b)'
+bldr query 'rdeps(//lib:a) & rdeps(//lib:b)'
 ```
 
 ## Performance Considerations
@@ -403,7 +403,7 @@ See `tests/integration/query.d` for comprehensive test suite covering:
 
 **Query returns empty results**
 - Check target patterns match actual targets
-- Verify Builderfile is parsed correctly: `builder graph`
+- Verify Builderfile is parsed correctly: `bldr graph`
 - Use `//...` to list all available targets
 
 **Query is slow**
@@ -413,7 +413,7 @@ See `tests/integration/query.d` for comprehensive test suite covering:
 - Profile with `--format=json` to see result sizes
 
 **Syntax errors**
-- Ensure quotes around query: `builder query 'deps(//...)'`
+- Ensure quotes around query: `bldr query 'deps(//...)'`
 - Check parentheses are balanced
 - Verify operator precedence: use `()` for clarity
 

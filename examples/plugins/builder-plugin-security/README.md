@@ -88,7 +88,7 @@ workspace("myproject") {
 
 ```bash
 # Fail build on critical vulnerabilities
-builder build //app:main --plugin security --strict
+bldr build //app:main --plugin security --strict
 ```
 
 ## License

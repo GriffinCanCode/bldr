@@ -279,7 +279,7 @@ Below thresholds, use scalar implementations.
 dub build --build=release
 
 # Run SIMD benchmark suite
-./bin/builder --benchmark-simd
+./bin/bldr --benchmark-simd
 
 # Or in D code
 import utils.simd.bench;

@@ -27,7 +27,7 @@ Repository Rules enable you to declare external dependencies (libraries, tools, 
 ### 1. Build All Targets
 
 ```bash
-builder build
+bldr build
 ```
 
 On first build, Builder will:
@@ -41,10 +41,10 @@ On first build, Builder will:
 
 ```bash
 # Build single target
-builder build :app-with-fmt
+bldr build :app-with-fmt
 
 # Build with external dependency
-builder build :app-with-json
+bldr build :app-with-json
 ```
 
 ### 3. Run Executables
@@ -155,13 +155,13 @@ After first fetch, repositories are cached:
 
 ```bash
 # First build: Downloads and verifies
-$ builder build
+$ bldr build
 Fetching repository: fmt
 Downloaded and verified: fmt (10.2 MB)
 Building...
 
 # Subsequent builds: Uses cache
-$ builder build
+$ bldr build
 Repository already cached: fmt
 Building... (instant!)
 ```
@@ -172,7 +172,7 @@ Once cached, no network required:
 
 ```bash
 # Disconnect from internet
-$ builder build  # Still works!
+$ bldr build  # Still works!
 ```
 
 ### 4. Team Consistency
@@ -181,10 +181,10 @@ Everyone gets same dependencies:
 
 ```bash
 # Developer A
-$ builder build  # Downloads fmt 10.2.1
+$ bldr build  # Downloads fmt 10.2.1
 
 # Developer B
-$ builder build  # Gets exact same fmt 10.2.1
+$ bldr build  # Gets exact same fmt 10.2.1
 ```
 
 ### 5. Security
@@ -333,7 +333,7 @@ Got:      abc123...
 **Solutions:**
 1. Verify hash from official source
 2. Re-download archive (might be corrupted)
-3. Compute hash yourself: `builder repo hash file.zip`
+3. Compute hash yourself: `bldr repo hash file.zip`
 
 ### Archive Extraction Failed
 
@@ -354,8 +354,8 @@ Warning: Invalid cache entry for fmt, removing...
 
 **Solution:** Cache automatically re-fetches. Or manually:
 ```bash
-builder repo clean fmt
-builder build
+bldr repo clean fmt
+bldr build
 ```
 
 ## Best Practices
@@ -365,7 +365,7 @@ builder build
 3. **Use HTTPS URLs** to prevent MITM attacks
 4. **Verify hashes** from official sources
 5. **Document dependencies** in README
-6. **Keep cache clean**: `builder repo clean --old`
+6. **Keep cache clean**: `bldr repo clean --old`
 
 ## Next Steps
 

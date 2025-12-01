@@ -30,21 +30,21 @@ perl-project/
 
 ```bash
 cd examples/perl-project
-builder build
+bldr build
 ```
 
 ### Build Specific Target
 
 ```bash
-builder build :perl_app      # Build executable
-builder build :greeter_lib   # Validate library
-builder build :tests         # Run tests
+bldr build :perl_app      # Build executable
+bldr build :greeter_lib   # Validate library
+bldr build :tests         # Run tests
 ```
 
 ### Run Tests
 
 ```bash
-builder build :tests
+bldr build :tests
 ```
 
 Or directly with prove:

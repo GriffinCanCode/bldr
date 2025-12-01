@@ -143,7 +143,7 @@ Repositories are fetched only when:
 Cache entries invalidated when:
 - Local path no longer exists
 - Metadata is corrupt
-- User explicitly clears cache: `builder repo clean`
+- User explicitly clears cache: `bldr repo clean`
 
 ## Security Model
 
@@ -363,7 +363,7 @@ Got:      def456...
 **Solution**:
 1. Verify hash from official source
 2. Re-download archive
-3. Compute hash: `builder repo hash file.tar.gz`
+3. Compute hash: `bldr repo hash file.tar.gz`
 
 ### Archive Extraction Failed
 
@@ -385,7 +385,7 @@ Warning: Invalid cache entry for llvm, removing...
 **Solution**: Cache will automatically re-fetch. Or manually:
 ```bash
 builder repo clean llvm
-builder build
+bldr build
 ```
 
 ## Implementation Notes

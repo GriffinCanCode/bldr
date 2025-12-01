@@ -53,7 +53,7 @@ class ConfigParser
                         "No Builderfile found and no build targets could be automatically inferred",
                         ErrorCode.InvalidConfiguration
                     );
-                    error.addSuggestion(ErrorSuggestion.command("Create a Builderfile", "builder init"));
+                    error.addSuggestion(ErrorSuggestion.command("Create a Builderfile", "bldr init"));
                     error.addSuggestion(ErrorSuggestion.docs("See zero-config mode", "docs/user-guides/examples.md"));
                     return Err!(WorkspaceConfig, BuildError)(error);
                 }
@@ -68,8 +68,8 @@ class ConfigParser
                     "Failed to automatically infer build targets: " ~ e.msg,
                     ErrorCode.AnalysisFailed
                 );
-                error.addSuggestion(ErrorSuggestion.command("Create a Builderfile manually", "builder init"));
-                error.addSuggestion(ErrorSuggestion.command("Run with verbose output", "builder build --verbose"));
+                error.addSuggestion(ErrorSuggestion.command("Create a Builderfile manually", "bldr init"));
+                error.addSuggestion(ErrorSuggestion.command("Run with verbose output", "bldr build --verbose"));
                 error.addContext(ErrorContext("auto-inference", e.msg));
                 return Err!(WorkspaceConfig, BuildError)(error);
             }

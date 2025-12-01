@@ -36,7 +36,7 @@ struct ExplainCommand
             case "search":
                 if (args.length < 3)
                 {
-                    Logger.error("Usage: builder explain search <query>");
+                    Logger.error("Usage: bldr explain search <query>");
                     return;
                 }
                 performSearch(args[2 .. $].join(" "));
@@ -45,7 +45,7 @@ struct ExplainCommand
             case "example":
                 if (args.length < 3)
                 {
-                    Logger.error("Usage: builder explain example <topic>");
+                    Logger.error("Usage: bldr explain example <topic>");
                     return;
                 }
                 showExamples(args[2]);
@@ -54,7 +54,7 @@ struct ExplainCommand
             case "workflow":
                 if (args.length < 3)
                 {
-                    Logger.error("Usage: builder explain workflow <workflow-name>");
+                    Logger.error("Usage: bldr explain workflow <workflow-name>");
                     return;
                 }
                 showWorkflow(args[2]);
@@ -75,11 +75,11 @@ struct ExplainCommand
         writeln("=== Builder Explain - AI-Optimized Documentation ===");
         writeln();
         writeln("USAGE:");
-        writeln("  builder explain <topic>              Show topic documentation (smart match)");
-        writeln("  builder explain list                 List all available topics");
-        writeln("  builder explain search <query>       Search across all topics");
-        writeln("  builder explain example <topic>      Show working examples");
-        writeln("  builder explain workflow <name>      Show step-by-step workflow");
+        writeln("  bldr explain <topic>              Show topic documentation (smart match)");
+        writeln("  bldr explain list                 List all available topics");
+        writeln("  bldr explain search <query>       Search across all topics");
+        writeln("  bldr explain example <topic>      Show working examples");
+        writeln("  bldr explain workflow <name>      Show step-by-step workflow");
         writeln();
         writeln("AVAILABLE TOPICS:");
         writeln("  blake3           BLAKE3 hash function - 3-5x faster than SHA-256");
@@ -90,9 +90,9 @@ struct ExplainCommand
         writeln("  remote-cache     Distributed cache for teams/CI");
         writeln();
         writeln("EXAMPLES:");
-        writeln("  builder explain blake3");
-        writeln("  builder explain \"fast builds\"");
-        writeln("  builder explain example caching");
+        writeln("  bldr explain blake3");
+        writeln("  bldr explain \"fast builds\"");
+        writeln("  bldr explain example caching");
         writeln();
     }
     
@@ -183,13 +183,13 @@ struct ExplainCommand
                 writefln("  \x1b[36m%-20s\x1b[0m %s", match["topic"].str, match["summary"].str);
             }
             writeln();
-            writefln("Found %d related topics. Use 'builder explain <topic>' to view.", matches.length);
+            writefln("Found %d related topics. Use 'bldr explain <topic>' to view.", matches.length);
         }
         else
         {
             Logger.error("Topic not found: " ~ query);
             writeln("\nAvailable topics:");
-            writeln("  builder explain list");
+            writeln("  bldr explain list");
         }
     }
     
@@ -202,7 +202,7 @@ struct ExplainCommand
         if (matches.length == 0)
         {
             Logger.info("No topics found matching: " ~ query);
-            writeln("\nTry: builder explain list");
+            writeln("\nTry: bldr explain list");
         }
         else
         {
@@ -213,7 +213,7 @@ struct ExplainCommand
                 writefln("  \x1b[36m%-20s\x1b[0m %s", match["topic"].str, match["summary"].str);
             }
             writeln();
-            writefln("Found %d topic(s). Use 'builder explain <topic>' for details.", matches.length);
+            writefln("Found %d topic(s). Use 'bldr explain <topic>' for details.", matches.length);
         }
     }
     
@@ -370,7 +370,7 @@ struct ExplainCommand
     private static void showWorkflow(string workflow) @system
     {
         Logger.info("Workflows not yet implemented. Coming soon!");
-        writeln("\nCurrently available: builder explain <topic>");
+        writeln("\nCurrently available: bldr explain <topic>");
     }
     
     /// Display topic documentation

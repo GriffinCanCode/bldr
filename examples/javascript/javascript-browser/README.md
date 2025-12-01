@@ -13,7 +13,7 @@ Browser application with ES6 modules and bundling.
 ## Build
 
 ```bash
-../../bin/builder build
+../../bin/bldr build
 ```
 
 ## Run

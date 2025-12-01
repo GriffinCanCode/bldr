@@ -4,7 +4,7 @@
 
 ## Overview
 
-Builder now deeply integrates with language ecosystems through intelligent parsing of package manifests (package.json, Cargo.toml, pyproject.toml, etc.). When you run `builder init`, it automatically:
+Builder now deeply integrates with language ecosystems through intelligent parsing of package manifests (package.json, Cargo.toml, pyproject.toml, etc.). When you run `bldr init`, it automatically:
 
 1. **Scans for package manifests** across 26 supported languages
 2. **Extracts project metadata**: entry points, dependencies, scripts, framework hints
@@ -30,7 +30,7 @@ manifests/
 └── composer.d       # composer.json parser (PHP)
 ```
 
-**Key Innovation**: Unified manifest parsing interface that both `builder init` and `builder migrate` use, eliminating code duplication.
+**Key Innovation**: Unified manifest parsing interface that both `bldr init` and `bldr migrate` use, eliminating code duplication.
 
 ### Enhanced Detection
 
@@ -152,11 +152,11 @@ Placeholder for `pom.xml` parsing (extensible architecture ready)
 
 ### 1. Init Command Enhancement
 
-`builder init` now uses manifest parsing:
+`bldr init` now uses manifest parsing:
 
 ```bash
 $ cd my-react-app
-$ builder init
+$ bldr init
 
 🔍 Scanning project directory...
 ✨ Detected Languages
@@ -298,7 +298,7 @@ Validated with real-world projects:
 - ✅ Go microservice with Gin
 - ✅ Multi-language monorepo (JS + Python + Go)
 
-All achieved 80-100% working builds from `builder init` alone.
+All achieved 80-100% working builds from `bldr init` alone.
 
 ## Summary
 

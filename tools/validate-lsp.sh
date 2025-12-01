@@ -67,16 +67,16 @@ check "LSP README exists" "test -f source/lsp/README.md"
 
 # 2. LSP Binary
 section "LSP Binary"
-check "builder-lsp binary exists" "test -f bin/builder-lsp"
-check "builder-lsp is executable" "test -x bin/builder-lsp"
-check "builder-lsp has correct architecture" "file bin/builder-lsp | grep -q 'arm64\|x86_64'"
+check "builder-lsp binary exists" "test -f bin/bldr-lsp"
+check "builder-lsp is executable" "test -x bin/bldr-lsp"
+check "builder-lsp has correct architecture" "file bin/bldr-lsp | grep -q 'arm64\|x86_64'"
 
 # 3. LSP Binary Functionality
 section "LSP Binary Functionality"
 echo -n "Testing LSP initialize response... "
 MSG='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":"file:///tmp","capabilities":{}}}'
 LEN=${#MSG}
-RESPONSE=$(printf "Content-Length: %d\r\n\r\n%s" $LEN "$MSG" | timeout 2 bin/builder-lsp 2>/dev/null || true)
+RESPONSE=$(printf "Content-Length: %d\r\n\r\n%s" $LEN "$MSG" | timeout 2 bin/bldr-lsp 2>/dev/null || true)
 if echo "$RESPONSE" | grep -q '"result".*"capabilities"'; then
     echo -e "${GREEN}✓${NC} LSP server responds correctly to initialize"
     PASSED_CHECKS=$((PASSED_CHECKS + 1))

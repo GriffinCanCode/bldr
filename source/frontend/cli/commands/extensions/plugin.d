@@ -51,7 +51,7 @@ struct PluginCommand {
             case "info":
                 if (args.length < 3) {
                     Logger.error("Plugin name required");
-                    Logger.info("Usage: builder plugin info <name>");
+                    Logger.info("Usage: bldr plugin info <name>");
                 } else {
                     showPluginInfo(args[2]);
                 }
@@ -59,7 +59,7 @@ struct PluginCommand {
             case "install":
                 if (args.length < 3) {
                     Logger.error("Plugin name required");
-                    Logger.info("Usage: builder plugin install <name>");
+                    Logger.info("Usage: bldr plugin install <name>");
                 } else {
                     installPlugin(args[2]);
                 }
@@ -67,7 +67,7 @@ struct PluginCommand {
             case "uninstall":
                 if (args.length < 3) {
                     Logger.error("Plugin name required");
-                    Logger.info("Usage: builder plugin uninstall <name>");
+                    Logger.info("Usage: bldr plugin uninstall <name>");
                 } else {
                     uninstallPlugin(args[2]);
                 }
@@ -78,7 +78,7 @@ struct PluginCommand {
             case "validate":
                 if (args.length < 3) {
                     Logger.error("Plugin name required");
-                    Logger.info("Usage: builder plugin validate <name>");
+                    Logger.info("Usage: bldr plugin validate <name>");
                 } else {
                     validatePlugin(args[2]);
                 }
@@ -89,7 +89,7 @@ struct PluginCommand {
             case "create":
                 if (args.length < 3) {
                     Logger.error("Plugin name required");
-                    Logger.info("Usage: builder plugin create <name> [--language=d|python|go|rust]");
+                    Logger.info("Usage: bldr plugin create <name> [--language=d|python|go|rust]");
                 } else {
                     string language = "d";
                     if (args.length >= 4 && args[3].startsWith("--language=")) {
@@ -112,7 +112,7 @@ struct PluginCommand {
         terminal.writeln(formatter.bold("Plugin Management"));
         terminal.writeln();
         terminal.writeln("Usage:");
-        terminal.writeln("  builder plugin <subcommand> [options]");
+        terminal.writeln("  bldr plugin <subcommand> [options]");
         terminal.writeln();
         terminal.writeln("Subcommands:");
         terminal.writeln("  " ~ formatter.cyan("list") ~ 
@@ -133,11 +133,11 @@ struct PluginCommand {
             " <name>       Create new plugin from template");
         terminal.writeln();
         terminal.writeln("Examples:");
-        terminal.writeln("  builder plugin list");
-        terminal.writeln("  builder plugin info docker");
-        terminal.writeln("  builder plugin install docker");
-        terminal.writeln("  builder plugin update");
-        terminal.writeln("  builder plugin create myplugin --language=python");
+        terminal.writeln("  bldr plugin list");
+        terminal.writeln("  bldr plugin info docker");
+        terminal.writeln("  bldr plugin install docker");
+        terminal.writeln("  bldr plugin update");
+        terminal.writeln("  bldr plugin create myplugin --language=python");
         terminal.writeln();
     }
     

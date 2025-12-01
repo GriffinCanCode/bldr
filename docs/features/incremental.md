@@ -102,11 +102,11 @@ Incremental analysis is automatically enabled:
 
 ```bash
 # First build: Full analysis
-builder build //my:target
+bldr build //my:target
 
 # Subsequent builds: Incremental analysis
 # Only changed files are reanalyzed
-builder build //my:target
+bldr build //my:target
 ```
 
 ### With Watch Mode
@@ -114,7 +114,7 @@ builder build //my:target
 Combine with watch mode for optimal development experience:
 
 ```bash
-builder build --watch //my:target
+bldr build --watch //my:target
 ```
 
 **Benefits:**
@@ -335,7 +335,7 @@ analyzer.enableIncremental();  // Initialize tracking
 For iterative development, use watch mode:
 
 ```bash
-builder build --watch //my:target
+bldr build --watch //my:target
 ```
 
 This combines:
@@ -348,7 +348,7 @@ This combines:
 Clear cache after major refactors:
 
 ```bash
-builder clean --analysis-cache
+bldr clean --analysis-cache
 ```
 
 Or programmatically:
@@ -362,7 +362,7 @@ analyzer.clear();
 Check cache effectiveness:
 
 ```bash
-builder build --stats
+bldr build --stats
 ```
 
 Low hit rates (<80%) may indicate:
@@ -375,7 +375,7 @@ Low hit rates (<80%) may indicate:
 Use with remote cache for team-wide benefits:
 
 ```bash
-builder build --remote-cache=https://cache.example.com
+bldr build --remote-cache=https://cache.example.com
 ```
 
 Analysis results shared across team members.
@@ -405,7 +405,7 @@ Analysis results shared across team members.
 **Symptom:** Large cache directory
 
 **Solutions:**
-1. Clear cache: `builder clean --analysis-cache`
+1. Clear cache: `bldr clean --analysis-cache`
 2. Configure cache size limits (future feature)
 3. Use distributed cache to offload storage
 

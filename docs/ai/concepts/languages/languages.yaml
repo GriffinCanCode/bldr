@@ -22,6 +22,6 @@ usage_examples:
 related: [targets, workspace, wizard]
 
 next_steps: |
-  - Check 'builder explain list' for specific language guides (if available)
-  - Use 'builder init' to set up language support
+  - Check 'bldr explain list' for specific language guides (if available)
+  - Use 'bldr init' to set up language support
 

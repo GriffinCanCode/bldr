@@ -1,12 +1,12 @@
 class BuilderPluginMetrics < Formula
   desc "Advanced build metrics and analytics for Builder"
-  homepage "https://github.com/GriffinCanCode/Builder"
-  url "https://github.com/GriffinCanCode/Builder/archive/v1.0.0.tar.gz"
+  homepage "https://github.com/GriffinCanCode/bldr"
+  url "https://github.com/GriffinCanCode/bldr/archive/v2.0.0.tar.gz"
   sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   license "MIT"
-  head "https://github.com/GriffinCanCode/Builder.git", branch: "master"
+  head "https://github.com/GriffinCanCode/bldr.git", branch: "master"
 
-  depends_on "builder"
+  depends_on "bldr"
   depends_on "go" => :build
 
   def install

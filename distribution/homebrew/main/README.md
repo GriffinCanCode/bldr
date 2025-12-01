@@ -1,10 +1,10 @@
-# Builder - Main Homebrew Formula
+# bldr - Main Homebrew Formula
 
-This directory contains the official Homebrew formula for installing Builder.
+This directory contains the official Homebrew formula for installing bldr.
 
-## Formula: builder.rb
+## Formula: bldr.rb
 
-The main formula for installing the Builder build system.
+The main formula for installing the bldr build system.
 
 ### Dependencies
 
@@ -25,26 +25,26 @@ The formula:
 
 If this formula is published in a tap:
 ```bash
-brew tap builder/builder
-brew install builder
+brew tap bldr/bldr
+brew install bldr
 ```
 
 Or if submitted to Homebrew core:
 ```bash
-brew install builder
+brew install bldr
 ```
 
 #### For Development/Testing
 
 Test the formula locally:
 ```bash
-brew install --build-from-source ./builder.rb
-brew test builder
+brew install --build-from-source ./bldr.rb
+brew test bldr
 ```
 
 Audit the formula:
 ```bash
-brew audit --strict --online ./builder.rb
+brew audit --strict --online ./bldr.rb
 ```
 
 ### Updating the Formula
@@ -53,12 +53,12 @@ When releasing a new version:
 
 1. Update the version tag in the `url` field:
    ```ruby
-   url "https://github.com/GriffinCanCode/Builder/archive/refs/tags/vX.Y.Z.tar.gz"
+   url "https://github.com/GriffinCanCode/bldr/archive/refs/tags/vX.Y.Z.tar.gz"
    ```
 
 2. Calculate the new SHA256:
    ```bash
-   curl -L https://github.com/GriffinCanCode/Builder/archive/refs/tags/vX.Y.Z.tar.gz | shasum -a 256
+   curl -L https://github.com/GriffinCanCode/bldr/archive/refs/tags/vX.Y.Z.tar.gz | shasum -a 256
    ```
 
 3. Update the `sha256` field with the new hash
@@ -68,7 +68,7 @@ When releasing a new version:
 ### Testing
 
 The formula includes a test that verifies:
-- The `builder` binary is installed correctly
+- The `bldr` binary is installed correctly
 - It can execute and display help information
 
 ### Notes
@@ -83,11 +83,11 @@ The formula includes a test that verifies:
 
 Create a tap repository:
 ```bash
-# Create repository: homebrew-builder
-# Add this formula to Formula/builder.rb
+# Create repository: homebrew-bldr
+# Add this formula to Formula/bldr.rb
 # Users can then:
-brew tap builder/builder
-brew install builder
+brew tap bldr/bldr
+brew install bldr
 ```
 
 ### Option 2: Homebrew Core
@@ -100,6 +100,6 @@ To submit to Homebrew core:
 ## Support
 
 For issues with the Homebrew formula:
-- [Builder Issues](https://github.com/GriffinCanCode/Builder/issues)
-- [Builder Documentation](https://github.com/GriffinCanCode/Builder/tree/master/docs)
+- [bldr Issues](https://github.com/GriffinCanCode/bldr/issues)
+- [bldr Documentation](https://github.com/GriffinCanCode/bldr/tree/master/docs)
 

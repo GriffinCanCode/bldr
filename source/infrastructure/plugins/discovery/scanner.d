@@ -119,7 +119,7 @@ class PluginScanner {
         );
         err.addSuggestion("Install the plugin: brew install builder-plugin-" ~ name);
         err.addSuggestion("Check if the plugin is in PATH: which " ~ fullName);
-        err.addSuggestion("List installed plugins: builder plugin list");
+        err.addSuggestion("List installed plugins: bldr plugin list");
         return Err!(string, BuildError)(err);
     }
     

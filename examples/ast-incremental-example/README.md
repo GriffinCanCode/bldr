@@ -30,16 +30,16 @@ src/
 ```bash
 # Initial build - parses all ASTs
 cd examples/ast-incremental-example
-builder build //app
+bldr build //app
 
 # Modify a single method in base.h
 echo "// Modified" >> src/core/base.h
 
 # Rebuild - only affected symbols recompiled
-builder build //app
+bldr build //app
 
 # Check statistics
-builder query //app --ast-stats
+bldr query //app --ast-stats
 ```
 
 ## Expected Results
@@ -82,19 +82,19 @@ Try these modifications to see AST-level tracking in action:
 1. **Modify a rarely-used method**: Fast rebuild
    ```bash
    # Edit src/core/utils.cpp - change debugPrint() implementation
-   builder build //app  # Only rebuilds files calling debugPrint()
+   bldr build //app  # Only rebuilds files calling debugPrint()
    ```
 
 2. **Modify a widely-used method**: Slower rebuild
    ```bash
    # Edit src/core/base.cpp - change Base::process() implementation
-   builder build //app  # Rebuilds all files using Base::process()
+   bldr build //app  # Rebuilds all files using Base::process()
    ```
 
 3. **Add a new class**: No rebuild of existing code
    ```bash
    # Add src/features/feature3.cpp with new Feature3 class
-   builder build //app  # Only compiles the new file
+   bldr build //app  # Only compiles the new file
    ```
 
 ## Configuration
@@ -121,16 +121,16 @@ Compare strategies:
 
 ```bash
 # Full rebuild
-builder clean && builder build //app --strategy=full
+bldr clean && bldr build //app --strategy=full
 
 # File-level incremental
-builder clean && builder build //app --strategy=file-level
+bldr clean && bldr build //app --strategy=file-level
 
 # AST-level incremental (default)
-builder clean && builder build //app --strategy=ast-level
+bldr clean && bldr build //app --strategy=ast-level
 
 # Hybrid (automatic selection)
-builder clean && builder build //app --strategy=hybrid
+bldr clean && bldr build //app --strategy=hybrid
 ```
 
 ## See Also

@@ -28,19 +28,19 @@ ai/
 
 ```bash
 # Get a concept definition
-builder explain blake3
+bldr explain blake3
 
 # Get working examples
-builder explain example caching
+bldr explain example caching
 
 # Get step-by-step workflow
-builder explain workflow setup-remote-cache
+bldr explain workflow setup-remote-cache
 
 # Search all topics
-builder explain search "incremental builds"
+bldr explain search "incremental builds"
 
 # List all available topics
-builder explain list
+bldr explain list
 ```
 
 ## Format

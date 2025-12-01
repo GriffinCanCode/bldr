@@ -40,11 +40,11 @@ Contains the official Homebrew formula for installing Builder.
 **Install command**:
 ```bash
 # If in a custom tap
-brew tap builder/builder
-brew install builder
+brew tap builder/bldr
+brew install bldr
 
 # If in Homebrew core
-brew install builder
+brew install bldr
 ```
 
 ### Plugins Tap (`homebrew/plugins/`)
@@ -57,7 +57,7 @@ Contains the Homebrew tap for Builder plugins. This is a separate tap that allow
 3. Users can then tap it:
    ```bash
    brew tap builder/builder-plugins
-   brew install builder-plugin-docker
+   brew install bldr-plugin-docker
    ```
 
 **Adding new plugins**:
@@ -139,7 +139,7 @@ chmod +x builder-lsp
 sudo mv builder-lsp /usr/local/bin/
 
 # Via Homebrew
-brew install builder  # LSP included
+brew install bldr  # LSP included
 ```
 
 **Editor compatibility**:

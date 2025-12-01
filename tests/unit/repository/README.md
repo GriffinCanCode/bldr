@@ -56,7 +56,7 @@ Comprehensive unit tests for the Repository Rules System.
 dub test --build=unittest
 
 # Using builder (self-hosting)
-builder test //tests/unit/repository/...
+bldr test //tests/unit/repository/...
 ```
 
 ### Run Specific Test Module

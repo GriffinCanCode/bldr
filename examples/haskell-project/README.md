@@ -28,7 +28,7 @@ haskell-project/
 ### Build with GHC (default)
 
 ```bash
-builder build hello-ghc
+bldr build hello-ghc
 ```
 
 This will compile `Main.hs` directly using GHC with `-O2` optimization.
@@ -44,7 +44,7 @@ cabal init
 Then uncomment the Cabal target in `Builderfile` and build:
 
 ```bash
-builder build hello-cabal
+bldr build hello-cabal
 ```
 
 ### Build with Stack
@@ -58,13 +58,13 @@ stack init
 Then uncomment the Stack target in `Builderfile` and build:
 
 ```bash
-builder build hello-stack
+bldr build hello-stack
 ```
 
 ### Build with HLint
 
 ```bash
-builder build hello-lint
+bldr build hello-lint
 ```
 
 This will run HLint to check for code quality issues before building.

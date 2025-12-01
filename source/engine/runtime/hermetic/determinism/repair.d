@@ -127,7 +127,7 @@ struct RepairPlan
         result ~= "  1. Apply the suggested compiler flags to your build\n";
         result ~= "  2. Set the environment variables before building\n";
         result ~= "  3. Update your Builderfile with the recommended changes\n";
-        result ~= "  4. Run `builder verify-determinism <target>` to verify\n";
+        result ~= "  4. Run `bldr verify-determinism <target>` to verify\n";
         
         return result;
     }

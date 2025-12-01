@@ -352,7 +352,7 @@ See `tests/unit/caching/source_storage_test.d` for comprehensive tests:
 
 Run tests:
 ```bash
-builder test --filter source_storage_test
+bldr test --filter source_storage_test
 ```
 
 ## See Also

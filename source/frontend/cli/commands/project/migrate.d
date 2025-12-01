@@ -55,7 +55,7 @@ struct MigrateCommand
                 if (args.length < 3)
                 {
                     Logger.error("Build system name required");
-                    Logger.info("Usage: builder migrate info <system>");
+                    Logger.info("Usage: bldr migrate info <system>");
                     return 1;
                 }
                 showSystemInfo(args[2]);
@@ -109,8 +109,8 @@ struct MigrateCommand
         if (inputFile.empty)
         {
             Logger.error("Input file required");
-            Logger.info("Usage: builder migrate --from=<system> --input=<file> [--output=<file>]");
-            Logger.info("   or: builder migrate --auto <file>");
+            Logger.info("Usage: bldr migrate --from=<system> --input=<file> [--output=<file>]");
+            Logger.info("   or: bldr migrate --auto <file>");
             return 1;
         }
         
@@ -146,7 +146,7 @@ struct MigrateCommand
             {
                 Logger.error("Unknown build system: " ~ fromSystem);
                 Logger.info("Available systems: " ~ MigratorFactory.availableSystems().join(", "));
-                Logger.info("Use 'builder migrate list' to see all supported systems");
+                Logger.info("Use 'bldr migrate list' to see all supported systems");
                 return 1;
             }
         }
@@ -205,7 +205,7 @@ struct MigrateCommand
                 Logger.info("Next steps:");
                 Logger.info("  1. Review the generated Builderfile");
                 Logger.info("  2. Adjust any commented warnings");
-                Logger.info("  3. Test with: builder build");
+                Logger.info("  3. Test with: bldr build");
             }
             catch (Exception e)
             {
@@ -260,10 +260,10 @@ struct MigrateCommand
         Logger.info("Convert build files from other build systems to Builderfile format.");
         Logger.info("");
         Logger.info("USAGE:");
-        Logger.info("  builder migrate --from=<system> --input=<file> [--output=<file>]");
-        Logger.info("  builder migrate --auto <file>");
-        Logger.info("  builder migrate list");
-        Logger.info("  builder migrate info <system>");
+        Logger.info("  bldr migrate --from=<system> --input=<file> [--output=<file>]");
+        Logger.info("  bldr migrate --auto <file>");
+        Logger.info("  bldr migrate list");
+        Logger.info("  bldr migrate info <system>");
         Logger.info("");
         Logger.info("OPTIONS:");
         Logger.info("  --from=<system>     Source build system (bazel, cmake, maven, etc.)");
@@ -279,16 +279,16 @@ struct MigrateCommand
         Logger.info("");
         Logger.info("EXAMPLES:");
         Logger.info("  # Auto-detect and migrate");
-        Logger.info("  builder migrate --auto BUILD");
+        Logger.info("  bldr migrate --auto BUILD");
         Logger.info("");
         Logger.info("  # Migrate from Bazel");
-        Logger.info("  builder migrate --from=bazel --input=BUILD --output=Builderfile");
+        Logger.info("  bldr migrate --from=bazel --input=BUILD --output=Builderfile");
         Logger.info("");
         Logger.info("  # Migrate from CMake");
-        Logger.info("  builder migrate --from=cmake CMakeLists.txt");
+        Logger.info("  bldr migrate --from=cmake CMakeLists.txt");
         Logger.info("");
         Logger.info("  # Dry run to preview");
-        Logger.info("  builder migrate --auto pom.xml --dry-run");
+        Logger.info("  bldr migrate --auto pom.xml --dry-run");
         Logger.info("");
     }
     
@@ -313,7 +313,7 @@ struct MigrateCommand
             }
         }
         
-        Logger.info("Use 'builder migrate info <system>' for detailed information");
+        Logger.info("Use 'bldr migrate info <system>' for detailed information");
         Logger.info("");
     }
     
@@ -324,7 +324,7 @@ struct MigrateCommand
         if (migrator is null)
         {
             Logger.error("Unknown build system: " ~ systemName);
-            Logger.info("Use 'builder migrate list' to see available systems");
+            Logger.info("Use 'bldr migrate list' to see available systems");
             return;
         }
         
@@ -353,7 +353,7 @@ struct MigrateCommand
         Logger.info("");
         
         Logger.info("Example:");
-        Logger.info("  builder migrate --from=" ~ systemName ~ " --input=" ~ 
+        Logger.info("  bldr migrate --from=" ~ systemName ~ " --input=" ~ 
                    migrator.defaultFileNames()[0]);
         Logger.info("");
     }

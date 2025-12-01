@@ -26,35 +26,35 @@ Platform-specific binaries for the Builder Language Server.
 
 ```bash
 dub build :lsp --build=release --compiler=ldc2 --arch=arm64-apple-macos
-cp bin/builder-lsp distribution/lsp/binaries/builder-lsp-darwin-arm64
+cp bin/bldr-lsp distribution/lsp/binaries/bldr-lsp-darwin-arm64
 ```
 
 #### macOS x86_64 (Intel)
 
 ```bash
 dub build :lsp --build=release --compiler=ldc2 --arch=x86_64-apple-macos
-cp bin/builder-lsp distribution/lsp/binaries/builder-lsp-darwin-x86_64
+cp bin/bldr-lsp distribution/lsp/binaries/bldr-lsp-darwin-x86_64
 ```
 
 #### Linux x86_64
 
 ```bash
 dub build :lsp --build=release --compiler=ldc2 --arch=x86_64-linux-gnu
-cp bin/builder-lsp distribution/lsp/binaries/builder-lsp-linux-x86_64
+cp bin/bldr-lsp distribution/lsp/binaries/bldr-lsp-linux-x86_64
 ```
 
 #### Linux ARM64
 
 ```bash
 dub build :lsp --build=release --compiler=ldc2 --arch=aarch64-linux-gnu
-cp bin/builder-lsp distribution/lsp/binaries/builder-lsp-linux-aarch64
+cp bin/bldr-lsp distribution/lsp/binaries/bldr-lsp-linux-aarch64
 ```
 
 #### Windows x86_64
 
 ```bash
 dub build :lsp --build=release --compiler=ldc2 --arch=x86_64-windows-msvc
-cp bin/builder-lsp.exe distribution/lsp/binaries/builder-lsp-windows-x86_64.exe
+cp bin/bldr-lsp.exe distribution/lsp/binaries/bldr-lsp-windows-x86_64.exe
 ```
 
 ### Build All Platforms
@@ -94,7 +94,7 @@ shasum -a 256 -c SHA256SUMS
 
 2. Test each binary on target platform:
    ```bash
-   ./builder-lsp-<platform> --version
+   ./bldr-lsp-<platform> --version
    ```
 
 3. Generate checksums:
@@ -105,8 +105,8 @@ shasum -a 256 -c SHA256SUMS
 
 4. Tag release:
    ```bash
-   git tag -a v1.0.0 -m "Release v1.0.0"
-   git push origin v1.0.0
+   git tag -a v2.0.0 -m "Release v2.0.0"
+   git push origin v2.0.0
    ```
 
 5. Create GitHub release and attach binaries
@@ -132,15 +132,15 @@ Test each binary before release:
 
 ```bash
 # Basic functionality
-./builder-lsp-darwin-arm64 --version
-./builder-lsp-darwin-arm64 --help
+./bldr-lsp-darwin-arm64 --version
+./bldr-lsp-darwin-arm64 --help
 
 # LSP protocol test
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}' | ./builder-lsp-darwin-arm64
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}' | ./bldr-lsp-darwin-arm64
 
 # Integration test
 cd tests
-./test-lsp-integration.sh ../distribution/lsp/binaries/builder-lsp-darwin-arm64
+./test-lsp-integration.sh ../distribution/lsp/binaries/bldr-lsp-darwin-arm64
 ```
 
 ## Cross-Compilation Notes
@@ -192,7 +192,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: builder-lsp-${{ matrix.os }}
-          path: bin/builder-lsp*
+          path: bin/bldr-lsp*
 ```
 
 ## Troubleshooting

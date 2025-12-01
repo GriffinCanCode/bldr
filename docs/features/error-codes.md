@@ -57,7 +57,7 @@ Builder uses a comprehensive error code system to help you quickly identify and 
   Failed dependencies: core-lib
 
 Suggestions:
-  - Run with verbose output: builder build --verbose
+  - Run with verbose output: bldr build --verbose
   - Check for compilation errors in source files
   - Verify all dependencies are properly configured
 ```
@@ -101,14 +101,14 @@ Suggestions:
 
 Suggestions:
   - Check if the target name is spelled correctly (typos detected automatically)
-  - List available targets: builder query --targets
+  - List available targets: bldr query --targets
   - Check target name spelling in Builderfile
 ```
 
 **Resolution**:
 - Check for typos in target name
 - Verify target is defined in Builderfile
-- Use `builder query --targets` to list valid targets
+- Use `bldr query --targets` to list valid targets
 
 ---
 
@@ -122,7 +122,7 @@ Suggestions:
 
 Suggestions:
   - Verify language handler is installed for this file type
-  - List supported languages: builder query --languages
+  - List supported languages: bldr query --languages
 ```
 
 **Resolution**:
@@ -198,13 +198,13 @@ Suggestions:
 [Parse:InvalidBuildFile] Builderfile is missing required 'targets' field
 
 Suggestions:
-  - Create a valid Builderfile: builder init
+  - Create a valid Builderfile: bldr init
   - See Builderfile examples: docs/user-guides/examples.md
   - Check for required fields: targets array
 ```
 
 **Resolution**:
-- Initialize with `builder init`
+- Initialize with `bldr init`
 - Review Builderfile structure in documentation
 - Ensure all required fields are present
 
@@ -300,7 +300,7 @@ Suggestions:
   Target: web-app
 
 Suggestions:
-  - Run with verbose output: builder build --verbose
+  - Run with verbose output: bldr build --verbose
   - Check for syntax errors in source files
 ```
 
@@ -346,7 +346,7 @@ Suggestions:
     app → lib-a → lib-b → app
 
 Suggestions:
-  - Visualize dependency graph to identify cycle: builder query --graph
+  - Visualize dependency graph to identify cycle: bldr query --graph
   - Break the cycle by removing or refactoring dependencies
 ```
 
@@ -369,7 +369,7 @@ Suggestions:
 
 Suggestions:
   - Add missing dependency to target configuration
-  - Check available targets: builder query --targets
+  - Check available targets: bldr query --targets
 ```
 
 **Resolution**:
@@ -390,12 +390,12 @@ Suggestions:
 [Cache:CacheLoadFailed] Failed to load cached build for 'my-app'
 
 Suggestions:
-  - Clear cache and retry: builder clean --cache
+  - Clear cache and retry: bldr clean --cache
   - Check cache directory permissions
 ```
 
 **Resolution**:
-- Clear cache with `builder clean --cache`
+- Clear cache with `bldr clean --cache`
 - Check filesystem permissions
 - Verify cache directory is not corrupted
 
@@ -410,7 +410,7 @@ Suggestions:
 [Cache:CacheCorrupted] Cache entry corrupted for target 'my-lib'
 
 Suggestions:
-  - Clear the corrupted cache: builder clean --cache
+  - Clear the corrupted cache: bldr clean --cache
   - Rebuild from clean state
 ```
 

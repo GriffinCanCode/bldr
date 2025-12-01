@@ -31,7 +31,7 @@ javascript-vite-react/
 ### Application Target (`app`)
 Bundles the entire React application for production:
 ```bash
-builder build :app
+bldr build :app
 ```
 
 **Configuration:**
@@ -45,7 +45,7 @@ builder build :app
 ### Library Target (`lib`)
 Builds the App component as a reusable library:
 ```bash
-builder build :lib
+bldr build :lib
 ```
 
 **Configuration:**
@@ -182,12 +182,12 @@ npm run dev
 
 For production builds:
 ```bash
-builder build :app
+bldr build :app
 ```
 
 For library builds:
 ```bash
-builder build :lib
+bldr build :lib
 ```
 
 ## Output

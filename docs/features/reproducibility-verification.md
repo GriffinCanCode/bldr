@@ -43,7 +43,7 @@ The reproducibility verification system consists of four main components:
 
 ```bash
 # Analyze command for potential issues without building
-builder verify //main:app --quick
+bldr verify //main:app --quick
 ```
 
 This performs static analysis of the compiler command to identify potential non-determinism sources.
@@ -52,18 +52,18 @@ This performs static analysis of the compiler command to identify potential non-
 
 ```bash
 # Build twice and compare outputs (default)
-builder verify //main:app
+bldr verify //main:app
 
 # Build N times and compare
-builder verify //main:app --iterations 5
+bldr verify //main:app --iterations 5
 
 # Strict mode (fail on non-determinism)
-builder verify //main:app --strict
+bldr verify //main:app --strict
 
 # Different verification strategies
-builder verify //main:app --strategy bitwise
-builder verify //main:app --strategy fuzzy
-builder verify //main:app --strategy structural
+bldr verify //main:app --strategy bitwise
+bldr verify //main:app --strategy fuzzy
+bldr verify //main:app --strategy structural
 ```
 
 ### Configuration
@@ -127,7 +127,7 @@ Fast verification using BLAKE3 hashing:
 - **Best for**: Most builds, CI/CD pipelines
 
 ```bash
-builder verify //main:app --strategy hash
+bldr verify //main:app --strategy hash
 ```
 
 ### BitwiseCompare
@@ -139,7 +139,7 @@ Thorough byte-by-byte comparison:
 - **Best for**: Critical builds, security-sensitive code
 
 ```bash
-builder verify //main:app --strategy bitwise
+bldr verify //main:app --strategy bitwise
 ```
 
 ### Fuzzy
@@ -151,7 +151,7 @@ Ignores metadata and timestamps:
 - **Best for**: Partially deterministic builds
 
 ```bash
-builder verify //main:app --strategy fuzzy
+bldr verify //main:app --strategy fuzzy
 ```
 
 ### Structural
@@ -163,7 +163,7 @@ Format-aware structural comparison:
 - **Best for**: Debug builds with metadata
 
 ```bash
-builder verify //main:app --strategy structural
+bldr verify //main:app --strategy structural
 ```
 
 ## Detection and Repair
@@ -266,7 +266,7 @@ When enabled, Builder will:
 # .github/workflows/build.yml
 - name: Build with determinism verification
   run: |
-    builder verify //main:app --strict --iterations 3
+    bldr verify //main:app --strict --iterations 3
 ```
 
 In CI/CD:
@@ -384,7 +384,7 @@ gdc -frandom-seed=42 -ffile-prefix-map=/workspace/=./
 
 1. **Run Quick Check**
    ```bash
-   builder verify //target:name --quick
+   bldr verify //target:name --quick
    ```
 
 2. **Check Common Issues**
@@ -395,7 +395,7 @@ gdc -frandom-seed=42 -ffile-prefix-map=/workspace/=./
 
 3. **Generate Repair Plan**
    ```bash
-   builder verify //target:name
+   bldr verify //target:name
    ```
    The repair plan will show exact flags to add.
 
@@ -405,7 +405,7 @@ If builds are deterministic but verification fails:
 
 1. **Try Fuzzy Strategy**
    ```bash
-   builder verify //target:name --strategy fuzzy
+   bldr verify //target:name --strategy fuzzy
    ```
 
 2. **Check File Timestamps**

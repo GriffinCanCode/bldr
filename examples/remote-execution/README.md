@@ -65,7 +65,7 @@ builder serve --remote \
 
 ```bash
 # Terminal 2: Build using remote execution
-builder build cpp_project --remote
+bldr build cpp_project --remote
 
 # Output:
 # [INFO] Using remote execution (coordinator: 0.0.0.0:9000)
@@ -148,7 +148,7 @@ You can test without a real worker pool:
 
 ```bash
 # Use local worker (no coordinator)
-builder build cpp_project --remote=local
+bldr build cpp_project --remote=local
 
 # This starts a single worker on localhost
 # Useful for testing hermetic specs
@@ -186,7 +186,7 @@ builder serve --remote --cloud k8s
 ### Baseline (Local Build)
 
 ```
-$ time builder build cpp_project
+$ time bldr build cpp_project
 real    0m 5.234s
 user    0m 4.891s
 sys     0m 0.312s
@@ -195,7 +195,7 @@ sys     0m 0.312s
 ### With Remote Execution (8 Workers)
 
 ```
-$ time builder build cpp_project --remote
+$ time bldr build cpp_project --remote
 real    0m 1.432s   # 3.7x faster
 user    0m 0.123s   # 97% less CPU
 sys     0m 0.045s
@@ -204,7 +204,7 @@ sys     0m 0.045s
 ### With Caching
 
 ```
-$ builder build cpp_project --remote
+$ bldr build cpp_project --remote
 [INFO] Cache hit: cpp_project (stored 2m ago)
 [INFO] Build completed in 45ms   # 116x faster!
 ```
@@ -268,7 +268,7 @@ hermetic:
 **Fix:**
 ```bash
 # Enable audit mode to find violations
-builder build cpp_project --hermetic-audit
+bldr build cpp_project --hermetic-audit
 
 # Output shows what files were accessed outside spec
 ```

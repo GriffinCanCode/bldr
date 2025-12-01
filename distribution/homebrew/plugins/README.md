@@ -14,10 +14,10 @@ brew tap builder/plugins
 
 ```bash
 # Install Docker plugin
-brew install builder-plugin-docker
+brew install bldr-plugin-docker
 
 # Install multiple plugins
-brew install builder-plugin-docker builder-plugin-sonar builder-plugin-notify
+brew install bldr-plugin-docker builder-plugin-sonar builder-plugin-notify
 ```
 
 ### List available plugins
@@ -70,11 +70,11 @@ Create a file `Formula/builder-plugin-myplugin.rb`:
 class BuilderPluginMyplugin < Formula
   desc "My plugin for Builder"
   homepage "https://github.com/GriffinCanCode/builder-plugin-myplugin"
-  url "https://github.com/GriffinCanCode/builder-plugin-myplugin/archive/v1.0.0.tar.gz"
+  url "https://github.com/GriffinCanCode/builder-plugin-myplugin/archive/v2.0.0.tar.gz"
   sha256 "YOUR_SHA256_HERE"
   license "MIT"
 
-  depends_on "builder"
+  depends_on "bldr"
 
   def install
     # For Python plugins
@@ -121,9 +121,9 @@ end
 
 ## Support
 
-- [Builder Documentation](https://github.com/GriffinCanCode/Builder/tree/master/docs)
-- [Plugin Architecture](https://github.com/GriffinCanCode/Builder/blob/master/docs/architecture/PLUGINS.md)
-- [Issues](https://github.com/GriffinCanCode/Builder/issues)
+- [bldr Documentation](https://github.com/GriffinCanCode/bldr/tree/master/docs)
+- [Plugin Architecture](https://github.com/GriffinCanCode/bldr/blob/master/docs/architecture/PLUGINS.md)
+- [Issues](https://github.com/GriffinCanCode/bldr/issues)
 
 ## License
 

@@ -473,7 +473,7 @@ shared static this()
             ErrorCategory.Build,
             Recoverability.Fatal,
             "Build failed",
-            ["Review build output above for specific errors", "Run with verbose output: builder build --verbose"],
+            ["Review build output above for specific errors", "Run with verbose output: bldr build --verbose"],
             "docs/user-guides/examples.md"
         ),
         ErrorCode.BuildTimeout: ErrorRegistryEntry(
@@ -497,7 +497,7 @@ shared static this()
             ErrorCategory.Build,
             Recoverability.User,
             "Target not found",
-            ["Check target name spelling", "List all targets: builder list", "View available targets: builder graph"],
+            ["Check target name spelling", "List all targets: bldr list", "View available targets: bldr graph"],
             "docs/user-guides/examples.md"
         ),
         ErrorCode.HandlerNotFound: ErrorRegistryEntry(
@@ -549,7 +549,7 @@ shared static this()
             ErrorCategory.Cache,
             Recoverability.Transient,
             "Failed to load cache",
-            ["Clear cache: builder clean", "Check cache permissions", "Verify network connectivity for remote cache"],
+            ["Clear cache: bldr clean", "Check cache permissions", "Verify network connectivity for remote cache"],
             "docs/features/caching.md"
         ),
         ErrorCode.NetworkError: ErrorRegistryEntry(
@@ -577,7 +577,7 @@ shared static this()
             ErrorCategory.Plugin,
             Recoverability.Fatal,
             "Plugin error",
-            ["List plugins: builder plugin list", "Refresh registry: builder plugin refresh"],
+            ["List plugins: bldr plugin list", "Refresh registry: bldr plugin refresh"],
             "docs/architecture/plugins.md"
         ),
         
@@ -597,7 +597,7 @@ shared static this()
             ErrorCategory.Watch,
             Recoverability.Fatal,
             "Watch mode error",
-            ["Try manual rebuild: builder build", "Check watch configuration"],
+            ["Try manual rebuild: bldr build", "Check watch configuration"],
             "docs/user-guides/watch.md"
         ),
         
@@ -607,7 +607,7 @@ shared static this()
             ErrorCategory.Config,
             Recoverability.User,
             "Configuration error",
-            ["Check configuration syntax", "Validate with: builder check"],
+            ["Check configuration syntax", "Validate with: bldr check"],
             "docs/architecture/dsl.md"
         ),
     ];

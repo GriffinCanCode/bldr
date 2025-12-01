@@ -49,7 +49,7 @@ BUILDER_CACHE_MAX_AGE_DAYS=30           # 30 days default
 - Source file changes (two-tier hash comparison)
 - Dependency changes (transitive invalidation)
 - Automatic eviction when limits exceeded
-- Manual invalidation via `builder clean`
+- Manual invalidation via `bldr clean`
 
 ### 3. Build Executor (`core/executor.d`)
 

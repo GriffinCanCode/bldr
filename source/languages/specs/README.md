@@ -71,7 +71,7 @@ Command templates support variable substitution:
 
 1. Create `mylang.json` in this directory
 2. Fill in language metadata and commands
-3. Test with: `builder build //path/to:target`
+3. Test with: `bldr build //path/to:target`
 4. No recompilation needed!
 
 ## Integration

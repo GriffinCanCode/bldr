@@ -112,13 +112,13 @@ if (certResult.isOk)
 
 ```bash
 # Add to your CI pipeline
-builder verify
+bldr verify
 
 # Generate and save certificate
-builder verify --certificate build-proof.cert
+bldr verify --certificate build-proof.cert
 
 # Verify existing certificate
-builder verify --check build-proof.cert
+bldr verify --check build-proof.cert
 ```
 
 ## Proof Details
@@ -342,10 +342,10 @@ Comprehensive test suite in `tests/unit/graph/verification.d`:
 
 ```bash
 # Run verification tests
-builder test //tests/unit/graph:verification
+bldr test //tests/unit/graph:verification
 
 # Run all graph tests including verification
-builder test //tests/unit/graph/...
+bldr test //tests/unit/graph/...
 ```
 
 Tests cover:
@@ -376,13 +376,13 @@ Tests cover:
 
 ```bash
 # Generate certificate in CI
-builder verify --certificate ci-proof.cert
+bldr verify --certificate ci-proof.cert
 
 # Commit certificate to repo
 git add ci-proof.cert
 
 # Verify certificate in deployment
-builder verify --check ci-proof.cert
+bldr verify --check ci-proof.cert
 ```
 
 ### Performance Tuning
@@ -397,7 +397,7 @@ For large graphs (>1000 nodes):
 If verification fails:
 
 1. **Acyclicity failure**: Circular dependency detected
-   - Run `builder graph` to visualize
+   - Run `bldr graph` to visualize
    - Break cycle by refactoring
 
 2. **Hermeticity failure**: Input/output overlap

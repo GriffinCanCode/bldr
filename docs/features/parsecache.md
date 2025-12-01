@@ -380,7 +380,7 @@ Run tests:
 
 1. **Enable by default** - Performance benefit with no downsides
 2. **Monitor statistics** - Use `--verbose` to see cache hits
-3. **Clean periodically** - `builder clean` removes old cache
+3. **Clean periodically** - `bldr clean` removes old cache
 
 ### For Developers
 

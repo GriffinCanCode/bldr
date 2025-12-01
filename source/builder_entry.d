@@ -101,7 +101,7 @@ int runBuilder(string[] args)
     
     if (showVersion)
     {
-        writeln("Builder version 2.0.0");
+        writeln("bldr version 2.0.0");
         writeln("High-performance build system for mixed-language monorepos");
         return 0;
     }
@@ -191,9 +191,9 @@ int runBuilder(string[] args)
                 if (args.length < 3)
                 {
                     Logger.error("Query expression required");
-                    Logger.info("Usage: builder query '<expression>' [--format=pretty|list|json|dot]");
-                    Logger.info("Example: builder query 'deps(//...)'");
-                    Logger.info("         builder query 'rdeps(//lib:utils)' --format=json");
+                    Logger.info("Usage: bldr query '<expression>' [--format=pretty|list|json|dot]");
+                    Logger.info("Example: bldr query 'deps(//...)'");
+                    Logger.info("         bldr query 'rdeps(//lib:utils)' --format=json");
                 }
                 else
                 {
@@ -237,7 +237,7 @@ int runBuilder(string[] args)
                 ExplainCommand.execute(args[1 .. $]);
                 break;
             case "version":
-                writeln("Builder version 2.0.0");
+                writeln("bldr version 2.0.0");
                 writeln("High-performance build system for mixed-language monorepos");
                 break;
             default:
@@ -537,7 +537,7 @@ void resumeCommand(in string modeStr) @system
     
     if (!checkpointManager.exists())
     {
-        Logger.error("No checkpoint found. Run 'builder build' first.");
+        Logger.error("No checkpoint found. Run 'bldr build' first.");
         import core.stdc.stdlib : exit;
         exit(1);
     }
@@ -601,7 +601,7 @@ void resumeCommand(in string modeStr) @system
     // Validate checkpoint
     if (!checkpoint.isValid(graph))
     {
-        Logger.error("Checkpoint invalid for current project state. Run 'builder clean' and rebuild.");
+        Logger.error("Checkpoint invalid for current project state. Run 'bldr clean' and rebuild.");
         import core.stdc.stdlib : exit;
         exit(1);
     }

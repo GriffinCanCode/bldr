@@ -9,14 +9,14 @@ Try migrating any of these examples:
 ```bash
 # Bazel
 cd bazel-example
-builder migrate --auto BUILD
+bldr migrate --auto BUILD
 
 # CMake
 cd cmake-example
-builder migrate --auto CMakeLists.txt
+bldr migrate --auto CMakeLists.txt
 
 # Or use explicit system specification
-builder migrate --from=bazel --input=BUILD --output=Builderfile
+bldr migrate --from=bazel --input=BUILD --output=Builderfile
 ```
 
 ## Examples
@@ -32,7 +32,7 @@ builder migrate --from=bazel --input=BUILD --output=Builderfile
 After migrating, test the build:
 
 ```bash
-builder build
+bldr build
 ```
 
 Compare with original build system to ensure correctness.

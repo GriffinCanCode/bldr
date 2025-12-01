@@ -6,25 +6,25 @@
 
 ```bash
 # Optimize within budget
-$ builder build --budget=5.00
+$ bldr build --budget=5.00
 
 # Optimize within time limit (seconds)
-$ builder build --time-limit=120
+$ bldr build --time-limit=120
 
 # Optimize for cost
-$ builder build --optimize=cost
+$ bldr build --optimize=cost
 
 # Optimize for time
-$ builder build --optimize=time
+$ bldr build --optimize=time
 
 # Balanced optimization
-$ builder build --optimize=balanced
+$ bldr build --optimize=balanced
 ```
 
 ### Example Output
 
 ```bash
-$ builder build --budget=5.00
+$ bldr build --budget=5.00
 Starting build...
 Computing optimal build plan...
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -87,7 +87,7 @@ This enables:
 Find the **fastest build** within a budget:
 
 ```bash
-$ builder build --budget=5.00
+$ bldr build --budget=5.00
 ```
 
 **Use Cases**:
@@ -108,7 +108,7 @@ $ builder build --budget=5.00
 Find the **cheapest build** within a time limit:
 
 ```bash
-$ builder build --time-limit=120  # 2 minutes
+$ bldr build --time-limit=120  # 2 minutes
 ```
 
 **Use Cases**:
@@ -130,13 +130,13 @@ Optimize for a specific objective:
 
 ```bash
 # Minimize cost (no time constraint)
-$ builder build --optimize=cost
+$ bldr build --optimize=cost
 
 # Minimize time (no cost constraint)
-$ builder build --optimize=time
+$ bldr build --optimize=time
 
 # Balance cost and time (α=0.5)
-$ builder build --optimize=balanced
+$ bldr build --optimize=balanced
 ```
 
 **Use Cases**:
@@ -396,25 +396,25 @@ workspace {
 
 ```bash
 # Budget-constrained build
-builder build --budget=5.00
+bldr build --budget=5.00
 
 # Time-constrained build
-builder build --time-limit=120
+bldr build --time-limit=120
 
 # Cost-optimized build
-builder build --optimize=cost
+bldr build --optimize=cost
 
 # Time-optimized build
-builder build --optimize=time
+bldr build --optimize=time
 
 # Balanced build (default)
-builder build --optimize=balanced
+bldr build --optimize=balanced
 
 # Combine with remote execution
-builder build --remote --budget=10.00
+bldr build --remote --budget=10.00
 
 # Environment-based configuration
-BUILDER_BUDGET=5.00 builder build
+BUILDER_BUDGET=5.00 bldr build
 ```
 
 ## API Reference

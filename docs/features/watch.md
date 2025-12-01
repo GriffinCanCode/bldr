@@ -328,7 +328,7 @@ TelemetryCollector.recordBuild(
 );
 
 // Statistics available via telemetry command
-builder telemetry
+bldr telemetry
 ```
 
 ## Performance Optimizations

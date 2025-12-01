@@ -174,7 +174,7 @@ auto targets = generator.generate();
 
 ```bash
 # Test with specific Builder binary
-dub run --single integration_bench.d -- --builder=/path/to/builder
+dub run --single integration_bench.d -- --builder=/path/to/bldr
 
 # Use custom workspace
 dub run --single integration_bench.d -- --workspace=/tmp/bench
@@ -262,7 +262,7 @@ SCENARIO 1/8: Clean build - 50K targets
 ║         Testing actual Builder with 50K-100K targets          ║
 ╚════════════════════════════════════════════════════════════════╝
 
-✓ Using Builder binary: ./bin/builder
+✓ Using Builder binary: ./bin/bldr
 
 SCENARIO 1/4: Real build - 50K targets (clean)
 ================================================================
@@ -273,7 +273,7 @@ SCENARIO 1/4: Real build - 50K targets (clean)
   ✓ Cleaned cache directory
 
 [PHASE 3] Running Builder System
-  Executing: ./bin/builder build
+  Executing: ./bin/bldr build
   ✓ Build succeeded
   Build time: 67,890 ms
 
@@ -376,7 +376,7 @@ Target generation is I/O bound:
 make
 
 # Or specify path
-dub run --single integration_bench.d -- --builder=/path/to/builder
+dub run --single integration_bench.d -- --builder=/path/to/bldr
 ```
 
 ## Integration with CI/CD

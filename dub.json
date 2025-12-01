@@ -1,12 +1,12 @@
 {
-    "name": "builder",
+    "name": "bldr",
     "description": "High-performance build system for mixed-language monorepos",
     "authors": ["Griffin"],
     "copyright": "Copyright © 2025",
     "license": "MIT",
     "targetType": "executable",
     "targetPath": "bin",
-    "targetName": "builder",
+    "targetName": "bldr",
     
     "sourcePaths": ["source"],
     "importPaths": ["source"],
@@ -20,7 +20,7 @@
         {
             "name": "default",
             "targetType": "executable",
-            "targetName": "builder",
+            "targetName": "bldr",
             "mainSourceFile": "source/app.d",
             "excludedSourceFiles": ["source/frontend/lsp/core/main.d"],
             "sourceFiles": [
@@ -44,7 +44,7 @@
         {
             "name": "lsp",
             "targetType": "executable",
-            "targetName": "builder-lsp",
+            "targetName": "bldr-lsp",
             "mainSourceFile": "source/frontend/lsp/core/main.d",
             "excludedSourceFiles": [
                 "source/app.d"

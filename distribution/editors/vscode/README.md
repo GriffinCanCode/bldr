@@ -78,7 +78,7 @@ The extension will automatically detect the LSP server in this order:
 1. Custom path specified in `builder.lsp.serverPath` setting
 2. Bundled LSP server (included in extension)
 3. System-wide installation (`builder-lsp` in PATH)
-4. Homebrew installation (`/opt/homebrew/bin/builder-lsp`)
+4. Homebrew installation (`/opt/homebrew/bin/bldr-lsp`)
 
 ## Commands
 

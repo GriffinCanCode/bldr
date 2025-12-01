@@ -1,12 +1,12 @@
 class BuilderPluginExample < Formula
   desc "Example plugin for Builder build system"
-  homepage "https://github.com/builder-plugins/example"
-  url "https://github.com/builder-plugins/example/archive/v1.0.0.tar.gz"
+  homepage "https://github.com/GriffinCanCode/bldr"
+  url "https://github.com/GriffinCanCode/bldr/archive/v2.0.0.tar.gz"
   sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   license "MIT"
-  head "https://github.com/builder-plugins/example.git", branch: "main"
+  head "https://github.com/GriffinCanCode/bldr.git", branch: "master"
 
-  depends_on "builder"
+  depends_on "bldr"
   
   # For Python plugins
   # depends_on "python@3.11"

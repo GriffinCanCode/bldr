@@ -69,11 +69,11 @@ mkdir -p "$BIN_DIR"
 
 # Copy binary
 if [ "$PLATFORM" = "win32" ]; then
-    cp bin/builder-lsp.exe "$BIN_DIR/"
+    cp bin/bldr-lsp.exe "$BIN_DIR/"
     echo -e "${GREEN}✓ Copied builder-lsp.exe to $BIN_DIR${NC}"
 else
-    cp bin/builder-lsp "$BIN_DIR/"
-    chmod +x "$BIN_DIR/builder-lsp"
+    cp bin/bldr-lsp "$BIN_DIR/"
+    chmod +x "$BIN_DIR/bldr-lsp"
     echo -e "${GREEN}✓ Copied builder-lsp to $BIN_DIR${NC}"
 fi
 echo
@@ -110,7 +110,7 @@ echo
 
 # Step 6: Verify binary is in package
 echo -e "${BLUE}Step 6: Verifying binary in package...${NC}"
-if unzip -l "$VSIX_FILE" | grep -q "bin/${PLATFORM}-${ARCH}/builder-lsp"; then
+if unzip -l "$VSIX_FILE" | grep -q "bin/${PLATFORM}-${ARCH}/bldr-lsp"; then
     echo -e "${GREEN}✓ Binary found in package for ${PLATFORM}-${ARCH}${NC}"
 else
     echo -e "${RED}✗ Binary NOT found in package${NC}"
@@ -126,7 +126,7 @@ echo -e "${GREEN}✓ Extension ready for testing!${NC}"
 echo -e "${BLUE}════════════════════════════════════════════════════════${NC}"
 echo
 echo -e "Package: ${YELLOW}${VSIX_FILE}${NC}"
-echo -e "Platform binary: ${YELLOW}bin/${PLATFORM}-${ARCH}/builder-lsp${NC}"
+echo -e "Platform binary: ${YELLOW}bin/${PLATFORM}-${ARCH}/bldr-lsp${NC}"
 echo
 echo -e "${YELLOW}To install and test:${NC}"
 echo -e "  code --install-extension ${VSIX_FILE}"

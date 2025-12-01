@@ -1,7 +1,7 @@
 #!/usr/bin/env dub
 /+ dub.sdl:
     name "type_safe_errors_example"
-    dependency "builder" path="../.."
+    dependency "bldr" path="../.."
 +/
 
 /**
@@ -72,7 +72,7 @@ void demonstrateBuilderPattern()
         .withFileCheck("Ensure main.d defines a main() function")
         .withCommand("Check for compilation errors", "dmd -c main.d")
         .withDocs("See D language documentation", "https://dlang.org/spec/function.html")
-        .withCommand("Build with verbose output", "builder build --verbose")
+        .withCommand("Build with verbose output", "bldr build --verbose")
         .build();
     
     writeln("Build Error with Builder Pattern:");
@@ -169,11 +169,11 @@ void antiPatterns()
     // auto error = new IOError("", "Failed");
     
     // ❌ BAD: String-based suggestions without structure
-    // error.addSuggestion("Try: builder clean");
+    // error.addSuggestion("Try: bldr clean");
     
     // ✅ GOOD: Structured, typed suggestions
     auto error = buildFailureError("myapp", "Build failed");
-    error.addSuggestion(ErrorSuggestion.command("Clear cache", "builder clean"));
+    error.addSuggestion(ErrorSuggestion.command("Clear cache", "bldr clean"));
     error.addContext(ErrorContext("building target", "using cached dependencies"));
 }
 

@@ -250,7 +250,7 @@ Repositories fetched only when:
 
 ```bash
 # Implicit fetch (during build)
-builder build :app-with-fmt
+bldr build :app-with-fmt
 
 # Explicit fetch (no build)
 builder repo fetch fmt
@@ -658,7 +658,7 @@ Got:      abc123...
 Solutions:
 1. Verify hash from official source
 2. Re-download (may be corrupted)
-3. Compute hash: `builder repo hash file.tar.gz`
+3. Compute hash: `bldr repo hash file.tar.gz`
 
 **Archive Extraction Failed:**
 ```
@@ -683,7 +683,7 @@ Solutions:
 ```
 Warning: Invalid cache entry, removing...
 ```
-Solution: Automatic re-fetch. Or: `builder repo clean fmt && builder build`
+Solution: Automatic re-fetch. Or: `bldr repo clean fmt && bldr build`
 
 ## Future Enhancements
 

@@ -16,13 +16,13 @@ export BUILDER_TELEMETRY_ENABLED=0
 
 ```bash
 # Show comprehensive summary
-builder telemetry
+bldr telemetry
 
 # Show recent builds
-builder telemetry recent 10
+bldr telemetry recent 10
 
 # Export data
-builder telemetry export > telemetry.json
+bldr telemetry export > telemetry.json
 ```
 
 ## Features
@@ -83,9 +83,9 @@ export BUILDER_TELEMETRY_RETENTION_DAYS=90
 Display comprehensive analytics:
 
 ```bash
-builder telemetry
+bldr telemetry
 # or
-builder telemetry summary
+bldr telemetry summary
 ```
 
 **Output Example:**
@@ -122,7 +122,7 @@ Build Time Trend: Stable
 View recent build history:
 
 ```bash
-builder telemetry recent [count]
+bldr telemetry recent [count]
 ```
 
 **Output Example:**
@@ -148,10 +148,10 @@ Export telemetry in various formats:
 
 ```bash
 # JSON (structured data)
-builder telemetry export > telemetry.json
+bldr telemetry export > telemetry.json
 
 # CSV (for spreadsheet analysis)
-builder telemetry export --format csv > telemetry.csv
+bldr telemetry export --format csv > telemetry.csv
 ```
 
 **JSON Format:**
@@ -179,7 +179,7 @@ builder telemetry export --format csv > telemetry.csv
 Remove all telemetry data:
 
 ```bash
-builder telemetry clear
+bldr telemetry clear
 ```
 
 ## Use Cases
@@ -189,7 +189,7 @@ builder telemetry clear
 Identify bottlenecks and focus optimization efforts:
 
 ```bash
-builder telemetry summary | grep "Bottlenecks"
+bldr telemetry summary | grep "Bottlenecks"
 ```
 
 ### 2. **Monitor CI/CD Performance**
@@ -198,11 +198,11 @@ Track build performance over time in continuous integration:
 
 ```bash
 # In CI pipeline
-builder build
-builder telemetry export > artifacts/telemetry-${BUILD_ID}.json
+bldr build
+bldr telemetry export > artifacts/telemetry-${BUILD_ID}.json
 
 # Fail build on regression
-if builder telemetry summary | grep -q "Performance Regressions"; then
+if bldr telemetry summary | grep -q "Performance Regressions"; then
     echo "⚠️ Build regression detected!"
     exit 1
 fi
@@ -214,12 +214,12 @@ Compare different build configurations:
 
 ```bash
 # Baseline
-BUILDER_PARALLEL=4 builder build
-builder telemetry recent 1 > baseline.txt
+BUILDER_PARALLEL=4 bldr build
+bldr telemetry recent 1 > baseline.txt
 
 # Experiment
-BUILDER_PARALLEL=8 builder build
-builder telemetry recent 1 > experiment.txt
+BUILDER_PARALLEL=8 bldr build
+bldr telemetry recent 1 > experiment.txt
 
 diff baseline.txt experiment.txt
 ```
@@ -230,7 +230,7 @@ Export and aggregate telemetry across the team:
 
 ```bash
 # Each developer exports their data
-builder telemetry export > ~/telemetry-$(whoami).json
+bldr telemetry export > ~/telemetry-$(whoami).json
 
 # Aggregate in data warehouse
 cat ~/telemetry-*.json | jq -s '.' | upload-to-analytics
@@ -242,7 +242,7 @@ Alert when builds exceed SLA:
 
 ```bash
 # Check if last build exceeded 5 minutes
-LAST_BUILD_MS=$(builder telemetry recent 1 | grep -oP '\d+(?=ms)' | head -1)
+LAST_BUILD_MS=$(bldr telemetry recent 1 | grep -oP '\d+(?=ms)' | head -1)
 if [ "$LAST_BUILD_MS" -gt 300000 ]; then
     notify-slack "Build exceeded 5min SLA: ${LAST_BUILD_MS}ms"
 fi
@@ -300,7 +300,7 @@ Telemetry has minimal performance impact:
 For performance-critical builds, you can disable telemetry:
 
 ```bash
-BUILDER_TELEMETRY_ENABLED=0 builder build
+BUILDER_TELEMETRY_ENABLED=0 bldr build
 ```
 
 ## Data Privacy
@@ -316,7 +316,7 @@ BUILDER_TELEMETRY_ENABLED=0 builder build
 
 ```bash
 # Export to Prometheus format
-builder telemetry export | jq '.sessions[] | 
+bldr telemetry export | jq '.sessions[] | 
   "builder_duration_ms \(.durationMs) \(.startTime)\n
    builder_cache_hit_rate \(.cacheHitRate) \(.startTime)\n
    builder_targets_per_second \(.targetsPerSecond) \(.startTime)"'
@@ -359,7 +359,7 @@ echo $BUILDER_TELEMETRY_ENABLED
 
 # Enable explicitly
 export BUILDER_TELEMETRY_ENABLED=1
-builder build
+bldr build
 ```
 
 ### Storage Issues
@@ -372,7 +372,7 @@ builder build
 ls -la .builder-cache/telemetry/
 
 # Clear corrupted data
-builder telemetry clear
+bldr telemetry clear
 ```
 
 ### Disk Space
@@ -388,7 +388,7 @@ export BUILDER_TELEMETRY_RETENTION_DAYS=30
 export BUILDER_TELEMETRY_MAX_SESSIONS=500
 
 # Clear old data
-builder telemetry clear
+bldr telemetry clear
 ```
 
 ## Best Practices
@@ -399,7 +399,7 @@ Set up daily/weekly reviews of telemetry:
 
 ```bash
 # Add to cron
-0 9 * * 1 builder telemetry summary | mail -s "Weekly Build Report" team@example.com
+0 9 * * 1 bldr telemetry summary | mail -s "Weekly Build Report" team@example.com
 ```
 
 ### 2. **Baseline Establishment**
@@ -408,7 +408,7 @@ Establish performance baselines:
 
 ```bash
 # After optimizations
-builder telemetry summary > baseline-2025-10.txt
+bldr telemetry summary > baseline-2025-10.txt
 ```
 
 ### 3. **Regression Prevention**
@@ -419,10 +419,10 @@ Add telemetry checks to CI/CD:
 # .github/workflows/build.yml
 - name: Build and check performance
   run: |
-    builder build
-    builder telemetry summary
+    bldr build
+    bldr telemetry summary
     # Fail if regression detected
-    ! builder telemetry summary | grep -q "Performance Regressions"
+    ! bldr telemetry summary | grep -q "Performance Regressions"
 ```
 
 ### 4. **Data Export for Analysis**
@@ -431,7 +431,7 @@ Regularly export data for long-term analysis:
 
 ```bash
 # Monthly export
-builder telemetry export > telemetry-$(date +%Y-%m).json
+bldr telemetry export > telemetry-$(date +%Y-%m).json
 ```
 
 ## See Also

@@ -459,7 +459,7 @@ auto discovery = DiscoveryBuilder.forTarget(target.id)
 
 ```bash
 export BUILDER_LOG_LEVEL=debug
-builder build
+bldr build
 ```
 
 Look for discovery-related messages:
@@ -474,7 +474,7 @@ Look for discovery-related messages:
 ### Visualize Dynamic Graph
 
 ```bash
-builder graph --show-discovered
+bldr graph --show-discovered
 ```
 
 Discovered nodes are highlighted in the graph visualization.
@@ -482,7 +482,7 @@ Discovered nodes are highlighted in the graph visualization.
 ### Query Discoveries
 
 ```bash
-builder query --discoveries
+bldr query --discoveries
 ```
 
 Shows all discoveries made during the last build:

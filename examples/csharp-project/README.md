@@ -13,12 +13,12 @@ A demonstration of modern C# features and Builder integration.
 
 ### Standard Build
 ```bash
-builder build csharp-app
+bldr build csharp-app
 ```
 
 ### Native AOT Build (requires .NET 8+)
 ```bash
-builder build csharp-app-aot
+bldr build csharp-app-aot
 ```
 
 ### Run

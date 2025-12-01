@@ -10,7 +10,7 @@ key_points:
   - "RAM estimation: Avoid OOM by scheduling based on memory"
 
 usage_examples:
-  - command: "builder build -j 4 --resources=ram:8000"
+  - command: "bldr build -j 4 --resources=ram:8000"
     description: "Build with 4 jobs and 8GB RAM limit"
 
 related: [concurrency, performance, coordinator]

@@ -15,7 +15,7 @@ Builder provides enterprise-grade test execution with intelligent features that 
 ### 1. Initialize Configuration
 
 ```bash
-builder test --init-config
+bldr test --init-config
 ```
 
 This creates `.buildertest` with sensible defaults:
@@ -34,13 +34,13 @@ This creates `.buildertest` with sensible defaults:
 
 ```bash
 # Use default configuration
-builder test
+bldr test
 
 # Override specific settings
-builder test --shards 8 --analytics
+bldr test --shards 8 --analytics
 
 # Disable features
-builder test --no-cache --no-retry
+bldr test --no-cache --no-retry
 ```
 
 ## Configuration
@@ -90,18 +90,18 @@ CLI flags override config file settings:
 
 ```bash
 # Execution
-builder test -j 8                    # 8 parallel jobs
-builder test --shards 16             # 16 test shards
-builder test --no-shard              # Disable sharding
+bldr test -j 8                    # 8 parallel jobs
+bldr test --shards 16             # 16 test shards
+bldr test --no-shard              # Disable sharding
 
 # Caching
-builder test --no-cache              # Disable caching
-builder test --no-retry              # Disable retry
+bldr test --no-cache              # Disable caching
+bldr test --no-retry              # Disable retry
 
 # Output
-builder test --analytics             # Generate analytics
-builder test --junit results.xml     # JUnit XML output
-builder test -v                      # Verbose output
+bldr test --analytics             # Generate analytics
+bldr test --junit results.xml     # JUnit XML output
+bldr test -v                      # Verbose output
 ```
 
 ## Features
@@ -121,10 +121,10 @@ Distribute tests across workers for optimal parallelism.
 
 ```bash
 # Auto-detect optimal shards
-builder test
+bldr test
 
 # Specify shard count
-builder test --shards 8
+bldr test --shards 8
 
 # Change strategy in .buildertest
 {
@@ -152,10 +152,10 @@ Skip tests whose inputs haven't changed.
 
 ```bash
 # Enable caching (default)
-builder test
+bldr test
 
 # Disable caching
-builder test --no-cache
+bldr test --no-cache
 
 # Configure in .buildertest
 {
@@ -186,10 +186,10 @@ Bayesian statistical model identifies flaky tests.
 
 ```bash
 # Enable detection (default)
-builder test
+bldr test
 
 # Skip quarantined tests
-builder test --skip-quarantined
+bldr test --skip-quarantined
 
 # Configure in .buildertest
 {
@@ -224,10 +224,10 @@ delay = initialDelay * (backoff ^ attempt)
 
 ```bash
 # Enable retry (default)
-builder test
+bldr test
 
 # Disable retry
-builder test --no-retry
+bldr test --no-retry
 
 # Configure in .buildertest
 {
@@ -252,7 +252,7 @@ Comprehensive test suite health analysis.
 
 ```bash
 # Generate analytics report
-builder test --analytics
+bldr test --analytics
 ```
 
 **Output:**
@@ -349,7 +349,7 @@ Ensure tests:
 Regular run analytics to identify issues:
 
 ```bash
-builder test --analytics
+bldr test --analytics
 ```
 
 Act on recommendations:
@@ -402,7 +402,7 @@ Useful for:
 
 1. **Detect flaky tests:**
 ```bash
-builder test --analytics
+bldr test --analytics
 ```
 
 2. **Skip quarantined in CI:**
@@ -415,7 +415,7 @@ builder test --analytics
 3. **Fix and release:**
 ```bash
 # Run only quarantined tests
-builder query 'attr(quarantined, 1, tests(//...))'
+bldr query 'attr(quarantined, 1, tests(//...))'
 ```
 
 ### Performance Tuning
@@ -424,12 +424,12 @@ Experiment with shard count:
 
 ```bash
 # Try different shard counts
-builder test --shards 4
-builder test --shards 8
-builder test --shards 16
+bldr test --shards 4
+bldr test --shards 8
+bldr test --shards 16
 
 # Check analytics for optimal setting
-builder test --shards 8 --analytics
+bldr test --shards 8 --analytics
 ```
 
 Look for:
@@ -450,7 +450,7 @@ Look for:
 **Solution:**
 ```bash
 # Disable hermetic if environment varies
-builder test --hermetic=false
+bldr test --hermetic=false
 
 # Clear cache
 rm -rf .builder-cache/tests
@@ -476,7 +476,7 @@ Increase detection threshold in custom code or run more iterations to build conf
 }
 
 # Increase shard count
-builder test --shards 16
+bldr test --shards 16
 ```
 
 ## API Reference
@@ -489,13 +489,13 @@ See [Test API Documentation](../api/testing.md) for programmatic usage.
 
 Old:
 ```bash
-builder test --verbose --fail-fast
+bldr test --verbose --fail-fast
 ```
 
 New:
 ```bash
-builder test --init-config
-builder test -v --fail-fast
+bldr test --init-config
+bldr test -v --fail-fast
 ```
 
 ### From Bazel
@@ -519,7 +519,7 @@ New (`.buildertest`):
 
 Then:
 ```bash
-builder test
+bldr test
 ```
 
 ## Future Enhancements

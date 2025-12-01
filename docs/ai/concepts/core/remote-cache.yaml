@@ -49,7 +49,7 @@ deployment_options:
 setup:
   server_start: |
     # Start cache server
-    builder cache-server --port=8080 --cache-dir=/var/cache/builder
+    builder cache-server --port=8080 --cache-dir=/var/cache/bldr
   
   client_config: |
     # Configure client
@@ -66,13 +66,13 @@ setup:
   
   build_with_cache: |
     # First build (populates cache)
-    builder build //app
+    bldr build //app
     # Uploads artifacts to remote cache in background
     
     # Clean build on another machine
     git clone repo && cd repo
     export BUILDER_REMOTE_CACHE_URL=http://cache-server:8080
-    builder build //app
+    bldr build //app
     # Downloads artifacts from remote cache - 85% faster
 
 protocol:
@@ -137,7 +137,7 @@ monitoring:
     - "Storage usage"
     - "Most cached artifacts"
   
-  command: "builder telemetry remote-cache"
+  command: "bldr telemetry remote-cache"
   output: |
     Remote Cache Statistics:
       URL: http://cache-server:8080
@@ -167,7 +167,7 @@ troubleshooting:
 related: [caching, action-cache, distributed, cdn]
 
 next_steps: |
-  - See 'builder explain workflow setup-remote-cache' for step-by-step setup
-  - See 'builder explain caching' for overall architecture
+  - See 'bldr explain workflow setup-remote-cache' for step-by-step setup
+  - See 'bldr explain caching' for overall architecture
   - See docs/features/remotecache.md for detailed documentation
 

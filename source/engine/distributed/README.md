@@ -121,13 +121,13 @@ builder-worker \
 
 ```bash
 # Auto-detect coordinator
-builder build --distributed
+bldr build --distributed
 
 # Explicit coordinator
-builder build --coordinator http://coordinator:9000
+bldr build --coordinator http://coordinator:9000
 
 # Mixed local + distributed
-builder build --distributed --local-workers 4
+bldr build --distributed --local-workers 4
 ```
 
 ## Configuration

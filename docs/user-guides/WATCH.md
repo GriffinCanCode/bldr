@@ -17,16 +17,16 @@ Watch mode is a powerful development feature that continuously monitors your sou
 
 ```bash
 # Watch all targets
-builder build --watch
+bldr build --watch
 
 # Watch specific target
-builder build --watch //src:app
+bldr build --watch //src:app
 
 # Standalone watch command
-builder watch
+bldr watch
 
 # Custom debounce delay
-builder build --watch --debounce=500
+bldr build --watch --debounce=500
 ```
 
 ## Features
@@ -64,7 +64,7 @@ builder build --watch --debounce=500
 
 ```bash
 # Start watch mode
-builder build --watch
+bldr build --watch
 ```
 
 This will:
@@ -77,7 +77,7 @@ This will:
 
 ```bash
 # Watch only a specific target
-builder build --watch //backend:api
+bldr build --watch //backend:api
 ```
 
 Watches only the specified target and its dependencies.
@@ -86,16 +86,16 @@ Watches only the specified target and its dependencies.
 
 ```bash
 # Watch with dependency graph
-builder build --watch --graph
+bldr build --watch --graph
 
 # Watch without clearing screen
-builder build --watch --no-clear
+bldr build --watch --no-clear
 
 # Watch with custom debounce
-builder build --watch --debounce=1000
+bldr build --watch --debounce=1000
 
 # Watch in verbose mode
-builder build --watch --verbose
+bldr build --watch --verbose
 ```
 
 ## Options
@@ -120,10 +120,10 @@ The debounce delay controls how long the watcher waits after the last file chang
 
 ```bash
 # Fast feedback
-builder build --watch --debounce=100
+bldr build --watch --debounce=100
 
 # Conservative (better for large projects)
-builder build --watch --debounce=1000
+bldr build --watch --debounce=1000
 ```
 
 ## Platform Support
@@ -362,10 +362,10 @@ For large monorepos, watch only relevant targets:
 
 ```bash
 # Instead of watching everything
-builder build --watch
+bldr build --watch
 
 # Watch only frontend
-builder build --watch //frontend:app
+bldr build --watch //frontend:app
 ```
 
 ### 3. Optimize Debounce for Workflow
@@ -378,10 +378,10 @@ builder build --watch //frontend:app
 
 ```bash
 # Clean output between builds (default)
-builder build --watch --clear
+bldr build --watch --clear
 
 # Preserve history for debugging
-builder build --watch --no-clear
+bldr build --watch --no-clear
 ```
 
 ### 5. Monitor Build Statistics
@@ -404,14 +404,14 @@ Combine with shell scripts for advanced workflows:
 #!/bin/bash
 # watch-and-test.sh
 
-builder build --watch &
+bldr build --watch &
 WATCH_PID=$!
 
 # Run tests on each successful build
 while true; do
     inotifywait -e modify -r src/
-    if builder build; then
-        builder test
+    if bldr build; then
+        bldr test
     fi
 done
 
@@ -449,7 +449,7 @@ FROM dlang/ldc
 WORKDIR /app
 COPY . .
 
-RUN builder build
+RUN bldr build
 
 CMD ["builder", "build", "--watch"]
 ```
@@ -520,7 +520,7 @@ sudo yum install inotify-tools
 
 ```bash
 # Watch React app with browser reload
-builder build --watch //frontend:app
+bldr build --watch //frontend:app
 
 # The built app will be in bin/
 # Use a dev server with hot reload:
@@ -532,27 +532,27 @@ cd bin && npx serve -s
 
 ```bash
 # Watch Go API server
-builder build --watch //backend:api
+bldr build --watch //backend:api
 
 # Auto-restart on changes (with entr)
-builder build --watch | entr -r ./bin/api
+bldr build --watch | entr -r ./bin/api
 ```
 
 ### Monorepo Development
 
 ```bash
 # Watch multiple related targets
-builder build --watch //services/auth:api //services/users:api
+bldr build --watch //services/auth:api //services/users:api
 ```
 
 ### Test-Driven Development
 
 ```bash
 # Watch tests
-builder build --watch //tests:unit
+bldr build --watch //tests:unit
 
 # Or watch main target and run tests after each build
-builder build --watch && builder test
+bldr build --watch && bldr test
 ```
 
 ## Comparison with Other Tools
@@ -580,6 +580,6 @@ Watch mode is an essential tool for modern development workflows. By automatical
 
 For more information, run:
 ```bash
-builder help watch
+bldr help watch
 ```
 

@@ -14,7 +14,7 @@ Generate code from `.proto` files and automatically create compile targets:
 
 ```bash
 cd protobuf
-builder build
+bldr build
 ```
 
 **What happens:**
@@ -29,7 +29,7 @@ Expand template files to generate source code:
 
 ```bash
 cd templates
-builder build
+bldr build
 ```
 
 **What happens:**
@@ -44,7 +44,7 @@ Generate code for multiple languages from one source:
 
 ```bash
 cd multi-lang
-builder build
+bldr build
 ```
 
 **What happens:**
@@ -104,7 +104,7 @@ builder discover --history
 Normal build automatically handles discovery:
 
 ```bash
-builder build
+bldr build
 ```
 
 ### Watch Mode with Discovery
@@ -112,7 +112,7 @@ builder build
 Watch mode automatically re-runs discovery when sources change:
 
 ```bash
-builder watch
+bldr watch
 ```
 
 ## How It Works
@@ -257,7 +257,7 @@ foreach (file; files) {
 Discovery results are automatically cached. Clean cache to force re-discovery:
 
 ```bash
-builder clean --discovery
+bldr clean --discovery
 ```
 
 ## Troubleshooting
@@ -271,7 +271,7 @@ builder clean --discovery
 
 2. Enable debug logging:
    ```bash
-   BUILDER_LOG_LEVEL=debug builder build
+   BUILDER_LOG_LEVEL=debug bldr build
    ```
 
 3. Check discovery history:

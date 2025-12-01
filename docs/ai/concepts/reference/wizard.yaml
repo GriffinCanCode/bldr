@@ -12,12 +12,12 @@ key_points:
   - "Multi-language: Supports all Builder languages"
 
 usage_examples:
-  - command: "builder init"
+  - command: "bldr init"
     description: "Start the wizard for a new or existing project"
 
 related: [cli, workspace, languages]
 
 next_steps: |
-  - Run 'builder init' in an empty directory to start a new project
-  - Run 'builder init' in an existing codebase to generate a builder.yml
+  - Run 'bldr init' in an empty directory to start a new project
+  - Run 'bldr init' in an existing codebase to generate a builder.yml
 

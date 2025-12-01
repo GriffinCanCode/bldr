@@ -89,15 +89,15 @@ configuration:
 
 usage_examples:
   - description: "Check if build is cached"
-    command: "builder build //target"
+    command: "bldr build //target"
     output: |
       [Cache Hit] //target - 32ms (skipped build)
   
   - description: "Clean cache and rebuild"
-    command: "builder clean && builder build //target"
+    command: "bldr clean && bldr build //target"
   
   - description: "View cache statistics"
-    command: "builder telemetry cache"
+    command: "bldr telemetry cache"
     output: |
       Target Cache: 1,248 entries, 2.4 GB, 87.3% hit rate
       Action Cache: 15,392 actions, 420 MB, 91.2% hit rate
@@ -121,19 +121,19 @@ related: [blake3, determinism, action-cache, remote-cache, incremental, content-
 common_issues:
   - problem: "Cache always misses"
     cause: "Non-deterministic builds (timestamps, random values)"
-    solution: "See 'builder explain determinism' to fix"
+    solution: "See 'bldr explain determinism' to fix"
   
   - problem: "Cache growing too large"
     cause: "No eviction policy configured"
-    solution: "Set BUILDER_CACHE_MAX_SIZE or run 'builder clean'"
+    solution: "Set BUILDER_CACHE_MAX_SIZE or run 'bldr clean'"
   
   - problem: "Remote cache slow"
     cause: "Network latency or large artifacts"
     solution: "Use CDN or compression, or disable for local dev"
 
 next_steps: |
-  - See 'builder explain action-cache' for fine-grained caching
-  - See 'builder explain remote-cache' for team collaboration setup
-  - See 'builder explain determinism' to ensure cache reliability
-  - See 'builder explain workflow setup-cache' for configuration guide
+  - See 'bldr explain action-cache' for fine-grained caching
+  - See 'bldr explain remote-cache' for team collaboration setup
+  - See 'bldr explain determinism' to ensure cache reliability
+  - See 'bldr explain workflow setup-cache' for configuration guide
 

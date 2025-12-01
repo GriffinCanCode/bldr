@@ -82,5 +82,5 @@ related: [builderfile, dependencies, build-graph]
 
 next_steps: |
   - See docs/user-guides/cli.md for target syntax
-  - See 'builder explain example targets' for complete examples
+  - See 'bldr explain example targets' for complete examples
 

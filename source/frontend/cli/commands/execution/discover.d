@@ -95,7 +95,7 @@ void discoverCommand(string[] args)
         
         writeln();
         writeln("💡 These targets will discover new dependencies at build time");
-        writeln("   Run 'builder build' to execute discovery and build");
+        writeln("   Run 'bldr build' to execute discovery and build");
     }
     else
     {
@@ -120,7 +120,7 @@ void discoverHistoryCommand()
     if (!exists(historyFile))
     {
         Logger.warning("No discovery history found");
-        writeln("Run 'builder build' first to generate discovery data");
+        writeln("Run 'bldr build' first to generate discovery data");
         return;
     }
     

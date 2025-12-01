@@ -11,7 +11,7 @@ key_points:
   - "GC: Cleaning up old artifacts"
 
 usage_examples:
-  - command: "builder clean"
+  - command: "bldr clean"
     description: "Remove all artifacts"
 
 related: [caching, workspace, targets]

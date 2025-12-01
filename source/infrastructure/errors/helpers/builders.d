@@ -64,7 +64,7 @@ auto createParseError(
     else if (fileName == "Builderfile")
     {
         error.addSuggestion(ErrorSuggestion.docs("Review Builderfile syntax", "docs/user-guides/examples.md"));
-        error.addSuggestion(ErrorSuggestion.command("Reinitialize Builderfile", "builder init"));
+        error.addSuggestion(ErrorSuggestion.command("Reinitialize Builderfile", "bldr init"));
         error.addSuggestion(ErrorSuggestion("Check for required fields: name, type, language, inputs"));
     }
     else if (fileName == "Builderspace")
@@ -109,9 +109,9 @@ auto createFileReadError(
         
         string fileName = baseName(filePath);
         if (fileName == "Builderfile")
-            error.addSuggestion(ErrorSuggestion.command("Create Builderfile", "builder init"));
+            error.addSuggestion(ErrorSuggestion.command("Create Builderfile", "bldr init"));
         else if (fileName == "Builderspace")
-            error.addSuggestion(ErrorSuggestion.command("Create workspace", "builder init --workspace"));
+            error.addSuggestion(ErrorSuggestion.command("Create workspace", "bldr init --workspace"));
     }
     else
     {
@@ -143,13 +143,13 @@ auto createAnalysisError(
     // Add code-specific suggestions
     if (code == ErrorCode.CircularDependency)
     {
-        error.addSuggestion(ErrorSuggestion.command("Visualize dependency graph", "builder query --graph " ~ targetName));
+        error.addSuggestion(ErrorSuggestion.command("Visualize dependency graph", "bldr query --graph " ~ targetName));
         error.addSuggestion(ErrorSuggestion("Break the cycle by removing or refactoring dependencies"));
     }
     else if (code == ErrorCode.MissingDependency)
     {
         error.addSuggestion(ErrorSuggestion.config("Add missing dependency to target's deps field"));
-        error.addSuggestion(ErrorSuggestion.command("List available targets", "builder query --targets"));
+        error.addSuggestion(ErrorSuggestion.command("List available targets", "bldr query --targets"));
     }
     else if (code == ErrorCode.ImportResolutionFailed)
     {
@@ -159,7 +159,7 @@ auto createAnalysisError(
     }
     else
     {
-        error.addSuggestion(ErrorSuggestion.command("Run with verbose output", "builder build --verbose " ~ targetName));
+        error.addSuggestion(ErrorSuggestion.command("Run with verbose output", "bldr build --verbose " ~ targetName));
         error.addSuggestion(ErrorSuggestion("Check for syntax errors in source files"));
     }
     
@@ -195,13 +195,13 @@ auto createBuildError(
     }
     else if (code == ErrorCode.HandlerNotFound)
     {
-        error.addSuggestion(ErrorSuggestion.command("List supported languages", "builder query --languages"));
+        error.addSuggestion(ErrorSuggestion.command("List supported languages", "bldr query --languages"));
         error.addSuggestion(ErrorSuggestion.config("Specify correct language in target configuration"));
     }
     else
     {
-        error.addSuggestion(ErrorSuggestion.command("Run with verbose output for details", "builder build --verbose " ~ targetId));
-        error.addSuggestion(ErrorSuggestion.command("Clean and rebuild", "builder clean && builder build " ~ targetId));
+        error.addSuggestion(ErrorSuggestion.command("Run with verbose output for details", "bldr build --verbose " ~ targetId));
+        error.addSuggestion(ErrorSuggestion.command("Clean and rebuild", "bldr clean && bldr build " ~ targetId));
         error.addSuggestion(ErrorSuggestion("Check compiler/tool output for specific errors"));
     }
     
@@ -233,7 +233,7 @@ auto createLanguageError(
     }
     else if (code == ErrorCode.UnsupportedLanguage)
     {
-        error.addSuggestion(ErrorSuggestion.command("List supported languages", "builder query --languages"));
+        error.addSuggestion(ErrorSuggestion.command("List supported languages", "bldr query --languages"));
         error.addSuggestion(ErrorSuggestion.docs("See language support", "docs/features/languages.md"));
         error.addSuggestion(ErrorSuggestion("Consider implementing a custom language handler"));
     }
@@ -269,12 +269,12 @@ auto createCacheError(
     
     if (code == ErrorCode.CacheCorrupted)
     {
-        error.addSuggestion(ErrorSuggestion.command("Clear corrupted cache", "builder clean --cache"));
+        error.addSuggestion(ErrorSuggestion.command("Clear corrupted cache", "bldr clean --cache"));
         error.addSuggestion(ErrorSuggestion("Rebuild from clean state"));
     }
     else if (code == ErrorCode.CacheTooLarge)
     {
-        error.addSuggestion(ErrorSuggestion.command("Clean old cache entries", "builder clean --cache"));
+        error.addSuggestion(ErrorSuggestion.command("Clean old cache entries", "bldr clean --cache"));
         error.addSuggestion(ErrorSuggestion.config("Configure cache size limits", "cache.max_size: \"10GB\""));
     }
     else if (code == ErrorCode.CacheWriteFailed || code == ErrorCode.CacheSaveFailed)
@@ -284,7 +284,7 @@ auto createCacheError(
     }
     else
     {
-        error.addSuggestion(ErrorSuggestion.command("Clear cache and retry", "builder clean --cache"));
+        error.addSuggestion(ErrorSuggestion.command("Clear cache and retry", "bldr clean --cache"));
         error.addSuggestion(ErrorSuggestion.fileCheck("Check cache directory permissions"));
     }
     

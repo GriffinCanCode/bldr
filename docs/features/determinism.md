@@ -353,10 +353,10 @@ auto verifier = DeterminismVerifier.create(
 
 ```bash
 # Build with determinism enforcement
-builder build --determinism=strict //main:app
+bldr build --determinism=strict //main:app
 
 # Verify manually
-builder verify-determinism //main:app --iterations=5
+bldr verify-determinism //main:app --iterations=5
 ```
 
 ### Example 2: Rust Project with Cargo

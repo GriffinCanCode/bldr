@@ -11,7 +11,7 @@ key_points:
   - "attr(...): Filter by attribute value"
 
 usage_examples:
-  - command: "builder query 'kind(test, //...)'"
+  - command: "bldr query 'kind(test, //...)'"
     description: "Find all tests"
 
 related: [bldrquery, build-graph, cli]

@@ -13,7 +13,7 @@ import tests.harness;
 import tests.fixtures;
 
 /**
- * Real-world integration tests that run actual builder build commands
+ * Real-world integration tests that run actual bldr build commands
  * against example projects to verify end-to-end functionality.
  * 
  * These tests ensure Builder works with realistic project structures

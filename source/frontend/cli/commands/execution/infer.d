@@ -59,7 +59,7 @@ struct InferCommand
             terminal.write("  No targets could be inferred from project structure");
             terminal.writeln();
             terminal.write("  Consider running ");
-            terminal.writeColored("builder init", Color.Green, Style.Bold);
+            terminal.writeColored("bldr init", Color.Green, Style.Bold);
             terminal.write(" to create a Builderfile manually");
             terminal.writeln();
             terminal.writeln();
@@ -188,7 +188,7 @@ struct InferCommand
         terminal.writeColored("📦 Zero-Config Build:", Color.Cyan, Style.Bold);
         terminal.writeln();
         terminal.write("  ");
-        terminal.writeColored("builder build", Color.Green, Style.Bold);
+        terminal.writeColored("bldr build", Color.Green, Style.Bold);
         terminal.write("    ");
         terminal.writeColored("# Automatically infers and builds targets", Color.BrightBlack);
         terminal.writeln();
@@ -197,7 +197,7 @@ struct InferCommand
         terminal.writeColored("📝 Generate Builderfile:", Color.Cyan, Style.Bold);
         terminal.writeln();
         terminal.write("  ");
-        terminal.writeColored("builder init", Color.Green, Style.Bold);
+        terminal.writeColored("bldr init", Color.Green, Style.Bold);
         terminal.write("     ");
         terminal.writeColored("# Creates Builderfile with detected configuration", Color.BrightBlack);
         terminal.writeln();

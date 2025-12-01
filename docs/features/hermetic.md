@@ -428,7 +428,7 @@ ls /proc/self/ns/
 which sandbox-exec
 
 # Test network isolation
-builder build --hermetic --verbose
+bldr build --hermetic --verbose
 ```
 
 ### Troubleshooting

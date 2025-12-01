@@ -248,7 +248,7 @@ auto hexHash = Blake3.hashHex("data");
 
 ```bash
 # Old cache will be automatically cleared on first build
-builder build
+bldr build
 # Output: "Cache migrated to BLAKE3 format"
 ```
 

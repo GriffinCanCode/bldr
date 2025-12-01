@@ -12,7 +12,7 @@ key_points:
   - "Resource usage: CPU/RAM usage over time"
 
 usage_examples:
-  - command: "builder build --trace=trace.json"
+  - command: "bldr build --trace=trace.json"
     description: "Generate a build trace file"
 
 related: [telemetry, performance, concurrency]

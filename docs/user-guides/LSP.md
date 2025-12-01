@@ -61,9 +61,9 @@ Open any `Builderfile` and the extension automatically activates. You'll see:
 ### Automatic Setup (Recommended)
 
 The extension automatically finds `builder-lsp` if it's installed at:
-- `/usr/local/bin/builder-lsp`
-- `/opt/homebrew/bin/builder-lsp`
-- `~/.local/bin/builder-lsp`
+- `/usr/local/bin/bldr-lsp`
+- `/opt/homebrew/bin/bldr-lsp`
+- `~/.local/bin/bldr-lsp`
 - Anywhere in your `$PATH`
 
 ### Manual Configuration
@@ -77,7 +77,7 @@ If you installed `builder-lsp` to a custom location:
 Example:
 ```json
 {
-  "builder.lsp.serverPath": "/custom/path/to/builder-lsp"
+  "builder.lsp.serverPath": "/custom/path/to/bldr-lsp"
 }
 ```
 

@@ -11,7 +11,7 @@ key_points:
   - "workspace_status_command: Script to generate status"
 
 usage_examples:
-  - command: "builder build --stamp"
+  - command: "bldr build --stamp"
     description: "Enable stamping"
 
 related: [telemetry, observability, release]

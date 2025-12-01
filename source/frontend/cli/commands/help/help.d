@@ -8,7 +8,7 @@ import frontend.cli.display.format;
 import frontend.cli.commands.extensions.watch : WatchCommand;
 import languages.registry : LanguageCategory, getLanguageCategoryList;
 
-/// Help command - provides detailed documentation for Builder commands
+/// Help command - provides detailed documentation for bldr commands
 struct HelpCommand
 {
     private static Terminal terminal;
@@ -51,16 +51,16 @@ struct HelpCommand
         
         // Title box
         string[] titleContent = [
-            "Builder is a modern, zero-configuration build system that automatically",
+            "bldr is a modern, zero-configuration build system that automatically",
             "detects and builds projects in multiple languages with intelligent",
             "dependency management and caching."
         ];
-        terminal.writeln(formatter.formatBox("Builder - Mixed-Language Build System", titleContent));
+        terminal.writeln(formatter.formatBox("bldr - Mixed-Language Build System", titleContent));
         terminal.writeln();
         
         // Usage section
         printSectionHeader("USAGE");
-        terminal.writeColored("  builder", Color.Cyan, Style.Bold);
+        terminal.writeColored("  bldr", Color.Cyan, Style.Bold);
         terminal.write(" <command> [options] [arguments]");
         terminal.writeln();
         terminal.writeln();
@@ -87,7 +87,7 @@ struct HelpCommand
         printSectionHeader("MONITORING & TOOLS");
         printCommand("telemetry", "", "View build analytics and performance insights");
         printCommand("cache-server", "[options]", "Start remote cache server");
-        printCommand("install-extension", "", "Install Builder VS Code extension");
+        printCommand("install-extension", "", "Install bldr VS Code extension");
         terminal.writeln();
         
         // Distributed builds
@@ -113,23 +113,23 @@ struct HelpCommand
         
         // Zero-config mode highlight
         printHighlight("⚡ ZERO-CONFIG MODE", 
-            "Builder can automatically detect and build projects without a Builderfile.\n" ~
-            "  Simply run 'builder build' in any supported project directory!");
+            "bldr can automatically detect and build projects without a Builderfile.\n" ~
+            "  Simply run 'bldr build' in any supported project directory!");
         terminal.writeln();
         
         // Examples
         printSectionHeader("EXAMPLES");
-        printExample("builder build", "Auto-detect and build all targets");
-        printExample("builder build --watch", "Watch mode - rebuild on file changes");
-        printExample("builder init", "Create Builderfile from project structure");
-        printExample("builder build //path/to:target", "Build specific target");
-        printExample("builder graph", "Show complete dependency graph");
-        printExample("builder telemetry", "View build performance analytics");
-        printExample("builder help build", "Show detailed help for build command");
+        printExample("bldr build", "Auto-detect and build all targets");
+        printExample("bldr build --watch", "Watch mode - rebuild on file changes");
+        printExample("bldr init", "Create Builderfile from project structure");
+        printExample("bldr build //path/to:target", "Build specific target");
+        printExample("bldr graph", "Show complete dependency graph");
+        printExample("bldr telemetry", "View build performance analytics");
+        printExample("bldr help build", "Show detailed help for build command");
         terminal.writeln();
         
         terminal.writeColored("For detailed help on any command, run: ", Color.Cyan);
-        terminal.writeColored("builder help <command>", Color.Yellow, Style.Bold);
+        terminal.writeColored("bldr help <command>", Color.Yellow, Style.Bold);
         terminal.writeln();
         terminal.writeln();
         
@@ -328,7 +328,7 @@ struct HelpCommand
             default:
                 Logger.error("Unknown command: " ~ command);
                 terminal.write("Run ");
-                terminal.writeColored("'builder help'", Color.Cyan, Style.Bold);
+                terminal.writeColored("'bldr help'", Color.Cyan, Style.Bold);
                 terminal.write(" to see available commands.");
                 terminal.writeln();
         }
@@ -342,11 +342,11 @@ struct HelpCommand
             "Run test targets with comprehensive reporting and CI/CD integration.",
             "Supports test discovery, filtering, and JUnit XML output."
         ];
-        terminal.writeln(formatter.formatBox("builder test [target]", description));
+        terminal.writeln(formatter.formatBox("bldr test [target]", description));
         terminal.writeln();
         
         printSectionHeader("USAGE");
-        terminal.writeColored("  builder test", Color.Cyan, Style.Bold);
+        terminal.writeColored("  bldr test", Color.Cyan, Style.Bold);
         terminal.write(" ");
         terminal.writeColored("[options]", Color.Yellow);
         terminal.write(" ");
@@ -366,12 +366,12 @@ struct HelpCommand
         terminal.writeln();
         
         printSectionHeader("EXAMPLES");
-        printExample("builder test", "Run all tests");
-        printExample("builder test --verbose", "Run with detailed output");
-        printExample("builder test //path:target", "Run specific test target");
-        printExample("builder test --filter unit", "Filter by pattern");
-        printExample("builder test --junit report.xml", "Generate JUnit XML");
-        printExample("builder test --fail-fast", "Stop on first failure");
+        printExample("bldr test", "Run all tests");
+        printExample("bldr test --verbose", "Run with detailed output");
+        printExample("bldr test //path:target", "Run specific test target");
+        printExample("bldr test --filter unit", "Filter by pattern");
+        printExample("bldr test --junit report.xml", "Generate JUnit XML");
+        printExample("bldr test --fail-fast", "Stop on first failure");
         terminal.writeln();
         
         printSectionHeader("TEST DISCOVERY");
@@ -397,9 +397,9 @@ struct HelpCommand
         terminal.writeln();
         
         printSectionHeader("SEE ALSO");
-        printSeeAlso("builder build", "Build targets");
-        printSeeAlso("builder query", "Query test targets");
-        printSeeAlso("builder watch", "Continuous testing");
+        printSeeAlso("bldr build", "Build targets");
+        printSeeAlso("bldr query", "Query test targets");
+        printSeeAlso("bldr watch", "Continuous testing");
         terminal.writeln();
     }
     
@@ -408,14 +408,14 @@ struct HelpCommand
         terminal.writeln();
         
         string[] description = [
-            "Build all targets in the workspace or a specific target. Builder",
+            "Build all targets in the workspace or a specific target. bldr",
             "automatically detects project structure and builds without configuration."
         ];
-        terminal.writeln(formatter.formatBox("builder build [target]", description));
+        terminal.writeln(formatter.formatBox("bldr build [target]", description));
         terminal.writeln();
         
         printSectionHeader("USAGE");
-        terminal.writeColored("  builder build", Color.Cyan, Style.Bold);
+        terminal.writeColored("  bldr build", Color.Cyan, Style.Bold);
         terminal.write(" ");
         terminal.writeColored("[options]", Color.Yellow);
         terminal.write(" ");
@@ -444,16 +444,16 @@ struct HelpCommand
         terminal.writeln();
         
         printSectionHeader("EXAMPLES");
-        printExample("builder build", "Build all targets");
-        printExample("builder build -v", "Build with verbose output");
-        printExample("builder build --graph", "Show graph, then build");
-        printExample("builder build //src:myapp", "Build specific target");
-        printExample("builder build -m plain", "Use plain mode for CI");
-        printExample("builder build -m interactive", "Rich interactive mode");
+        printExample("bldr build", "Build all targets");
+        printExample("bldr build -v", "Build with verbose output");
+        printExample("bldr build --graph", "Show graph, then build");
+        printExample("bldr build //src:myapp", "Build specific target");
+        printExample("bldr build -m plain", "Use plain mode for CI");
+        printExample("bldr build -m interactive", "Rich interactive mode");
         terminal.writeln();
         
         printSectionHeader("ZERO-CONFIG");
-        terminal.write("  If no Builderfile exists, Builder will:");
+        terminal.write("  If no Builderfile exists, bldr will:");
         terminal.writeln();
         printListItem("Scan the project directory");
         printListItem("Detect languages and frameworks");
@@ -470,9 +470,9 @@ struct HelpCommand
         terminal.writeln();
         
         printSectionHeader("SEE ALSO");
-        printSeeAlso("builder resume", "Resume from checkpoint");
-        printSeeAlso("builder graph", "Visualize dependencies");
-        printSeeAlso("builder telemetry", "View build analytics");
+        printSeeAlso("bldr resume", "Resume from checkpoint");
+        printSeeAlso("bldr graph", "Visualize dependencies");
+        printSeeAlso("bldr telemetry", "View build analytics");
         terminal.writeln();
     }
     
@@ -564,15 +564,15 @@ struct HelpCommand
         terminal.writeln();
         
         string[] description = [
-            "Resume a failed build from the last checkpoint. Builder automatically",
+            "Resume a failed build from the last checkpoint. bldr automatically",
             "saves checkpoints during builds, allowing you to continue from where",
             "a build failed without rebuilding already-completed targets."
         ];
-        terminal.writeln(formatter.formatBox("builder resume", description));
+        terminal.writeln(formatter.formatBox("bldr resume", description));
         terminal.writeln();
         
         printSectionHeader("USAGE");
-        terminal.writeColored("  builder resume", Color.Cyan, Style.Bold);
+        terminal.writeColored("  bldr resume", Color.Cyan, Style.Bold);
         terminal.write(" ");
         terminal.writeColored("[options]", Color.Yellow);
         terminal.writeln();
@@ -585,7 +585,7 @@ struct HelpCommand
         printSectionHeader("HOW IT WORKS");
         terminal.write("  ");
         terminal.writeColored("1.", Color.BrightCyan);
-        terminal.write(" Builder saves a checkpoint after each successful target build");
+        terminal.write(" bldr saves a checkpoint after each successful target build");
         terminal.writeln();
         terminal.write("  ");
         terminal.writeColored("2.", Color.BrightCyan);
@@ -593,7 +593,7 @@ struct HelpCommand
         terminal.writeln();
         terminal.write("  ");
         terminal.writeColored("3.", Color.BrightCyan);
-        terminal.write(" 'builder resume' loads the checkpoint and continues from there");
+        terminal.write(" 'bldr resume' loads the checkpoint and continues from there");
         terminal.writeln();
         terminal.write("  ");
         terminal.writeColored("4.", Color.BrightCyan);
@@ -602,7 +602,7 @@ struct HelpCommand
         terminal.writeln();
         
         printSectionHeader("CHECKPOINT VALIDATION");
-        terminal.write("  Builder validates that:");
+        terminal.write("  bldr validates that:");
         terminal.writeln();
         printFeature("Project structure hasn't changed significantly");
         printFeature("Target dependencies remain the same");
@@ -610,19 +610,19 @@ struct HelpCommand
         terminal.writeln();
         
         printSectionHeader("EXAMPLES");
-        printExample("builder resume", "Resume last failed build");
-        printExample("builder resume -m verbose", "Resume with detailed output");
+        printExample("bldr resume", "Resume last failed build");
+        printExample("bldr resume -m verbose", "Resume with detailed output");
         terminal.writeln();
         
         printSectionHeader("NOTES");
         printListItem("Checkpoints are stored in .builder-cache/");
-        printListItem("Use 'builder clean' to remove checkpoints");
+        printListItem("Use 'bldr clean' to remove checkpoints");
         printListItem("Checkpoints are automatically invalidated when dependencies change");
         terminal.writeln();
         
         printSectionHeader("SEE ALSO");
-        printSeeAlso("builder build", "Start a new build");
-        printSeeAlso("builder clean", "Remove cache and checkpoints");
+        printSeeAlso("bldr build", "Start a new build");
+        printSeeAlso("bldr clean", "Remove cache and checkpoints");
         terminal.writeln();
     }
     
@@ -634,11 +634,11 @@ struct HelpCommand
             "Remove all build artifacts, cache files, and checkpoints. This forces",
             "a complete rebuild on the next build command."
         ];
-        terminal.writeln(formatter.formatBox("builder clean", description));
+        terminal.writeln(formatter.formatBox("bldr clean", description));
         terminal.writeln();
         
         printSectionHeader("USAGE");
-        terminal.writeColored("  builder clean", Color.Cyan, Style.Bold);
+        terminal.writeColored("  bldr clean", Color.Cyan, Style.Bold);
         terminal.writeln();
         terminal.writeln();
         
@@ -662,8 +662,8 @@ struct HelpCommand
         terminal.writeln();
         
         printSectionHeader("EXAMPLES");
-        printExample("builder clean", "Clean everything");
-        printExample("builder clean && builder build", "Clean then rebuild");
+        printExample("bldr clean", "Clean everything");
+        printExample("bldr clean && bldr build", "Clean then rebuild");
         terminal.writeln();
         
         printSectionHeader("NOTES");
@@ -681,20 +681,20 @@ struct HelpCommand
             "Visualize the dependency graph for all targets or a specific target.",
             "Shows build order, dependencies, and target relationships."
         ];
-        terminal.writeln(formatter.formatBox("builder graph [target]", description));
+        terminal.writeln(formatter.formatBox("bldr graph [target]", description));
         terminal.writeln();
         
         printSectionHeader("USAGE");
-        terminal.writeColored("  builder graph", Color.Cyan, Style.Bold);
+        terminal.writeColored("  bldr graph", Color.Cyan, Style.Bold);
         terminal.write(" ");
         terminal.writeColored("[target]", Color.Green);
         terminal.writeln();
         terminal.writeln();
         
         printSectionHeader("EXAMPLES");
-        printExample("builder graph", "Show complete dependency graph");
-        printExample("builder graph //src:myapp", "Show dependencies for specific target");
-        printExample("builder graph :lib", "Show dependencies for local target");
+        printExample("bldr graph", "Show complete dependency graph");
+        printExample("bldr graph //src:myapp", "Show dependencies for specific target");
+        printExample("bldr graph :lib", "Show dependencies for local target");
         terminal.writeln();
         
         printSectionHeader("GRAPH OUTPUT INCLUDES");
@@ -715,13 +715,13 @@ struct HelpCommand
         printSectionHeader("NOTES");
         printListItem("Graph generation is fast and doesn't build anything");
         printListItem("Works with both Builderfile and zero-config projects");
-        printListItem("Can be combined with build: 'builder build --graph'");
+        printListItem("Can be combined with build: 'bldr build --graph'");
         terminal.writeln();
         
         printSectionHeader("SEE ALSO");
-        printSeeAlso("builder build --graph", "Show graph before building");
-        printSeeAlso("builder infer", "Preview auto-detected targets");
-        printSeeAlso("builder query", "Query targets and dependencies");
+        printSeeAlso("bldr build --graph", "Show graph before building");
+        printSeeAlso("bldr infer", "Preview auto-detected targets");
+        printSeeAlso("bldr query", "Query targets and dependencies");
         terminal.writeln();
     }
     
@@ -734,11 +734,11 @@ struct HelpCommand
             "Bazel-compatible with advanced extensions for path analysis,",
             "set operations, regex filtering, and multiple output formats."
         ];
-        terminal.writeln(formatter.formatBox("builder query <expression> [--format=type]", description));
+        terminal.writeln(formatter.formatBox("bldr query <expression> [--format=type]", description));
         terminal.writeln();
         
         printSectionHeader("USAGE");
-        terminal.writeColored("  builder query", Color.Cyan, Style.Bold);
+        terminal.writeColored("  bldr query", Color.Cyan, Style.Bold);
         terminal.write(" ");
         terminal.writeColored("'<expression>'", Color.Yellow);
         terminal.write(" ");
@@ -785,12 +785,12 @@ struct HelpCommand
         terminal.writeln();
         
         printSectionHeader("EXAMPLES");
-        printExample("builder query '//...'", "List all targets");
-        printExample("builder query 'deps(//src:app)'", "All dependencies");
-        printExample("builder query 'rdeps(//lib:utils) & kind(test, //...)'", "Tests depending on utils");
-        printExample("builder query 'shortest(//a:x, //b:y)'", "Shortest path");
-        printExample("builder query '//src/... - //src/test/...'", "Source without tests");
-        printExample("builder query 'deps(//...) --format=json'", "Export to JSON");
+        printExample("bldr query '//...'", "List all targets");
+        printExample("bldr query 'deps(//src:app)'", "All dependencies");
+        printExample("bldr query 'rdeps(//lib:utils) & kind(test, //...)'", "Tests depending on utils");
+        printExample("bldr query 'shortest(//a:x, //b:y)'", "Shortest path");
+        printExample("bldr query '//src/... - //src/test/...'", "Source without tests");
+        printExample("bldr query 'deps(//...) --format=json'", "Export to JSON");
         terminal.writeln();
         
         printSectionHeader("USE CASES");
@@ -803,8 +803,8 @@ struct HelpCommand
         terminal.writeln();
         
         printSectionHeader("SEE ALSO");
-        printSeeAlso("builder graph", "Visualize full dependency graph");
-        printSeeAlso("builder infer", "Preview auto-detected targets");
+        printSeeAlso("bldr graph", "Visualize full dependency graph");
+        printSeeAlso("bldr infer", "Preview auto-detected targets");
         printSeeAlso("docs/features/bldrquery.md", "Complete query language reference");
         terminal.writeln();
     }
@@ -814,14 +814,14 @@ struct HelpCommand
         terminal.writeln();
         
         string[] description = [
-            "Interactive wizard for setting up a Builder project. Guides you through",
+            "Interactive wizard for setting up a bldr project. Guides you through",
             "language selection, project structure, and configuration options."
         ];
-        terminal.writeln(formatter.formatBox("builder wizard", description));
+        terminal.writeln(formatter.formatBox("bldr wizard", description));
         terminal.writeln();
         
         printSectionHeader("USAGE");
-        terminal.writeColored("  builder wizard", Color.Cyan, Style.Bold);
+        terminal.writeColored("  bldr wizard", Color.Cyan, Style.Bold);
         terminal.writeln();
         terminal.writeln();
         
@@ -844,13 +844,13 @@ struct HelpCommand
         terminal.writeln();
         
         printSectionHeader("EXAMPLES");
-        printExample("builder wizard", "Start interactive setup");
-        printExample("cd my-project && builder wizard", "Set up specific project");
+        printExample("bldr wizard", "Start interactive setup");
+        printExample("cd my-project && bldr wizard", "Set up specific project");
         terminal.writeln();
         
         printSectionHeader("SEE ALSO");
-        printSeeAlso("builder init", "Non-interactive initialization");
-        printSeeAlso("builder infer", "Preview auto-detection");
+        printSeeAlso("bldr init", "Non-interactive initialization");
+        printSeeAlso("bldr infer", "Preview auto-detection");
         terminal.writeln();
     }
     
@@ -859,14 +859,14 @@ struct HelpCommand
         terminal.writeln();
         
         string[] description = [
-            "Initialize a new Builder project by creating a Builderfile, Builderspace,",
+            "Initialize a new bldr project by creating a Builderfile, Builderspace,",
             "and .builderignore based on automatic project detection."
         ];
-        terminal.writeln(formatter.formatBox("builder init", description));
+        terminal.writeln(formatter.formatBox("bldr init", description));
         terminal.writeln();
         
         printSectionHeader("USAGE");
-        terminal.writeColored("  builder init", Color.Cyan, Style.Bold);
+        terminal.writeColored("  bldr init", Color.Cyan, Style.Bold);
         terminal.write(" ");
         terminal.writeColored("[options]", Color.Yellow);
         terminal.writeln();
@@ -879,14 +879,14 @@ struct HelpCommand
         terminal.writeln();
         
         printSectionHeader("EXAMPLES");
-        printExample("builder init", "Initialize in current directory");
-        printExample("cd my-project && builder init", "Initialize in specific directory");
+        printExample("bldr init", "Initialize in current directory");
+        printExample("cd my-project && bldr init", "Initialize in specific directory");
         terminal.writeln();
         
         printSectionHeader("SEE ALSO");
-        printSeeAlso("builder wizard", "Interactive setup with guided prompts");
-        printSeeAlso("builder infer", "Preview detection without creating files");
-        printSeeAlso("builder build", "Build after initialization");
+        printSeeAlso("bldr wizard", "Interactive setup with guided prompts");
+        printSeeAlso("bldr infer", "Preview detection without creating files");
+        printSeeAlso("bldr build", "Build after initialization");
         terminal.writeln();
     }
     
@@ -898,11 +898,11 @@ struct HelpCommand
             "Preview what targets would be automatically detected and inferred from",
             "your project structure without creating any files. Dry-run of zero-config."
         ];
-        terminal.writeln(formatter.formatBox("builder infer", description));
+        terminal.writeln(formatter.formatBox("bldr infer", description));
         terminal.writeln();
         
         printSectionHeader("USAGE");
-        terminal.writeColored("  builder infer", Color.Cyan, Style.Bold);
+        terminal.writeColored("  bldr infer", Color.Cyan, Style.Bold);
         terminal.writeln();
         terminal.writeln();
         
@@ -915,14 +915,14 @@ struct HelpCommand
         terminal.writeln();
         
         printSectionHeader("EXAMPLES");
-        printExample("builder infer", "Show inferred targets");
-        printExample("builder infer > targets.txt", "Save to file");
+        printExample("bldr infer", "Show inferred targets");
+        printExample("bldr infer > targets.txt", "Save to file");
         terminal.writeln();
         
         printSectionHeader("SEE ALSO");
-        printSeeAlso("builder wizard", "Interactive setup wizard");
-        printSeeAlso("builder init", "Generate Builderfile from detection");
-        printSeeAlso("builder build", "Build using zero-config");
+        printSeeAlso("bldr wizard", "Interactive setup wizard");
+        printSeeAlso("bldr init", "Generate Builderfile from detection");
+        printSeeAlso("bldr build", "Build using zero-config");
         terminal.writeln();
     }
     
@@ -934,11 +934,11 @@ struct HelpCommand
             "View build analytics, performance insights, and telemetry data collected",
             "during builds. Helps identify bottlenecks and track build performance."
         ];
-        terminal.writeln(formatter.formatBox("builder telemetry [cmd]", description));
+        terminal.writeln(formatter.formatBox("bldr telemetry [cmd]", description));
         terminal.writeln();
         
         printSectionHeader("USAGE");
-        terminal.writeColored("  builder telemetry", Color.Cyan, Style.Bold);
+        terminal.writeColored("  bldr telemetry", Color.Cyan, Style.Bold);
         terminal.write(" ");
         terminal.writeColored("[subcommand]", Color.Yellow);
         terminal.writeln();
@@ -952,10 +952,10 @@ struct HelpCommand
         terminal.writeln();
         
         printSectionHeader("EXAMPLES");
-        printExample("builder telemetry", "Show summary");
-        printExample("builder telemetry recent 20", "Show last 20 builds");
-        printExample("builder telemetry export > data.json", "Export to file");
-        printExample("builder telemetry clear", "Remove all data");
+        printExample("bldr telemetry", "Show summary");
+        printExample("bldr telemetry recent 20", "Show last 20 builds");
+        printExample("bldr telemetry export > data.json", "Export to file");
+        printExample("bldr telemetry clear", "Remove all data");
         terminal.writeln();
         
         printSectionHeader("PRIVACY");
@@ -965,7 +965,7 @@ struct HelpCommand
         terminal.writeln();
         
         printSectionHeader("SEE ALSO");
-        printSeeAlso("builder build", "Builds collect telemetry data");
+        printSeeAlso("bldr build", "Builds collect telemetry data");
         terminal.writeln();
     }
     
@@ -974,14 +974,14 @@ struct HelpCommand
         terminal.writeln();
         
         string[] description = [
-            "Install the Builder VS Code extension for syntax highlighting,",
+            "Install the bldr VS Code extension for syntax highlighting,",
             "autocompletion, and other IDE features for Builderfile editing."
         ];
-        terminal.writeln(formatter.formatBox("builder install-extension", description));
+        terminal.writeln(formatter.formatBox("bldr install-extension", description));
         terminal.writeln();
         
         printSectionHeader("USAGE");
-        terminal.writeColored("  builder install-extension", Color.Cyan, Style.Bold);
+        terminal.writeColored("  bldr install-extension", Color.Cyan, Style.Bold);
         terminal.writeln();
         terminal.writeln();
         
@@ -994,7 +994,7 @@ struct HelpCommand
         terminal.writeln();
         
         printSectionHeader("EXAMPLES");
-        printExample("builder install-extension", "Install VS Code extension");
+        printExample("bldr install-extension", "Install VS Code extension");
         terminal.writeln();
         
         printSectionHeader("NOTES");
@@ -1008,22 +1008,22 @@ struct HelpCommand
         terminal.writeln();
         
         string[] description = [
-            "Display help information for Builder commands."
+            "Display help information for bldr commands."
         ];
-        terminal.writeln(formatter.formatBox("builder help [command]", description));
+        terminal.writeln(formatter.formatBox("bldr help [command]", description));
         terminal.writeln();
         
         printSectionHeader("USAGE");
-        terminal.writeColored("  builder help", Color.Cyan, Style.Bold);
+        terminal.writeColored("  bldr help", Color.Cyan, Style.Bold);
         terminal.write(" ");
         terminal.writeColored("[command]", Color.Yellow);
         terminal.writeln();
         terminal.writeln();
         
         printSectionHeader("EXAMPLES");
-        printExample("builder help", "Show general help");
-        printExample("builder help build", "Help for build command");
-        printExample("builder help telemetry", "Help for telemetry command");
+        printExample("bldr help", "Show general help");
+        printExample("bldr help build", "Help for build command");
+        printExample("bldr help telemetry", "Help for telemetry command");
         terminal.writeln();
         
         printSectionHeader("AVAILABLE COMMANDS");

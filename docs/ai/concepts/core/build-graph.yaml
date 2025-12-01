@@ -11,11 +11,11 @@ key_points:
   - "Traversal: How Builder walks the graph"
 
 usage_examples:
-  - command: "builder graph //target"
+  - command: "bldr graph //target"
     description: "Visualize the graph"
 
 related: [bldrquery, targets, dependencies]
 
 next_steps: |
-  - Use 'builder query' to explore the graph
+  - Use 'bldr query' to explore the graph
 

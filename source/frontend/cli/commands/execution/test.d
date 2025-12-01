@@ -334,7 +334,7 @@ struct TestCommand
     private static void showHelp() @system
     {
         terminal.writeln();
-        terminal.writeln("Usage: builder test [OPTIONS] [TARGET]");
+        terminal.writeln("Usage: bldr test [OPTIONS] [TARGET]");
         terminal.writeln();
         terminal.writeln("Run test targets with advanced features.");
         terminal.writeln();
@@ -363,11 +363,11 @@ struct TestCommand
         terminal.writeln("  --mode MODE           Render mode: auto, interactive, plain");
         terminal.writeln();
         terminal.writeln("Examples:");
-        terminal.writeln("  builder test                    # Run all tests (uses .buildertest)");
-        terminal.writeln("  builder test --init-config      # Create configuration file");
-        terminal.writeln("  builder test -j 8 --analytics   # Run with 8 jobs + analytics");
-        terminal.writeln("  builder test --no-cache         # Run without caching");
-        terminal.writeln("  builder test //path:target      # Run specific test");
+        terminal.writeln("  bldr test                    # Run all tests (uses .buildertest)");
+        terminal.writeln("  bldr test --init-config      # Create configuration file");
+        terminal.writeln("  bldr test -j 8 --analytics   # Run with 8 jobs + analytics");
+        terminal.writeln("  bldr test --no-cache         # Run without caching");
+        terminal.writeln("  bldr test //path:target      # Run specific test");
         terminal.writeln();
         terminal.writeln("Config File (.buildertest):");
         terminal.writeln("  All options can be configured in .buildertest (JSON format)");

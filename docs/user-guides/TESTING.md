@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `builder test` command provides a unified interface for running tests across all supported languages. It automatically discovers test targets, executes them in parallel, and provides comprehensive reporting with CI/CD integration.
+The `bldr test` command provides a unified interface for running tests across all supported languages. It automatically discovers test targets, executes them in parallel, and provides comprehensive reporting with CI/CD integration.
 
 ## Features
 
@@ -30,55 +30,55 @@ Builder discovers tests in several ways:
 
 ```bash
 # Run all tests
-builder test
+bldr test
 
 # Run specific test target
-builder test //path/to:test-target
+bldr test //path/to:test-target
 
 # Run with verbose output
-builder test --verbose
+bldr test --verbose
 
 # Run tests quietly (errors only)
-builder test --quiet
+bldr test --quiet
 ```
 
 ### Filtering Tests
 
 ```bash
 # Filter by pattern
-builder test --filter unit
+bldr test --filter unit
 
 # Filter by path
-builder test --filter "//core"
+bldr test --filter "//core"
 
 # Run specific test type
-builder test --filter integration
+bldr test --filter integration
 ```
 
 ### Test Execution Control
 
 ```bash
 # Stop on first failure
-builder test --fail-fast
+bldr test --fail-fast
 
 # Show passed tests
-builder test --show-passed
+bldr test --show-passed
 
 # Combine options
-builder test --verbose --fail-fast --filter unit
+bldr test --verbose --fail-fast --filter unit
 ```
 
 ### CI/CD Integration
 
 ```bash
 # Generate JUnit XML report
-builder test --junit test-results.xml
+bldr test --junit test-results.xml
 
 # Use with custom path
-builder test --junit reports/junit.xml
+bldr test --junit reports/junit.xml
 
 # CI-friendly output
-builder test --mode plain --junit results.xml
+bldr test --mode plain --junit results.xml
 ```
 
 ## Output Format
@@ -117,7 +117,7 @@ Tests failed!
 Shows individual test cases:
 
 ```bash
-builder test --verbose
+bldr test --verbose
 ```
 
 ```
@@ -144,7 +144,7 @@ The JUnit XML export is compatible with:
 
 ```yaml
 - name: Run tests
-  run: builder test --junit test-results.xml
+  run: bldr test --junit test-results.xml
 
 - name: Publish test results
   uses: EnricoMi/publish-unit-test-result-action@v2
@@ -158,7 +158,7 @@ The JUnit XML export is compatible with:
 ```yaml
 test:
   script:
-    - builder test --junit test-results.xml
+    - bldr test --junit test-results.xml
   artifacts:
     reports:
       junit: test-results.xml
@@ -261,7 +261,7 @@ Builder caches test results based on:
 
 - **Cache Hit**: Test skipped, previous result reported
 - **Cache Miss**: Test executed normally
-- **Force Rerun**: Use `builder clean` then `builder test`
+- **Force Rerun**: Use `bldr clean` then `bldr test`
 
 ### Cache Invalidation
 
@@ -284,7 +284,7 @@ Tests are re-run when:
 Combine with watch mode for continuous testing:
 
 ```bash
-builder watch test
+bldr watch test
 ```
 
 ### Query Test Targets
@@ -292,13 +292,13 @@ builder watch test
 List all test targets:
 
 ```bash
-builder query 'kind(test, //...)'
+bldr query 'kind(test, //...)'
 ```
 
 Find tests that depend on a library:
 
 ```bash
-builder query 'rdeps(//lib:mylib) intersect kind(test, //...)'
+bldr query 'rdeps(//lib:mylib) intersect kind(test, //...)'
 ```
 
 ### Parallel Execution
@@ -374,7 +374,7 @@ target(
 Always generate JUnit XML in CI:
 
 ```bash
-builder test --junit test-results.xml --mode plain
+bldr test --junit test-results.xml --mode plain
 ```
 
 ## Troubleshooting
@@ -383,7 +383,7 @@ builder test --junit test-results.xml --mode plain
 
 1. Check target type: `type = "test"`
 2. Verify source patterns match files
-3. Use `builder infer` to see auto-detection
+3. Use `bldr infer` to see auto-detection
 4. Check `.builderignore` isn't excluding tests
 
 ### Tests Always Re-run (Cache Miss)
@@ -413,28 +413,28 @@ builder test --junit test-results.xml --mode plain
 
 ```bash
 # Run all tests with full reporting
-builder test --verbose --junit test-results.xml
+bldr test --verbose --junit test-results.xml
 ```
 
 ### Quick Smoke Test
 
 ```bash
 # Run only unit tests, fast fail
-builder test --filter unit --fail-fast
+bldr test --filter unit --fail-fast
 ```
 
 ### CI Pipeline
 
 ```bash
 # CI-friendly: plain output, JUnit export
-builder test --mode plain --junit results.xml
+bldr test --mode plain --junit results.xml
 ```
 
 ### Development Workflow
 
 ```bash
 # Watch mode with filter
-builder watch "test --filter unit"
+bldr watch "test --filter unit"
 ```
 
 ## Coverage Support (Future)
@@ -443,10 +443,10 @@ The `--coverage` flag is reserved for future coverage reporting:
 
 ```bash
 # Future: Generate coverage report
-builder test --coverage
+bldr test --coverage
 
 # Future: Coverage with specific format
-builder test --coverage --coverage-format html
+bldr test --coverage --coverage-format html
 ```
 
 ## See Also

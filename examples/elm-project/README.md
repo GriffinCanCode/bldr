@@ -38,7 +38,7 @@ elm-project/
 
 Build the project:
 ```bash
-builder build
+bldr build
 ```
 
 This will:
@@ -116,7 +116,7 @@ Builder integrates with Elm ecosystem tools:
 - **elm-test**: Unit testing
   ```bash
   npm install -g elm-test
-  builder test
+  bldr test
   ```
 
 ## Example Application

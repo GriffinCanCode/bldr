@@ -98,8 +98,8 @@ struct WatchCommand
         terminal.writeln();
         
         terminal.writeln(formatter.section("Usage"));
-        terminal.writeln("  builder build --watch [target] [options]");
-        terminal.writeln("  builder watch [target] [options]");
+        terminal.writeln("  bldr build --watch [target] [options]");
+        terminal.writeln("  bldr watch [target] [options]");
         terminal.writeln();
         
         terminal.writeln(formatter.section("Options"));
@@ -113,16 +113,16 @@ struct WatchCommand
         
         terminal.writeln(formatter.section("Examples"));
         terminal.writeln("  # Watch all targets");
-        terminal.writeln("  builder build --watch");
+        terminal.writeln("  bldr build --watch");
         terminal.writeln();
         terminal.writeln("  # Watch specific target");
-        terminal.writeln("  builder build --watch //src:app");
+        terminal.writeln("  bldr build --watch //src:app");
         terminal.writeln();
         terminal.writeln("  # Watch with custom debounce");
-        terminal.writeln("  builder build --watch --debounce=500");
+        terminal.writeln("  bldr build --watch --debounce=500");
         terminal.writeln();
         terminal.writeln("  # Watch without clearing screen");
-        terminal.writeln("  builder build --watch --no-clear");
+        terminal.writeln("  bldr build --watch --no-clear");
         terminal.writeln();
         
         terminal.writeln(formatter.section("How It Works"));

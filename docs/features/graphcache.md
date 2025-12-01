@@ -186,20 +186,20 @@ Graph caching is automatic - no configuration needed:
 
 ```bash
 # First build: analyzes and caches graph
-$ builder build
+$ bldr build
 
 # Subsequent builds: loads from cache (if unchanged)
-$ builder build  # ← 10-50x faster analysis!
+$ bldr build  # ← 10-50x faster analysis!
 ```
 
 ### Manual Cache Management
 
 ```bash
 # Clear graph cache
-$ builder clean --graph-cache
+$ bldr clean --graph-cache
 
 # Invalidate and rebuild
-$ builder build --no-cache
+$ bldr build --no-cache
 ```
 
 ### Programmatic Usage
@@ -277,13 +277,13 @@ unittest
 
 ```bash
 # Test cache across builds
-$ builder build          # Populates cache
+$ bldr build          # Populates cache
 $ touch src/main.d       # Change source (not config)
-$ builder build          # Should use cache
+$ bldr build          # Should use cache
 
 # Test invalidation
 $ echo "# comment" >> Builderfile  # Change config
-$ builder build          # Should invalidate and rebuild
+$ bldr build          # Should invalidate and rebuild
 ```
 
 ---

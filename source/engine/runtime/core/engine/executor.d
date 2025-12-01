@@ -251,7 +251,7 @@ struct EngineExecutor
             auto integration = integrationResult.unwrap();
             
             // For automatic verification, we perform a quick check only
-            // Full two-build comparison should be done explicitly via `builder verify`
+            // Full two-build comparison should be done explicitly via `bldr verify`
             // to avoid doubling build times automatically
             
             // Quick check: analyze for potential non-determinism
@@ -286,7 +286,7 @@ struct EngineExecutor
                 if (config.options.determinism.strictMode)
                 {
                     Logger.error("Build failed due to potential non-determinism (strict mode)");
-                    Logger.info("Run 'builder verify " ~ target.name ~ "' for full verification");
+                    Logger.info("Run 'bldr verify " ~ target.name ~ "' for full verification");
                     observability.setSpanStatus(verifySpan, SpanStatus.Error, 
                         "Non-determinism detected in strict mode");
                 }
@@ -301,7 +301,7 @@ struct EngineExecutor
                 observability.setSpanAttribute(verifySpan, "determinism.verified", "true");
             }
             
-            Logger.info("For full verification, run: builder verify " ~ target.name);
+            Logger.info("For full verification, run: bldr verify " ~ target.name);
         }
         catch (Exception e)
         {

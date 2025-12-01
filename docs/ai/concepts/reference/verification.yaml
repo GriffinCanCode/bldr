@@ -11,7 +11,7 @@ key_points:
   - "Header verification: Ensure all included headers are declared"
 
 usage_examples:
-  - command: "builder verify"
+  - command: "bldr verify"
     description: "Run standard verification checks"
 
 related: [determinism, hermetic, security]

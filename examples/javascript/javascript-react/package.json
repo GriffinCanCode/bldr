@@ -4,8 +4,8 @@
   "description": "React application built with Builder",
   "main": "dist/bundle.js",
   "scripts": {
-    "build": "../../bin/builder build",
-    "clean": "../../bin/builder clean"
+    "build": "../../bin/bldr build",
+    "clean": "../../bin/bldr clean"
   },
   "dependencies": {
     "react": "^18.2.0",

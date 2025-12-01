@@ -51,10 +51,10 @@ Every topic was researched from actual Builder source code:
 
 COMMANDS AVAILABLE
 ━━━━━━━━━━━━━━━━━━
-$ builder explain <topic>          # Show topic definition
-$ builder explain list              # List all topics
-$ builder explain search "<query>"  # Search topics
-$ builder explain example <topic>   # Show examples
+$ bldr explain <topic>          # Show topic definition
+$ bldr explain list              # List all topics
+$ bldr explain search "<query>"  # Search topics
+$ bldr explain example <topic>   # Show examples
 
 FEATURES
 ━━━━━━━━
@@ -103,19 +103,19 @@ DESIGN PHILOSOPHY
 EXAMPLE USAGE
 ━━━━━━━━━━━━━
 # Get instant definition
-$ builder explain blake3
+$ bldr explain blake3
 → Shows: Summary, definition, key points, usage, related topics
 
 # Find topics about performance
-$ builder explain search "fast"
+$ bldr explain search "fast"
 → Shows: blake3, caching, incremental
 
 # Get working code
-$ builder explain example caching
+$ bldr explain example caching
 → Shows: Numbered examples with copy-paste code
 
 # See what's available
-$ builder explain list
+$ bldr explain list
 → Shows: All 9 concepts with one-line summaries
 
 BENEFITS
@@ -160,7 +160,7 @@ EXTENSIBILITY
 Easy to add new topics:
 1. Create YAML file (~10 minutes)
 2. Update index.yaml (~2 minutes)
-3. Test with `builder explain` (~1 minute)
+3. Test with `bldr explain` (~1 minute)
 Done!
 
 Future expansions planned:
@@ -182,9 +182,9 @@ Created complete documentation:
 NEXT STEPS
 ━━━━━━━━━━
 To use immediately:
-  $ builder explain list
-  $ builder explain blake3
-  $ builder explain search "cache"
+  $ bldr explain list
+  $ bldr explain blake3
+  $ bldr explain search "cache"
 
 To add more topics:
   1. Read docs/ai/IMPLEMENTATION.md
@@ -193,7 +193,7 @@ To add more topics:
   4. Test
 
 To integrate with AI:
-  AI assistants can now use `builder explain <topic>` to get
+  AI assistants can now use `bldr explain <topic>` to get
   instant, accurate information about Builder features.
 
 STATUS

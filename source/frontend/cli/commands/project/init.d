@@ -275,14 +275,14 @@ struct InitCommand
         terminal.write("  ");
         terminal.writeColored("3.", Color.BrightYellow, Style.Bold);
         terminal.write(" Run ");
-        terminal.writeColored("builder build", Color.Green, Style.Bold);
+        terminal.writeColored("bldr build", Color.Green, Style.Bold);
         terminal.write(" to build your project");
         terminal.writeln();
         
         terminal.write("  ");
         terminal.writeColored("4.", Color.BrightYellow, Style.Bold);
         terminal.write(" Run ");
-        terminal.writeColored("builder graph", Color.Green, Style.Bold);
+        terminal.writeColored("bldr graph", Color.Green, Style.Bold);
         terminal.write(" to visualize dependencies");
         terminal.writeln();
         terminal.writeln();

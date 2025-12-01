@@ -822,7 +822,7 @@ done
 - BuildKit integration
 
 ```bash
-builder build //app:container --plugin docker
+bldr build //app:container --plugin docker
 ```
 
 ### 2. SonarQube Plugin
@@ -834,7 +834,7 @@ builder build //app:container --plugin docker
 - PR decoration
 
 ```bash
-builder build //app:main --plugin sonar
+bldr build //app:main --plugin sonar
 ```
 
 ### 3. Notification Plugin
@@ -846,7 +846,7 @@ builder build //app:main --plugin sonar
 - Custom webhooks
 
 ```bash
-builder build //app:main --plugin notify
+bldr build //app:main --plugin notify
 ```
 
 ### 4. S3 Upload Plugin
@@ -858,7 +858,7 @@ builder build //app:main --plugin notify
 - Access control
 
 ```bash
-builder build //app:release --plugin s3
+bldr build //app:release --plugin s3
 ```
 
 ### 5. Grafana Plugin
@@ -870,7 +870,7 @@ builder build //app:release --plugin s3
 - Historical trends
 
 ```bash
-builder build //app:main --plugin grafana
+bldr build //app:main --plugin grafana
 ```
 
 ---
@@ -939,7 +939,7 @@ A: For typical plugin operations (a few per build), the overhead is negligible (
 A: Yes, through well-defined hooks. Plugins can run before/after builds, add custom target types, process artifacts, and extend CLI commands.
 
 **Q: How do I write a plugin?**  
-A: Use `builder plugin create my-plugin` to generate a template, implement the JSON-RPC handlers, and build/test. See the SDK section above.
+A: Use `bldr plugin create my-plugin` to generate a template, implement the JSON-RPC handlers, and build/test. See the SDK section above.
 
 **Q: Are plugins secure?**  
 A: In v1.0, plugins run with full privileges (like any CLI tool). Future versions will add sandboxing. Only install plugins you trust.

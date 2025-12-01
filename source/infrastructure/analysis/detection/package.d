@@ -1,6 +1,6 @@
 module infrastructure.analysis.detection;
 
-/// Project detection and template generation for `builder init`
+/// Project detection and template generation for `bldr init`
 /// 
 /// This package provides intelligent project detection capabilities
 /// that scan directories to identify languages, frameworks, and project

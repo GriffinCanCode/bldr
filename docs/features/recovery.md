@@ -172,20 +172,20 @@ class BuildNode {
 
 ```bash
 # Normal build - automatically checkpoints on failure
-builder build
+bldr build
 
 # If build fails, resume with:
-builder resume
+bldr resume
 ```
 
 ### Resume Options
 
 ```bash
 # Resume with specific strategy
-BUILDER_RESUME_STRATEGY=retry builder resume    # Retry failed
-BUILDER_RESUME_STRATEGY=skip builder resume     # Skip failed
-BUILDER_RESUME_STRATEGY=smart builder resume    # Smart (default)
-BUILDER_RESUME_STRATEGY=rebuild builder resume  # Rebuild all
+BUILDER_RESUME_STRATEGY=retry bldr resume    # Retry failed
+BUILDER_RESUME_STRATEGY=skip bldr resume     # Skip failed
+BUILDER_RESUME_STRATEGY=smart bldr resume    # Smart (default)
+BUILDER_RESUME_STRATEGY=rebuild bldr resume  # Rebuild all
 ```
 
 ### Configuration
@@ -207,7 +207,7 @@ export BUILDER_ENABLE_RETRIES=false
 ### Example 1: Network Timeout Recovery
 
 ```bash
-$ builder build
+$ bldr build
 Building 100 targets...
   ✓ target1
   ✓ target2
@@ -220,15 +220,15 @@ Building 100 targets...
 ### Example 2: Build Failure Resumption
 
 ```bash
-$ builder build
+$ bldr build
 Building 100 targets...
 [... 50 targets succeed ...]
   ✗ target51 (CompilationFailed)
 Build failed with 1 errors
-Checkpoint saved for resume with 'builder resume'
+Checkpoint saved for resume with 'bldr resume'
 
 # Fix the issue, then:
-$ builder resume
+$ bldr resume
 Found checkpoint from 2025-01-27 14:30:00
 Progress: 50/100 targets (50%)
 Failed targets:
@@ -255,7 +255,7 @@ Build completed successfully!
 ### Example 3: Partial Build with Failures
 
 ```bash
-$ builder build
+$ bldr build
 Building 20 targets...
   ✓ module-a (3 targets)
   ✗ module-b (2 targets failed)
@@ -263,7 +263,7 @@ Building 20 targets...
 Checkpoint saved
 
 # Continue with other modules
-$ BUILDER_RESUME_STRATEGY=skip builder resume
+$ BUILDER_RESUME_STRATEGY=skip bldr resume
 Skipping failed targets, building remaining...
   ✓ module-d (10 targets)
 Build completed (2 targets skipped)
@@ -384,7 +384,7 @@ class CustomStrategy : ResumePlanner {
 1. **Use Smart Resume** - Best balance of correctness and performance
 2. **Enable Retries** - Handles transient failures automatically
 3. **Monitor Retry Stats** - High retry rates indicate systemic issues
-4. **Clear Stale Checkpoints** - Run `builder clean` after major refactors
+4. **Clear Stale Checkpoints** - Run `bldr clean` after major refactors
 5. **Validate After Resume** - Check build outputs after resuming
 
 ## Comparison with Other Build Systems

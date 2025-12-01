@@ -184,7 +184,7 @@ builder cache-server --auth my-secret-token
 builder cache-server \
   --host 0.0.0.0 \
   --port 8080 \
-  --storage /var/cache/builder \
+  --storage /var/cache/bldr \
   --max-size 50000000000
 ```
 
@@ -266,10 +266,10 @@ workspace("project") {
 ```bash
 # Client automatically uses remote cache if configured
 export BUILDER_REMOTE_CACHE_URL=http://localhost:8080
-builder build //...
+bldr build //...
 
 # Cache statistics
-builder build //... --stats
+bldr build //... --stats
 # Will show:
 #   Remote cache hits: 42
 #   Remote cache misses: 8
@@ -281,7 +281,7 @@ builder build //... --stats
 # Environment variables for production
 export BUILDER_CACHE_SERVER_HOST=0.0.0.0
 export BUILDER_CACHE_SERVER_PORT=8080
-export BUILDER_CACHE_SERVER_STORAGE=/var/cache/builder
+export BUILDER_CACHE_SERVER_STORAGE=/var/cache/bldr
 export BUILDER_CACHE_SERVER_MAX_SIZE=100000000000  # 100 GB
 export BUILDER_CACHE_SERVER_AUTH_TOKEN=your-secret-token
 export BUILDER_CACHE_SERVER_ENABLE_COMPRESSION=true
@@ -299,7 +299,7 @@ builder cache-server --production
 builder cache-server \
   --host 0.0.0.0 \
   --port 8080 \
-  --storage /var/cache/builder \
+  --storage /var/cache/bldr \
   --auth your-secret-token \
   --max-size 100000000000 \
   --enable-compression \
@@ -603,7 +603,7 @@ echo $BUILDER_REMOTE_CACHE_TOKEN
 **Low hit rate:**
 ```bash
 # Check content hash computation
-builder build --verbose
+bldr build --verbose
 # Look for "cache miss" reasons
 
 # Verify network latency

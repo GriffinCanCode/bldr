@@ -297,16 +297,16 @@ Tests full rendering pipeline with mock builds.
 
 ```bash
 # Test different modes
-builder build --mode=interactive
-builder build --mode=plain
-builder build --mode=verbose
-builder build --mode=quiet
+bldr build --mode=interactive
+bldr build --mode=plain
+bldr build --mode=verbose
+bldr build --mode=quiet
 
 # Test color disable
-NO_COLOR=1 builder build
+NO_COLOR=1 bldr build
 
 # Test in pipe (non-interactive)
-builder build | tee output.log
+bldr build | tee output.log
 ```
 
 ## Extending

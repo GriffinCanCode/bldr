@@ -411,7 +411,7 @@ final class BuildCache
                 auto error = ErrorBuilder!CacheError.create("Cache signature verification failed - possible tampering or corruption detected", ErrorCode.CacheCorrupted)
                     .withContext("verifying cache integrity", cacheFilePath)
                     .withFileCheck("The cache file may have been modified or corrupted")
-                    .withCommand("Remove corrupted cache", "builder clean")
+                    .withCommand("Remove corrupted cache", "bldr clean")
                     .withCommand("Check file system integrity", "fsck")
                     .withFileCheck("Ensure no other processes are modifying files in .builder-cache/")
                     .build();

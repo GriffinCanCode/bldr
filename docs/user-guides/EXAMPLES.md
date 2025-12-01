@@ -10,7 +10,7 @@ dub build
 
 # Test an example
 cd examples/simple
-../../bin/builder build
+../../bin/bldr build
 ```
 
 ## Examples Overview
@@ -27,7 +27,7 @@ Basic Python project with library and executable.
 **Run:**
 ```bash
 cd examples/simple
-../../bin/builder build
+../../bin/bldr build
 python3 main.py
 ```
 
@@ -58,7 +58,7 @@ calculator → string-utils
 **Run:**
 ```bash
 cd examples/python-multi
-../../bin/builder build
+../../bin/bldr build
 python3 calculator.py
 ```
 
@@ -81,11 +81,11 @@ String Operations:
 **Incremental Build:**
 ```bash
 # First build
-../../bin/builder build
+../../bin/bldr build
 # Built: 3, Cached: 0, Time: 80ms
 
 # Second build (no changes)
-../../bin/builder build
+../../bin/bldr build
 # Built: 0, Cached: 2, Time: 0ms
 ```
 
@@ -102,7 +102,7 @@ Simple Node.js script with no bundling.
 
 ```bash
 cd examples/javascript/javascript-node
-../../bin/builder build
+../../bin/bldr build
 node app.js
 ```
 
@@ -117,7 +117,7 @@ Browser application with ES6 modules and esbuild bundling.
 
 ```bash
 cd examples/javascript/javascript-browser
-../../bin/builder build
+../../bin/bldr build
 # Open index.html in browser
 ```
 
@@ -132,7 +132,7 @@ Multi-format library builds (ESM, CommonJS, UMD).
 
 ```bash
 cd examples/javascript/javascript-library
-../../bin/builder build //.:lib-esm //.:lib-cjs //.:lib-umd
+../../bin/bldr build //.:lib-esm //.:lib-cjs //.:lib-umd
 ```
 
 **Features:**
@@ -147,7 +147,7 @@ React app with JSX transformation and bundling.
 ```bash
 cd examples/javascript/javascript-react
 npm install
-../../bin/builder build
+../../bin/bldr build
 # Open public/index.html in browser
 ```
 
@@ -163,8 +163,8 @@ Modern React app with Vite bundler for lightning-fast HMR and optimized builds.
 ```bash
 cd examples/javascript/javascript-vite-react
 npm install
-../../bin/builder build :app    # Production build
-../../bin/builder build :lib    # Library build
+../../bin/bldr build :app    # Production build
+../../bin/bldr build :lib    # Library build
 ```
 
 **Features:**
@@ -201,8 +201,8 @@ Vue 3 Single File Component (SFC) application with Vite.
 ```bash
 cd examples/javascript/javascript-vite-vue
 npm install
-../../bin/builder build :app    # Production build
-../../bin/builder build :lib    # Library build
+../../bin/bldr build :app    # Production build
+../../bin/bldr build :lib    # Library build
 ```
 
 **Features:**
@@ -234,7 +234,7 @@ TypeScript with type checking and compilation.
 
 ```bash
 cd examples/typescript-app
-../../bin/builder build
+../../bin/bldr build
 node dist/app.js
 ```
 
@@ -337,7 +337,7 @@ Native Go application demonstrating fast compilation.
 **Run:**
 ```bash
 cd examples/go-project
-../../bin/builder build
+../../bin/bldr build
 ./bin/go-app
 ```
 
@@ -367,7 +367,7 @@ Native D application showcasing D's features.
 **Run:**
 ```bash
 cd examples/d-project
-../../bin/builder build
+../../bin/bldr build
 ./bin/d-hello
 ```
 
@@ -409,7 +409,7 @@ web-ui (JavaScript, standalone)
 **Run:**
 ```bash
 cd examples/mixed-lang
-../../bin/builder build
+../../bin/bldr build
 python3 processor.py
 ```
 
@@ -438,7 +438,7 @@ Data Summary:
 
 ```bash
 cd examples/python-multi
-../../bin/builder graph
+../../bin/bldr graph
 ```
 
 **Output:**
@@ -477,16 +477,16 @@ Builder uses content-based caching to skip unchanged targets:
 
 ```bash
 # Initial build
-builder build
+bldr build
 # Built: 3, Cached: 0, Time: 80ms
 
 # No changes - everything cached
-builder build
+bldr build
 # Built: 0, Cached: 2, Time: 0ms
 
 # Modify one file
 echo "# comment" >> lib/math_utils.py
-builder build
+bldr build
 # Built: 2, Cached: 1, Time: 40ms
 # (math-utils + calculator rebuilt, string-utils cached)
 ```
@@ -496,7 +496,7 @@ builder build
 Builder automatically parallelizes independent targets:
 
 ```bash
-builder build -v
+bldr build -v
 # Max parallelism: 2 jobs
 # Building //.:math-utils...
 # Building //.:string-utils...
@@ -509,7 +509,7 @@ Single command builds all languages:
 
 ```bash
 cd examples/
-builder build //...  # Build everything
+bldr build //...  # Build everything
 ```
 
 Supported languages:
@@ -524,7 +524,7 @@ Supported languages:
 ### 5. Clean Builds
 
 ```bash
-builder clean
+bldr clean
 # Cleans build cache and outputs
 ```
 

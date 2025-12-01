@@ -58,5 +58,5 @@ related: [builderfile, configuration, targets]
 
 next_steps: |
   - See docs/user-guides/cli.md for complete configuration reference
-  - See 'builder explain example workspace' for complete examples
+  - See 'bldr explain example workspace' for complete examples
 

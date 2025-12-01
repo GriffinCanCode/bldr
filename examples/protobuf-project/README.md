@@ -59,7 +59,7 @@ Download from https://protobuf.dev/downloads/
 
 Generate code for all languages:
 ```bash
-builder build
+bldr build
 ```
 
 ### Build Specific Language
@@ -67,16 +67,16 @@ builder build
 Generate code for a specific language:
 ```bash
 # C++
-builder build protos-cpp
+bldr build protos-cpp
 
 # Python
-builder build protos-python
+bldr build protos-python
 
 # Java
-builder build protos-java
+bldr build protos-java
 
 # Go
-builder build protos-go
+bldr build protos-go
 ```
 
 ## Configuration
@@ -247,7 +247,7 @@ person := &example.Person{
 
 Remove generated files:
 ```bash
-builder clean
+bldr clean
 ```
 
 ## Notes

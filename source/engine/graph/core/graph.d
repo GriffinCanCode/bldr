@@ -392,7 +392,7 @@ final class BuildGraph
                 .withContext("adding target to graph", "target: " ~ key)
                 .withSuggestion(ErrorSuggestion.fileCheck("Check for duplicate target definitions in Builderfile"))
                 .withSuggestion(ErrorSuggestion.fileCheck("Ensure each target has a unique name"))
-                .withCommand("List all targets", "builder list")
+                .withCommand("List all targets", "bldr list")
                 .build();
             return Result!BuildError.err(cast(BuildError) error);
         }
@@ -414,7 +414,7 @@ final class BuildGraph
                 .withContext("adding target by ID", "targetId: " ~ key)
                 .withSuggestion(ErrorSuggestion.fileCheck("Check for duplicate target IDs"))
                 .withSuggestion(ErrorSuggestion.fileCheck("Ensure all TargetId values are unique"))
-                .withCommand("View dependency graph", "builder graph")
+                .withCommand("View dependency graph", "bldr graph")
                 .build();
             return Result!BuildError.err(cast(BuildError) error);
         }
@@ -471,7 +471,7 @@ final class BuildGraph
             
             auto error = ErrorBuilder!GraphError.create("Circular dependency detected: adding '" ~ from ~ "' -> '" ~ to ~ "' would create a cycle", ErrorCode.GraphCycle)
                 .withContext("adding dependency", "would create cycle")
-                .withCommand("Visualize the dependency cycle", "builder graph")
+                .withCommand("Visualize the dependency cycle", "bldr graph")
                 .withFileCheck("Remove or reorder dependencies to break the cycle")
                 .withSuggestion("Consider extracting shared code into a separate target")
                 .withFileCheck("Check if the dependency is actually needed")
@@ -500,7 +500,7 @@ final class BuildGraph
             auto error = new GraphError("Target '" ~ fromKey ~ "' not found in dependency graph", ErrorCode.NodeNotFound);
             error.addContext(ErrorContext("adding dependency", "from: " ~ fromKey ~ ", to: " ~ toKey));
             error.addSuggestion("Ensure target '" ~ fromKey ~ "' is defined in your Builderfile");
-            error.addSuggestion("Run 'builder graph' to see all available targets");
+            error.addSuggestion("Run 'bldr graph' to see all available targets");
             error.addSuggestion("Check for typos in the target name");
             return Result!BuildError.err(cast(BuildError) error);
         }
@@ -510,7 +510,7 @@ final class BuildGraph
             auto error = new GraphError("Target '" ~ toKey ~ "' not found in dependency graph", ErrorCode.NodeNotFound);
             error.addContext(ErrorContext("adding dependency", "from: " ~ fromKey ~ ", to: " ~ toKey));
             error.addSuggestion("Ensure target '" ~ toKey ~ "' is defined in your Builderfile");
-            error.addSuggestion("Run 'builder graph' to see all available targets");
+            error.addSuggestion("Run 'bldr graph' to see all available targets");
             error.addSuggestion("Check for typos in the target name");
             return Result!BuildError.err(cast(BuildError) error);
         }
@@ -525,7 +525,7 @@ final class BuildGraph
         {
             auto error = new GraphError("Circular dependency detected: adding '" ~ fromKey ~ "' -> '" ~ toKey ~ "' would create a cycle", ErrorCode.GraphCycle);
             error.addContext(ErrorContext("adding dependency", "would create cycle"));
-            error.addSuggestion("Run 'builder graph' to visualize the dependency cycle");
+            error.addSuggestion("Run 'bldr graph' to visualize the dependency cycle");
             error.addSuggestion("Remove or reorder dependencies to break the cycle");
             error.addSuggestion("Consider extracting shared code into a separate target");
             error.addSuggestion("Check if the dependency is actually needed");
@@ -649,7 +649,7 @@ final class BuildGraph
             {
                 auto error = new GraphError("Circular dependency detected in build graph involving target: " ~ node.id.toString(), ErrorCode.GraphCycle);
                 error.addContext(ErrorContext("topological sort", "cycle detected"));
-                error.addSuggestion("Run 'builder graph' to visualize all dependencies");
+                error.addSuggestion("Run 'bldr graph' to visualize all dependencies");
                 error.addSuggestion("Trace the cycle by checking which targets depend on '" ~ node.id.toString() ~ "'");
                 error.addSuggestion("Break the cycle by removing or refactoring dependencies");
                 error.addSuggestion("Consider using lazy loading or interface-based design patterns");

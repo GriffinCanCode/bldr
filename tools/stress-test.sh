@@ -45,7 +45,7 @@ echo "OS: $(uname -s) $(uname -r)"
 echo "CPU: $(sysctl -n machdep.cpu.brand_string 2>/dev/null || lscpu | grep 'Model name' | cut -d: -f2 | xargs)"
 echo "Cores: $(sysctl -n hw.ncpu 2>/dev/null || nproc)"
 echo "Memory: $(( $(sysctl -n hw.memsize 2>/dev/null || grep MemTotal /proc/meminfo | awk '{print $2}') / 1024 / 1024 )) MB"
-echo "Builder version: $(${PROJECT_ROOT}/bin/builder --version 2>/dev/null || echo 'dev')"
+echo "Builder version: $(${PROJECT_ROOT}/bin/bldr --version 2>/dev/null || echo 'dev')"
 echo ""
 
 # Start results file

@@ -75,21 +75,21 @@ module engine.economics;
 /// 
 /// ### Optimize for budget
 /// ```bash
-/// $ builder build --budget=$5.00
+/// $ bldr build --budget=$5.00
 /// Using: 4 remote cores, shared cache
 /// Est cost: $4.87, Est time: 5m 20s
 /// ```
 /// 
 /// ### Optimize for time
 /// ```bash
-/// $ builder build --time-limit=2m
+/// $ bldr build --time-limit=2m
 /// Using: 32 remote cores, premium instances  
 /// Est cost: $12.30, Est time: 1m 55s
 /// ```
 /// 
 /// ### Optimize for cost
 /// ```bash
-/// $ builder build --optimize=cost
+/// $ bldr build --optimize=cost
 /// Found: Local build with distributed cache
 /// Cost: $0.00, Time: 8m 15s
 /// ```

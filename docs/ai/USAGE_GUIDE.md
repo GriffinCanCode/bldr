@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`builder explain` provides **instant, structured documentation** optimized for AI assistants. Unlike human-oriented markdown docs, this system gives you machine-readable, queryable information via simple CLI commands.
+`bldr explain` provides **instant, structured documentation** optimized for AI assistants. Unlike human-oriented markdown docs, this system gives you machine-readable, queryable information via simple CLI commands.
 
 ## Why This Exists
 
@@ -12,7 +12,7 @@ AI assistants can only execute commands, not:
 - Navigate interactive docs
 - Read long-form documentation efficiently
 
-`builder explain` solves this by providing:
+`bldr explain` solves this by providing:
 - **Single-command answers** - No navigation needed
 - **Structured output** - Easy to parse and understand
 - **Concise information** - Only what matters
@@ -23,14 +23,14 @@ AI assistants can only execute commands, not:
 
 ### 1. Get Topic Definition
 ```bash
-builder explain <topic>
+bldr explain <topic>
 ```
 
 **Use when:** You need to understand a specific concept
 
 **Example:**
 ```bash
-builder explain blake3
+bldr explain blake3
 ```
 
 **Output structure:**
@@ -43,7 +43,7 @@ builder explain blake3
 
 ### 2. List All Topics
 ```bash
-builder explain list
+bldr explain list
 ```
 
 **Use when:** You want to see what documentation is available
@@ -52,16 +52,16 @@ builder explain list
 
 ### 3. Search Topics
 ```bash
-builder explain search "<query>"
+bldr explain search "<query>"
 ```
 
 **Use when:** You're not sure of the exact topic name or want to find related topics
 
 **Example:**
 ```bash
-builder explain search "fast builds"
-builder explain search "cache"
-builder explain search "reproducible"
+bldr explain search "fast builds"
+bldr explain search "cache"
+bldr explain search "reproducible"
 ```
 
 **Searches in:**
@@ -71,15 +71,15 @@ builder explain search "reproducible"
 
 ### 4. Get Examples
 ```bash
-builder explain example <topic>
+bldr explain example <topic>
 ```
 
 **Use when:** You need working code or command examples
 
 **Example:**
 ```bash
-builder explain example caching
-builder explain example blake3
+bldr explain example caching
+bldr explain example blake3
 ```
 
 **Output:** Numbered examples with descriptions and copy-paste ready code
@@ -111,51 +111,51 @@ These shortcuts map to main topics:
 ### Workflow 1: Understanding a New Concept
 ```bash
 # Start with the topic
-builder explain caching
+bldr explain caching
 
 # Explore related concepts
-builder explain blake3
-builder explain action-cache
-builder explain remote-cache
+bldr explain blake3
+bldr explain action-cache
+bldr explain remote-cache
 
 # Get examples
-builder explain example caching
+bldr explain example caching
 ```
 
 ### Workflow 2: Solving a Problem
 ```bash
 # Search for relevant topics
-builder explain search "slow builds"
+bldr explain search "slow builds"
 
 # Read about performance topics
-builder explain incremental
-builder explain caching
+bldr explain incremental
+bldr explain caching
 
 # Get working examples
-builder explain example incremental
+bldr explain example incremental
 ```
 
 ### Workflow 3: Exploring Features
 ```bash
 # See all available topics
-builder explain list
+bldr explain list
 
 # Pick interesting ones
-builder explain determinism
-builder explain remote-cache
+bldr explain determinism
+bldr explain remote-cache
 ```
 
 ## Best Practices
 
 ### DO:
-- ✅ Use single-word topic names: `builder explain blake3`
-- ✅ Search when unsure: `builder explain search "cache"`
+- ✅ Use single-word topic names: `bldr explain blake3`
+- ✅ Search when unsure: `bldr explain search "cache"`
 - ✅ Follow related links: Check the "related" field
-- ✅ Get examples: `builder explain example <topic>`
+- ✅ Get examples: `bldr explain example <topic>`
 - ✅ Use aliases: `hash` instead of `blake3` is fine
 
 ### DON'T:
-- ❌ Use full phrases: `builder explain "BLAKE3 hashing"` (just use `blake3`)
+- ❌ Use full phrases: `bldr explain "BLAKE3 hashing"` (just use `blake3`)
 - ❌ Guess syntax: Use `list` to see exact names
 - ❌ Read everything: Follow related topics for discovery
 
@@ -200,7 +200,7 @@ The explain system is **independent** from the main documentation:
 - **Human docs** (`docs/`): Long-form guides, architecture, tutorials
 - **AI docs** (`docs/ai/`): Structured, queryable, instant answers
 
-Use `builder explain` for:
+Use `bldr explain` for:
 - Quick definitions
 - Working examples
 - Discovery of features
@@ -226,17 +226,17 @@ No database or network calls - all file-based.
 
 ### Topic not found
 ```bash
-builder explain nonexistent
+bldr explain nonexistent
 # Error: Topic not found: nonexistent
 # Available topics:
-#   builder explain list
+#   bldr explain list
 ```
 
-**Solution:** Use `builder explain list` to see available topics
+**Solution:** Use `bldr explain list` to see available topics
 
 ### Unclear which topic to use
 ```bash
-builder explain search "keyword"
+bldr explain search "keyword"
 ```
 
 **Solution:** Search for related terms
@@ -248,7 +248,7 @@ builder explain search "keyword"
 
 ```bash
 # I want to make my builds faster
-$ builder explain search "fast"
+$ bldr explain search "fast"
 Search Results for: fast
   blake3
     BLAKE3 cryptographic hash function - 3-5x faster than SHA-256
@@ -262,7 +262,7 @@ Search Results for: fast
 Found 3 topic(s).
 
 # Let me learn about caching
-$ builder explain caching
+$ bldr explain caching
 CACHING
 ────────────────
 
@@ -283,28 +283,28 @@ RELATED:
   blake3, determinism, action-cache, remote-cache, incremental
 
 NEXT STEPS:
-  - See 'builder explain action-cache' for fine-grained caching
-  - See 'builder explain remote-cache' for team collaboration setup
+  - See 'bldr explain action-cache' for fine-grained caching
+  - See 'bldr explain remote-cache' for team collaboration setup
 
 # Let me check action-cache
-$ builder explain action-cache
+$ bldr explain action-cache
 [detailed info about action-cache]
 
 # Now get some examples
-$ builder explain example caching
+$ bldr explain example caching
 EXAMPLES: caching
 ────────────────
 
 EXAMPLE 1:
   Check if build is cached
-  Command: builder build //target
+  Command: bldr build //target
   [output example]
 ...
 ```
 
 ## Summary
 
-`builder explain` is your **instant documentation assistant**. Use it to:
+`bldr explain` is your **instant documentation assistant**. Use it to:
 1. Quickly understand concepts
 2. Find working examples
 3. Discover related features

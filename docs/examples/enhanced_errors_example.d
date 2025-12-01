@@ -221,7 +221,7 @@ void demonstrateSnippetExtraction()
  * [Build:TargetNotFound] Target 'my-ap' not found. Did you mean 'my-app'?
  * 
  * Suggestions:
- *   - List available targets: builder query --targets
+ *   - List available targets: bldr query --targets
  *   - Check Builderfile for target definitions
  * 
  * Example 4: Error Code Information

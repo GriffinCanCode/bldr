@@ -5,7 +5,7 @@ The Builder Wizard provides an interactive, guided experience for setting up new
 ## Overview
 
 ```bash
-builder wizard
+bldr wizard
 ```
 
 The wizard guides you through:
@@ -48,7 +48,7 @@ The wizard creates three essential files:
 
 ```bash
 cd my-project
-builder wizard
+bldr wizard
 ```
 
 ### Example Session
@@ -94,7 +94,7 @@ builder wizard
 ✓ Added .builderignore
 ────────────────────────────────────────────────────────
 
-Run 'builder build' to start building!
+Run 'bldr build' to start building!
 ```
 
 ## Language Support
@@ -245,9 +245,9 @@ After generation, you can manually edit the files:
 2. **Builderspace** - Configure parallelism, timeouts, telemetry
 3. **.builderignore** - Add project-specific exclusions
 
-## Comparison with `builder init`
+## Comparison with `bldr init`
 
-| Feature | `builder wizard` | `builder init` |
+| Feature | `bldr wizard` | `bldr init` |
 |---------|-----------------|----------------|
 | Interactive | ✓ Yes | ✗ No |
 | Arrow key navigation | ✓ Yes | ✗ No |
@@ -269,28 +269,28 @@ After generation, you can manually edit the files:
 
 ```bash
 cd my-flask-app
-builder wizard
+bldr wizard
 # Select: Python → Single application → poetry → Enable caching
-builder build
+bldr build
 ```
 
 ### Rust + TypeScript Monorepo
 
 ```bash
 cd my-fullstack-app
-builder wizard
+bldr wizard
 # Select: Rust → Monorepo → Enable caching
 # Then manually edit Builderfile to add TypeScript frontend
-builder build
+bldr build
 ```
 
 ### Go Microservice
 
 ```bash
 cd my-service
-builder wizard
+bldr wizard
 # Select: Go → Single application → Enable caching + remote
-builder build
+bldr build
 ```
 
 ## Troubleshooting
@@ -309,8 +309,8 @@ Run `reset` to restore terminal state. This shouldn't happen normally - please r
 
 ## See Also
 
-- `builder init` - Non-interactive initialization
-- `builder infer` - Preview auto-detection results
-- `builder build` - Build your project
-- `builder help` - Full command reference
+- `bldr init` - Non-interactive initialization
+- `bldr infer` - Preview auto-detection results
+- `bldr build` - Build your project
+- `bldr help` - Full command reference
 

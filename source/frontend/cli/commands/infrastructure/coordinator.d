@@ -92,7 +92,7 @@ void printCoordinatorHelp()
     writeln("Builder Coordinator - Distributed build coordinator");
     writeln();
     writeln("USAGE:");
-    writeln("  builder coordinator [OPTIONS]");
+    writeln("  bldr coordinator [OPTIONS]");
     writeln();
     writeln("OPTIONS:");
     writeln("  --host <HOST>          Bind address (default: 0.0.0.0)");
@@ -102,13 +102,13 @@ void printCoordinatorHelp()
     writeln();
     writeln("EXAMPLES:");
     writeln("  # Start coordinator on default port");
-    writeln("  builder coordinator");
+    writeln("  bldr coordinator");
     writeln();
     writeln("  # Custom host and port");
-    writeln("  builder coordinator --host 127.0.0.1 --port 8080");
+    writeln("  bldr coordinator --host 127.0.0.1 --port 8080");
     writeln();
     writeln("  # Limit workers");
-    writeln("  builder coordinator --max-workers 50");
+    writeln("  bldr coordinator --max-workers 50");
 }
 
 

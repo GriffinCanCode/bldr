@@ -108,16 +108,16 @@ usage:
   
   cli_verification: |
     # Build and verify determinism
-    builder build //app --determinism=strict
+    bldr build //app --determinism=strict
     
     # Verify across 5 builds
-    builder verify //app --iterations=5
+    bldr verify //app --iterations=5
     
     # Detect non-determinism sources (quick check)
-    builder verify //app --quick
+    bldr verify //app --quick
     
     # Get repair suggestions (automatic with verify)
-    builder verify //app
+    bldr verify //app
 
 verification_strategies:
   - name: "Content Hash (default)"
@@ -170,7 +170,7 @@ examples:
       }
   
   - description: "Verify determinism"
-    command: "builder verify //app:app --iterations=5"
+    command: "bldr verify //app:app --iterations=5"
     expected_output: |
       Build 1/5: hash=abc123...
       Build 2/5: hash=abc123...
@@ -180,8 +180,8 @@ examples:
       ✓ Build is deterministic: all outputs match
 
 next_steps: |
-  - See 'builder explain hermetic' for build isolation
-  - See 'builder explain caching' to understand why determinism matters
-  - See 'builder explain example determinism' for complete examples
+  - See 'bldr explain hermetic' for build isolation
+  - See 'bldr explain caching' to understand why determinism matters
+  - See 'bldr explain example determinism' for complete examples
   - See docs/features/determinism.md for detailed architecture
 

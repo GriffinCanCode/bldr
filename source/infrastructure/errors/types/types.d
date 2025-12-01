@@ -560,13 +560,13 @@ IOError fileNotFoundError(string path, string context = "") @system
     
     if (fileName == "Builderfile")
     {
-        error.addSuggestion(ErrorSuggestion.command("Create a Builderfile", "builder init"));
+        error.addSuggestion(ErrorSuggestion.command("Create a Builderfile", "bldr init"));
         error.addSuggestion(ErrorSuggestion.fileCheck("Check if you're in the correct directory"));
         error.addSuggestion(ErrorSuggestion.docs("See Builderfile documentation", "docs/user-guides/EXAMPLES.md"));
     }
     else if (fileName == "Builderspace")
     {
-        error.addSuggestion(ErrorSuggestion.command("Create a workspace", "builder init --workspace"));
+        error.addSuggestion(ErrorSuggestion.command("Create a workspace", "bldr init --workspace"));
         error.addSuggestion(ErrorSuggestion.fileCheck("Check if you're in the workspace root"));
         error.addSuggestion(ErrorSuggestion.docs("See workspace documentation", "docs/architecture/DSL.md"));
     }
@@ -645,10 +645,10 @@ BuildFailureError buildFailureError(string targetId, string message, string[] fa
         error.failedDeps = failedDeps;
     
     error.addSuggestion(ErrorSuggestion("Review build output above for specific errors"));
-    error.addSuggestion(ErrorSuggestion.command("Run with verbose output", "builder build --verbose"));
+    error.addSuggestion(ErrorSuggestion.command("Run with verbose output", "bldr build --verbose"));
     error.addSuggestion(ErrorSuggestion.fileCheck("Check that all dependencies are installed"));
     error.addSuggestion(ErrorSuggestion.fileCheck("Verify source files have no errors"));
-    error.addSuggestion(ErrorSuggestion.command("View dependency graph", "builder graph"));
+    error.addSuggestion(ErrorSuggestion.command("View dependency graph", "bldr graph"));
     
     return error;
 }
@@ -659,8 +659,8 @@ AnalysisError targetNotFoundError(string targetName) @system
     auto error = new AnalysisError(targetName, "Target not found: " ~ targetName, ErrorCode.TargetNotFound);
     
     error.addSuggestion(ErrorSuggestion.fileCheck("Check that target name is spelled correctly"));
-    error.addSuggestion(ErrorSuggestion.command("View available targets", "builder graph"));
-    error.addSuggestion(ErrorSuggestion.command("List all targets", "builder list"));
+    error.addSuggestion(ErrorSuggestion.command("View available targets", "bldr graph"));
+    error.addSuggestion(ErrorSuggestion.command("List all targets", "bldr list"));
     error.addSuggestion(ErrorSuggestion.fileCheck("Verify target is defined in Builderfile"));
     error.addSuggestion(ErrorSuggestion.docs("See target documentation", "docs/user-guides/EXAMPLES.md"));
     
@@ -673,7 +673,7 @@ CacheError cacheLoadError(string cachePath, string message) @system
     auto error = new CacheError("Cache load failed: " ~ message, ErrorCode.CacheLoadFailed);
     error.cachePath = cachePath;
     
-    error.addSuggestion(ErrorSuggestion.command("Clear cache and rebuild", "builder clean"));
+    error.addSuggestion(ErrorSuggestion.command("Clear cache and rebuild", "bldr clean"));
     error.addSuggestion(ErrorSuggestion.fileCheck("Cache may be from incompatible version"));
     error.addSuggestion(ErrorSuggestion.command("Check cache permissions", "ls -la .builder-cache/"));
     error.addSuggestion(ErrorSuggestion.fileCheck("Check available disk space"));
@@ -690,7 +690,7 @@ GraphError circularDependencyError(string[] cycle) @system
     
     error.addSuggestion(ErrorSuggestion.fileCheck("Break the circular dependency by removing one of the links"));
     error.addSuggestion(ErrorSuggestion.fileCheck("Refactor code to eliminate the cycle"));
-    error.addSuggestion(ErrorSuggestion.command("View full dependency graph", "builder graph"));
+    error.addSuggestion(ErrorSuggestion.command("View full dependency graph", "bldr graph"));
     error.addSuggestion(ErrorSuggestion.docs("See dependency management guide", "docs/architecture/ARCHITECTURE.md"));
     
     return error;
@@ -704,7 +704,7 @@ LanguageError compilationError(string language, string filePath, string message,
     error.compilerOutput = compilerOutput;
     
     error.addSuggestion(ErrorSuggestion.fileCheck("Review compiler output above for specific errors"));
-    error.addSuggestion(ErrorSuggestion.command("Build with verbose output", "builder build --verbose"));
+    error.addSuggestion(ErrorSuggestion.command("Build with verbose output", "bldr build --verbose"));
     error.addSuggestion(ErrorSuggestion.fileCheck("Check syntax in " ~ filePath));
     error.addSuggestion(ErrorSuggestion.docs("See " ~ language ~ " documentation", "docs/user-guides/EXAMPLES.md"));
     
@@ -720,8 +720,8 @@ AnalysisError missingDependencyError(string targetName, string missingDep) @syst
     
     error.addSuggestion(ErrorSuggestion.fileCheck("Add '" ~ missingDep ~ "' to the deps list of target '" ~ targetName ~ "'"));
     error.addSuggestion(ErrorSuggestion.fileCheck("Check if '" ~ missingDep ~ "' target exists in Builderfile"));
-    error.addSuggestion(ErrorSuggestion.command("List all available targets", "builder list"));
-    error.addSuggestion(ErrorSuggestion.command("View dependency graph", "builder graph"));
+    error.addSuggestion(ErrorSuggestion.command("List all available targets", "bldr list"));
+    error.addSuggestion(ErrorSuggestion.command("View dependency graph", "bldr graph"));
     
     return error;
 }
@@ -764,7 +764,7 @@ ParseError invalidConfigError(string filePath, string fieldName, string message,
     error.addSuggestion(ErrorSuggestion.fileCheck("Check the '" ~ fieldName ~ "' field in " ~ filePath));
     error.addSuggestion(ErrorSuggestion.docs("See configuration syntax", "docs/user-guides/examples.md"));
     error.addSuggestion(ErrorSuggestion.fileCheck("Verify field type and format"));
-    error.addSuggestion(ErrorSuggestion.command("Validate configuration", "builder check"));
+    error.addSuggestion(ErrorSuggestion.command("Validate configuration", "bldr check"));
     
     return error;
 }
@@ -803,7 +803,7 @@ ParseError unknownTargetError(string targetName, const(string)[] availableTarget
     
     auto error = new ParseError(filePath, message, ErrorCode.TargetNotFound);
     
-    error.addSuggestion(ErrorSuggestion.command("List available targets", "builder query --targets"));
+    error.addSuggestion(ErrorSuggestion.command("List available targets", "bldr query --targets"));
     error.addSuggestion(ErrorSuggestion.fileCheck("Check Builderfile for target definitions"));
     
     return error;
@@ -829,8 +829,8 @@ PluginError pluginError(string pluginName, string message, ErrorCode code = Erro
     auto error = new PluginError(message, code);
     error.pluginName = pluginName;
     
-    error.addSuggestion(ErrorSuggestion.command("List available plugins", "builder plugin list"));
-    error.addSuggestion(ErrorSuggestion.command("Refresh plugin registry", "builder plugin refresh"));
+    error.addSuggestion(ErrorSuggestion.command("List available plugins", "bldr plugin list"));
+    error.addSuggestion(ErrorSuggestion.command("Refresh plugin registry", "bldr plugin refresh"));
     error.addSuggestion(ErrorSuggestion.docs("See plugin documentation", "docs/architecture/PLUGINS.md"));
     
     return error;
@@ -843,8 +843,8 @@ PluginError pluginNotFoundError(string pluginName) @system
     error.pluginName = pluginName;
     
     error.addSuggestion(ErrorSuggestion.command("Install plugin", "brew install builder-plugin-" ~ pluginName));
-    error.addSuggestion(ErrorSuggestion.command("List available plugins", "builder plugin list"));
-    error.addSuggestion(ErrorSuggestion.command("Refresh plugin registry", "builder plugin refresh"));
+    error.addSuggestion(ErrorSuggestion.command("List available plugins", "bldr plugin list"));
+    error.addSuggestion(ErrorSuggestion.command("Refresh plugin registry", "bldr plugin refresh"));
     
     return error;
 }
@@ -866,7 +866,7 @@ WatchError watchError(string message, ErrorCode code = ErrorCode.WatchError) @sy
 {
     auto error = new WatchError(message, code);
     
-    error.addSuggestion(ErrorSuggestion.command("Try manual rebuild", "builder build"));
+    error.addSuggestion(ErrorSuggestion.command("Try manual rebuild", "bldr build"));
     error.addSuggestion(ErrorSuggestion.docs("See watch mode documentation", "docs/user-guides/WATCH.md"));
     error.addSuggestion(ErrorSuggestion.config("Check watch mode configuration"));
     
@@ -883,7 +883,7 @@ ConfigError configError(string configPath, string fieldName, string message,
     
     error.addSuggestion(ErrorSuggestion.fileCheck("Check '" ~ fieldName ~ "' in " ~ configPath));
     error.addSuggestion(ErrorSuggestion.docs("See configuration syntax", "docs/architecture/DSL.md"));
-    error.addSuggestion(ErrorSuggestion.command("Validate configuration", "builder check"));
+    error.addSuggestion(ErrorSuggestion.command("Validate configuration", "bldr check"));
     
     return error;
 }

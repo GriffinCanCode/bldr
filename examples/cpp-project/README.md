@@ -14,10 +14,10 @@ This example demonstrates the comprehensive C++ language support in Builder.
 
 ```bash
 # From the project root
-builder build cpp-app
+bldr build cpp-app
 
 # Or from this directory
-builder build
+bldr build
 ```
 
 ## Advanced Configuration

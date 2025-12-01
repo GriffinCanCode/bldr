@@ -27,7 +27,7 @@ r-project/
 Build the R application:
 
 ```bash
-builder build r-app
+bldr build r-app
 ```
 
 ## Running
@@ -43,7 +43,7 @@ Run the built application:
 Run the tests:
 
 ```bash
-builder test
+bldr test
 ```
 
 ## Configuration

@@ -1,5 +1,5 @@
 [package]
-name = "builder-rs"
+name = "bldr"
 version = "2.0.0"
 edition = "2021"
 description = "High-performance build system for mixed-language monorepos"
@@ -8,7 +8,7 @@ license = "MIT"
 build = "build.rs"
 
 [[bin]]
-name = "builder"
+name = "bldr"
 path = "src/main.rs"
 
 [dependencies]

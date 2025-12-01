@@ -33,7 +33,7 @@ target("non-deterministic-app") {
 // Future: Re-enable when custom command execution is fully supported
 // target("verify-determinism") {
 //     type: custom;
-//     command: "builder verify //demo-app:demo-app --iterations=5";
+//     command: "bldr verify //demo-app:demo-app --iterations=5";
 //     deps: ["//demo-app:demo-app"];
 // }
 

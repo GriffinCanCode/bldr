@@ -516,8 +516,8 @@ unittest {
 ### End-to-End Tests
 ```bash
 # Real language builds
-builder build //examples/dynamic-languages/crystal:hello
-builder test //examples/dynamic-languages/dart:test
+bldr build //examples/dynamic-languages/crystal:hello
+bldr test //examples/dynamic-languages/dart:test
 ```
 
 ---

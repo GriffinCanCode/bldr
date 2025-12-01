@@ -125,7 +125,7 @@ key_points:
 related: [caching, incremental, target-cache]
 
 next_steps: |
-  - See 'builder explain caching' for overall cache architecture
-  - See 'builder explain incremental' for complementary optimization
+  - See 'bldr explain caching' for overall cache architecture
+  - See 'bldr explain incremental' for complementary optimization
   - See docs/features/caching.md for detailed action cache docs
 

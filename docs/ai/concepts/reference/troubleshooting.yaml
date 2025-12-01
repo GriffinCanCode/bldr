@@ -11,7 +11,7 @@ key_points:
   - "Cache inspection: meaningful cache miss analysis"
 
 usage_examples:
-  - command: "builder build -v"
+  - command: "bldr build -v"
     description: "Run with verbose logging"
 
 related: [observability, error-codes, support]

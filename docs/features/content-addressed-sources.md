@@ -219,7 +219,7 @@ service-c/utils/logging.d  ──┘
 **Traditional**:
 ```bash
 git checkout feature-branch  # Re-writes workspace files
-builder build               # Re-analyzes/re-hashes sources
+bldr build               # Re-analyzes/re-hashes sources
 ```
 
 **Content-Addressed**:
