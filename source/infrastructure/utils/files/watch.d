@@ -170,16 +170,15 @@ final class FSEventsWatcher : IFileWatcher
             string[] args = [
                 "fswatch",
                 "-r",           // Recursive
-                "-l", "0.1",    // Latency 100ms
+                "-l", "0.3",    // Latency 300ms - let fswatch handle debouncing
                 _watchPath
             ];
             
             auto pipes = pipeProcess(args, Redirect.stdout);
             scope(exit) wait(pipes.pid);
             
-            FileEvent[] batch;
-            SysTime lastEvent = Clock.currTime();
-            
+            // Pass events directly - fswatch handles debouncing via -l flag
+            // FileWatcher's debounceLoop handles additional debouncing
             foreach (line; pipes.stdout.byLine)
             {
                 if (!_active)
@@ -187,8 +186,8 @@ final class FSEventsWatcher : IFileWatcher
                 
                 string filePath = line.idup;
                 
-                // Skip if path should be ignored
-                if (IgnoreRegistry.shouldIgnoreDirectoryAny(filePath))
+                // Skip if path contains ignored directories (e.g. .builder-cache)
+                if (IgnoreRegistry.shouldIgnorePathAny(filePath))
                     continue;
                 
                 FileEvent event;
@@ -196,30 +195,12 @@ final class FSEventsWatcher : IFileWatcher
                 event.kind = inferEventKind(filePath);
                 event.timestamp = Clock.currTime();
                 
-                batch ~= event;
-                lastEvent = event.timestamp;
-                
-                // Trigger callback after debounce delay
-                if (batch.length >= config.maxBatchSize || 
-                    (Clock.currTime() - lastEvent) > config.debounceDelay)
-                {
-                    if (batch.length > 0)
-                    {
-                        callback(batch);
-                        batch.length = 0;
-                    }
-                }
-            }
-            
-            // Flush remaining events
-            if (batch.length > 0)
-            {
-                callback(batch);
+                // Pass event immediately - let FileWatcher handle debouncing
+                callback([event]);
             }
         }
         catch (Exception e)
         {
-            // Log error but don't crash
             import infrastructure.utils.logging.logger;
             Logger.error("FSEvents watcher failed: " ~ e.msg);
             _active = false;
@@ -319,7 +300,7 @@ final class INotifyWatcher : IFileWatcher
                 string filePath = parts[0].idup;
                 string eventType = parts[1].idup;
                 
-                if (IgnoreRegistry.shouldIgnoreDirectoryAny(filePath))
+                if (IgnoreRegistry.shouldIgnorePathAny(filePath))
                     continue;
                 
                 FileEvent event;
@@ -516,7 +497,7 @@ final class PollingWatcher : IFileWatcher
             {
                 foreach (entry; dirEntries(path, SpanMode.depth))
                 {
-                    if (entry.isFile && !IgnoreRegistry.shouldIgnoreDirectoryAny(entry.name))
+                    if (entry.isFile && !IgnoreRegistry.shouldIgnorePathAny(entry.name))
                     {
                         _fileStates[entry.name] = getFileState(entry.name);
                     }
@@ -554,7 +535,7 @@ final class PollingWatcher : IFileWatcher
         {
             foreach (entry; dirEntries(path, SpanMode.depth))
             {
-                if (entry.isFile && !IgnoreRegistry.shouldIgnoreDirectoryAny(entry.name))
+                if (entry.isFile && !IgnoreRegistry.shouldIgnorePathAny(entry.name))
                 {
                     string state = getFileState(entry.name);
                     newStates[entry.name] = state;
@@ -630,7 +611,7 @@ final class FileWatcher
     private bool _active;
     private FileEvent[] _eventQueue;
     private Mutex _queueMutex;
-    private SysTime _lastTrigger;
+    private SysTime _lastEventTime;  // When last event was received
     private Thread _debounceThread;
     
     this(WatchConfig config = WatchConfig.init) @system
@@ -644,7 +625,7 @@ final class FileWatcher
     WatchResult watch(string path, void delegate() onChange) @system
     {
         _active = true;
-        _lastTrigger = Clock.currTime();
+        _lastEventTime = SysTime.min;  // No events yet
         
         // Start debounce thread
         _debounceThread = new Thread(() => debounceLoop(onChange));
@@ -688,6 +669,7 @@ final class FileWatcher
             {
                 _eventQueue ~= event;
             }
+            _lastEventTime = Clock.currTime();  // Update on new events
         }
     }
     
@@ -695,36 +677,32 @@ final class FileWatcher
     {
         while (_active)
         {
-            Thread.sleep(50.msecs);  // Check every 50ms
+            Thread.sleep(50.msecs);
             
+            bool shouldTrigger = false;
             synchronized (_queueMutex)
             {
                 if (_eventQueue.length > 0)
                 {
-                    auto now = Clock.currTime();
-                    auto timeSinceLastEvent = now - _lastTrigger;
+                    auto timeSinceLastEvent = Clock.currTime() - _lastEventTime;
                     
-                    // Trigger if debounce delay has passed
+                    // Trigger only after debounce delay has passed since last event
                     if (timeSinceLastEvent >= _config.debounceDelay)
                     {
-                        _lastTrigger = now;
                         _eventQueue.length = 0;
-                        
-                        // Call onChange outside of synchronized block
-                        try
-                        {
-                            onChange();
-                        }
-                        catch (Exception e)
-                        {
-                            import infrastructure.utils.logging.logger;
-                            Logger.error("Watch callback failed: " ~ e.msg);
-                        }
+                        shouldTrigger = true;
                     }
                 }
-                else
+            }
+            
+            // Call outside synchronized block to avoid deadlocks
+            if (shouldTrigger)
+            {
+                try { onChange(); }
+                catch (Exception e)
                 {
-                    _lastTrigger = Clock.currTime();
+                    import infrastructure.utils.logging.logger;
+                    Logger.error("Watch callback failed: " ~ e.msg);
                 }
             }
         }
