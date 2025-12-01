@@ -337,7 +337,7 @@ class JavaScriptHandler : BaseLanguageHandler
         actionId.inputHash = FastHash.hashStrings(inputFiles);
         
         // Check if bundling is cached
-        if (actionCache.isCached(actionId, inputFiles, metadata))
+        if (getCache().isCached(actionId, inputFiles, metadata))
         {
             bool allOutputsExist = expectedOutputs.all!(o => exists(o));
             if (allOutputsExist)
@@ -356,7 +356,7 @@ class JavaScriptHandler : BaseLanguageHandler
         bool success = bundleResult.success;
         
         // Update cache with result
-        actionCache.update(
+        getCache().update(
             actionId,
             inputFiles,
             bundleResult.outputs,

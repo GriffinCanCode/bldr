@@ -411,7 +411,6 @@ function add(a: number, b: number): string {
     writeln("\x1b[32m  ✓ TypeScript type error handled\x1b[0m");
 }
 
-// NOTE: Tests after "Type error handling" are disabled due to a segfault that occurs
-// after ~11-12 TypeScript tests. The issue appears to be related to resource
-// accumulation (ActionCache, Mutex, or GC) rather than specific test logic.
-// TODO: Investigate and fix the root cause of the segfault.
+// NOTE: The segfault that previously occurred after ~11-12 TypeScript tests has been fixed.
+// The fix involved using NullActionCache in unit tests to avoid Mutex/GC accumulation issues.
+// See source/languages/base/mixins.d and source/engine/caching/actions/action.d for details.

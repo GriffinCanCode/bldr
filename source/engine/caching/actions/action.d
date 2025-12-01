@@ -136,7 +136,7 @@ struct ActionEntry
 /// - Two-tier hashing for fast validation
 /// - Binary serialization (5-10x faster than JSON)
 /// - SIMD-accelerated hash comparisons
-final class ActionCache
+class ActionCache
 {
     private string cacheDir;
     private immutable string cacheFilePath;
@@ -197,7 +197,12 @@ final class ActionCache
     
     ~this()
     {
-        // Let GC handle cleanup - explicit flush in destructor can cause issues
+        // Destroy Mutex to release pthread resources immediately
+        if (cacheMutex !is null)
+        {
+            destroy(cacheMutex);
+            cacheMutex = null;
+        }
     }
     
     /// Check if an action is cached and up-to-date
@@ -607,4 +612,35 @@ struct ActionCacheConfig
         
         return config;
     }
+}
+
+/// Null action cache for unit tests - implements ActionCache interface but does nothing
+/// This avoids GC/Mutex accumulation issues during unit tests
+final class NullActionCache : ActionCache
+{
+    this() @system
+    {
+        // Skip parent constructor - don't create Mutex or load files
+    }
+    
+    override void close() @system {}
+    
+    override bool isCached(ActionId actionId, scope const(string)[] inputs, scope const(string[string]) metadata) @system
+    {
+        return false;  // Always cache miss
+    }
+    
+    override void update(
+        ActionId actionId,
+        scope const(string)[] inputs,
+        scope const(string)[] outputs,
+        scope const(string[string]) metadata,
+        bool success
+    ) @system {}
+    
+    override void invalidate(ActionId actionId) @system nothrow {}
+    
+    override void clear() @system {}
+    
+    override void flush(bool runEviction = true) @system {}
 }

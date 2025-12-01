@@ -259,7 +259,7 @@ class TypeScriptHandler : BaseLanguageHandler
         actionId.inputHash = FastHash.hashStrings(inputFiles);
         
         // Create compiler/bundler for TypeScript compilation
-        auto bundler = TSBundlerFactory.create(tsConfig.compiler, tsConfig, actionCache);
+        auto bundler = TSBundlerFactory.create(tsConfig.compiler, tsConfig, getCache());
         
         if (!bundler.isAvailable())
         {
