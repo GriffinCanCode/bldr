@@ -13,6 +13,12 @@ module engine.runtime.hermetic;
 /// - Build output verification
 /// - Repair suggestions with compiler flags
 /// 
+/// Runtime Hermetic Verification (NEW):
+/// - Syscall tracing via seccomp-bpf (Linux) or sandbox-exec (macOS)
+/// - Empirical proof of hermeticity through syscall analysis
+/// - Detection of network access, external file access, time sources
+/// - Combined static + runtime verification
+/// 
 /// Usage:
 /// ```d
 /// // Basic hermetic execution
@@ -31,6 +37,13 @@ module engine.runtime.hermetic;
 /// auto config = DeterminismConfig.strict();
 /// auto enforcer = DeterminismEnforcer.create(executor.unwrap(), config);
 /// auto detResult = enforcer.unwrap().executeAndVerify(command, workDir, 3);
+/// 
+/// // Runtime hermetic verification with syscall tracing
+/// import engine.runtime.hermetic.tracing;
+/// auto verifier = HermeticVerifier.create(VerificationConfig.strict());
+/// auto verified = verifier.unwrap().verify(["gcc", "main.c", "-o", "main"], workDir);
+/// if (!verified.unwrap().hermetic)
+///     writeln(verified.unwrap().hermeticAnalysis.report());
 /// 
 /// // With monitoring
 /// auto monitor = createMonitor(spec.unwrap().resources);
@@ -51,6 +64,9 @@ public import engine.runtime.hermetic.monitoring;
 
 // Determinism enforcement
 public import engine.runtime.hermetic.determinism;
+
+// Syscall tracing for runtime hermeticity verification
+public import engine.runtime.hermetic.tracing;
 
 // Enhanced sandbox (OS-level isolation)
 public import engine.runtime.hermetic.sandbox;
