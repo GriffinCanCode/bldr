@@ -12,6 +12,7 @@ module infrastructure.analysis;
 ///   metagen.d   - Metadata generation
 ///   detection/  - Project detection and init templates
 ///   manifests/  - Package manifest parsing (npm, cargo, etc.)
+///   lockfile/   - Deterministic lockfile generation
 ///
 /// Usage:
 ///   import analysis;
@@ -30,4 +31,5 @@ public import infrastructure.analysis.targets.spec;
 public import infrastructure.analysis.metadata.metagen;
 public import infrastructure.analysis.detection;
 public import infrastructure.analysis.manifests;
+public import infrastructure.analysis.lockfile;
 
