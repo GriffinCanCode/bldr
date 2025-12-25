@@ -396,3 +396,301 @@ void checkProperty(PropertyResult result, string propertyName = "property",
         throw new AssertionError(msg, file, line);
     }
 }
+
+// =============================================================================
+// ADDITIONAL GENERATORS FOR COMPREHENSIVE PROPERTY TESTING
+// =============================================================================
+
+/// Boolean generator
+class BoolGen : Generator!bool
+{
+    bool generate(ref Mt19937 rng)
+    {
+        return uniform(0, 2, rng) == 1;
+    }
+    
+    bool shrink(bool value)
+    {
+        return false;  // Shrink to false
+    }
+}
+
+/// Long integer generator
+class LongGen : Generator!long
+{
+    private long min;
+    private long max;
+    
+    this(long min = long.min / 2, long max = long.max / 2)
+    {
+        this.min = min;
+        this.max = max;
+    }
+    
+    long generate(ref Mt19937 rng)
+    {
+        // Use two 32-bit values to create 64-bit
+        uint high = uniform!uint(rng);
+        uint low = uniform!uint(rng);
+        long result = (cast(long)high << 32) | low;
+        
+        // Clamp to range
+        if (result < min) result = min;
+        if (result > max) result = max;
+        return result;
+    }
+    
+    long shrink(long value)
+    {
+        if (value > 0)
+            return value / 2;
+        else if (value < 0)
+            return value / 2;
+        return 0;
+    }
+}
+
+/// Unsigned long generator
+class ULongGen : Generator!ulong
+{
+    private ulong min;
+    private ulong max;
+    
+    this(ulong min = 0, ulong max = ulong.max / 2)
+    {
+        this.min = min;
+        this.max = max;
+    }
+    
+    ulong generate(ref Mt19937 rng)
+    {
+        uint high = uniform!uint(rng);
+        uint low = uniform!uint(rng);
+        ulong result = (cast(ulong)high << 32) | low;
+        
+        if (result < min) result = min;
+        if (result > max) result = max;
+        return result;
+    }
+    
+    ulong shrink(ulong value)
+    {
+        if (value > 0)
+            return value / 2;
+        return 0;
+    }
+}
+
+/// Unsigned int generator
+class UIntGen : Generator!uint
+{
+    private uint min;
+    private uint max;
+    
+    this(uint min = 0, uint max = uint.max)
+    {
+        this.min = min;
+        this.max = max;
+    }
+    
+    uint generate(ref Mt19937 rng)
+    {
+        return uniform(min, max, rng);
+    }
+    
+    uint shrink(uint value)
+    {
+        if (value > 0)
+            return value / 2;
+        return 0;
+    }
+}
+
+/// Byte array generator (for binary data)
+class ByteArrayGen : Generator!(ubyte[])
+{
+    private size_t minLen;
+    private size_t maxLen;
+    
+    this(size_t minLen = 0, size_t maxLen = 1000)
+    {
+        this.minLen = minLen;
+        this.maxLen = maxLen;
+    }
+    
+    ubyte[] generate(ref Mt19937 rng)
+    {
+        auto len = uniform(minLen, maxLen + 1, rng);
+        ubyte[] result = new ubyte[len];
+        
+        foreach (i; 0 .. len)
+            result[i] = cast(ubyte)uniform(0, 256, rng);
+        
+        return result;
+    }
+    
+    ubyte[] shrink(ubyte[] value)
+    {
+        if (value.length > minLen)
+            return value[0 .. value.length / 2];
+        return value;
+    }
+}
+
+/// Identifier generator (valid programming identifiers)
+class IdentifierGen : Generator!string
+{
+    private size_t minLen;
+    private size_t maxLen;
+    
+    this(size_t minLen = 1, size_t maxLen = 30)
+    {
+        this.minLen = minLen;
+        this.maxLen = maxLen;
+    }
+    
+    string generate(ref Mt19937 rng)
+    {
+        auto len = uniform(minLen, maxLen + 1, rng);
+        char[] result;
+        
+        // First character must be letter or underscore
+        auto firstChoice = uniform(0, 53, rng);
+        if (firstChoice < 26)
+            result ~= cast(char)('a' + firstChoice);
+        else if (firstChoice < 52)
+            result ~= cast(char)('A' + firstChoice - 26);
+        else
+            result ~= '_';
+        
+        // Rest can include digits
+        foreach (i; 1 .. len)
+        {
+            auto choice = uniform(0, 63, rng);
+            if (choice < 26)
+                result ~= cast(char)('a' + choice);
+            else if (choice < 52)
+                result ~= cast(char)('A' + choice - 26);
+            else if (choice < 62)
+                result ~= cast(char)('0' + choice - 52);
+            else
+                result ~= '_';
+        }
+        
+        return result.idup;
+    }
+    
+    string shrink(string value)
+    {
+        if (value.length > minLen)
+            return value[0 .. value.length / 2 + 1];  // Keep at least one char
+        return value;
+    }
+}
+
+/// DSL source string generator (generates valid-ish DSL snippets)
+class DSLGen : Generator!string
+{
+    string generate(ref Mt19937 rng)
+    {
+        auto choice = uniform(0, 5, rng);
+        
+        switch (choice)
+        {
+            case 0:
+                // Target declaration
+                auto nameLen = uniform(3, 15, rng);
+                char[] name;
+                foreach (i; 0 .. nameLen)
+                    name ~= cast(char)uniform('a', 'z' + 1, rng);
+                return `target("` ~ name.idup ~ `") { type: executable; }`;
+            
+            case 1:
+                // Variable declaration
+                auto varLen = uniform(1, 10, rng);
+                char[] varName;
+                foreach (i; 0 .. varLen)
+                    varName ~= cast(char)uniform('a', 'z' + 1, rng);
+                auto val = uniform(-1000, 1000, rng);
+                return "let " ~ varName.idup ~ " = " ~ val.to!string ~ ";";
+            
+            case 2:
+                // String literal
+                auto strLen = uniform(0, 50, rng);
+                char[] str;
+                foreach (i; 0 .. strLen)
+                    str ~= cast(char)uniform('a', 'z' + 1, rng);
+                return `"` ~ str.idup ~ `"`;
+            
+            case 3:
+                // Number
+                return uniform(-10000, 10000, rng).to!string;
+            
+            default:
+                // Array literal
+                auto arrLen = uniform(0, 5, rng);
+                string[] elements;
+                foreach (i; 0 .. arrLen)
+                    elements ~= `"elem` ~ i.to!string ~ `"`;
+                return "[" ~ elements.join(", ") ~ "]";
+        }
+    }
+    
+    string shrink(string value)
+    {
+        if (value.length > 10)
+            return value[0 .. value.length / 2];
+        return value;
+    }
+}
+
+/// One-of generator (picks from a set of values)
+class OneOfGen(T) : Generator!T
+{
+    private T[] choices;
+    
+    this(T[] choices)
+    {
+        this.choices = choices;
+    }
+    
+    T generate(ref Mt19937 rng)
+    {
+        if (choices.length == 0)
+            return T.init;
+        return choices[uniform(0, choices.length, rng)];
+    }
+    
+    T shrink(T value)
+    {
+        // Shrink to first choice
+        if (choices.length > 0 && value != choices[0])
+            return choices[0];
+        return value;
+    }
+}
+
+/// Nullable generator (occasionally returns null/empty)
+class NullableGen(T) : Generator!T
+{
+    private Generator!T inner;
+    private double nullProbability;
+    
+    this(Generator!T inner, double nullProbability = 0.1)
+    {
+        this.inner = inner;
+        this.nullProbability = nullProbability;
+    }
+    
+    T generate(ref Mt19937 rng)
+    {
+        if (uniform(0.0, 1.0, rng) < nullProbability)
+            return T.init;
+        return inner.generate(rng);
+    }
+    
+    T shrink(T value)
+    {
+        return inner.shrink(value);
+    }
+}
