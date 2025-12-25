@@ -451,7 +451,8 @@ private:
                 result.targetId = task.targetId;
                 result.outputHash = outputHash;
                 result.executionTime = elapsed;
-                result.producedArtifacts = task.node.target.outputs.dup;
+                result.producedArtifacts = task.node.target.outputPath.length > 0 
+                    ? [task.node.target.outputPath] : [];
                 result.isValid = isValid;
                 
                 if (!isValid)
@@ -556,13 +557,13 @@ struct EngineStats
     size_t activeWorkers;
     size_t cachedResults;
     
-    @property float completionRate() const pure nothrow @nogc
+    @property float completionRate() const pure nothrow @nogc @safe
     {
         auto total = tasksCompleted + tasksAborted;
         return total == 0 ? 0.0f : cast(float)tasksCompleted / cast(float)total;
     }
     
-    @property float hitRate() const pure nothrow @nogc
+    @property float hitRate() const pure nothrow @nogc @safe
     {
         return tasksCompleted == 0 ? 0.0f : 
             cast(float)tasksCacheHit / cast(float)tasksCompleted;

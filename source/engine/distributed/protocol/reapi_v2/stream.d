@@ -539,7 +539,7 @@ final class ByteStreamService : IByteStreamService {
  * ByteStream gRPC service methods
  */
 struct ByteStreamServices {
-    import engine.distributed.protocol.grpc.types : GrpcMethod;
+    import engine.distributed.protocol.grpc.frame : GrpcMethod;
     
     static GrpcMethod read() @safe =>
         GrpcMethod("google.bytestream.ByteStream", "Read", false, true);

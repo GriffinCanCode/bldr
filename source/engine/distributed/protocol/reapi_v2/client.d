@@ -9,6 +9,7 @@ import engine.distributed.protocol.reapi_v2.codec;
 import engine.distributed.protocol.reapi_v2.stream;
 import engine.distributed.protocol.reapi_v2.hash;
 import infrastructure.errors;
+import engine.distributed.protocol.protocol : DistributedErrors;
 
 /**
  * Streaming CAS Client
@@ -74,8 +75,12 @@ final class StreamingCasClient {
     BuildResult!(ubyte[]) download(ReapiDigest digest) @trusted {
         if (digest.sizeBytes > streamingThreshold)
             return streamDownload(digest);
-        else
-            return batchDownload([digest]).map!(r => r.length > 0 ? r[0] : cast(ubyte[])[]);
+        
+        auto result = batchDownload([digest]);
+        if (result.isErr)
+            return Err!(ubyte[], BuildError)(result.unwrapErr());
+        auto data = result.unwrap();
+        return Ok!(ubyte[], BuildError)(data.length > 0 ? data[0] : []);
     }
     
     /// Find missing blobs from a list
@@ -129,7 +134,7 @@ final class StreamingCasClient {
         req.digests = digests;
         req.acceptableCompressors = [Compressor.Identity, Compressor.Zstd];
         
-        auto reqData = ReapiV2Codec.encodeBatchReadBlobsRequest(req);
+        auto reqData = encodeBatchReadBlobsRequest(req);
         
         // Send request
         auto result = sendRequest("POST", casPath("blobs:batchRead"), reqData);
@@ -218,7 +223,7 @@ final class StreamingCasClient {
         foreach (blob; blobs)
             req.requests ~= ReapiBlobRequest(blob.digest, blob.data, Compressor.Identity);
         
-        auto reqData = ReapiV2Codec.encodeBatchUpdateBlobsRequest(req);
+        auto reqData = encodeBatchUpdateBlobsRequest(req);
         
         auto result = sendRequest("POST", casPath("blobs:batchUpdate"), reqData);
         if (result.isErr)
@@ -475,7 +480,7 @@ struct CasUploader {
             return Err!(ReapiDigest, BuildError)(uploadResult.unwrapErr());
         
         // Serialize and upload directory
-        auto dirData = ReapiV2Codec.encodeDirectory(root);
+        auto dirData = encodeDirectory(root);
         return client.upload(dirData);
     }
 }

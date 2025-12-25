@@ -2,7 +2,8 @@ module engine.runtime.services.speculation.history;
 
 import std.algorithm : map, filter, sort, sum, min, max;
 import std.array : array, join;
-import std.datetime : Duration, msecs, seconds, SysTime, Clock;
+import std.datetime : Duration, msecs, seconds, hours, SysTime, Clock;
+import std.math : abs;
 import std.conv : to;
 import std.file : exists, mkdirRecurse, write, readText, remove;
 import std.path : buildPath;
@@ -235,7 +236,8 @@ final class HistoryTracker
                     auto other = _recentEvents[j];
                     auto elapsed = event.timestamp - other.timestamp;
                     
-                    if (elapsed.total!"minutes".abs < 30)
+                    import std.math : abs;
+                    if (abs(elapsed.total!"minutes") < 30)
                     {
                         auto otherKey = other.targetId.toString();
                         if (key !in coOccurrence)
@@ -480,7 +482,7 @@ struct HistoryStats
     size_t speculativeHits;
     size_t speculativeMisses;
     
-    @property float speculationAccuracy() const pure nothrow @nogc
+    @property float speculationAccuracy() const pure nothrow @nogc @safe
     {
         auto total = speculativeHits + speculativeMisses;
         return total == 0 ? 0.0f : cast(float)speculativeHits / cast(float)total;
