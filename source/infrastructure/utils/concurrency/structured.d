@@ -378,8 +378,15 @@ final class TaskScope
                 }
                 
                 auto elapsed = MonoTime.currTime - start;
-                if (elapsed < interval && !token.isCancelled())
-                    Thread.sleep(interval - elapsed);
+                auto remaining = elapsed < interval ? interval - elapsed : Duration.zero;
+                
+                // Sleep in short intervals to allow fast cancellation
+                while (remaining > Duration.zero && !token.isCancelled())
+                {
+                    auto sleepTime = remaining > msecs(100) ? msecs(100) : remaining;
+                    Thread.sleep(sleepTime);
+                    remaining -= sleepTime;
+                }
             }
         });
     }

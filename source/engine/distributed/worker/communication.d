@@ -1,6 +1,6 @@
 module engine.distributed.worker.communication;
 
-import std.datetime : Duration, Clock, seconds;
+import std.datetime : Duration, Clock, seconds, msecs;
 import std.conv : to;
 import core.thread : Thread;
 import core.atomic;
@@ -52,9 +52,17 @@ struct WorkerCommunication
             try
             {
                 sendHeartbeat(id, getStateCallback(), getMetricsCallback(), coordinatorTransport);
-                Thread.sleep(heartbeatInterval);
             }
             catch (Exception e) { Logger.error("Heartbeat failed: " ~ e.msg); }
+            
+            // Sleep in short intervals to allow fast shutdown
+            auto remaining = heartbeatInterval;
+            while (remaining > Duration.zero && atomicLoad(*running))
+            {
+                auto sleepTime = remaining > msecs(100) ? msecs(100) : remaining;
+                Thread.sleep(sleepTime);
+                remaining -= sleepTime;
+            }
         }
     }
     
@@ -246,9 +254,17 @@ struct WorkerCommunication
             {
                 sendPeerAnnounce(id, listenAddress, localQueue, getLoadFactorCallback(), coordinatorTransport);
                 if (peerRegistry !is null) peerRegistry.pruneStale();
-                Thread.sleep(peerAnnounceInterval);
             }
             catch (Exception e) { Logger.error("Peer announce failed: " ~ e.msg); }
+            
+            // Sleep in short intervals to allow fast shutdown
+            auto remaining = peerAnnounceInterval;
+            while (remaining > Duration.zero && atomicLoad(*running))
+            {
+                auto sleepTime = remaining > msecs(100) ? msecs(100) : remaining;
+                Thread.sleep(sleepTime);
+                remaining -= sleepTime;
+            }
         }
     }
     

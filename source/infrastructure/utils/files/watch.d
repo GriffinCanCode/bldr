@@ -526,7 +526,14 @@ final class PollingWatcher : IFileWatcher
     {
         while (_active)
         {
-            Thread.sleep(config.pollInterval);
+            // Sleep in short intervals to allow fast shutdown
+            auto remaining = config.pollInterval;
+            while (remaining > Duration.zero && _active)
+            {
+                auto sleepTime = remaining > 100.msecs ? 100.msecs : remaining;
+                Thread.sleep(sleepTime);
+                remaining -= sleepTime;
+            }
             
             if (!_active)
                 break;
@@ -692,7 +699,9 @@ final class FileWatcher
     {
         while (_active)
         {
-            Thread.sleep(50.msecs);
+            // Short sleep with active check for fast shutdown
+            if (_active) Thread.sleep(50.msecs);
+            if (!_active) break;
             
             bool shouldTrigger = false;
             synchronized (_queueMutex)

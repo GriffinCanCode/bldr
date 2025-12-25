@@ -1,6 +1,6 @@
 module engine.runtime.remote.monitoring.health;
 
-import std.datetime : Duration, Clock, seconds;
+import std.datetime : Duration, Clock, seconds, msecs;
 import std.conv : to;
 import core.atomic;
 import core.sync.mutex : Mutex;
@@ -106,13 +106,19 @@ final class RemoteServiceHealthMonitor
                     Logger.warning("High queue depth: " ~ 
                                   coordStats.pendingActions.to!string ~ " pending");
                 }
-                
-                Thread.sleep(checkInterval);
             }
             catch (Exception e)
             {
                 Logger.error("Health check failed: " ~ e.msg);
-                Thread.sleep(checkInterval);
+            }
+            
+            // Sleep in short intervals to allow fast shutdown
+            auto remaining = checkInterval;
+            while (remaining > Duration.zero && atomicLoad(running))
+            {
+                auto sleepTime = remaining > msecs(100) ? msecs(100) : remaining;
+                Thread.sleep(sleepTime);
+                remaining -= sleepTime;
             }
         }
     }

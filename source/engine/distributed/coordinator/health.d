@@ -241,8 +241,17 @@ final class HealthMonitor
     {
         while (atomicLoad(running))
         {
-            try { checkHealth(); Thread.sleep(heartbeatInterval); }
+            try { checkHealth(); }
             catch (Exception e) { Logger.error("Health check failed: " ~ e.msg); }
+            
+            // Sleep in short intervals to allow fast shutdown
+            auto remaining = heartbeatInterval;
+            while (remaining > Duration.zero && atomicLoad(running))
+            {
+                auto sleepTime = remaining > msecs(100) ? msecs(100) : remaining;
+                Thread.sleep(sleepTime);
+                remaining -= sleepTime;
+            }
         }
     }
     

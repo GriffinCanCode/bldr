@@ -1,6 +1,6 @@
 module engine.runtime.remote.pool.manager;
 
-import std.datetime : Duration, Clock, SysTime, seconds, minutes;
+import std.datetime : Duration, Clock, SysTime, seconds, minutes, msecs;
 import std.algorithm : filter, map, sort, min, max;
 import std.array : array;
 import std.conv : to;
@@ -383,14 +383,19 @@ final class WorkerPool
                     Logger.error("Scaling failed");
                     Logger.error(formatError(result.unwrapErr()));
                 }
-                
-                // Sleep until next check
-                Thread.sleep(config.healthCheckInterval);
             }
             catch (Exception e)
             {
                 Logger.error("Scaler loop exception: " ~ e.msg);
-                Thread.sleep(config.healthCheckInterval);
+            }
+            
+            // Sleep in short intervals to allow fast shutdown
+            auto remaining = config.healthCheckInterval;
+            while (remaining > Duration.zero && atomicLoad(running))
+            {
+                auto sleepTime = remaining > msecs(100) ? msecs(100) : remaining;
+                Thread.sleep(sleepTime);
+                remaining -= sleepTime;
             }
         }
     }

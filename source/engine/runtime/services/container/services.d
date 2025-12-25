@@ -12,6 +12,7 @@ import engine.economics.integration : EconomicsIntegration;
 import engine.economics.estimator : ExecutionHistory;
 import infrastructure.telemetry;
 import infrastructure.telemetry.distributed.tracing;
+import infrastructure.telemetry.distributed.otlp : OtlpHttpExporter, OtlpConfig;
 import infrastructure.utils.logging.structured;
 import infrastructure.utils.logging.logger;
 import infrastructure.utils.simd.capabilities;
@@ -26,7 +27,7 @@ import frontend.cli.events.events;
 import frontend.cli.display.render;
 import infrastructure.errors;
 import infrastructure.di : IServiceContainer;
-import engine.workers : PersistentWorkerService, WorkerServiceConfig, initWorkerService, shutdownWorkerService;
+import engine.workers : PersistentWorkerService, WorkerServiceConfig, initWorkerService, getWorkerService, shutdownWorkerService;
 import engine.runtime.services.speculation : SpeculationService;
 
 /// Service container for dependency injection
@@ -209,10 +210,19 @@ final class BuildServices : IServiceContainer
     
     /// Initialize observability infrastructure
     /// Tracing is ENABLED BY DEFAULT for comprehensive observability
+    /// 
+    /// Environment variables:
+    ///   BUILDER_TRACING_ENABLED    - "1" (default) or "0" to disable
+    ///   BUILDER_TRACING_EXPORTER   - "otlp", "jaeger", "console" (default: jaeger)
+    ///   BUILDER_TRACING_OUTPUT     - File path for jaeger exporter
+    ///   BUILDER_OTLP_ENDPOINT      - OTLP endpoint URL (default: http://localhost:4318/v1/traces)
+    ///   BUILDER_SERVICE_NAME       - Service name for traces (default: builder)
+    ///   BUILDER_SERVICE_VERSION    - Service version
+    ///   BUILDER_SAMPLING_RATIO     - Sampling ratio 0.0-1.0 (default: 1.0)
     private void _initializeObservability()
     {
         import std.process : environment;
-        import std.conv : to;
+        import std.conv : ConvException;
         
         // Initialize structured logger (always enabled)
         auto verbose = environment.get("BUILDER_VERBOSE", "0");
@@ -224,24 +234,56 @@ final class BuildServices : IServiceContainer
         auto tracingEnabled = environment.get("BUILDER_TRACING_ENABLED", "1");
         if (tracingEnabled != "0" && tracingEnabled != "false")
         {
+            // Build tracer configuration
+            TracerConfig tracerCfg;
+            tracerCfg.serviceName = environment.get("BUILDER_SERVICE_NAME", "builder");
+            tracerCfg.serviceVersion = environment.get("BUILDER_SERVICE_VERSION", "");
+            
+            // Parse sampling ratio
+            auto samplingStr = environment.get("BUILDER_SAMPLING_RATIO", "1.0");
+            try { tracerCfg.samplingRatio = samplingStr.to!double; }
+            catch (ConvException) { tracerCfg.samplingRatio = 1.0; }
+            
             // Determine exporter type from environment
             auto exporterType = environment.get("BUILDER_TRACING_EXPORTER", "jaeger");
             auto outputFile = environment.get("BUILDER_TRACING_OUTPUT", ".builder-cache/traces/jaeger.json");
             
             SpanExporter exporter;
-            if (exporterType == "console")
+            string exporterInfo;
+            
+            if (exporterType == "otlp")
+            {
+                // OTLP/HTTP exporter for Jaeger, Tempo, Grafana Cloud, etc.
+                OtlpConfig otlpCfg;
+                otlpCfg.endpoint = environment.get("BUILDER_OTLP_ENDPOINT", "http://localhost:4318/v1/traces");
+                otlpCfg.serviceName = tracerCfg.serviceName;
+                otlpCfg.serviceVersion = tracerCfg.serviceVersion;
+                
+                // Optional auth header for cloud providers
+                auto authToken = environment.get("BUILDER_OTLP_AUTH_TOKEN", "");
+                if (authToken.length > 0)
+                    otlpCfg.headers["Authorization"] = "Bearer " ~ authToken;
+                
+                exporter = new OtlpHttpExporter(otlpCfg);
+                exporterInfo = otlpCfg.endpoint;
+            }
+            else if (exporterType == "console")
             {
                 exporter = new ConsoleSpanExporter();
+                exporterInfo = "console";
             }
-            else  // Default to Jaeger
+            else  // Default to Jaeger JSON file exporter
             {
                 exporter = new JaegerSpanExporter(outputFile);
+                exporterInfo = outputFile;
             }
             
-            this._tracer = new Tracer(exporter);
-            this._structuredLogger.debug_("Distributed tracing enabled (default)", [
+            this._tracer = new Tracer(exporter, tracerCfg);
+            this._structuredLogger.debug_("Distributed tracing enabled", [
                 "exporter": exporterType,
-                "output": (exporterType == "console") ? "console" : outputFile,
+                "output": exporterInfo,
+                "service": tracerCfg.serviceName,
+                "sampling": tracerCfg.samplingRatio.to!string,
                 "simd.level": this._simdCapabilities !is null ? this._simdCapabilities.implName : "unknown"
             ]);
         }
@@ -462,9 +504,8 @@ final class BuildServices : IServiceContainer
         if (_persistentWorkers !is null)
         {
             Logger.debugLog("Shutting down persistent workers...");
-            _persistentWorkers.stop();
+            shutdownWorkerService();  // Stops the global service
             _persistentWorkers = null;
-            shutdownWorkerService();
         }
         
         // Stop remote execution service
@@ -617,12 +658,9 @@ final class BuildServices : IServiceContainer
             config.enableGoWorkers = environment.get("BUILDER_GO_WORKERS", "1") != "0";
             config.enablePythonWorkers = environment.get("BUILDER_PYTHON_WORKERS", "1") != "0";
             
-            // Create and start service
-            _persistentWorkers = new PersistentWorkerService(config);
-            _persistentWorkers.start();
-            
-            // Also initialize global service for integration layer
+            // Initialize global service (used by integration layer)
             initWorkerService(config);
+            _persistentWorkers = getWorkerService();
             
             Logger.debugLog("Persistent workers initialized (JVM/TS/Rust/Go/Python 3-50x speedup)");
         }

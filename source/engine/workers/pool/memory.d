@@ -240,7 +240,14 @@ final class WorkerMemoryMonitor
     {
         while (atomicLoad(running))
         {
-            Thread.sleep(pollInterval);
+            // Sleep in short intervals to allow fast shutdown
+            auto remaining = pollInterval;
+            while (remaining > Duration.zero && atomicLoad(running))
+            {
+                auto sleepTime = remaining > msecs(100) ? msecs(100) : remaining;
+                Thread.sleep(sleepTime);
+                remaining -= sleepTime;
+            }
             if (!atomicLoad(running)) break;
             
             // Check for stale metrics (worker may have died)
