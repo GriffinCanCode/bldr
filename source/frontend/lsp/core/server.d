@@ -20,6 +20,7 @@ import frontend.lsp.providers.rename;
 import frontend.lsp.providers.symbols;
 import frontend.lsp.providers.graph;
 import frontend.lsp.providers.codelens;
+import frontend.lsp.providers.formatting;
 import infrastructure.utils.logging.logger;
 
 /// LSP Server implementation with async message loop
@@ -35,6 +36,7 @@ class LSPServer
     private SymbolsProvider symbolsProvider;
     private GraphProvider graphProvider;
     private CodeLensProvider codeLensProvider;
+    private FormattingProvider formattingProvider;
     private string rootUri;
     
     // Async infrastructure
@@ -82,6 +84,7 @@ class LSPServer
         dispatcher.onRequest("workspace/symbol", (p) => handleWorkspaceSymbol(p));
         dispatcher.onRequest("textDocument/codeLens", (p) => handleCodeLens(p));
         dispatcher.onRequest("codeLens/resolve", (p) => handleCodeLensResolve(p));
+        dispatcher.onRequest("textDocument/formatting", (p) => handleFormatting(p));
         dispatcher.onRequest("workspace/executeCommand", (p) => handleExecuteCommand(p));
         
         // Notifications
@@ -123,6 +126,9 @@ class LSPServer
         
         // Create CodeLens provider with graph awareness
         codeLensProvider = CodeLensProvider(workspace, &graphProvider);
+        
+        // Create formatting provider
+        formattingProvider = FormattingProvider(workspace);
         
         Logger.info("Workspace root: " ~ rootUri);
         if (graphProvider.hasGraph)
@@ -274,6 +280,22 @@ class LSPServer
         auto lens = CodeLens.fromJSON(params);
         auto resolved = codeLensProvider.resolveCodeLens(lens);
         return resolved.toJSON();
+    }
+    
+    /// Handle document formatting request
+    private JSONValue handleFormatting(JSONValue params)
+    {
+        auto formatParams = DocumentFormattingParams.fromJSON(params);
+        auto edits = formattingProvider.provideFormatting(
+            formatParams.textDocument.uri,
+            formatParams.options
+        );
+        
+        JSONValue[] editsJson;
+        foreach (ref edit; edits)
+            editsJson ~= edit.toJSON();
+        
+        return JSONValue(editsJson);
     }
     
     /// Handle workspace/executeCommand request

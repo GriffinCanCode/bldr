@@ -15,6 +15,7 @@ The Builder LSP provides rich language features for Builderfile configuration fi
 - ✅ **Workspace Symbols** - Quick search for any target (Ctrl+T / Cmd+T)
 - ✅ **CodeLens** - Inline dependency counts and impact analysis above each target
 - ✅ **Impact Analysis** - Severity visualization with estimated rebuild times
+- ✅ **Document Formatting** - Auto-format Builderfiles with consistent style
 
 ## Quick Start
 
@@ -204,6 +205,21 @@ Rename targets across all Builderfiles:
 2. Press F2 (or right-click → Rename Symbol)
 3. Enter new name
 4. All references across the entire workspace are updated automatically
+
+### Document Formatting
+
+Auto-format your Builderfiles with consistent style:
+
+1. Open a Builderfile
+2. Press Shift+Alt+F (or right-click → Format Document)
+3. The file is formatted with:
+   - Consistent indentation (4 spaces by default)
+   - Proper spacing around colons (`field: value;`)
+   - Blank lines between target declarations
+   - Trailing whitespace removed
+   - Final newline ensured
+
+Formatting respects your editor's tab size and spaces/tabs preference.
 
 ### Workspace Symbol Search (Ctrl+T)
 

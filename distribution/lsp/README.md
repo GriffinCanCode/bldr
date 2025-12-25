@@ -15,6 +15,7 @@ The Builder LSP provides intelligent code editing features for Builderfile and B
 - **Rename Refactoring** - Safely rename targets and variables across files
 - **Diagnostics** - Real-time error detection and validation
 - **Document Symbols** - Outline view of targets and variables
+- **Document Formatting** - Auto-format Builderfiles with consistent style
 
 ## Distribution
 
@@ -244,6 +245,7 @@ The Builder LSP implements the Language Server Protocol 3.17 specification.
 - `textDocument/references`
 - `textDocument/rename`
 - `textDocument/documentSymbol`
+- `textDocument/formatting`
 - `textDocument/publishDiagnostics`
 
 ### Server Capabilities
@@ -259,6 +261,7 @@ The Builder LSP implements the Language Server Protocol 3.17 specification.
   "referencesProvider": true,
   "renameProvider": true,
   "documentSymbolProvider": true,
+  "documentFormattingProvider": true,
   "textDocumentSync": {
     "openClose": true,
     "change": 2,
