@@ -498,6 +498,124 @@ struct ReapiV2Codec {
         return buf;
     }
     
+    /// Encode GetCapabilitiesRequest message
+    static ubyte[] encodeGetCapabilitiesRequest(ReapiGetCapabilitiesRequest req) @trusted {
+        ubyte[] buf;
+        buf.reserve(64);
+        
+        // Field 1: instance_name
+        if (req.instanceName.length > 0) {
+            buf ~= makeTag(1, WireType.LengthDelimited);
+            buf ~= encodeVarint(req.instanceName.length);
+            buf ~= cast(ubyte[])req.instanceName;
+        }
+        
+        return buf;
+    }
+    
+    /// Encode FindMissingBlobsRequest message
+    static ubyte[] encodeFindMissingBlobsRequest(ReapiFindMissingBlobsRequest req) @trusted {
+        ubyte[] buf;
+        buf.reserve(256);
+        
+        // Field 1: instance_name
+        if (req.instanceName.length > 0) {
+            buf ~= makeTag(1, WireType.LengthDelimited);
+            buf ~= encodeVarint(req.instanceName.length);
+            buf ~= cast(ubyte[])req.instanceName;
+        }
+        
+        // Field 2: blob_digests (repeated)
+        foreach (digest; req.blobDigests) {
+            buf ~= makeTag(2, WireType.LengthDelimited);
+            auto digestBuf = encodeDigest(digest);
+            buf ~= encodeVarint(digestBuf.length);
+            buf ~= digestBuf;
+        }
+        
+        return buf;
+    }
+    
+    /// Decode FindMissingBlobsResponse message
+    static Result!(ReapiFindMissingBlobsResponse, string) decodeFindMissingBlobsResponse(
+        const ubyte[] data
+    ) @trusted {
+        ReapiFindMissingBlobsResponse resp;
+        size_t offset = 0;
+        
+        while (offset < data.length) {
+            auto tagResult = decodeTag(data[offset .. $]);
+            if (tagResult.isErr) return Err!(ReapiFindMissingBlobsResponse, string)(tagResult.unwrapErr());
+            
+            auto tag = tagResult.unwrap();
+            offset += tag.bytesRead;
+            
+            switch (tag.fieldNumber) {
+                case 1:  // missing_blob_digests
+                    auto lenResult = decodeVarint(data[offset .. $]);
+                    if (lenResult.isErr) return Err!(ReapiFindMissingBlobsResponse, string)(lenResult.unwrapErr());
+                    offset += lenResult.unwrap().bytesRead;
+                    
+                    auto msgLen = cast(size_t)lenResult.unwrap().value;
+                    auto digestResult = decodeDigest(data[offset .. offset + msgLen]);
+                    if (digestResult.isOk)
+                        resp.missingBlobDigests ~= digestResult.unwrap();
+                    offset += msgLen;
+                    break;
+                    
+                default:
+                    auto skipResult = skipField(data[offset .. $], tag.wireType);
+                    if (skipResult.isErr) return Err!(ReapiFindMissingBlobsResponse, string)(skipResult.unwrapErr());
+                    offset += skipResult.unwrap();
+                    break;
+            }
+        }
+        
+        return Ok!(ReapiFindMissingBlobsResponse, string)(resp);
+    }
+    
+    /// Decode ServerCapabilities message
+    static Result!(ReapiServerCapabilities, string) decodeServerCapabilities(const ubyte[] data) @trusted {
+        ReapiServerCapabilities caps;
+        size_t offset = 0;
+        
+        while (offset < data.length) {
+            auto tagResult = decodeTag(data[offset .. $]);
+            if (tagResult.isErr) break;
+            
+            auto tag = tagResult.unwrap();
+            offset += tag.bytesRead;
+            
+            switch (tag.fieldNumber) {
+                case 4:  // low_api_version
+                    auto lenResult = decodeVarint(data[offset .. $]);
+                    if (lenResult.isErr) break;
+                    offset += lenResult.unwrap().bytesRead;
+                    auto len = cast(size_t)lenResult.unwrap().value;
+                    caps.lowApiVersion = cast(string)data[offset .. offset + len];
+                    offset += len;
+                    break;
+                    
+                case 5:  // high_api_version
+                    auto lenResult = decodeVarint(data[offset .. $]);
+                    if (lenResult.isErr) break;
+                    offset += lenResult.unwrap().bytesRead;
+                    auto len = cast(size_t)lenResult.unwrap().value;
+                    caps.highApiVersion = cast(string)data[offset .. offset + len];
+                    offset += len;
+                    break;
+                    
+                default:
+                    auto skipResult = skipField(data[offset .. $], tag.wireType);
+                    if (skipResult.isErr) break;
+                    offset += skipResult.unwrap();
+                    break;
+            }
+        }
+        
+        return Ok!(ReapiServerCapabilities, string)(caps);
+    }
+    
     // =========================================================================
     // Decoding
     // =========================================================================

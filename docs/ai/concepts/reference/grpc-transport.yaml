@@ -1,39 +1,64 @@
 topic: grpc-transport
 category: reference
-summary: "gRPC Transport - HTTP/2 streaming protocol for remote execution"
+summary: "gRPC Transport - Pure D HTTP/2 implementation for REAPI compatibility"
 definition: |
-  gRPC transport layer provides high-performance communication for distributed builds.
-  Uses Protocol Buffers for serialization and HTTP/2 for multiplexed, bidirectional streaming.
+  gRPC transport layer provides full HTTP/2 + gRPC wire protocol support for Builder's
+  distributed execution system. Pure D implementation - no external dependencies required.
+  Enables true Bazel REAPI compatibility and interoperability with existing infrastructure.
 
 key_points:
-  - "Streaming: Bidirectional streams for progress updates and heartbeats"
+  - "Pure D: No grpc-core dependency, uses std.socket"
+  - "HTTP/2: Full RFC 7540 frame support with HPACK compression"
+  - "gRPC Wire: 5-byte length-prefixed message framing"
+  - "REAPI v2: Wire-compatible with Bazel Remote Execution API"
+  - "Streaming: Unary, server-streaming, client-streaming support"
+  - "TLS: Optional secure transport (configurable)"
   - "Retry: Automatic retry with exponential backoff"
-  - "Deadlines: Deadline propagation for timeout handling"
-  - "TLS: Secure communication with mutual TLS support"
-  - "REAPI: Wire-compatible with Bazel Remote Execution API"
-  - "Interop: Works with Buildbarn, Buildfarm, and other REAPI servers"
+  - "Deadlines: Timeout propagation through call chain"
+  - "Interop: Works with BuildBuddy, BuildBarn, Buildfarm, Google RBE"
 
 architecture: |
   ┌─────────────────────────────────────────────────────────┐
-  │                 Transport Layer                          │
-  │                                                          │
-  │  ┌──────────────┐     ┌──────────────┐                 │
-  │  │ HttpTransport │     │ GrpcTransport │                 │
-  │  │  (HTTP/1.1)   │     │  (HTTP/2)     │                 │
-  │  └──────┬───────┘     └──────┬───────┘                 │
-  │         │                     │                          │
-  │         └─────────┬───────────┘                          │
-  │                   │                                      │
-  │         ┌─────────▼─────────┐                           │
-  │         │ UnifiedTransport  │                           │
-  │         │     Factory       │                           │
-  │         └─────────┬─────────┘                           │
-  │                   │                                      │
-  │         ┌─────────▼─────────┐                           │
-  │         │   Transport       │  (common interface)       │
-  │         │   Interface       │                           │
-  │         └───────────────────┘                           │
-  └─────────────────────────────────────────────────────────┘
+  │              Builder Protocol Types                      │
+  │         (ActionRequest, ActionResult, etc.)              │
+  └────────────────────────┬────────────────────────────────┘
+                           │
+                           ▼
+  ┌─────────────────────────────────────────────────────────┐
+  │                    GrpcCodec                             │
+  │              (protobuf wire format)                      │
+  └────────────────────────┬────────────────────────────────┘
+                           │
+                           ▼
+  ┌─────────────────────────────────────────────────────────┐
+  │                    GrpcFrame                             │
+  │      (5-byte header + protobuf message payload)          │
+  └────────────────────────┬────────────────────────────────┘
+                           │
+                           ▼
+  ┌─────────────────────────────────────────────────────────┐
+  │                  H2Connection                            │
+  │         (HTTP/2 frames + HPACK compression)              │
+  └────────────────────────┬────────────────────────────────┘
+                           │
+                           ▼
+                      TCP Socket
+
+modules:
+  - name: http2.d
+    purpose: "HTTP/2 framing (RFC 7540), HPACK compression (RFC 7541)"
+  - name: frame.d
+    purpose: "gRPC message framing, status codes, REAPI method definitions"
+  - name: codec.d
+    purpose: "Builder ↔ protobuf encoding/decoding"
+  - name: transport.d
+    purpose: "Client-side gRPC transport"
+  - name: server.d
+    purpose: "Server-side gRPC with service handlers"
+  - name: factory.d
+    purpose: "Transport creation and connection pooling"
+  - name: bindings.d
+    purpose: "Optional grpc-core FFI (for native performance)"
 
 usage_examples:
   - description: "Configure gRPC transport"
@@ -48,14 +73,28 @@ usage_examples:
         tls:
           cert: "client.crt"
           key: "client.key"
-  - description: "Programmatic usage"
+  - description: "Client: Connect to REAPI server"
     code: |
-      auto config = GrpcConfig.secure("farm:8980", rootCerts);
+      auto config = GrpcConfig.insecure("buildbuddy:8980");
       auto transport = new GrpcTransport(config);
-  - description: "Using UnifiedTransportFactory"
+      if (transport.connect().isOk) {
+          auto caps = transport.getCapabilities("");
+          auto result = transport.execute(actionRequest);
+      }
+  - description: "Server: REAPI-compatible endpoint"
     code: |
-      auto config = TransportConfig.fromUrl("grpc://farm:8980");
-      auto result = UnifiedTransportFactory.create(config);
+      auto server = GrpcServerBuilder.create()
+          .listenOn("0.0.0.0:50051")
+          .withService(new MyExecutionService())
+          .build();
+      server.start();
+  - description: "Factory: Auto-detect from URL"
+    code: |
+      auto result = GrpcTransportFactory.createFromUrl("grpc://farm:8980");
+      if (result.isOk) {
+          auto transport = result.unwrap();
+          // Use transport...
+      }
 
 configuration:
   - name: target
@@ -89,10 +128,62 @@ configuration:
     type: size_t
     desc: "Max retry attempts (default: 3)"
 
-related: [distributed, remote-execution, remote-cache, hermetic]
+reapi_services:
+  capabilities:
+    - "GetCapabilities: Query server capabilities"
+  execution:
+    - "Execute: Run actions remotely (server streaming)"
+    - "WaitExecution: Wait for operation completion"
+  action_cache:
+    - "GetActionResult: Retrieve cached result"
+    - "UpdateActionResult: Store action result"
+  cas:
+    - "FindMissingBlobs: Check which blobs need upload"
+    - "BatchUpdateBlobs: Upload multiple blobs"
+    - "BatchReadBlobs: Download multiple blobs"
+    - "GetTree: Retrieve directory tree"
+  bytestream:
+    - "Read: Stream large blob download"
+    - "Write: Stream large blob upload"
+
+status_codes:
+  - code: 0
+    name: OK
+    desc: "Success"
+  - code: 1
+    name: CANCELLED
+    desc: "Cancelled by client"
+  - code: 4
+    name: DEADLINE_EXCEEDED
+    desc: "Timeout"
+  - code: 5
+    name: NOT_FOUND
+    desc: "Resource not found"
+  - code: 12
+    name: UNIMPLEMENTED
+    desc: "Method not supported"
+  - code: 13
+    name: INTERNAL
+    desc: "Server error"
+  - code: 14
+    name: UNAVAILABLE
+    desc: "Service unavailable"
+
+performance:
+  vs_http:
+    connection_reuse: "Full multiplexing (vs limited)"
+    streaming: "Bidirectional (vs not supported)"
+    header_compression: "HPACK ~90% reduction (vs none)"
+    binary_framing: "Standard (vs custom)"
+    retry: "Automatic (vs manual)"
+    deadline_propagation: "Built-in (vs manual)"
+
+related: [distributed, remote-execution, remote-cache, hermetic, reapi-v2]
+
+location: "source/engine/distributed/protocol/grpc/"
 
 next_steps: |
   - bldr explain remote-execution
   - bldr explain distributed
+  - bldr explain reapi-v2
   - See source/engine/distributed/protocol/grpc/README.md
-

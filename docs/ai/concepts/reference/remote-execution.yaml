@@ -1,35 +1,49 @@
 topic: remote-execution
 category: concepts
-summary: "Remote Execution - Running actions on a cluster"
+summary: "Remote Execution - Running actions on a cluster with REAPI compatibility"
 definition: |
   Detailed view of the Remote Execution system. Allows build actions (compiles, tests)
-  to run on a separate fleet of worker machines.
+  to run on a separate fleet of worker machines. Full REAPI v2 wire compatibility
+  enables integration with all standard remote execution backends.
 
 key_points:
   - "REAPI v2: Full Bazel Remote Execution API wire compatibility"
   - "Inputs: Transfers only necessary inputs to worker"
   - "Outputs: Downloads results from worker"
   - "Platform properties: Select workers by OS/arch"
-  - "Transport options: HTTP/1.1 (lightweight) or gRPC (full REAPI compat)"
-  - "Hash translation: Automatic BLAKE3 ↔ SHA256 mapping for REAPI servers"
-  - "Streaming: gRPC enables progress streaming during execution"
+  - "HTTP transport: Lightweight, no dependencies"
+  - "gRPC transport: Full REAPI compat, streaming, deadlines"
+  - "Hash translation: Automatic BLAKE3 ↔ SHA256 mapping"
+  - "Streaming: Progress updates during execution"
 
 transport_options:
   http:
-    - "Default transport, no external dependencies"
-    - "Good for Builder-native clusters"
-    - "Simple configuration"
+    description: "Default transport, no external dependencies"
+    use_cases:
+      - "Builder-native clusters"
+      - "Simple setups"
+      - "Internal networks"
+    config: |
+      remote_execution:
+        address: "http://coordinator:9000"
+        transport: http
   grpc:
-    - "Full Bazel REAPI wire compatibility"
-    - "Bidirectional streaming for progress updates"
-    - "Automatic retry with backoff"
-    - "Deadline propagation"
-    - "Works with Buildbarn, Buildfarm, etc."
-  reapi_v2:
-    - "Wire-compatible REAPI v2 protocol adapter"
-    - "Connect to BuildBuddy, BuildBarn, Google RBE"
-    - "No gRPC library dependency required"
-    - "Full CAS/ActionCache/Execution services"
+    description: "Full REAPI wire compatibility"
+    features:
+      - "Bidirectional streaming"
+      - "Automatic retry with backoff"
+      - "Deadline propagation"
+      - "HPACK header compression"
+    backends:
+      - "BuildBuddy"
+      - "BuildBarn"
+      - "Buildfarm"
+      - "Google RBE"
+      - "Engflow"
+    config: |
+      remote_execution:
+        address: "grpc://build-cluster:8980"
+        transport: grpc
 
 usage_examples:
   - description: "Basic gRPC configuration"
@@ -42,18 +56,112 @@ usage_examples:
       remote_execution:
         address: "http://coordinator:9000"
         transport: http
-  - description: "gRPC with full REAPI"
+  - description: "gRPC with TLS"
     code: |
       remote_execution:
-        address: "grpc://build-cluster:8980"
-        transport: grpc
-        enable_reapi: true
+        address: "grpcs://build-cluster:8980"
+        tls:
+          cert: "client.crt"
+          key: "client.key"
+          ca: "ca.crt"
+  - description: "BuildBuddy integration"
+    code: |
+      remote_execution:
+        address: "grpcs://remote.buildbuddy.io"
+        api_key: "${BUILDBUDDY_API_KEY}"
+  - description: "Programmatic: Execute action"
+    code: |
+      import engine.distributed.protocol.grpc;
+      
+      auto config = GrpcConfig.insecure("executor:50051");
+      auto transport = new GrpcTransport(config);
+      
+      if (transport.connect().isOk) {
+          // Execute action
+          auto result = transport.execute(actionRequest);
+          
+          // Or with streaming progress
+          transport.executeStream(actionRequest, (progress) {
+              writeln("Stage: ", progress.stage);
+          });
+      }
+  - description: "Programmatic: Host REAPI server"
+    code: |
+      import engine.distributed.protocol.grpc;
+      
+      auto server = GrpcServerBuilder.create()
+          .listenOn("0.0.0.0:50051")
+          .withMaxConcurrentStreams(100)
+          .withService(executionHandler)
+          .withService(casHandler)
+          .build();
+      
+      server.start();
+
+execution_flow:
+  steps:
+    - step: 1
+      name: "Upload inputs"
+      action: "Missing blobs uploaded to CAS"
+    - step: 2
+      name: "Submit action"
+      action: "Execute RPC with action digest"
+    - step: 3
+      name: "Wait for result"
+      action: "Poll Operation or use streaming"
+    - step: 4
+      name: "Download outputs"
+      action: "Fetch output files from CAS"
+
+platform_properties:
+  common:
+    - name: "OSFamily"
+      values: ["Linux", "Windows", "Darwin"]
+    - name: "Arch"
+      values: ["x86_64", "arm64"]
+    - name: "container-image"
+      desc: "Docker image for execution"
+  example: |
+    platform:
+      properties:
+        OSFamily: Linux
+        Arch: x86_64
+        container-image: "docker://ubuntu:22.04"
+
+reapi_services:
+  - service: "Capabilities"
+    rpc: "GetCapabilities"
+    desc: "Query server capabilities"
+  - service: "Execution"
+    rpc: "Execute"
+    desc: "Submit action for execution"
+  - service: "Execution"
+    rpc: "WaitExecution"
+    desc: "Wait for operation completion"
+  - service: "ActionCache"
+    rpc: "GetActionResult"
+    desc: "Retrieve cached result"
+  - service: "ActionCache"
+    rpc: "UpdateActionResult"
+    desc: "Store action result"
+  - service: "CAS"
+    rpc: "FindMissingBlobs"
+    desc: "Check which blobs to upload"
+  - service: "CAS"
+    rpc: "BatchUpdateBlobs"
+    desc: "Upload multiple blobs"
+  - service: "CAS"
+    rpc: "BatchReadBlobs"
+    desc: "Download multiple blobs"
 
 related: [distributed, remote-cache, hermetic, grpc-transport, reapi-v2]
 
-next_steps: |
-  - Requires a compatible backend (Buildbarn, Buildfarm, etc.)
-  - Use REAPI v2 adapter for standard REAPI endpoints
-  - Use gRPC transport for streaming support
-  - Use HTTP transport for Builder-native clusters
+location: "source/engine/distributed/"
 
+next_steps: |
+  - Choose transport: HTTP for simple, gRPC for full REAPI
+  - Configure platform properties for worker selection
+  - Set up authentication for cloud backends
+  - bldr explain grpc-transport
+  - bldr explain reapi-v2
+  - bldr explain distributed

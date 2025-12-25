@@ -212,9 +212,29 @@ StealStrategy selectStrategy(SystemMetrics metrics)
 
 ### Transport Layer
 
-**Primary:** gRPC with HTTP/2 (efficient binary protocol)  
-**Fallback:** WebSocket (firewall-friendly)  
-**Local:** Unix domain sockets (zero-copy)
+Builder supports multiple transport options:
+
+| Transport | Use Case | Features |
+|-----------|----------|----------|
+| **gRPC/HTTP2** | REAPI backends | Streaming, retries, deadlines, HPACK |
+| **HTTP/1.1** | Builder-native | Simple, no dependencies |
+| **WebSocket** | Firewall-friendly | Full-duplex |
+| **Unix Socket** | Local | Zero-copy |
+
+The gRPC transport is a **pure D implementation** - no external dependencies required.
+Full HTTP/2 framing (RFC 7540), HPACK compression (RFC 7541), and gRPC message framing.
+
+```d
+// gRPC client (works with BuildBuddy, BuildBarn, etc.)
+import engine.distributed.protocol.grpc;
+
+auto config = GrpcConfig.insecure("buildbuddy:8980");
+auto transport = new GrpcTransport(config);
+
+if (transport.connect().isOk) {
+    auto result = transport.execute(actionRequest);
+}
+```
 
 ```d
 /// Message envelope (all messages use this wrapper)

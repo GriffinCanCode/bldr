@@ -136,8 +136,8 @@ concepts:
 
   grpc-transport:
     file: "concepts/reference/grpc-transport.yaml"
-    summary: "gRPC Transport - HTTP/2 streaming for remote execution with REAPI compatibility"
-    keywords: ["grpc", "http2", "streaming", "remote", "reapi", "bazel"]
+    summary: "gRPC Transport - Pure D HTTP/2 implementation for REAPI compatibility"
+    keywords: ["grpc", "http2", "streaming", "remote", "reapi", "bazel", "buildbuddy", "buildbarn", "protobuf"]
 
   hermetic:
     file: "concepts/core/hermetic.yaml"
@@ -201,6 +201,11 @@ concepts:
     file: "concepts/reference/performance.yaml"
     summary: "Performance Tuning - Making builds faster"
 
+  persistent-workers:
+    file: "concepts/reference/persistent-workers.yaml"
+    summary: "Persistent Worker Protocol - Keep JVM/TypeScript compilers warm for 10-50x faster compilation"
+    keywords: ["worker", "jvm", "javac", "kotlinc", "tsc", "swc", "warm", "startup"]
+
   platforms:
     file: "concepts/config/platforms.yaml"
     summary: "Platforms - Defining target environments"
@@ -237,12 +242,12 @@ concepts:
 
   remote-execution:
     file: "concepts/reference/remote-execution.yaml"
-    summary: "Remote Execution - Running actions on a cluster"
+    summary: "Remote Execution - Running actions on a cluster with REAPI compatibility"
 
   reapi-v2:
     file: "concepts/reference/reapi-v2.yaml"
-    summary: "REAPI v2 - Bazel Remote Execution API wire compatibility"
-    keywords: ["bazel", "buildbarn", "buildbuddy", "remote", "reapi"]
+    summary: "REAPI v2 - Full Bazel Remote Execution API wire compatibility"
+    keywords: ["bazel", "buildbarn", "buildbuddy", "buildfarm", "google-rbe", "engflow", "remote", "reapi", "protobuf"]
 
   repository-rules:
     file: "concepts/ecosystem/repository-rules.yaml"
@@ -360,7 +365,15 @@ aliases:
   dist: "distributed"
   grpc: "grpc-transport"
   http2: "grpc-transport"
-  reapi: "remote-execution"
+  hpack: "grpc-transport"
+  protobuf: "reapi-v2"
+  proto: "reapi-v2"
+  reapi: "reapi-v2"
+  buildbuddy: "reapi-v2"
+  buildbarn: "reapi-v2"
+  buildfarm: "reapi-v2"
+  google-rbe: "reapi-v2"
+  rbe: "remote-execution"
   incremental-compilation: "incremental-compilation"
   sandbox: "hermetic"
   isolation: "hermetic"
@@ -398,6 +411,11 @@ aliases:
   kotlin: "java-support"
   scala: "java-support"
   jvm: "java-support"
+  workers: "persistent-workers"
+  warm-compiler: "persistent-workers"
+  persistent: "persistent-workers"
+  javac-worker: "persistent-workers"
+  tsc-worker: "persistent-workers"
   csharp: "languages"
   cs: "languages"
   fsharp: "languages"

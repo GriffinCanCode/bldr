@@ -212,7 +212,7 @@ Planned test expansions:
 - [ ] End-to-end integration tests
 - [ ] Chaos/fault injection tests
 - [ ] Performance regression tests
-- [ ] gRPC streaming tests (requires grpc-core)
+- [x] gRPC streaming tests (pure D implementation)
 - [ ] REAPI compatibility tests
 
 ## Contributing

@@ -39,10 +39,11 @@ The distributed build system enables massive speedups by executing build actions
 2. **Worker** - Executes build actions in hermetic sandbox
 3. **Registry** - Tracks worker pool state
 4. **Scheduler** - Distributes work with priority scheduling
-5. **Transport** - Network communication layer
+5. **Transport** - Network communication layer (HTTP/1.1 or gRPC/HTTP2)
 6. **Sandbox** - Isolated execution environment
 7. **Store** - Content-addressable artifact storage
 8. **REAPI v2** - Bazel Remote Execution API wire compatibility
+9. **gRPC** - Pure D HTTP/2 + gRPC implementation for REAPI backends
 
 ## Key Features
 
@@ -96,6 +97,30 @@ Automatic recovery from failures:
 - Worker timeout detection
 - Work reassignment
 - Graceful degradation
+
+## Transport Options
+
+### HTTP/1.1 (Default)
+Simple, no dependencies. Good for Builder-native clusters.
+
+```bash
+bldr build --coordinator http://coordinator:9000
+```
+
+### gRPC/HTTP2 (REAPI Compatible)
+Full REAPI wire compatibility. Works with BuildBuddy, BuildBarn, Google RBE.
+Pure D implementation - no external dependencies.
+
+```bash
+bldr build --coordinator grpc://buildbuddy:8980
+```
+
+Features:
+- Bidirectional streaming for progress updates
+- Automatic retry with exponential backoff  
+- Deadline propagation
+- HPACK header compression
+- Full REAPI v2 service compatibility
 
 ## Usage
 
@@ -314,11 +339,19 @@ Advanced memory management for high-performance distributed builds:
 ### Module Structure
 
 ```
-source/core/distributed/
+source/engine/distributed/
 ├── protocol/
 │   ├── protocol.d   - Core protocol types
 │   ├── messages.d   - Message serialization
-│   ├── transport.d  - Network transport
+│   ├── transport.d  - HTTP/1.1 transport
+│   ├── grpc/        - gRPC/HTTP2 transport (pure D)
+│   │   ├── transport.d  - gRPC client
+│   │   ├── server.d     - gRPC server
+│   │   ├── codec.d      - Protobuf encoding
+│   │   ├── http2.d      - HTTP/2 framing (RFC 7540)
+│   │   ├── frame.d      - gRPC message framing
+│   │   ├── factory.d    - Transport factory
+│   │   └── package.d    - gRPC API
 │   ├── reapi_v2/    - REAPI v2 compatibility layer
 │   │   ├── types.d      - REAPI type definitions
 │   │   ├── codec.d      - Protobuf wire format
@@ -374,48 +407,6 @@ dub test --config=chaos
 # Performance benchmarks
 dub run --config=benchmark
 ```
-
-## Roadmap
-
-### Phase 1: Core Protocol (Done)
-- [x] Protocol definitions
-- [x] Transport layer
-- [x] Message serialization
-
-### Phase 2: Basic Coordination (In Progress)
-- [x] Worker registry
-- [x] Distributed scheduler
-- [x] Coordinator implementation
-- [x] Worker implementation
-- [ ] Heartbeat monitoring
-- [ ] Failure recovery
-
-### Phase 3: Execution (Next)
-- [ ] Hermetic sandboxing (Linux)
-- [ ] Action execution
-- [ ] Artifact store integration
-- [ ] Resource monitoring
-
-### Phase 4: Work Stealing (Completed)
-- [x] Peer-to-peer protocol
-- [x] Peer discovery and registry
-- [x] Adaptive strategies
-- [x] Performance metrics and telemetry
-- [x] Load-aware victim selection
-- [x] Exponential backoff and retry logic
-
-### Phase 5: REAPI Integration (Done)
-- [x] REAPI v2 wire-format compatibility
-- [x] Hash translation (BLAKE3 ↔ SHA256)
-- [x] CAS/ActionCache/Execution services
-- [x] Client mode (connect to BuildBuddy, BuildBarn, etc.)
-- [x] Server mode (expose Builder as REAPI endpoint)
-
-### Phase 6: Production (Future)
-- [ ] Docker images
-- [ ] Kubernetes operator
-- [ ] Monitoring & metrics
-- [ ] Documentation
 
 ## Contributing
 

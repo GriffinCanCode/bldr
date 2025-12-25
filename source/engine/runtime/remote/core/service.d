@@ -71,7 +71,7 @@ struct ProviderConfig
 /// Transport type for remote communication
 enum RemoteTransportType {
     Http,       // HTTP/1.1 (default, no external dependencies)
-    Grpc,       // gRPC/HTTP2 (requires grpc-core, enables REAPI compatibility)
+    Grpc,       // gRPC/HTTP2 (pure D, enables REAPI compatibility)
     Auto        // Auto-detect best available transport
 }
 

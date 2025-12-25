@@ -164,7 +164,7 @@ troubleshooting:
   - problem: "Authentication failures"
     solution: "Check API keys, HMAC configuration"
 
-related: [caching, action-cache, distributed, cdn]
+related: [caching, action-cache, distributed, cdn, grpc-transport]
 
 next_steps: |
   - See 'bldr explain workflow setup-remote-cache' for step-by-step setup

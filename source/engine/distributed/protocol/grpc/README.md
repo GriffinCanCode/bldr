@@ -1,16 +1,16 @@
 # gRPC Transport for Remote Execution
 
-High-performance gRPC transport layer for Builder's distributed execution system, enabling true Bazel REAPI compatibility and interoperability with existing remote execution infrastructure.
+Pure D implementation of HTTP/2 + gRPC for REAPI compatibility. No external dependencies required.
 
 ## Overview
 
-The gRPC module provides an alternative transport implementation that complements Builder's existing HTTP transport. It enables:
+The gRPC module provides full wire-protocol compatibility with Bazel's Remote Execution API (REAPI), enabling Builder to interoperate with:
 
-- **True REAPI Compatibility**: Wire-compatible with Bazel Remote Execution API
-- **Streaming**: Bidirectional streaming for progress updates and large artifacts
-- **Automatic Retry**: Built-in retry with exponential backoff
-- **Deadline Propagation**: Timeouts flow through the entire call chain
-- **Interoperability**: Works with BuildBuddy, BuildBarn, Buildfarm, and other RE implementations
+- **BuildBuddy** - Bazel's commercial RE platform
+- **BuildBarn** - Open-source RE implementation
+- **Buildfarm** - Google's open-source RE
+- **Engflow** - Enterprise RE platform
+- **Google RBE** - Google's Remote Build Execution
 
 ## Architecture
 
@@ -20,189 +20,199 @@ The gRPC module provides an alternative transport implementation that complement
 │           (ActionRequest, ActionResult, etc.)             │
 └────────────────────────┬────────────────────────────────┘
                          │
-         ┌───────────────┼───────────────┐
-         │               │               │
-         ▼               ▼               ▼
-┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-│HttpTransport│  │GrpcTransport│  │MockTransport│
-│  (HTTP/1.1) │  │ (gRPC/H2)   │  │  (Testing)  │
-└──────┬──────┘  └──────┬──────┘  └─────────────┘
-       │                │
-       │                ▼
-       │         ┌─────────────┐
-       │         │ GrpcCodec   │
-       │         │ (Protobuf)  │
-       │         └──────┬──────┘
-       │                │
-       ▼                ▼
-   std.socket      grpc-core (C)
+                         ▼
+┌─────────────────────────────────────────────────────────┐
+│                     GrpcCodec                            │
+│              (protobuf wire format)                      │
+└────────────────────────┬────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────┐
+│                     GrpcFrame                            │
+│         (5-byte header + protobuf message)               │
+└────────────────────────┬────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────┐
+│                   H2Connection                           │
+│            (HTTP/2 frames + HPACK)                       │
+└────────────────────────┬────────────────────────────────┘
+                         │
+                         ▼
+                    TCP Socket
 ```
 
 ## Components
 
-### Proto Definitions
-
-- `proto/builder_remote.proto` - Builder's native protocol in protobuf format
-- `proto/reapi_compat.proto` - Bazel REAPI wire-compatible definitions
-
-### D Modules
-
-- `bindings.d` - C FFI bindings to grpc-core
-- `codec.d` - Protobuf wire format encoder/decoder
-- `transport.d` - GrpcTransport implementing Transport interface
-- `server.d` - gRPC server for hosting REAPI-compatible services
-- `factory.d` - Unified transport factory with auto-detection
+| Module | Purpose |
+|--------|---------|
+| `http2.d` | HTTP/2 framing (RFC 7540), HPACK compression (RFC 7541) |
+| `frame.d` | gRPC message framing, status codes, REAPI method definitions |
+| `codec.d` | Builder ↔ protobuf encoding/decoding |
+| `transport.d` | Client-side gRPC transport |
+| `server.d` | Server-side gRPC with service handlers |
+| `factory.d` | Transport creation and connection pooling |
+| `bindings.d` | Optional grpc-core FFI (for native performance) |
 
 ## Usage
 
-### Client: Connecting to Remote Coordinator
+### Client: Connect to REAPI Server
 
 ```d
 import engine.distributed.protocol.grpc;
 
-// Simple insecure connection
-auto config = GrpcConfig.insecure("coordinator:9000");
+// Create transport
+auto config = GrpcConfig.insecure("remote-execution.example.com:443");
 auto transport = new GrpcTransport(config);
 
-// Execute action
-auto request = new ActionRequest(...);
-auto result = transport.execute(request);
+// Connect
+if (transport.connect().isOk) {
+    // REAPI: Get server capabilities
+    auto capsResult = transport.getCapabilities("");
+    
+    // REAPI: Find missing blobs
+    auto missingResult = transport.findMissingBlobs(request);
+    
+    // REAPI: Upload blobs
+    auto uploadResult = transport.batchUpdateBlobs(blobs);
+    
+    // REAPI: Execute action
+    auto result = transport.execute(actionRequest);
+}
 
-// With streaming progress
-transport.executeStream(request, (progress) {
-    writeln("Progress: ", progress.stage, " - ", progress.progress * 100, "%");
-});
+transport.close();
 ```
 
-### Client: Using the Factory
+### Client: Using Factory
 
 ```d
 import engine.distributed.protocol.grpc;
 
 // Auto-detect from URL
-auto result = UnifiedTransportFactory.createFromUrl("grpc://coordinator:9000");
+auto result = GrpcTransportFactory.createFromUrl("grpc://coordinator:9000");
 if (result.isOk) {
     auto transport = result.unwrap();
     // Use transport...
+    transport.close();
 }
 
-// With explicit configuration
-auto config = TransportConfig.grpcSecure("coordinator:9000", rootCerts);
+// Or with configuration
+auto config = TransportConfig.grpcSecure("coordinator:9000");
 config.callTimeout = 120.seconds;
-config.enableRetry = true;
 auto transport = UnifiedTransportFactory.create(config);
 ```
 
-### Server: Hosting REAPI-Compatible Service
+### Server: REAPI-Compatible Service
 
 ```d
 import engine.distributed.protocol.grpc;
 
-// Create server
+// Create service handler
+class MyExecutionService : GrpcServiceHandler {
+    string serviceName() const => ReapiServices.Execution;
+    
+    Result!(ubyte[], string) handleUnary(string method, const ubyte[] request) {
+        switch (method) {
+            case "Execute":
+                return executeAction(request);
+            default:
+                return Err!(ubyte[], string)("Unknown method");
+        }
+    }
+}
+
+// Build server
 auto server = GrpcServerBuilder.create()
-    .listenOn("0.0.0.0:9000")
-    .withService(new CoordinatorServiceHandler(&executeAction))
-    .withService(new ReapiExecutionHandler(&executeAction))
+    .listenOn("0.0.0.0:50051")
+    .withMaxConcurrentStreams(100)
+    .withMaxMessageSize(16 * 1024 * 1024)
+    .withService(new MyExecutionService())
     .build();
 
 // Start serving
-server.start();
+if (server.start().isOk) {
+    writeln("gRPC server listening on port 50051");
+    // Server runs until stopped
+}
 
-// ... later
+// Graceful shutdown
 server.stop();
 ```
 
-### Configuration Options
+## Wire Format
+
+### gRPC Message Framing
+
+Each gRPC message has a 5-byte header:
+
+```
+┌─────────┬─────────────────────────────────────┐
+│ 1 byte  │              4 bytes                 │
+├─────────┼─────────────────────────────────────┤
+│Compress │     Message Length (big-endian)      │
+└─────────┴─────────────────────────────────────┘
+          │
+          ▼
+┌───────────────────────────────────────────────┐
+│           Protobuf Message Payload             │
+└───────────────────────────────────────────────┘
+```
+
+### HTTP/2 Frame Structure
+
+```
+┌───────────────────────────────────────────────┐
+│                Frame Header (9 bytes)          │
+├─────────────┬──────────┬───────┬──────────────┤
+│Length (24b) │Type (8b) │Flags  │Stream ID(31b)│
+└─────────────┴──────────┴───────┴──────────────┘
+              │
+              ▼
+┌───────────────────────────────────────────────┐
+│              Frame Payload                     │
+└───────────────────────────────────────────────┘
+```
+
+## REAPI Services Supported
+
+| Service | Methods | Status |
+|---------|---------|--------|
+| Capabilities | `GetCapabilities` | ✅ Full |
+| Execution | `Execute`, `WaitExecution` | ✅ Full |
+| ActionCache | `GetActionResult`, `UpdateActionResult` | ✅ Full |
+| ContentAddressableStorage | `FindMissingBlobs`, `BatchUpdateBlobs`, `BatchReadBlobs` | ✅ Full |
+| ByteStream | `Read`, `Write` | ✅ Streaming |
+
+## Configuration Options
 
 ```d
-// Transport config
-TransportConfig config;
-config.type = TransportType.Grpc;
-config.endpoint = "coordinator:9000";
-config.useTls = true;
-config.rootCerts = readText("ca.pem");
+GrpcConfig config;
+config.target = "executor:50051";       // Target endpoint
+config.useTls = true;                   // Enable TLS
+config.rootCerts = readText("ca.pem"); // CA certificates
 config.clientCert = readText("client.pem");
 config.clientKey = readText("client-key.pem");
-config.connectTimeout = 30.seconds;
-config.callTimeout = 60.seconds;
+config.connectTimeout = 30.seconds;     // Connection timeout
+config.callTimeout = 60.seconds;        // Per-call timeout
+config.maxMessageSize = 16 * 1024 * 1024; // 16MB max
+config.enableRetry = true;              // Auto-retry
 config.maxRetries = 3;
-
-// gRPC-specific
-config.maxMessageSize = 16 * 1024 * 1024;  // 16MB
-config.enableRetry = true;
 ```
 
-## Installation
+## Performance
 
-### Dependencies
+| Metric | HTTP/1.1 | gRPC/HTTP2 |
+|--------|----------|------------|
+| Connection reuse | Limited | Full multiplexing |
+| Streaming | Not supported | Bidirectional |
+| Header compression | None | HPACK (~90% reduction) |
+| Binary framing | Custom | Standard |
+| Retry | Manual | Automatic |
+| Deadline propagation | Manual | Built-in |
 
-The gRPC module requires the grpc-core C library:
+## Transport Selection
 
-**macOS (Homebrew):**
-```bash
-brew install grpc
-```
-
-**Ubuntu/Debian:**
-```bash
-sudo apt install libgrpc-dev libgrpc++-dev
-```
-
-**From source:**
-```bash
-git clone https://github.com/grpc/grpc.git
-cd grpc
-git submodule update --init
-mkdir build && cd build
-cmake ..
-make -j$(nproc)
-sudo make install
-```
-
-### Linking
-
-Add to your `dub.json`:
-```json
-{
-    "libs": ["grpc", "gpr"],
-    "lflags-linux": ["-L/usr/local/lib"],
-    "lflags-osx": ["-L/opt/homebrew/lib"]
-}
-```
-
-Or compile with:
-```bash
-dmd -L-lgrpc -L-lgpr your_app.d
-```
-
-## Protocol Compatibility
-
-### Builder Native Protocol
-
-The Builder native protocol (`builder_remote.proto`) provides:
-
-- Efficient binary encoding optimized for build actions
-- Support for work stealing between workers
-- Native priority scheduling
-- Full hermetic sandbox specification
-
-### Bazel REAPI Compatibility
-
-The REAPI adapter (`reapi_compat.proto`) provides wire-level compatibility with:
-
-- `build.bazel.remote.execution.v2.Execution`
-- `build.bazel.remote.execution.v2.ActionCache`
-- `build.bazel.remote.execution.v2.ContentAddressableStorage`
-- `build.bazel.remote.execution.v2.Capabilities`
-
-This enables Builder to:
-- Act as a Bazel remote execution backend
-- Connect to existing RE infrastructure (BuildBuddy, BuildBarn, etc.)
-- Use standard REAPI tooling for debugging
-
-## Transport Selection Strategy
-
-The `UnifiedTransportFactory` supports different strategies:
+The `UnifiedTransportFactory` supports multiple strategies:
 
 | Strategy | Description |
 |----------|-------------|
@@ -212,53 +222,46 @@ The `UnifiedTransportFactory` supports different strategies:
 | `HttpOnly` | Only use HTTP |
 | `RoundRobin` | Alternate between transports |
 
-## Performance Characteristics
+## Optional: Native gRPC (grpc-core)
 
-| Metric | HTTP/1.1 | gRPC/HTTP2 |
-|--------|----------|------------|
-| Connection reuse | Limited | Full multiplexing |
-| Streaming | Not supported | Bidirectional |
-| Header compression | None | HPACK |
-| Binary framing | Custom | Standard |
-| Retry | Manual | Automatic |
-| Deadline propagation | Manual | Built-in |
+For maximum performance, link with grpc-core C library:
 
-## When to Use Each Transport
+**macOS:**
+```bash
+brew install grpc
+```
 
-### Use HTTP Transport When:
-- Simple deployments without external dependencies
-- Internal communication within a single datacenter
-- No need for streaming or REAPI compatibility
-- Minimal binary footprint required
+**Ubuntu/Debian:**
+```bash
+sudo apt install libgrpc-dev libgrpc++-dev
+```
 
-### Use gRPC Transport When:
-- REAPI compatibility is required
-- Connecting to external RE infrastructure
-- Large artifact streaming needed
-- Cross-datacenter communication
-- Need automatic retry and deadline propagation
+**Linking:**
+```bash
+dmd -L-lgrpc -L-lgpr your_app.d
+```
 
-## Troubleshooting
+## Error Handling
 
-### "Failed to create channel"
-- Check that grpc-core is installed
-- Verify the target address is correct
-- Check network connectivity
+gRPC errors map to standard status codes:
 
-### "SSL handshake failed"
-- Verify certificate paths
-- Check certificate validity
-- Ensure CA is trusted
-
-### "Deadline exceeded"
-- Increase `callTimeout`
-- Check network latency
-- Verify server is responsive
+| Code | Name | Meaning |
+|------|------|---------|
+| 0 | OK | Success |
+| 1 | CANCELLED | Cancelled by client |
+| 2 | UNKNOWN | Unknown error |
+| 3 | INVALID_ARGUMENT | Bad request |
+| 4 | DEADLINE_EXCEEDED | Timeout |
+| 5 | NOT_FOUND | Resource not found |
+| 7 | PERMISSION_DENIED | Authorization failed |
+| 8 | RESOURCE_EXHAUSTED | Rate limited |
+| 12 | UNIMPLEMENTED | Method not supported |
+| 13 | INTERNAL | Server error |
+| 14 | UNAVAILABLE | Service unavailable |
 
 ## See Also
 
-- [Distributed Build System](../../README.md)
-- [Remote Execution](../../../runtime/remote/README.md)
-- [REAPI Adapter](../../../runtime/remote/protocol/reapi.d)
 - [Bazel Remote Execution API](https://github.com/bazelbuild/remote-apis)
-
+- [gRPC Protocol](https://grpc.io/docs/what-is-grpc/core-concepts/)
+- [HTTP/2 RFC 7540](https://datatracker.ietf.org/doc/html/rfc7540)
+- [HPACK RFC 7541](https://datatracker.ietf.org/doc/html/rfc7541)

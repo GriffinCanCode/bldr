@@ -12,7 +12,7 @@ import infrastructure.errors;
  */
 enum TransportType {
     Http,       // HTTP/1.1 (default, no dependencies)
-    Grpc,       // gRPC/HTTP2 (requires grpc-core)
+    Grpc,       // gRPC/HTTP2 (pure D implementation)
     Auto        // Auto-detect from URL
 }
 
@@ -181,10 +181,9 @@ final class UnifiedTransportFactory {
         return createHttpTransport(config);
     }
     
-    /// Check if gRPC is available (stub - grpc library not linked)
+    /// Check if gRPC is available (pure D implementation - always available)
     static bool isGrpcAvailable() @trusted nothrow {
-        // gRPC library is not linked, always return false
-        return false;
+        return true;  // Pure D HTTP/2 + gRPC implementation
     }
 }
 

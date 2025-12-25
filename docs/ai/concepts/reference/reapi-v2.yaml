@@ -1,6 +1,6 @@
 topic: reapi-v2
 category: concepts
-summary: "REAPI v2 Compatibility - Bazel Remote Execution API wire compatibility"
+summary: "REAPI v2 Compatibility - Full Bazel Remote Execution API wire compatibility"
 definition: |
   The REAPI v2 compatibility layer enables Builder to integrate with existing
   remote execution infrastructure. It provides wire-format compatibility with
@@ -11,48 +11,97 @@ key_points:
   - "Hash translation: Bidirectional BLAKE3 ↔ SHA256 mapping"
   - "Client mode: Connect to BuildBuddy, BuildBarn, Google RBE"
   - "Server mode: Expose Builder as REAPI endpoint for Bazel clients"
-  - "No gRPC dependency: Pure binary protocol implementation"
+  - "Pure D: No gRPC library dependency, implements wire protocol directly"
+  - "gRPC transport: Optional HTTP/2 + gRPC framing for full compatibility"
   - "Full service parity: Execution, ActionCache, CAS, Capabilities"
 
 services:
-  execution:
-    - "Execute actions remotely via long-running operations"
-    - "Operation status polling and cancellation"
-  action_cache:
-    - "Get/update cached action results"
-    - "Digest-based lookup"
-  cas:
-    - "FindMissingBlobs, BatchRead, BatchUpdate"
-    - "Single blob upload/download"
-    - "Directory tree retrieval"
   capabilities:
-    - "Server capability reporting"
-    - "Supported hash functions, compressors"
+    methods:
+      - "GetCapabilities: Query supported features, hash functions"
+    path: "/build.bazel.remote.execution.v2.Capabilities/GetCapabilities"
+  execution:
+    methods:
+      - "Execute: Run action remotely (returns Operation)"
+      - "WaitExecution: Wait for operation completion"
+    paths:
+      - "/build.bazel.remote.execution.v2.Execution/Execute"
+      - "/build.bazel.remote.execution.v2.Execution/WaitExecution"
+  action_cache:
+    methods:
+      - "GetActionResult: Retrieve cached action result"
+      - "UpdateActionResult: Store action result"
+    paths:
+      - "/build.bazel.remote.execution.v2.ActionCache/GetActionResult"
+      - "/build.bazel.remote.execution.v2.ActionCache/UpdateActionResult"
+  cas:
+    methods:
+      - "FindMissingBlobs: Check which blobs need upload"
+      - "BatchUpdateBlobs: Upload multiple blobs"
+      - "BatchReadBlobs: Download multiple blobs"
+      - "GetTree: Retrieve directory tree"
+    paths:
+      - "/build.bazel.remote.execution.v2.ContentAddressableStorage/FindMissingBlobs"
+      - "/build.bazel.remote.execution.v2.ContentAddressableStorage/BatchUpdateBlobs"
+      - "/build.bazel.remote.execution.v2.ContentAddressableStorage/BatchReadBlobs"
+      - "/build.bazel.remote.execution.v2.ContentAddressableStorage/GetTree"
+  bytestream:
+    methods:
+      - "Read: Stream large blob download"
+      - "Write: Stream large blob upload"
+    paths:
+      - "/google.bytestream.ByteStream/Read"
+      - "/google.bytestream.ByteStream/Write"
 
 usage_examples:
-  - description: "Connect to REAPI server (client mode)"
+  - description: "gRPC client: Connect to REAPI server"
     code: |
-      import engine.distributed.protocol.reapi_v2;
+      import engine.distributed.protocol.grpc;
       
-      auto client = new ReapiV2Client("buildbarn.example.com:8980");
-      auto result = client.execute(actionRequest);
-  - description: "Expose Builder as REAPI endpoint (server mode)"
+      auto config = GrpcConfig.insecure("buildbarn:8980");
+      auto transport = new GrpcTransport(config);
+      
+      if (transport.connect().isOk) {
+          // Get capabilities
+          auto caps = transport.getCapabilities("");
+          
+          // Find missing blobs
+          auto missing = transport.findMissingBlobs(request);
+          
+          // Execute action
+          auto result = transport.execute(actionRequest);
+      }
+  - description: "gRPC server: Expose REAPI endpoint"
     code: |
-      auto services = new ReapiServiceBundle(executeDelegate);
-      auto router = ReapiRouter(services);
-      auto response = router.route("POST", "/v2/default/actions:execute", body);
+      import engine.distributed.protocol.grpc;
+      
+      auto server = GrpcServerBuilder.create()
+          .listenOn("0.0.0.0:50051")
+          .withService(new ReapiServiceHandler(
+              ReapiServices.Execution, &handleExecute))
+          .withService(new ReapiServiceHandler(
+              ReapiServices.CAS, &handleCas))
+          .build();
+      
+      server.start();
   - description: "Hash translation"
     code: |
       auto translator = new HashTranslator();
       translator.registerContent(fileBytes);  // Computes BLAKE3 + SHA256
       auto digest = translator.actionIdToDigest(actionId, size);
 
-endpoints:
-  - "POST /v2/{instance}/actions:execute"
-  - "GET/PUT /v2/{instance}/actionResults/{hash}/{size}"
-  - "POST /v2/{instance}/blobs:findMissing"
-  - "GET/PUT /v2/{instance}/blobs/{hash}/{size}"
-  - "GET /v2/{instance}/capabilities"
+hash_translation:
+  purpose: "Builder uses BLAKE3, REAPI uses SHA256"
+  approach: "Compute both hashes, maintain bidirectional mapping"
+  code: |
+    // Register content (computes both hashes)
+    translator.registerContent(data);
+    
+    // Convert Builder ActionId to REAPI Digest
+    auto digest = translator.actionIdToDigest(actionId, size);
+    
+    // Convert REAPI Digest back to Builder ActionId
+    auto actionId = translator.digestToActionId(digest);
 
 compatible_backends:
   - "BuildBuddy"
@@ -62,12 +111,21 @@ compatible_backends:
   - "Google Remote Build Execution"
   - "Engflow"
 
+wire_format:
+  description: "Protobuf-compatible binary encoding"
+  details:
+    - "Varints for integers"
+    - "Length-delimited for strings/bytes"
+    - "Packed repeated fields"
+    - "Tag-based field identification"
+
 related: [distributed, remote-execution, grpc-transport, remote-cache, blake3]
 
 location: "source/engine/distributed/protocol/reapi_v2/"
 
 next_steps: |
-  - Use ReapiV2Client to connect to existing REAPI infrastructure
-  - Use ReapiServiceBundle to expose Builder as REAPI server
+  - Use GrpcTransport for gRPC + REAPI
+  - Use ReapiV2Codec for direct protobuf encoding
   - Register content with HashTranslator for BLAKE3/SHA256 mapping
-
+  - bldr explain grpc-transport
+  - bldr explain distributed

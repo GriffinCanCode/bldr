@@ -325,3 +325,59 @@ struct ReapiBlobResponse {
     ReapiStatus status;
 }
 
+/// GetCapabilities request
+struct ReapiGetCapabilitiesRequest {
+    string instanceName;
+}
+
+/// GetActionResult request
+struct ReapiGetActionResultRequest {
+    string instanceName;
+    ReapiDigest actionDigest;
+    bool inlineStdout;
+    bool inlineStderr;
+    string[] inlineOutputFiles;
+}
+
+/// UpdateActionResult request
+struct ReapiUpdateActionResultRequest {
+    string instanceName;
+    ReapiDigest actionDigest;
+    ReapiActionResult actionResult;
+    ReapiResultsCachePolicy resultsCachePolicy;
+}
+
+/// FindMissingBlobs request
+struct ReapiFindMissingBlobsRequest {
+    string instanceName;
+    ReapiDigest[] blobDigests;
+}
+
+/// FindMissingBlobs response
+struct ReapiFindMissingBlobsResponse {
+    ReapiDigest[] missingBlobDigests;
+}
+
+/// BatchUpdateBlobs request
+struct ReapiBatchUpdateBlobsRequest {
+    string instanceName;
+    ReapiBlobRequest[] requests;
+}
+
+/// BatchUpdateBlobs response
+struct ReapiBatchUpdateBlobsResponse {
+    ReapiBlobResponse[] responses;
+}
+
+/// BatchReadBlobs request
+struct ReapiBatchReadBlobsRequest {
+    string instanceName;
+    ReapiDigest[] digests;
+    Compressor[] acceptableCompressors;
+}
+
+/// BatchReadBlobs response
+struct ReapiBatchReadBlobsResponse {
+    ReapiBlobResponse[] responses;
+}
+
