@@ -10,6 +10,7 @@ import core.atomic;
 import core.sync.mutex : Mutex;
 import core.sync.condition : Condition;
 import core.thread : Thread;
+import infrastructure.utils.concurrency.structured : TaskScope, VoidTask;
 import engine.graph : BuildGraph, BuildNode, BuildStatus;
 import infrastructure.config.schema.schema : TargetId, Target;
 import infrastructure.utils.logging.logger;
@@ -52,8 +53,9 @@ final class SpeculativeEngine
     private Mutex _mutex;
     private Condition _workAvailable;
     
-    // Worker pool
-    private Thread[] _workers;
+    // Structured concurrency: TaskScope manages worker threads
+    private TaskScope _taskScope;
+    private VoidTask[] _workerTasks;
     private shared bool _shutdown;
     private shared size_t _activeWorkers;
     
@@ -105,20 +107,22 @@ final class SpeculativeEngine
         _executor = executor;
     }
     
-    /// Start the speculative engine with worker threads
+    /// Start the speculative engine using structured concurrency
     void start() @trusted
     {
         synchronized (_mutex)
         {
-            if (_workers.length > 0)
+            if (_taskScope !is null)
                 return; // Already started
             
-            _workers = new Thread[_config.workerCount];
+            // Create TaskScope for hierarchical worker management
+            _taskScope = new TaskScope("speculation-engine");
+            _workerTasks = new VoidTask[_config.workerCount];
             
             foreach (i; 0 .. _config.workerCount)
             {
-                _workers[i] = new Thread(&workerLoop);
-                _workers[i].start();
+                _workerTasks[i] = _taskScope.launchBackground("worker-" ~ i.to!string, 
+                    () @trusted => workerLoopBody());
             }
             
             Logger.info("Speculation engine started with " ~ 
@@ -126,7 +130,7 @@ final class SpeculativeEngine
         }
     }
     
-    /// Stop the engine and wait for workers
+    /// Stop the engine - TaskScope guarantees all workers complete
     void stop() @trusted
     {
         atomicStore(_shutdown, true);
@@ -137,16 +141,15 @@ final class SpeculativeEngine
             _workAvailable.notifyAll();
         }
         
-        // Wait for workers to finish
-        foreach (worker; _workers)
+        // TaskScope ensures all workers complete before continuing
+        if (_taskScope !is null)
         {
-            if (worker !is null)
-                worker.join();
-        }
-        
-        synchronized (_mutex)
-        {
-            _workers = [];
+            _taskScope.cancelAndJoin();
+            synchronized (_mutex)
+            {
+                _taskScope = null;
+                _workerTasks = [];
+            }
         }
         
         Logger.info("Speculation engine stopped");
@@ -375,38 +378,40 @@ private:
         return SpeculationPolicy.init;
     }
     
-    /// Worker thread main loop
-    void workerLoop() @trusted
+    /// Worker loop body (called by TaskScope.launchBackground)
+    void workerLoopBody() @trusted
     {
-        while (!atomicLoad(_shutdown))
+        if (atomicLoad(_shutdown) || (_taskScope !is null && _taskScope.isCancelled())) 
+            return;
+        
+        WorkerTask task;
+        bool hasTask = false;
+        
+        synchronized (_mutex)
         {
-            WorkerTask task;
-            bool hasTask = false;
-            
-            synchronized (_mutex)
+            // Wait for work or shutdown
+            if (_taskQueue.length == 0 && !atomicLoad(_shutdown))
             {
-                while (_taskQueue.length == 0 && !atomicLoad(_shutdown))
-                {
-                    _workAvailable.wait();
-                }
-                
-                if (atomicLoad(_shutdown))
-                    break;
-                
-                if (_taskQueue.length > 0)
-                {
-                    task = _taskQueue[0];
-                    _taskQueue = _taskQueue[1 .. $];
-                    hasTask = true;
-                    atomicOp!"+="(_activeWorkers, 1);
-                }
+                import core.time : msecs;
+                _workAvailable.wait(100.msecs); // Short wait to allow cancellation checks
             }
             
-            if (hasTask)
+            if (atomicLoad(_shutdown))
+                return;
+            
+            if (_taskQueue.length > 0)
             {
-                scope(exit) atomicOp!"-="(_activeWorkers, 1);
-                executeTask(task);
+                task = _taskQueue[0];
+                _taskQueue = _taskQueue[1 .. $];
+                hasTask = true;
+                atomicOp!"+="(_activeWorkers, 1);
             }
+        }
+        
+        if (hasTask)
+        {
+            scope(exit) atomicOp!"-="(_activeWorkers, 1);
+            executeTask(task);
         }
     }
     

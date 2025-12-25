@@ -8,6 +8,7 @@ import std.conv : to;
 import core.thread : Thread;
 import core.atomic;
 import core.sync.mutex : Mutex;
+import infrastructure.utils.concurrency.structured : TaskScope, VoidTask;
 import engine.graph : BuildGraph;
 import engine.distributed.protocol.protocol;
 import engine.distributed.protocol.messages;
@@ -65,9 +66,12 @@ final class Coordinator
     private BuildGraph graph;
     private Socket listener;
     private shared bool running;
-    private Thread acceptThread;
-    private Thread healthThread;
     private Mutex mutex;
+    
+    // Structured concurrency: TaskScope guarantees thread cleanup
+    private TaskScope taskScope;
+    private VoidTask acceptTask;
+    private VoidTask healthTask;
     
     // Peer registry for work-stealing
     private PeerRegistry peerRegistry;
@@ -110,7 +114,7 @@ final class Coordinator
     /// Get profile scheduler for statistics (null if not enabled)
     ProfileGuidedScheduler getProfileScheduler() @safe nothrow @nogc => profileScheduler;
     
-    /// Start coordinator server
+    /// Start coordinator server using structured concurrency
     Result!DistributedError start() @trusted
     {
         synchronized (mutex)
@@ -126,8 +130,13 @@ final class Coordinator
                 
                 atomicStore(running, true);
                 
-                (acceptThread = new Thread(&acceptLoop)).start();
-                (healthThread = new Thread(&healthLoop)).start();
+                // Create TaskScope for hierarchical task management
+                taskScope = new TaskScope("coordinator");
+                
+                // Launch accept and health as structured tasks
+                acceptTask = taskScope.launchBackground("accept-loop", () @trusted => acceptLoopBody());
+                healthTask = taskScope.launchPeriodic("health-check", config.heartbeatInterval, 
+                    () @trusted => healthCheckBody());
                 
                 Logger.info("Coordinator started on " ~ config.host ~ ":" ~ config.port.to!string);
                 return Ok!DistributedError();
@@ -139,7 +148,7 @@ final class Coordinator
         }
     }
     
-    /// Stop coordinator
+    /// Stop coordinator - TaskScope guarantees all tasks complete
     void stop() @trusted
     {
         atomicStore(running, false);
@@ -150,8 +159,12 @@ final class Coordinator
             catch (Exception) {}
         }
         
-        if (acceptThread !is null) acceptThread.join();
-        if (healthThread !is null) healthThread.join();
+        // TaskScope ensures all tasks complete before continuing
+        if (taskScope !is null)
+        {
+            taskScope.cancelAndJoin();
+            taskScope = null;
+        }
         
         scheduler.shutdown();
         
@@ -324,33 +337,27 @@ final class Coordinator
         }
     }
     
-    /// Accept loop (handles worker connections)
-    private void acceptLoop() @trusted
+    /// Accept loop body (called by TaskScope.launchBackground)
+    private void acceptLoopBody() @trusted
     {
-        while (atomicLoad(running))
+        if (!atomicLoad(running) || taskScope.isCancelled()) return;
+        
+        try
         {
-            try
-            {
-                listener.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, 1.seconds);
-                auto client = listener.accept();
-                (new Thread(() => messageHandler.handleClient(client))).start();
-            }
-            catch (SocketAcceptException) {} // Timeout, continue
-            catch (Exception e) { if (atomicLoad(running)) Logger.error("Accept failed: " ~ e.msg); }
+            listener.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, 1.seconds);
+            auto client = listener.accept();
+            // Handle client in a new thread (could also use TaskScope)
+            (new Thread(() => messageHandler.handleClient(client))).start();
         }
+        catch (SocketAcceptException) {} // Timeout, continue
+        catch (Exception e) { if (atomicLoad(running)) Logger.error("Accept failed: " ~ e.msg); }
     }
     
-    /// Health monitoring loop (checks worker health periodically)
-    private void healthLoop() @trusted
+    /// Health check body (called periodically by TaskScope.launchPeriodic)
+    private void healthCheckBody() @trusted
     {
-        import core.thread : Thread;
-        import std.datetime : dur;
-        
-        while (atomicLoad(running))
-        {
-            try { Thread.sleep(config.heartbeatInterval); } // Health monitor runs its own monitoring loop
-            catch (Exception e) { if (atomicLoad(running)) Logger.error("Health check failed: " ~ e.msg); }
-        }
+        // Health monitor runs its own monitoring - this is just a heartbeat
+        // The actual health checking is handled by healthMonitor
     }
     
     /// Handle heartbeat from worker (called by message handler)

@@ -13,6 +13,7 @@ import engine.workers.pool.recycler;
 import engine.workers.pool.memory;
 import infrastructure.errors;
 import infrastructure.utils.logging.logger;
+import infrastructure.utils.concurrency.structured : TaskScope, VoidTask;
 
 /// Persistent Worker Pool Manager
 /// 
@@ -210,6 +211,7 @@ final class PersistentWorker
 }
 
 /// Worker pool for managing multiple persistent workers
+/// Uses structured concurrency via TaskScope for background thread management
 final class WorkerPool
 {
     private WorkerPoolConfig config;
@@ -217,11 +219,14 @@ final class WorkerPool
     private PersistentWorker[][string] workers;
     private Mutex mutex;
     private bool running;
-    private Thread healthThread;
     private shared size_t _totalStartups;
     private shared size_t _totalRestarts;
     private shared size_t _totalFailures;
     private shared size_t _oomRestarts;
+    
+    // Structured concurrency: TaskScope guarantees health thread cleanup
+    private TaskScope taskScope;
+    private VoidTask healthTask;
     
     // SOC: Recycler handles warmth decisions
     private WorkerRecycler recycler;
@@ -252,7 +257,7 @@ final class WorkerPool
         }
     }
     
-    /// Start the worker pool (starts health check thread)
+    /// Start the worker pool using structured concurrency
     void start() @trusted
     {
         synchronized (mutex)
@@ -264,13 +269,18 @@ final class WorkerPool
         if (memoryMonitor !is null)
             memoryMonitor.start();
         
-        healthThread = new Thread(&healthCheckLoop);
-        healthThread.start();
+        // Create TaskScope for hierarchical task management
+        taskScope = new TaskScope("worker-pool");
+        
+        // Launch health check as periodic structured task
+        healthTask = taskScope.launchPeriodic("health-check", 
+            config.healthCheckInterval, () @trusted => healthCheckBody());
+        
         Logger.info("Worker pool started (recycling=" ~ config.enableRecycling.to!string ~ 
                    ", memory=" ~ config.enableMemoryMonitor.to!string ~ ")");
     }
     
-    /// Stop the worker pool and shutdown all workers
+    /// Stop the worker pool - TaskScope guarantees cleanup
     void stop() @trusted
     {
         synchronized (mutex)
@@ -279,10 +289,11 @@ final class WorkerPool
         if (memoryMonitor !is null)
             memoryMonitor.stop();
         
-        if (healthThread !is null)
+        // TaskScope ensures health task completes
+        if (taskScope !is null)
         {
-            healthThread.join();
-            healthThread = null;
+            taskScope.cancelAndJoin();
+            taskScope = null;
         }
         
         // Shutdown workers (respecting persistence policy)
@@ -455,81 +466,77 @@ final class WorkerPool
     /// Get memory monitor (for external memory queries)
     WorkerMemoryMonitor getMemoryMonitor() @safe => memoryMonitor;
     
-    /// Health check loop - integrates recycler eviction and memory monitoring
-    private void healthCheckLoop() @trusted
+    /// Health check body (called periodically by TaskScope.launchPeriodic)
+    private void healthCheckBody() @trusted
     {
-        while (running)
+        if (!running) return;
+        
+        // Check memory monitor for workers at risk
+        WorkerId[] memoryAtRisk;
+        if (memoryMonitor !is null)
+            memoryAtRisk = memoryMonitor.getAtRisk();
+        
+        // Check recycler for evictable workers
+        WorkerId[] evictable;
+        if (recycler !is null)
+            evictable = recycler.getEvictable();
+        
+        synchronized (mutex)
         {
-            Thread.sleep(config.healthCheckInterval);
-            if (!running) break;
-            
-            // Check memory monitor for workers at risk
-            WorkerId[] memoryAtRisk;
-            if (memoryMonitor !is null)
-                memoryAtRisk = memoryMonitor.getAtRisk();
-            
-            // Check recycler for evictable workers
-            WorkerId[] evictable;
-            if (recycler !is null)
-                evictable = recycler.getEvictable();
-            
-            synchronized (mutex)
+            foreach (type, ref workerList; workers)
             {
-                foreach (type, ref workerList; workers)
+                PersistentWorker[] toRemove;
+                
+                foreach (worker; workerList)
                 {
-                    PersistentWorker[] toRemove;
+                    auto id = worker.getId();
+                    auto state = worker.getState();
                     
-                    foreach (worker; workerList)
+                    // Remove dead/terminating workers
+                    if (state == WorkerState.Dead || state == WorkerState.Terminating)
                     {
-                        auto id = worker.getId();
-                        auto state = worker.getState();
-                        
-                        // Remove dead/terminating workers
-                        if (state == WorkerState.Dead || state == WorkerState.Terminating)
-                        {
-                            toRemove ~= worker;
-                            continue;
-                        }
-                        
-                        // OOM risk - restart immediately
-                        if (memoryAtRisk.canFind(id))
-                        {
-                            Logger.warning("Restarting worker due to OOM: " ~ id.toString());
-                            atomicOp!"+="(_oomRestarts, 1);
-                            worker.shutdown();
-                            toRemove ~= worker;
-                            continue;
-                        }
-                        
-                        // Recycler says evict (based on warmth-aware idle policy)
-                        if (evictable.canFind(id))
-                        {
-                            auto warmth = recycler !is null ? recycler.getWarmth(id) : WarmthLevel.Cold;
-                            Logger.info("Evicting " ~ warmth.to!string ~ " worker: " ~ id.toString());
-                            worker.shutdown();
-                            toRemove ~= worker;
-                            continue;
-                        }
-                        
-                        // Fallback: basic idle timeout (if no recycler)
-                        if (recycler is null && state == WorkerState.Idle && 
-                            worker.idleDuration() > config.idleTimeout)
-                        {
-                            Logger.info("Evicting idle worker: " ~ id.toString());
-                            worker.shutdown();
-                            toRemove ~= worker;
-                        }
+                        toRemove ~= worker;
+                        continue;
                     }
                     
-                    // Cleanup
-                    foreach (w; toRemove)
+                    // OOM risk - restart immediately
+                    if (memoryAtRisk.canFind(id))
                     {
-                        if (recycler !is null)
-                            recycler.unregister(w.getId());
-                        if (memoryMonitor !is null)
-                            memoryMonitor.unregister(w.getId());
-                        workerList = workerList.filter!(x => x !is w).array;
+                        Logger.warning("Restarting worker due to OOM: " ~ id.toString());
+                        atomicOp!"+="(_oomRestarts, 1);
+                        worker.shutdown();
+                        toRemove ~= worker;
+                        continue;
                     }
+                    
+                    // Recycler says evict (based on warmth-aware idle policy)
+                    if (evictable.canFind(id))
+                    {
+                        auto warmth = recycler !is null ? recycler.getWarmth(id) : WarmthLevel.Cold;
+                        Logger.info("Evicting " ~ warmth.to!string ~ " worker: " ~ id.toString());
+                        worker.shutdown();
+                        toRemove ~= worker;
+                        continue;
+                    }
+                    
+                    // Fallback: basic idle timeout (if no recycler)
+                    if (recycler is null && state == WorkerState.Idle && 
+                        worker.idleDuration() > config.idleTimeout)
+                    {
+                        Logger.info("Evicting idle worker: " ~ id.toString());
+                        worker.shutdown();
+                        toRemove ~= worker;
+                    }
+                }
+                
+                // Cleanup
+                foreach (w; toRemove)
+                {
+                    if (recycler !is null)
+                        recycler.unregister(w.getId());
+                    if (memoryMonitor !is null)
+                        memoryMonitor.unregister(w.getId());
+                    workerList = workerList.filter!(x => x !is w).array;
                 }
             }
         }

@@ -255,6 +255,43 @@ struct WorkerCommunication
     /// Calculate current load factor
     float calculateLoadFactor(size_t queueSize, size_t queueCapacity, WorkerState state, size_t maxConcurrentActions) @trusted nothrow => 
         cast(float)queueSize / queueCapacity * 0.7 + cast(float)(state == WorkerState.Executing) / maxConcurrentActions * 0.3;
+    
+    /// Announce to peers and prune stale entries (convenience for structured tasks)
+    void announceToPeers(WorkerId id, string listenAddress, size_t queueSize, 
+        float loadFactor, PeerRegistry peerRegistry, Transport coordinatorTransport) @trusted
+    {
+        // Create temporary deque reference for sendPeerAnnounce compatibility
+        // This is safe because we're just reading queue size
+        try
+        {
+            auto announce = PeerAnnounce(id, listenAddress, queueSize, loadFactor);
+            auto announceData = serializePeerAnnounce(announce);
+            ubyte[1] typeBytes = [cast(ubyte)MessageType.PeerAnnounce];
+            ubyte[4] lengthBytes;
+            *cast(uint*)lengthBytes.ptr = cast(uint)announceData.length;
+            
+            auto http = cast(HttpTransport)coordinatorTransport;
+            if (http is null || !http.isConnected()) return;
+            
+            auto socket = http.getSocket();
+            if (socket is null || !socket.isAlive) return;
+            
+            socket.send(typeBytes);
+            socket.send(lengthBytes);
+            for (size_t totalSent = 0; totalSent < announceData.length;)
+            {
+                auto chunk = socket.send(announceData[totalSent .. $]);
+                if (chunk <= 0) break;
+                totalSent += chunk;
+            }
+            
+            if (peerRegistry !is null) peerRegistry.pruneStale();
+            
+            Logger.debugLog("Peer announce sent (queue: " ~ queueSize.to!string ~
+                          ", load: " ~ (loadFactor * 100).to!size_t.to!string ~ "%)");
+        }
+        catch (Exception e) { Logger.error("Failed to announce: " ~ e.msg); }
+    }
 }
 
 /// Serialize work request message

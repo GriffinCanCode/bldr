@@ -5,6 +5,7 @@ import std.conv : to;
 import std.digest : toHexString;
 import std.bitmanip : write, read;
 import std.string : toLower;
+import std.format : format;
 import infrastructure.errors;
 
 // Re-export NetworkError from infrastructure.errors for backward compatibility
@@ -247,6 +248,102 @@ struct SystemMetrics
     size_t activeActions;   // Currently executing
 }
 
+/// Trace context for distributed tracing propagation
+/// Follows W3C Trace Context specification (traceparent header)
+struct DistributedTraceContext
+{
+    ulong traceIdHigh;     // Trace ID high bits (128-bit total)
+    ulong traceIdLow;      // Trace ID low bits
+    ulong parentSpanId;    // Parent span ID (64-bit)
+    bool sampled;          // Sampling decision
+    
+    /// Check if trace context is valid
+    bool isValid() const pure nothrow @safe @nogc =>
+        traceIdHigh != 0 || traceIdLow != 0;
+    
+    /// Serialize to W3C traceparent format: 00-{traceId}-{spanId}-{flags}
+    string toTraceparent() const pure @safe
+    {
+        import std.format : format;
+        immutable sampledFlag = sampled ? "01" : "00";
+        return format("00-%016x%016x-%016x-%s", traceIdHigh, traceIdLow, parentSpanId, sampledFlag);
+    }
+    
+    /// Parse from W3C traceparent header
+    static Result!(DistributedTraceContext, string) fromTraceparent(string header) pure @trusted
+    {
+        import std.string : split, strip;
+        import std.conv : parse, ConvException;
+        
+        auto parts = header.strip().split("-");
+        if (parts.length != 4)
+            return Result!(DistributedTraceContext, string).err("Invalid traceparent format");
+        
+        if (parts[0] != "00")
+            return Result!(DistributedTraceContext, string).err("Unsupported trace version");
+        
+        try
+        {
+            DistributedTraceContext ctx;
+            
+            // Parse 32-char trace ID as two 16-char hex strings
+            if (parts[1].length != 32)
+                return Result!(DistributedTraceContext, string).err("Invalid trace ID length");
+            
+            auto highStr = parts[1][0 .. 16].dup;
+            auto lowStr = parts[1][16 .. 32].dup;
+            ctx.traceIdHigh = parse!ulong(highStr, 16);
+            ctx.traceIdLow = parse!ulong(lowStr, 16);
+            
+            // Parse 16-char span ID
+            if (parts[2].length != 16)
+                return Result!(DistributedTraceContext, string).err("Invalid span ID length");
+            
+            auto spanStr = parts[2].dup;
+            ctx.parentSpanId = parse!ulong(spanStr, 16);
+            
+            // Parse flags
+            ctx.sampled = parts[3] == "01";
+            
+            return Result!(DistributedTraceContext, string).ok(ctx);
+        }
+        catch (ConvException e)
+        {
+            return Result!(DistributedTraceContext, string).err("Invalid hex: " ~ e.msg);
+        }
+    }
+    
+    /// Serialize to binary (25 bytes: 8 + 8 + 8 + 1)
+    ubyte[] serialize() const pure @trusted
+    {
+        ubyte[] buffer;
+        buffer.reserve(25);
+        buffer.write!ulong(traceIdHigh, buffer.length);
+        buffer.write!ulong(traceIdLow, buffer.length);
+        buffer.write!ulong(parentSpanId, buffer.length);
+        buffer.write!ubyte(sampled ? 1 : 0, buffer.length);
+        return buffer;
+    }
+    
+    /// Deserialize from binary
+    static DistributedTraceContext deserialize(const ubyte[] data) pure @trusted
+    {
+        DistributedTraceContext ctx;
+        if (data.length >= 25)
+        {
+            ubyte[] mutable = cast(ubyte[])data.dup;
+            auto slice1 = mutable[0 .. 8];
+            ctx.traceIdHigh = slice1.read!ulong();
+            auto slice2 = mutable[8 .. 16];
+            ctx.traceIdLow = slice2.read!ulong();
+            auto slice3 = mutable[16 .. 24];
+            ctx.parentSpanId = slice3.read!ulong();
+            ctx.sampled = mutable[24] != 0;
+        }
+        return ctx;
+    }
+}
+
 /// Build action request (coordinator → worker)
 final class ActionRequest
 {
@@ -258,10 +355,12 @@ final class ActionRequest
     Capabilities capabilities;      // Security sandbox
     Priority priority;              // Scheduling priority
     Duration timeout;               // Max execution time
+    DistributedTraceContext traceContext; // Distributed tracing context
     
     this(ActionId id, string command, string[string] env, 
          InputSpec[] inputs, OutputSpec[] outputs,
-         Capabilities capabilities, Priority priority, Duration timeout) @safe
+         Capabilities capabilities, Priority priority, Duration timeout,
+         DistributedTraceContext traceContext = DistributedTraceContext.init) @safe
     {
         this.id = id;
         this.command = command;
@@ -271,6 +370,7 @@ final class ActionRequest
         this.capabilities = capabilities;
         this.priority = priority;
         this.timeout = timeout;
+        this.traceContext = traceContext;
     }
     
     /// Serialize to binary format
@@ -323,6 +423,9 @@ final class ActionRequest
         // Priority and timeout
         buffer.write!ubyte(priority, buffer.length);
         buffer.write!long(timeout.total!"msecs", buffer.length);
+        
+        // Trace context (25 bytes)
+        buffer ~= traceContext.serialize();
         
         return buffer;
     }
@@ -483,8 +586,16 @@ final class ActionRequest
                 return Err!(ActionRequest, DistributedError)(DistributedErrors.truncated("Timeout").build());
             auto timeSlice = mutableData[offset .. offset + 8];
             immutable timeout = timeSlice.read!long().msecs;
+            offset += 8;
             
-            auto request = new ActionRequest(actionId, command, env, inputs, outputs, capabilities, priority, timeout);
+            // Trace context (optional, for backward compatibility)
+            DistributedTraceContext traceContext;
+            if (offset + 25 <= data.length)
+            {
+                traceContext = DistributedTraceContext.deserialize(data[offset .. offset + 25]);
+            }
+            
+            auto request = new ActionRequest(actionId, command, env, inputs, outputs, capabilities, priority, timeout, traceContext);
             return Ok!(ActionRequest, DistributedError)(request);
         }
         catch (Exception e)

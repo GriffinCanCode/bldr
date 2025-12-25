@@ -51,9 +51,6 @@ struct WorkerLifecycle
     private WorkStealingDeque!ActionRequest localQueue;
     private Transport coordinatorTransport;
     private shared WorkerState state;
-    private Thread mainThread;
-    private Thread heartbeatThread;
-    private Thread peerAnnounceThread;
     private shared bool running;
     private SystemMetrics metrics;
     
@@ -104,22 +101,22 @@ struct WorkerLifecycle
         return Ok!DistributedError();
     }
     
-    /// Stop worker
+    /// Stop worker - cleanup transport and logging (threads managed by TaskScope in Worker)
     void stop() @trusted
     {
         atomicStore(running, false);
-        if (mainThread !is null) mainThread.join();
-        if (heartbeatThread !is null) heartbeatThread.join();
-        if (peerAnnounceThread !is null) peerAnnounceThread.join();
+        
+        // Transport cleanup
         if (coordinatorTransport !is null) coordinatorTransport.close();
+        
+        // Log statistics
         if (stealTelemetry !is null) Logger.info("Work-stealing stats: " ~ stealTelemetry.getStats().toString());
         
-        // Log adaptive threshold state on shutdown
         if (stealEngine !is null && stealEngine.isAdaptiveEnabled())
         {
-            auto state = stealEngine.getAdaptiveState();
+            auto adaptiveState = stealEngine.getAdaptiveState();
             auto stats = stealEngine.getAdaptiveStats();
-            Logger.info("Adaptive thresholds: " ~ state.toString());
+            Logger.info("Adaptive thresholds: " ~ adaptiveState.toString());
             Logger.info("Adaptive stats: " ~ stats.toString());
         }
         Logger.info("Worker stopped: " ~ id.toString());
@@ -230,10 +227,5 @@ struct WorkerLifecycle
     bool isAdaptiveEnabled() @trusted => stealEngine !is null && stealEngine.isAdaptiveEnabled();
     ThresholdState getAdaptiveState() @trusted => stealEngine !is null ? stealEngine.getAdaptiveState() : ThresholdState.init;
     AdaptiveStats getAdaptiveStats() @trusted => stealEngine !is null ? stealEngine.getAdaptiveStats() : AdaptiveStats.init;
-    
-    /// Set thread handles (called by worker main)
-    void setMainThread(Thread t) @trusted { mainThread = t; }
-    void setHeartbeatThread(Thread t) @trusted { heartbeatThread = t; }
-    void setPeerAnnounceThread(Thread t) @trusted { peerAnnounceThread = t; }
 }
 

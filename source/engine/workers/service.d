@@ -7,6 +7,7 @@ import std.datetime;
 import core.time : Duration, MonoTime, seconds, minutes, msecs;
 import core.atomic;
 import core.thread : Thread;
+import infrastructure.utils.concurrency.structured : TaskScope, VoidTask;
 import engine.workers.protocol;
 import engine.workers.pool;
 import engine.workers.pool.recycler : WarmthLevel;
@@ -106,14 +107,18 @@ struct LanguageMetrics
 }
 
 /// Persistent Worker Service
+/// Uses structured concurrency via TaskScope for background task management
 final class PersistentWorkerService
 {
     private WorkerServiceConfig config;
     private WorkerPool pool;
     private WorkerServiceStatus status;
     private WorkerServiceMetrics metrics;
-    private Thread metricsThread;
     private shared bool running;
+    
+    // Structured concurrency: TaskScope guarantees metrics thread cleanup
+    private TaskScope taskScope;
+    private VoidTask metricsTask;
     
     this(WorkerServiceConfig config = WorkerServiceConfig.init) @trusted
     {
@@ -122,7 +127,7 @@ final class PersistentWorkerService
         this.status = WorkerServiceStatus.Stopped;
     }
     
-    /// Start the worker service with all configured languages
+    /// Start the worker service using structured concurrency
     void start() @trusted
     {
         if (status != WorkerServiceStatus.Stopped) return;
@@ -139,8 +144,13 @@ final class PersistentWorkerService
         pool.start();
         
         atomicStore(running, true);
-        metricsThread = new Thread(&metricsLoop);
-        metricsThread.start();
+        
+        // Create TaskScope for hierarchical task management
+        taskScope = new TaskScope("worker-service");
+        
+        // Launch metrics as periodic structured task
+        metricsTask = taskScope.launchPeriodic("metrics", config.metricsInterval, 
+            () @trusted => metricsBody());
         
         status = WorkerServiceStatus.Running;
         
@@ -230,7 +240,7 @@ final class PersistentWorkerService
         Logger.debugLog("Registered Python workers (mypy, ruff, pylint, black, pytest)");
     }
     
-    /// Stop the worker service
+    /// Stop the worker service - TaskScope guarantees cleanup
     void stop() @trusted
     {
         if (status == WorkerServiceStatus.Stopped) return;
@@ -240,10 +250,11 @@ final class PersistentWorkerService
         
         atomicStore(running, false);
         
-        if (metricsThread !is null)
+        // TaskScope ensures metrics task completes before continuing
+        if (taskScope !is null)
         {
-            metricsThread.join();
-            metricsThread = null;
+            taskScope.cancelAndJoin();
+            taskScope = null;
         }
         
         pool.stop();
@@ -650,32 +661,29 @@ final class PersistentWorkerService
         metrics.averageSpeedupFactor = count > 0 ? totalSpeedup / count : 1.0f;
     }
     
-    private void metricsLoop() @trusted
+    /// Metrics body (called periodically by TaskScope.launchPeriodic)
+    private void metricsBody() @trusted
     {
-        while (atomicLoad(running))
+        if (!atomicLoad(running)) return;
+        
+        auto stats = pool.getStats();
+        metrics.poolStats = stats;
+        metrics.lastUpdated = MonoTime.currTime;
+        
+        Logger.debugLog("Worker service: " ~
+            metrics.totalCompilations.to!string ~ " compilations, " ~
+            metrics.averageSpeedupFactor.to!string ~ "x avg speedup, " ~
+            metrics.totalSavedTime.total!"seconds".to!string ~ "s saved");
+        
+        // Check degraded state
+        if (stats.totalFailures > stats.totalStartups / 4)
         {
-            Thread.sleep(config.metricsInterval);
-            if (!atomicLoad(running)) break;
-            
-            auto stats = pool.getStats();
-            metrics.poolStats = stats;
-            metrics.lastUpdated = MonoTime.currTime;
-            
-            Logger.debugLog("Worker service: " ~
-                metrics.totalCompilations.to!string ~ " compilations, " ~
-                metrics.averageSpeedupFactor.to!string ~ "x avg speedup, " ~
-                metrics.totalSavedTime.total!"seconds".to!string ~ "s saved");
-            
-            // Check degraded state
-            if (stats.totalFailures > stats.totalStartups / 4)
-            {
-                status = WorkerServiceStatus.Degraded;
-                Logger.warning("Worker service degraded: high failure rate");
-            }
-            else if (status == WorkerServiceStatus.Degraded)
-            {
-                status = WorkerServiceStatus.Running;
-            }
+            status = WorkerServiceStatus.Degraded;
+            Logger.warning("Worker service degraded: high failure rate");
+        }
+        else if (status == WorkerServiceStatus.Degraded)
+        {
+            status = WorkerServiceStatus.Running;
         }
     }
 }

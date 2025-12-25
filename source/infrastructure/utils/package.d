@@ -25,10 +25,11 @@ module infrastructure.utils;
 ///   batch.d     - Batch file reading and hashing
 ///
 /// Concurrency (Advanced):
-///   deque.d     - Lock-free work-stealing deque (Chase-Lev algorithm)
-///   scheduler.d - Work-stealing scheduler with priority support
-///   balancer.d  - Dynamic load balancing with multiple strategies
-///   priority.d  - Priority queues and critical path scheduling
+///   deque.d      - Lock-free work-stealing deque (Chase-Lev algorithm)
+///   scheduler.d  - Work-stealing scheduler with priority support
+///   balancer.d   - Dynamic load balancing with multiple strategies
+///   priority.d   - Priority queues and critical path scheduling
+///   structured.d - Structured concurrency with TaskScope and hierarchical cancellation
 ///
 /// Memory Optimization:
 ///   intern.d    - String interning for memory deduplication (60-80% savings)
@@ -74,6 +75,7 @@ public import infrastructure.utils.concurrency.deque;
 public import infrastructure.utils.concurrency.scheduler;
 public import infrastructure.utils.concurrency.balancer;
 public import infrastructure.utils.concurrency.priority;
+public import infrastructure.utils.concurrency.structured;
 public import infrastructure.utils.files.chunking;
 public import infrastructure.utils.files.cdc;
 public import infrastructure.utils.logging.logger;
