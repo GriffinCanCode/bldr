@@ -147,16 +147,10 @@ struct DiscoveryCoordinator
     }
     
     /// Integrate discovered nodes into execution flow
-    /// Returns nodes that are immediately ready to execute
-    static BuildNode[] integrateDiscoveredNodes(
-        BuildNode[] discoveredNodes,
-        BuildGraph graph
-    ) @system
+    /// Returns lazy range of nodes immediately ready to execute
+    static auto integrateDiscoveredNodes(BuildNode[] discoveredNodes, BuildGraph) @system
     {
-        import std.algorithm : filter;
-        import std.array : array;
-        
-        return discoveredNodes.filter!(n => n.pendingDeps == 0).array;
+        return discoveredNodes.filter!(n => n.pendingDeps == 0);
     }
 }
 

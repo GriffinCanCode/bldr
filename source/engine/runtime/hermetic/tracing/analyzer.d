@@ -2,6 +2,7 @@ module engine.runtime.hermetic.tracing.analyzer;
 
 import std.algorithm : filter, map, sort, uniq, canFind, any;
 import std.array : array, Appender;
+import std.range : walkLength;
 import std.string : indexOf, startsWith;
 import std.conv : to;
 import engine.runtime.hermetic.tracing.tracer;
@@ -59,16 +60,16 @@ struct HermeticityAnalysis
     string[] externalPaths;              // Non-hermetic paths accessed
     SyscallStatistics stats;             // Syscall statistics
     
-    /// Get violations by severity
-    const(HermeticityViolation)[] bySeverity(ViolationSeverity sev) const @safe
+    /// Get violations by severity (lazy range)
+    auto bySeverity(ViolationSeverity sev) const @safe
     {
-        return violations.filter!(v => v.severity == sev).array;
+        return violations.filter!(v => v.severity == sev);
     }
     
-    /// Get violations by category
-    const(HermeticityViolation)[] byCategory(ViolationCategory cat) const @safe
+    /// Get violations by category (lazy range)
+    auto byCategory(ViolationCategory cat) const @safe
     {
-        return violations.filter!(v => v.category == cat).array;
+        return violations.filter!(v => v.category == cat);
     }
     
     /// Generate human-readable report
@@ -101,7 +102,7 @@ struct HermeticityAnalysis
             foreach (sev; [ViolationSeverity.Critical, ViolationSeverity.High,
                           ViolationSeverity.Medium, ViolationSeverity.Low])
             {
-                auto sevViolations = bySeverity(sev);
+                auto sevViolations = bySeverity(sev).array;  // materialize once for count + iteration
                 if (sevViolations.length > 0)
                 {
                     sb ~= "\n  " ~ sev.to!string ~ " (" ~ sevViolations.length.to!string ~ "):\n";

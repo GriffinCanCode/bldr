@@ -3,7 +3,7 @@ module engine.distributed.coordinator.registry;
 import std.datetime : SysTime, Clock, Duration, seconds;
 import std.algorithm : filter, map, maxElement, minElement, sort, sum;
 import std.array : array;
-import std.range : empty;
+import std.range : empty, walkLength;
 import std.container : RedBlackTree;
 import core.sync.mutex : Mutex;
 import engine.distributed.protocol.protocol;
@@ -296,7 +296,7 @@ final class WorkerRegistry
                 .array;
             
             stats.healthyWorkers = healthy.length;
-            stats.idleWorkers = healthy.filter!(w => w.state == WorkerState.Idle).array.length;
+            stats.idleWorkers = healthy.filter!(w => w.state == WorkerState.Idle).walkLength;
             
             if (healthy.length > 0)
             {

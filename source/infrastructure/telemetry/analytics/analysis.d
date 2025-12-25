@@ -2,7 +2,7 @@ module infrastructure.telemetry.analytics.analysis;
 
 import std.datetime : Duration, dur;
 import std.algorithm : sum, map, sort, maxElement, minElement, filter;
-import std.range : array, empty;
+import std.range : array, empty, walkLength;
 import std.math : sqrt;
 import infrastructure.telemetry.collection.collector;
 import infrastructure.errors;
@@ -28,7 +28,7 @@ struct TelemetryAnalyzer
         AnalyticsReport report;
         
         report.totalBuilds = sessions.length;
-        report.successfulBuilds = sessions.filter!(s => s.succeeded).array.length;
+        report.successfulBuilds = sessions.filter!(s => s.succeeded).walkLength;
         report.failedBuilds = report.totalBuilds - report.successfulBuilds;
         report.successRate = (report.successfulBuilds * 100.0) / report.totalBuilds;
         

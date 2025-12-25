@@ -112,8 +112,7 @@ struct VersionRange {
         }
         
         // Handle space-separated constraints (e.g., ">=1.0.0 <2.0.0")
-        auto parts = trimmed.splitter(" ").array;
-        foreach (part; parts) {
+        foreach (part; trimmed.splitter(" ")) {
             auto p = part.strip();
             if (p.empty) continue;
             

@@ -172,9 +172,9 @@ struct TargetTemplate
         return target;
     }
     
-    Target[] instantiateMany(string[] names) const @system
+    auto instantiateMany(string[] names) const @system
     {
-        return names.map!(name => instantiate(name)).array;
+        return names.map!(name => instantiate(name));
     }
 }
 

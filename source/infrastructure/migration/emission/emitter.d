@@ -149,7 +149,8 @@ struct BuilderfileEmitter
         writeLine("env: {");
         indentLevel++;
         
-        auto keys = env.keys.array.sort().array;
+        auto keys = env.keys.array;
+        keys.sort();
         foreach (i, key; keys)
         {
             string line = `"` ~ key ~ `": "` ~ env[key] ~ `"`;

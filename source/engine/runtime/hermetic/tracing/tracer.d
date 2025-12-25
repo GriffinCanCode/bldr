@@ -135,16 +135,16 @@ struct TraceResult
             .array;
     }
     
-    /// Get network connections attempted
-    const(SyscallEvent)[] networkAttempts() const @safe
+    /// Get network connections attempted (lazy range)
+    auto networkAttempts() const @safe
     {
-        return events.filter!(e => e.isNetworkOp()).array;
+        return events.filter!(e => e.isNetworkOp());
     }
     
-    /// Get external resource accesses
-    const(SyscallEvent)[] externalAccesses() const @safe
+    /// Get external resource accesses (lazy range)
+    auto externalAccesses() const @safe
     {
-        return events.filter!(e => e.isExternalAccess()).array;
+        return events.filter!(e => e.isExternalAccess());
     }
     
     /// Count syscalls by name

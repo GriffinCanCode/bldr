@@ -144,10 +144,10 @@ Target test(string name, string[] sources, string[] deps = []) pure @system
         .build();
 }
 
-/// Generate targets from template
-Target[] generateTargets(T)(T[] items, Target delegate(T) fn) pure @system
+/// Generate targets from template (lazy range)
+auto generateTargets(T)(T[] items, Target delegate(T) fn) pure @system
 {
-    return items.map!fn.array;
+    return items.map!fn;
 }
 
 /// Glob-based target generation

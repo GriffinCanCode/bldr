@@ -2,6 +2,7 @@ module frontend.testframework.analytics.insights;
 
 import std.algorithm : sort, map, filter, sum;
 import std.array : array;
+import std.range : walkLength;
 import std.datetime : Duration;
 import std.conv : to;
 import frontend.testframework.results;
@@ -75,7 +76,7 @@ final class TestAnalytics
             return metrics;
         
         // Calculate pass rate
-        immutable passed = results.filter!(r => r.passed).array.length;
+        immutable passed = results.filter!(r => r.passed).walkLength;
         metrics.passRate = cast(double)passed / results.length;
         
         // Calculate stability (inverse of flakiness)
@@ -95,7 +96,7 @@ final class TestAnalytics
         }
         
         // Performance score based on caching
-        immutable cached = results.filter!(r => r.cached).array.length;
+        immutable cached = results.filter!(r => r.cached).walkLength;
         if (results.length > 0)
         {
             metrics.performance = cast(double)cached / results.length;
@@ -103,11 +104,11 @@ final class TestAnalytics
         
         // Count flaky tests
         metrics.flakyCount = flakyRecords.filter!(r => 
-            r.confidence >= FlakyConfidence.Medium).array.length;
+            r.confidence >= FlakyConfidence.Medium).walkLength;
         
         // Count slow tests (>10s)
         metrics.slowCount = results.filter!(r => 
-            r.duration.total!"seconds" > 10).array.length;
+            r.duration.total!"seconds" > 10).walkLength;
         
         return metrics;
     }
@@ -122,8 +123,9 @@ final class TestAnalytics
         if (results.length == 0)
             return insights;
         
-        // Sort by duration
-        auto sorted = results.map!(r => r.duration).array.sort().array;
+        // Sort by duration (in-place)
+        auto sorted = results.map!(r => r.duration).array;
+        sorted.sort();
         
         // Total duration
         insights.totalDuration = sorted.sum();

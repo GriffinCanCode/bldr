@@ -81,9 +81,11 @@ struct DeterminismVerifier
     {
         import std.algorithm : sort;
         
-        // Normalize paths
-        auto sorted1 = outputPaths1.dup.sort().array;
-        auto sorted2 = outputPaths2.dup.sort().array;
+        // Normalize paths (dup + in-place sort)
+        auto sorted1 = outputPaths1.dup;
+        sorted1.sort();
+        auto sorted2 = outputPaths2.dup;
+        sorted2.sort();
         
         // Check same file count
         if (sorted1.length != sorted2.length)
@@ -172,8 +174,9 @@ struct DeterminismVerifier
     {
         import std.algorithm : sort;
         
-        // Sort for deterministic ordering
-        auto sorted = outputPaths.dup.sort().array;
+        // Sort for deterministic ordering (dup + in-place sort)
+        auto sorted = outputPaths.dup;
+        sorted.sort();
         
         // Hash all files
         string combined;

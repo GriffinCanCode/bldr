@@ -37,12 +37,11 @@ struct Closure
     /// Get parameter count
     size_t arity() const pure nothrow @nogc @safe { return params.length; }
     
-    /// Get parameter names  
-    const(string)[] paramNames() const pure @safe
+    /// Get parameter names (lazy range)
+    auto paramNames() const pure @safe
     {
         import std.algorithm : map;
-        import std.array : array;
-        return params.map!(p => p.name).array;
+        return params.map!(p => p.name);
     }
 }
 
