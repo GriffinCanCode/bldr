@@ -243,13 +243,18 @@ async function executeCompilation(request) {
     const startTime = Date.now();
     return new Promise((resolve) => {
         let cmd, cmdArgs;
+        // Convert --outDir to tool-specific flags
+        const args = request.arguments.map(arg => {
+            if (compiler === 'swc' && arg === '--outDir') return '--out-dir';
+            return arg;
+        });
         switch (compiler) {
-            case 'swc': cmd = 'npx'; cmdArgs = ['swc', ...request.arguments]; break;
-            case 'esbuild': cmd = 'npx'; cmdArgs = ['esbuild', ...request.arguments]; break;
-            case 'bun': cmd = 'bun'; cmdArgs = ['build', ...request.arguments]; break;
+            case 'swc': cmd = 'npx'; cmdArgs = ['swc', ...args]; break;
+            case 'esbuild': cmd = 'npx'; cmdArgs = ['esbuild', ...args]; break;
+            case 'bun': cmd = 'bun'; cmdArgs = ['build', ...args]; break;
             default:
                 cmd = 'npx';
-                cmdArgs = ['tsc', '--noEmit', 'false', ...request.arguments];
+                cmdArgs = ['tsc', '--noEmit', 'false', ...args];
                 if (incremental) cmdArgs.push('--incremental');
                 if (projectPath) cmdArgs.push('--project', projectPath);
         }

@@ -3,13 +3,36 @@ module infrastructure.utils.security.executor;
 import std.process;
 import std.algorithm : canFind, filter, map, remove;
 import std.array;
-import std.string : startsWith, replace, indexOf, toUpper, strip;
+import std.string : startsWith, endsWith, replace, indexOf, toUpper, strip;
 import std.path : baseName, dirName;
 import std.range : empty;
 import infrastructure.utils.security.validation;
 import infrastructure.utils.logging.logger;
 import engine.runtime.hermetic;
 import infrastructure.errors;
+
+
+/// Known safe build tool patterns that contain path separators but aren't actual paths
+/// These patterns are used by build tools (Go, Bazel, etc.) as package/target specifiers
+private bool isKnownSafeBuildPattern(string arg) nothrow
+{
+    try
+    {
+        // Go wildcard patterns: ./..., ./pkg/..., etc.
+        if (arg == "./..." || (arg.startsWith("./") && arg.endsWith("/...")))
+            return true;
+        
+        // Bazel-style target patterns: //..., //pkg:target
+        if (arg.startsWith("//"))
+            return true;
+        
+        return false;
+    }
+    catch (Exception)
+    {
+        return false;
+    }
+}
 
 
 /// Redact sensitive information from strings for audit logging
@@ -321,7 +344,7 @@ struct SecureExecutor
             // Validate paths if enabled
             if (validatePaths && (arg.canFind('/') || arg.canFind('\\')))
             {
-                if (!SecurityValidator.isPathSafe(arg))
+                if (!isKnownSafeBuildPattern(arg) && !SecurityValidator.isPathSafe(arg))
                     return Err!(ProcessResult, BuildError)(
                         securityError("Unsafe path: " ~ arg, SecurityCode.PathTraversal));
             }
@@ -556,7 +579,8 @@ auto execute(
             // Allow flags starting with - even if they contain slashes
             if (!arg.startsWith("-") && !arg.startsWith("--"))
             {
-                if (!SecurityValidator.isPathSafe(arg))
+                // Allow known safe build tool patterns (Go wildcards, etc.)
+                if (!isKnownSafeBuildPattern(arg) && !SecurityValidator.isPathSafe(arg))
                 {
                     throw new Exception("SECURITY: Unsafe path detected in argument: " ~ arg);
                 }

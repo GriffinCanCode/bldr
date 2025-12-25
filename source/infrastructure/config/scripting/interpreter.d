@@ -383,8 +383,24 @@ class Interpreter
     {
         if (auto litExpr = cast(LiteralExpr)expr)
         {
-            // Evaluate literal using existing evaluator
             return evaluator.evaluate(litExpr);
+        }
+        else if (auto identExpr = cast(IdentExpr)expr)
+        {
+            // Delegate identifier lookup to evaluator (handles scope lookup + true/false/null)
+            return evaluator.evaluate(identExpr);
+        }
+        else if (auto memberExpr = cast(MemberExpr)expr)
+        {
+            auto objectResult = evaluateExpr(memberExpr.object);
+            if (objectResult.isErr)
+                return objectResult;
+            return evaluator.evaluateMapAccess(objectResult.unwrap(), memberExpr.member);
+        }
+        else if (auto lambdaExpr = cast(LambdaExpr)expr)
+        {
+            // Delegate lambda/closure creation to evaluator
+            return evaluator.evaluate(lambdaExpr);
         }
         else if (auto binaryExpr = cast(BinaryExpr)expr)
         {

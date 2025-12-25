@@ -89,7 +89,20 @@ struct MigrateCommand
         }
         
         // Default: run the interactive wizard
-        return MigrationWizard.execute(args);
+        Logger.debugLog("Running migration wizard (use --help for other options)");
+        int result = MigrationWizard.execute(args);
+        
+        // If wizard fails with exit 1 and produced no output, show help hint
+        if (result != 0)
+        {
+            Logger.info("");
+            Logger.info("For non-interactive migration, try:");
+            Logger.info("  bldr migrate --auto <build-file>  # Auto-detect and migrate");
+            Logger.info("  bldr migrate list                 # Show supported systems");
+            Logger.info("  bldr migrate --help               # Show full help");
+        }
+        
+        return result;
     }
     
     /// Check if explicit non-wizard flags are provided

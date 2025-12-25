@@ -49,6 +49,20 @@ struct MigrationWizard
     /// Main wizard execution flow
     private int run(string[] args) @system
     {
+        import core.sys.posix.unistd : isatty, STDIN_FILENO;
+        
+        // Check if running interactively - if not, provide helpful message
+        version(Posix)
+        {
+            if (!isatty(STDIN_FILENO))
+            {
+                Logger.error("Migration wizard requires interactive terminal.");
+                Logger.info("Use non-interactive mode instead: bldr migrate --auto <file>");
+                Logger.info("Or specify build system: bldr migrate --no-wizard --from=<system> <file>");
+                return 1;
+            }
+        }
+        
         // Setup terminal for raw input
         enableRawMode();
         scope(exit) disableRawMode();
