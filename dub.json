@@ -37,7 +37,7 @@
                 "source/infrastructure/utils/serialization/c/varint.o",
                 "source/infrastructure/utils/serialization/c/memops.o"
             ],
-            "libs": ["tree-sitter"],
+            "libs": ["tree-sitter", "sqlite3"],
             "lflags-osx": ["-L/opt/homebrew/lib", "-L/usr/local/lib"],
             "dflags": ["-I/opt/homebrew/include", "-I/usr/local/include"]
         },
@@ -63,7 +63,7 @@
                 "source/infrastructure/utils/serialization/c/varint.o",
                 "source/infrastructure/utils/serialization/c/memops.o"
             ],
-            "libs": ["tree-sitter"],
+            "libs": ["tree-sitter", "sqlite3"],
             "lflags-osx": ["-L/opt/homebrew/lib", "-L/usr/local/lib"],
             "dflags": ["-I/opt/homebrew/include", "-I/usr/local/include"]
         },
@@ -105,7 +105,7 @@
                 "source/infrastructure/utils/serialization/c/varint.o",
                 "source/infrastructure/utils/serialization/c/memops.o"
             ],
-            "libs": ["tree-sitter"],
+            "libs": ["tree-sitter", "sqlite3"],
             "lflags-osx": ["-L/opt/homebrew/lib", "-L/usr/local/lib"],
             "dflags": ["-I/opt/homebrew/include", "-I/usr/local/include"]
         }
