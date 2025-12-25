@@ -401,8 +401,11 @@ final class KQueueWatcher : IFileWatcher
         }
         else
         {
-            auto error = new BuildError("kqueue not supported on this platform");
-            return WatchResult.err(error);
+            return WatchResult.err(
+                Errors.generic("kqueue not supported on this platform", ErrorCode.NotSupported)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
     }
     

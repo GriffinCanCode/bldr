@@ -414,8 +414,8 @@ final class CdnManager
             immutable sent = socket.send(requestStr);
             if (sent != requestStr.length)
             {
-                auto error = new NetworkError("Failed to send complete request", ErrorCode.NetworkError);
-                return Err!(ubyte[], BuildError)(error);
+                return Err!(ubyte[], BuildError)(
+                    Errors.network("Failed to send complete request", ErrorCode.NetworkError));
             }
             
             // Receive response
@@ -441,17 +441,14 @@ final class CdnManager
                 return Ok!(ubyte[], BuildError)(cast(ubyte[])response.body_);
             else
             {
-                auto error = new NetworkError(
-                    format("HTTP error %d: %s", response.statusCode, response.body_),
-                    ErrorCode.NetworkError
-                );
-                return Err!(ubyte[], BuildError)(error);
+                return Err!(ubyte[], BuildError)(
+                    Errors.network(format("HTTP error %d: %s", response.statusCode, response.body_), ErrorCode.NetworkError));
             }
         }
         catch (Exception e)
         {
-            auto error = new NetworkError("HTTP request failed: " ~ e.msg, ErrorCode.NetworkError);
-            return Err!(ubyte[], BuildError)(error);
+            return Err!(ubyte[], BuildError)(
+                Errors.network("HTTP request failed: " ~ e.msg, ErrorCode.NetworkError));
         }
     }
     

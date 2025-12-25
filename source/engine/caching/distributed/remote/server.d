@@ -307,21 +307,15 @@ final class CacheServer
                 // Prevent header overflow
                 if (received.data.length > 1_000_000)
                 {
-                    auto error = new NetworkError(
-                        "Request headers too large",
-                        ErrorCode.NetworkError
-                    );
-                    return Err!(HttpRequest, BuildError)(error);
+                    return Err!(HttpRequest, BuildError)(
+                        Errors.network("Request headers too large", ErrorCode.NetworkError));
                 }
             }
             
             if (headerEnd < 0)
             {
-                auto error = new NetworkError(
-                    "Invalid HTTP request",
-                    ErrorCode.NetworkError
-                );
-                return Err!(HttpRequest, BuildError)(error);
+                return Err!(HttpRequest, BuildError)(
+                    Errors.network("Invalid HTTP request", ErrorCode.NetworkError));
             }
             
             // Parse request line and headers
@@ -330,22 +324,16 @@ final class CacheServer
             
             if (lines.length == 0)
             {
-                auto error = new NetworkError(
-                    "Empty HTTP request",
-                    ErrorCode.NetworkError
-                );
-                return Err!(HttpRequest, BuildError)(error);
+                return Err!(HttpRequest, BuildError)(
+                    Errors.network("Empty HTTP request", ErrorCode.NetworkError));
             }
             
             // Parse request line
             auto requestParts = lines[0].split(" ");
             if (requestParts.length < 3)
             {
-                auto error = new NetworkError(
-                    "Invalid request line",
-                    ErrorCode.NetworkError
-                );
-                return Err!(HttpRequest, BuildError)(error);
+                return Err!(HttpRequest, BuildError)(
+                    Errors.network("Invalid request line", ErrorCode.NetworkError));
             }
             
             request.method = requestParts[0];
@@ -396,11 +384,8 @@ final class CacheServer
         }
         catch (Exception e)
         {
-            auto error = new NetworkError(
-                "Failed to receive request: " ~ e.msg,
-                ErrorCode.NetworkError
-            );
-            return Err!(HttpRequest, BuildError)(error);
+            return Err!(HttpRequest, BuildError)(
+                Errors.network("Failed to receive request: " ~ e.msg, ErrorCode.NetworkError));
         }
     }
     
