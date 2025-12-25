@@ -6,6 +6,7 @@ import std.path : buildPath, dirName;
 import std.bitmanip : nativeToLittleEndian, littleEndianToNative;
 import std.exception : collectException;
 import std.conv : to;
+import std.datetime : Clock;
 import core.sync.mutex : Mutex;
 
 import engine.graph.core.graph;
@@ -15,11 +16,11 @@ import infrastructure.utils.memory.mmap : MmapRegion, MapMode, MapAdvice;
 import infrastructure.utils.serialization;
 import infrastructure.errors;
 
-/// Memory-mapped graph format header
+/// Memory-mapped graph format header (v2 with config hash for watch mode)
 private struct MappedGraphHeader
 {
     ubyte[4] magic = ['B', 'G', 'R', 'P'];  // "BGRP" = Builder Graph
-    uint version_ = 1;
+    uint version_ = 2;                       // v2: added configHash for watch mode
     uint flags;
     ulong nodeCount;
     ulong edgeCount;
@@ -28,11 +29,15 @@ private struct MappedGraphHeader
     ulong stringTableOffset;
     ulong stringTableSize;
     ubyte[32] contentHash;
+    ubyte[32] configHash;                    // Hash of config files for instant validation
+    ulong timestamp;                         // Persistence timestamp for staleness check
+    
+    enum HEADER_SIZE = 136;  // Fixed header size for v2
     
     /// Serialize header to bytes
-    ubyte[96] serialize() const @safe nothrow
+    ubyte[HEADER_SIZE] serialize() const @safe nothrow
     {
-        ubyte[96] result;
+        ubyte[HEADER_SIZE] result;
         result[0 .. 4] = magic[];
         result[4 .. 8] = nativeToLittleEndian(version_)[];
         result[8 .. 12] = nativeToLittleEndian(flags)[];
@@ -43,6 +48,8 @@ private struct MappedGraphHeader
         result[44 .. 52] = nativeToLittleEndian(stringTableOffset)[];
         result[52 .. 60] = nativeToLittleEndian(stringTableSize)[];
         result[60 .. 92] = contentHash[];
+        result[92 .. 124] = configHash[];
+        result[124 .. 132] = nativeToLittleEndian(timestamp)[];
         return result;
     }
     
@@ -50,7 +57,7 @@ private struct MappedGraphHeader
     static MappedGraphHeader deserialize(const(ubyte)[] data) @safe nothrow
     {
         MappedGraphHeader h;
-        if (data.length < 96) return h;
+        if (data.length < HEADER_SIZE) return h;
         
         h.magic = data[0 .. 4][0 .. 4];
         h.version_ = littleEndianToNative!uint(data[4 .. 8][0 .. 4]);
@@ -62,12 +69,14 @@ private struct MappedGraphHeader
         h.stringTableOffset = littleEndianToNative!ulong(data[44 .. 52][0 .. 8]);
         h.stringTableSize = littleEndianToNative!ulong(data[52 .. 60][0 .. 8]);
         h.contentHash = data[60 .. 92][0 .. 32];
+        h.configHash = data[92 .. 124][0 .. 32];
+        h.timestamp = littleEndianToNative!ulong(data[124 .. 132][0 .. 8]);
         return h;
     }
     
-    /// Validate header
+    /// Validate header (accepts v1 or v2)
     bool valid() const @safe pure nothrow @nogc =>
-        magic == ['B', 'G', 'R', 'P'] && version_ == 1;
+        magic == ['B', 'G', 'R', 'P'] && (version_ == 1 || version_ == 2);
 }
 
 /// Fixed-size node record for memory-mapped access
@@ -198,9 +207,9 @@ final class MappedGraphView
         auto view = new MappedGraphView();
         view._region = region;
         
-        // Parse header
+        // Parse header (v2 is 136 bytes, v1 was 96)
         auto data = region[];
-        if (data.length < 96)
+        if (data.length < MappedGraphHeader.HEADER_SIZE)
         {
             region.unmap();
             return Err!(MappedGraphView, BuildError)(
@@ -208,7 +217,7 @@ final class MappedGraphView
             );
         }
         
-        view._header = MappedGraphHeader.deserialize(data[0 .. 96]);
+        view._header = MappedGraphHeader.deserialize(data[0 .. MappedGraphHeader.HEADER_SIZE]);
         
         if (!view._header.valid)
         {
@@ -323,6 +332,21 @@ final class MappedGraphView
     const(ubyte)[32] contentHash() const @safe pure nothrow @nogc =>
         _valid ? _header.contentHash : (ubyte[32]).init;
     
+    /// Config hash for watch mode validation
+    const(ubyte)[32] configHash() const @safe pure nothrow @nogc =>
+        _valid ? _header.configHash : (ubyte[32]).init;
+    
+    /// Persistence timestamp
+    ulong timestamp() const @safe pure nothrow @nogc =>
+        _valid ? _header.timestamp : 0;
+    
+    /// Validate config hash matches (for instant watch mode startup)
+    bool validateConfigHash(const ubyte[32] expectedHash) const @safe pure nothrow @nogc
+    {
+        if (!_valid) return false;
+        return _header.configHash == expectedHash;
+    }
+    
     /// Optimize for random access (after initial scan)
     void optimizeForRandomAccess() @system nothrow
     {
@@ -362,7 +386,8 @@ final class MappedGraphStorage
     }
     
     /// Serialize BuildGraph to memory-mapped format
-    VoidBuildResult persist(BuildGraph graph) @system
+    /// configHash: Optional hash of config files for watch mode validation
+    VoidBuildResult persist(BuildGraph graph, const ubyte[32] configHash = (ubyte[32]).init) @system
     {
         if (graph is null)
             return VoidBuildResult.err(Errors.cache("Null graph", ErrorCode.InvalidInput).build());
@@ -435,9 +460,8 @@ final class MappedGraphStorage
                     }
                 }
                 
-                // Calculate offsets
-                immutable headerSize = 96;
-                immutable nodeTableOffset = headerSize;
+                // Calculate offsets (v2 header is 136 bytes)
+                immutable nodeTableOffset = MappedGraphHeader.HEADER_SIZE;
                 immutable nodeTableSize = nodes.length * MappedNode.SIZE;
                 immutable edgeTableOffset = nodeTableOffset + nodeTableSize;
                 immutable edgeTableSize = edges.length * MappedEdge.SIZE;
@@ -451,6 +475,8 @@ final class MappedGraphStorage
                 header.edgeTableOffset = edgeTableOffset;
                 header.stringTableOffset = stringTableOffset;
                 header.stringTableSize = strings.data.length;
+                header.configHash = configHash;
+                header.timestamp = cast(ulong)Clock.currStdTime();
                 
                 // Compute content hash
                 import infrastructure.utils.crypto.blake3 : Blake3;
@@ -517,8 +543,75 @@ final class MappedGraphStorage
         if (viewResult.isErr)
             return Err!(BuildGraph, BuildError)(viewResult.unwrapErr());
         
-        auto view = viewResult.unwrap();
-        
+        return restoreFromView(viewResult.unwrap());
+    }
+    
+    /// Check if cached graph exists
+    bool graphExists() const @system => stdfile.exists(graphPath);
+    
+    /// Invalidate cached graph
+    void invalidate() @system
+    {
+        synchronized (mutex)
+        {
+            try { if (stdfile.exists(graphPath)) stdfile.remove(graphPath); }
+            catch (Exception) {}
+        }
+    }
+    
+    /// Storage statistics
+    struct MappedGraphStorageStats
+    {
+        size_t graphsSaved;
+        size_t graphsLoaded;
+        size_t graphsRestored;
+        size_t bytesSaved;
+        size_t bytesLoaded;
+        size_t watchModeHits;      // Instant startup successes
+        size_t watchModeMisses;    // Config changed, needed full rebuild
+    }
+    
+    MappedGraphStorageStats stats() const @safe nothrow => _stats;
+    
+    /// Try to load graph for watch mode with config validation
+    /// Returns Ok with graph if config unchanged, Err if needs rebuild
+    /// This enables instant startup when config hasn't changed
+    BuildResult!BuildGraph tryLoadForWatchMode(const ubyte[32] configHash) @system
+    {
+        synchronized (mutex)
+        {
+            auto viewResult = load();
+            if (viewResult.isErr)
+            {
+                _stats.watchModeMisses++;
+                return Err!(BuildGraph, BuildError)(viewResult.unwrapErr());
+            }
+            
+            auto view = viewResult.unwrap();
+            
+            // Validate config hash for instant startup
+            if (!view.validateConfigHash(configHash))
+            {
+                _stats.watchModeMisses++;
+                return Err!(BuildGraph, BuildError)(
+                    Errors.cache("Config changed since last persist", ErrorCode.CacheCorrupted).build()
+                );
+            }
+            
+            // Config matches - restore graph instantly
+            auto restoreResult = restoreFromView(view);
+            if (restoreResult.isOk)
+                _stats.watchModeHits++;
+            else
+                _stats.watchModeMisses++;
+            
+            return restoreResult;
+        }
+    }
+    
+    /// Restore BuildGraph from an already-loaded view
+    private BuildResult!BuildGraph restoreFromView(MappedGraphView view) @system
+    {
         try
         {
             // Create graph with arena pre-sized for node count
@@ -577,7 +670,6 @@ final class MappedGraphStorage
             }
             
             _stats.graphsRestored++;
-            
             return Ok!(BuildGraph, BuildError)(graph);
         }
         catch (Exception e)
@@ -588,30 +680,35 @@ final class MappedGraphStorage
         }
     }
     
-    /// Check if cached graph exists
-    bool graphExists() const @system => stdfile.exists(graphPath);
-    
-    /// Invalidate cached graph
-    void invalidate() @system
+    /// Compute config hash from a list of config files
+    /// Use this to generate the configHash parameter for persist()
+    static ubyte[32] computeConfigHash(scope const(string)[] configFiles) @system
     {
-        synchronized (mutex)
+        import infrastructure.utils.crypto.blake3 : Blake3;
+        import std.file : exists, read;
+        import std.algorithm : sort;
+        
+        auto hasher = Blake3(0);
+        
+        // Sort for deterministic ordering
+        auto sortedFiles = configFiles.dup;
+        sortedFiles.sort();
+        
+        foreach (file; sortedFiles)
         {
-            try { if (stdfile.exists(graphPath)) stdfile.remove(graphPath); }
-            catch (Exception) {}
+            if (exists(file))
+            {
+                // Hash filename for path sensitivity
+                hasher.put(cast(const(ubyte)[])file);
+                // Hash content
+                auto content = cast(ubyte[])read(file);
+                hasher.put(content);
+            }
         }
+        
+        auto result = hasher.finish(32);
+        return result[0 .. 32];
     }
-    
-    /// Storage statistics
-    struct MappedGraphStorageStats
-    {
-        size_t graphsSaved;
-        size_t graphsLoaded;
-        size_t graphsRestored;
-        size_t bytesSaved;
-        size_t bytesLoaded;
-    }
-    
-    MappedGraphStorageStats stats() const @safe nothrow => _stats;
 }
 
 /// String table builder for deduplication
@@ -637,7 +734,7 @@ private struct StringTableBuilder
 
 unittest
 {
-    import std.file : tempDir, rmdirRecurse;
+    import std.file : tempDir, rmdirRecurse, write;
     import std.path : buildPath;
     
     // Create test graph
@@ -671,10 +768,18 @@ unittest
         immutable testDir = buildPath(tempDir(), "mapped_graph_test");
         scope(exit) collectException(rmdirRecurse(testDir));
         
+        // Create a fake config file for hash testing
+        mkdirRecurse(testDir);
+        auto configPath = buildPath(testDir, "Builderfile");
+        write(configPath, "target lib1 {}");
+        
         auto storage = new MappedGraphStorage(testDir);
         
-        // Save
-        auto saveResult = storage.persist(graph);
+        // Compute config hash
+        auto configHash = MappedGraphStorage.computeConfigHash([configPath]);
+        
+        // Save with config hash
+        auto saveResult = storage.persist(graph, configHash);
         assert(saveResult.isOk, "Failed to save graph");
         
         // Load view
@@ -683,6 +788,17 @@ unittest
         
         auto view = loadResult.unwrap();
         assert(view.nodeCount == 2);
+        assert(view.validateConfigHash(configHash), "Config hash mismatch");
+        
+        // Test watch mode startup with matching hash
+        auto watchResult = storage.tryLoadForWatchMode(configHash);
+        assert(watchResult.isOk, "Watch mode load failed with matching hash");
+        
+        // Test watch mode startup with different hash
+        ubyte[32] differentHash;
+        differentHash[0] = 0xFF;
+        auto watchResult2 = storage.tryLoadForWatchMode(differentHash);
+        assert(watchResult2.isErr, "Watch mode should fail with different hash");
         
         // Restore full graph
         auto restoreResult = storage.restore();
@@ -690,5 +806,10 @@ unittest
         
         auto restored = restoreResult.unwrap();
         assert(restored.nodes.length == 2);
+        
+        // Verify stats
+        auto stats = storage.stats;
+        assert(stats.watchModeHits >= 1, "Should have at least one watch mode hit");
+        assert(stats.watchModeMisses >= 1, "Should have at least one watch mode miss");
     }
 }

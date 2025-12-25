@@ -9,6 +9,7 @@ import std.path;
 import core.thread;
 import core.time;
 import engine.graph;
+import engine.graph.caching.mapped : MappedGraphStorage;
 import engine.runtime.core.engine;
 import engine.runtime.services;
 import engine.caching.targets.cache;
@@ -29,6 +30,8 @@ struct WatchModeConfig
     string renderMode = "auto";              /// CLI render mode
     bool failFast = false;                   /// Stop on first error
     bool verbose = false;                    /// Verbose output
+    bool useMmapPersistence = true;          /// Use mmap for instant startup
+    string cacheDir = ".builder-cache";      /// Cache directory
 }
 
 /// Watch mode service - orchestrates file watching and incremental builds
@@ -37,6 +40,7 @@ struct WatchModeConfig
 /// - Caches the build graph between builds when structure is unchanged
 /// - Uses incremental topo sort to avoid O(V+E) recomputation on each change
 /// - Only rebuilds affected targets in proper topological order
+/// - Memory-mapped graph persistence for instant startup on watch restart
 final class WatchModeService
 {
     private string _workspaceRoot;
@@ -56,6 +60,11 @@ final class WatchModeService
     private size_t _incrementalHits;              // Times incremental order was reused
     private size_t _fullRebuilds;                 // Times full rebuild was needed
     
+    // Memory-mapped persistence for instant startup
+    private MappedGraphStorage _mmapStorage;      // Mmap-backed graph persistence
+    private ubyte[32] _lastConfigHash;            // Last computed config hash
+    private bool _usedMmapStartup;                // Whether startup used mmap
+    
     /// Create watch mode service
     this(string workspaceRoot, WatchModeConfig config) @system
     {
@@ -66,6 +75,14 @@ final class WatchModeService
         _lastBuildSuccess = true;
         _incrementalHits = 0;
         _fullRebuilds = 0;
+        _usedMmapStartup = false;
+        
+        // Initialize mmap storage for instant startup
+        if (_watchConfig.useMmapPersistence)
+        {
+            auto cachePath = buildPath(workspaceRoot, _watchConfig.cacheDir);
+            _mmapStorage = new MappedGraphStorage(cachePath);
+        }
     }
     
     /// Start watch mode
@@ -74,9 +91,7 @@ final class WatchModeService
         // Parse workspace configuration
         auto configResult = ConfigParser.parseWorkspace(_workspaceRoot);
         if (configResult.isErr)
-        {
             return VoidBuildResult.err(configResult.unwrapErr());
-        }
         
         _config = configResult.unwrap();
         
@@ -93,13 +108,9 @@ final class WatchModeService
             
             auto watcherResult = _analysisWatcher.start(_workspaceRoot);
             if (watcherResult.isOk)
-            {
                 Logger.debugLog("Analysis watcher started for proactive cache invalidation");
-            }
             else
-            {
                 Logger.debugLog("Analysis watcher not available");
-            }
         }
         
         // Create file watcher with config
@@ -110,16 +121,26 @@ final class WatchModeService
         
         _watcher = new FileWatcher(watchConfig);
         
-        // Perform initial build
+        // Perform initial build (try mmap instant startup first)
         printWatchHeader();
-        Logger.info("Performing initial build...");
-        writeln();
         
-        performBuild(target);
+        if (tryMmapStartup(target))
+        {
+            Logger.success("Instant startup from memory-mapped graph cache");
+            _usedMmapStartup = true;
+        }
+        else
+        {
+            Logger.info("Performing initial build...");
+            writeln();
+            performBuild(target);
+        }
         
         // Start watching
         Logger.info("Watching for changes... (Press Ctrl+C to stop)");
         Logger.info("Using watcher: " ~ _watcher.implName());
+        if (_watchConfig.useMmapPersistence)
+            Logger.debugLog("Memory-mapped graph persistence enabled");
         writeln();
         
         _isRunning = true;
@@ -129,17 +150,76 @@ final class WatchModeService
         });
         
         if (watchResult.isErr)
-        {
             return VoidBuildResult.err(watchResult.unwrapErr());
-        }
         
         // Keep running until interrupted
         while (_isRunning)
-        {
             Thread.sleep(100.msecs);
-        }
         
         return VoidBuildResult.ok();
+    }
+    
+    /// Try instant startup from memory-mapped graph
+    /// Returns true if successful, false if needs full rebuild
+    private bool tryMmapStartup(string target) @system
+    {
+        if (_mmapStorage is null || !_mmapStorage.graphExists())
+            return false;
+        
+        import std.datetime.stopwatch : StopWatch, AutoStart;
+        auto sw = StopWatch(AutoStart.yes);
+        
+        // Compute current config hash
+        auto configFiles = collectConfigFiles();
+        _lastConfigHash = MappedGraphStorage.computeConfigHash(configFiles);
+        
+        // Try to load graph with config validation
+        auto graphResult = _mmapStorage.tryLoadForWatchMode(_lastConfigHash);
+        if (graphResult.isErr)
+        {
+            Logger.debugLog("Mmap startup failed: config changed or cache invalid");
+            return false;
+        }
+        
+        _cachedGraph = graphResult.unwrap();
+        _lastTopoVersion = _cachedGraph.topoCacheVersion;
+        _lastBuildSuccess = true;
+        _lastBuildTime = Clock.currTime();
+        
+        sw.stop();
+        auto elapsed = sw.peek();
+        Logger.debugLog("Graph loaded from mmap in " ~ elapsed.total!"usecs".to!string ~ "µs");
+        
+        return true;
+    }
+    
+    /// Collect all config files for hash computation
+    private string[] collectConfigFiles() const @trusted
+    {
+        import std.file : dirEntries, SpanMode, exists, isFile;
+        
+        string[] files;
+        
+        // Builderfile in root
+        auto builderfile = buildPath(_workspaceRoot, "Builderfile");
+        if (exists(builderfile) && isFile(builderfile))
+            files ~= builderfile;
+        
+        // Builderspace in root
+        auto builderspace = buildPath(_workspaceRoot, "Builderspace");
+        if (exists(builderspace) && isFile(builderspace))
+            files ~= builderspace;
+        
+        // Scan for nested Builderfiles
+        try
+        {
+            foreach (entry; dirEntries(_workspaceRoot, "Builderfile", SpanMode.depth))
+                if (entry.isFile)
+                    files ~= entry.name;
+        }
+        catch (Exception) {}
+        
+        return files;
     }
     
     /// Stop watch mode
@@ -147,20 +227,22 @@ final class WatchModeService
     {
         _isRunning = false;
         
-        if (_watcher !is null)
+        // Persist graph for instant startup on next run
+        if (_mmapStorage !is null && _cachedGraph !is null)
         {
-            _watcher.stop();
+            auto persistResult = _mmapStorage.persist(_cachedGraph, _lastConfigHash);
+            if (persistResult.isOk)
+                Logger.debugLog("Graph persisted for instant startup");
         }
+        
+        if (_watcher !is null)
+            _watcher.stop();
         
         if (_analysisWatcher !is null)
-        {
             _analysisWatcher.stop();
-        }
         
         if (_services !is null)
-        {
             _services.shutdown();
-        }
         
         Logger.info("Watch mode stopped");
     }
@@ -260,6 +342,10 @@ final class WatchModeService
             
             _cachedGraph = graph;
             
+            // Update config hash for persistence
+            auto configFiles = collectConfigFiles();
+            _lastConfigHash = MappedGraphStorage.computeConfigHash(configFiles);
+            
             if (_watchConfig.showGraph)
             {
                 Logger.info("\nDependency Graph:");
@@ -283,6 +369,14 @@ final class WatchModeService
             
             sw.stop();
             _lastBuildTime = Clock.currTime();
+            
+            // Persist graph after successful build for instant startup
+            if (_lastBuildSuccess && _mmapStorage !is null)
+            {
+                auto persistResult = _mmapStorage.persist(graph, _lastConfigHash);
+                if (persistResult.isErr && _watchConfig.verbose)
+                    Logger.debugLog("Graph persistence failed: " ~ persistResult.unwrapErr().message);
+            }
             
             // Print timing with incremental info
             auto elapsed = sw.peek();
@@ -468,6 +562,10 @@ struct WatchStats
     size_t incrementalHits;       // Times cached topo order was reused
     size_t fullRecomputations;    // Times full topo sort was needed
     
+    // Memory-mapped graph stats
+    bool usedMmapStartup;         // Whether instant startup was used
+    size_t mmapPersists;          // Times graph was persisted
+    
     /// Record a build
     void recordBuild(bool success, Duration buildTime, bool usedIncrementalOrder = false) @system
     {
@@ -493,6 +591,10 @@ struct WatchStats
         writeln("  Successful: " ~ successfulBuilds.to!string);
         writeln("  Failed: " ~ failedBuilds.to!string);
         writeln("  Average build time: " ~ averageBuildTime.total!"msecs".to!string ~ "ms");
+        
+        // Memory-mapped persistence stats
+        if (usedMmapStartup)
+            writeln("  Startup: instant (mmap)");
         
         // Incremental optimization stats
         if (incrementalHits + fullRecomputations > 0)
