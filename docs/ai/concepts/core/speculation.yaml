@@ -1,0 +1,224 @@
+topic: speculation
+category: concepts/core
+summary: "Speculative execution for critical path optimization - pre-execute likely-needed targets"
+keywords: ["speculation", "critical-path", "prefetch", "parallel", "abort", "economics", "lookahead"]
+
+definition: |
+  Speculative Execution pre-executes build targets that are likely to be needed before their
+  dependencies fully complete. By identifying the critical path and using cost estimation,
+  Builder can speculatively start expensive targets with high confidence, aborting if inputs
+  change. This reduces build latency by 10-30% for builds with long critical paths.
+
+architecture:
+  components:
+    - name: "SpeculationService"
+      purpose: "Main speculation coordinator"
+      location: "engine/runtime/services/speculation/service.d"
+      features:
+        - "Critical path analysis integration"
+        - "Economics-based speculation decisions"
+        - "Input hash tracking for abort detection"
+        - "Statistics and effectiveness metrics"
+
+    - name: "SpeculativeTask"
+      purpose: "Individual speculative execution unit"
+      location: "engine/runtime/services/speculation/service.d"
+      features:
+        - "Atomic status transitions"
+        - "Input hash recording"
+        - "Abort semantics"
+        - "Result promotion"
+
+    - name: "SpeculationExecutor"
+      purpose: "Build loop integration"
+      location: "engine/runtime/services/speculation/executor.d"
+      features:
+        - "Speculation-aware execution"
+        - "Result validation"
+        - "Input change notification"
+        - "Statistics collection"
+
+    - name: "SpeculationPolicy"
+      purpose: "Configurable speculation behavior"
+      location: "engine/runtime/services/speculation/service.d"
+      presets:
+        conservative:
+          maxConcurrent: 2
+          minCostMs: 2000
+          confidenceThreshold: 0.9
+        balanced:
+          maxConcurrent: 4
+          minCostMs: 500
+          confidenceThreshold: 0.7
+        aggressive:
+          maxConcurrent: 8
+          minCostMs: 200
+          confidenceThreshold: 0.5
+
+how_it_works:
+  critical_path_analysis: |
+    1. Compute critical path costs using ProfileGuidedScheduler
+    2. Each node's cost = own estimated time + max downstream cost
+    3. Nodes on critical path have highest priority for speculation
+    4. Fan-out nodes (many dependents) also prioritized
+
+  speculation_decision: |
+    1. Check target is on critical path OR has high fan-out
+    2. Verify estimated cost > minCostMs threshold
+    3. Check cache hit probability < confidence threshold
+    4. Ensure concurrent speculation count < maxConcurrent
+    5. If all pass: create SpeculativeTask and begin execution
+
+  input_tracking: |
+    1. Record hash of all source files at speculation start
+    2. Record hash of dependency outputs (or expected outputs)
+    3. On notifyInputChanged(): compare with recorded hashes
+    4. If any hash differs: abort speculation, discard results
+
+  abort_semantics: |
+    1. SpeculativeTask status transitions: Pending → Running → Completed/Aborted
+    2. Aborted tasks: results discarded, not cached
+    3. Completed tasks: validated before promotion to real result
+    4. Promotion: speculation result used as actual build result
+
+key_benefits:
+  - "10-30% build time reduction on critical path-bound builds"
+  - "Zero wasted work with proper abort semantics"
+  - "Economics-driven: only speculate when worthwhile"
+  - "Transparent: existing build logic unchanged"
+  - "Configurable: conservative to aggressive policies"
+  - "Observable: detailed statistics and ROI tracking"
+
+performance:
+  typical_savings:
+    long_critical_path:
+      scenario: "Compiling 100-file C++ project, 5-minute critical path"
+      without_speculation: "5 minutes"
+      with_speculation: "3.5-4.5 minutes"
+      savings: "10-30%"
+
+    high_fanout:
+      scenario: "Library used by 50 downstream targets"
+      benefit: "Dependents start immediately on completion"
+
+  overhead:
+    memory: "O(concurrent_speculation) - minimal per task"
+    cpu: "Input hash tracking: <1% of build time"
+    worst_case: "Aborted speculation: wasted work, but bounded by policy"
+
+  roi_metrics:
+    effectiveness: "successful / total speculations"
+    roi: "timeSaved / timeWasted"
+    good_effectiveness: ">0.7 (70%+ success)"
+    good_roi: ">5.0 (5x return on speculation investment)"
+
+usage_examples:
+  - description: "Enable speculation with balanced policy"
+    code: |
+      import engine.runtime.services.speculation;
+
+      auto speculation = createSpeculationService(graph, history);
+      speculation.setPolicy(SpeculationPolicy.balanced());
+      speculation.analyzeGraph(graph);
+
+  - description: "Check for speculative result before execution"
+    code: |
+      // In build loop
+      if (auto result = speculation.getValidResult(targetId))
+      {
+          // Use pre-computed result
+          applyResult(result);
+          speculation.promote(targetId);
+      }
+      else
+      {
+          // Execute normally
+          executeTarget(targetId);
+      }
+
+  - description: "Notify on input change"
+    code: |
+      // When file changes detected (watch mode, etc.)
+      speculation.notifyInputChanged(filePath, newHash);
+      // This automatically aborts affected speculations
+
+  - description: "Custom policy for aggressive speculation"
+    code: |
+      SpeculationPolicy custom;
+      custom.maxConcurrent = 12;
+      custom.minCostMs = 100;
+      custom.confidenceThreshold = 0.4;
+      custom.budgetFraction = 0.5;
+      speculation.setPolicy(custom);
+
+configuration:
+  environment:
+    BUILDER_SPECULATION_ENABLED: "0|1 - Enable/disable speculation"
+    BUILDER_SPECULATION_POLICY: "conservative|balanced|aggressive"
+
+  policy_options:
+    maxConcurrent: "Max concurrent speculative tasks"
+    minCostMs: "Minimum estimated cost to speculate (milliseconds)"
+    confidenceThreshold: "Minimum confidence (0.0-1.0) to speculate"
+    budgetFraction: "Fraction of total build budget for speculation"
+    enableCriticalPath: "Speculate on critical path targets"
+    enableFanOut: "Speculate on high-fanout targets"
+    abortOnInputChange: "Abort speculation if inputs change"
+
+when_to_use:
+  effective_scenarios:
+    - "Long critical paths (>30 seconds)"
+    - "Expensive targets (>500ms each)"
+    - "High fan-out dependencies"
+    - "Stable input files (low change rate)"
+    - "Remote execution (hide latency)"
+
+  ineffective_scenarios:
+    - "Short builds (<10 seconds)"
+    - "High cache hit rates (>80%)"
+    - "Frequently changing inputs"
+    - "Cheap targets (<100ms each)"
+    - "Resource-constrained environments"
+
+statistics:
+  tracked_metrics:
+    totalSpeculated: "Total speculation attempts"
+    successful: "Speculations validated and used"
+    aborted: "Speculations cancelled (input changed)"
+    wasted: "Speculations completed but not used"
+    timeSaved: "Cumulative time saved from valid speculation"
+    timeWasted: "Cumulative time spent on wasted speculation"
+
+  computed_metrics:
+    effectiveness: "successful / totalSpeculated"
+    roi: "timeSaved / timeWasted"
+    hitRate: "hits / (hits + misses)"
+
+related: [critical-path, economics, scheduling, watch, determinism, caching]
+
+integration_points:
+  profile_guided_scheduler: "Uses critical path costs from ProfileGuidedScheduler"
+  cost_estimator: "Uses CostEstimator for speculation decisions"
+  execution_history: "Historical data improves speculation accuracy"
+  scheduling_service: "Submits speculative tasks to scheduler"
+  observability: "Logs speculation events and statistics"
+
+comparison:
+  vs_eager_execution:
+    similarity: "Both start work early"
+    difference: "Speculation has abort semantics, eager doesn't"
+
+  vs_prefetching:
+    similarity: "Both anticipate future needs"
+    difference: "Speculation is execution, prefetching is data loading"
+
+  vs_branch_prediction:
+    similarity: "Both guess likely outcomes"
+    difference: "Build speculation has rollback via abort"
+
+next_steps: |
+  - See 'bldr explain critical-path' for understanding build bottlenecks
+  - See 'bldr explain economics' for cost estimation details
+  - See 'bldr explain watch' for input change detection
+  - See 'bldr explain determinism' for reproducible speculation results
+

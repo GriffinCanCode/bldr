@@ -452,6 +452,38 @@ For a 5-minute build, this is **0.002%** overhead.
 4. **Portfolio Optimization**: Optimize across entire dependency graph
 5. **Spot Instance Support**: Use spot instances for cost savings
 
+## Speculation Integration
+
+Cost optimization integrates with [Speculative Execution](speculation.md) to make principled decisions about when to speculate:
+
+### Economics-Driven Speculation
+
+```d
+// Only speculate when expected value > expected cost
+SpeculationPolicy policy;
+policy.minCostMs = 500;           // Only expensive targets worth speculation overhead
+policy.budgetFraction = 0.2;      // Max 20% of build budget for speculation
+policy.confidenceThreshold = 0.7; // Only speculate with >70% confidence
+```
+
+### Cost/Benefit Analysis
+
+Speculation uses the cost estimator to evaluate:
+
+1. **Expected savings**: criticalPathCost × confidence × (1 - cacheHitProbability)
+2. **Expected waste**: estimatedCostMs × (1 - confidence)
+3. **ROI threshold**: Only speculate when expectedSavings > expectedWaste × 2
+
+### Statistics Tracking
+
+```d
+// After build
+auto stats = speculation.getStats();
+writefln("Speculation ROI: %.1fx (timeSaved=$%.2f, timeWasted=$%.2f)",
+    stats.roi, stats.timeSaved.total!"seconds" * costPerSecond,
+    stats.timeWasted.total!"seconds" * costPerSecond);
+```
+
 ## Comparison with Other Build Systems
 
 | Feature | Builder | Bazel | Buck2 | Pants |
@@ -468,9 +500,11 @@ For a 5-minute build, this is **0.002%** overhead.
 ## See Also
 
 - [Economics README](../../source/engine/economics/README.md)
+- [Speculative Execution](speculation.md)
 - [Remote Execution](remote-execution.md)
 - [Distributed Builds](distributed.md)
 - [Caching](caching.md)
+- [Critical Path](../ai/concepts/reference/critical-path.yaml)
 
 ---
 

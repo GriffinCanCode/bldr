@@ -1,0 +1,163 @@
+topic: economics
+category: concepts/core
+summary: "Economic optimization - Pareto-optimal cost/time tradeoffs for builds"
+keywords: ["economics", "cost", "optimization", "pareto", "budget", "cloud", "pricing"]
+
+definition: |
+  Builder's economics module provides multi-objective optimization for build execution,
+  computing Pareto-optimal solutions across the time-cost tradeoff space. Unlike
+  traditional build systems that only minimize time, Builder considers actual resource
+  costs (CPU, memory, network) enabling principled decisions for CI/CD at scale.
+
+architecture:
+  components:
+    - name: "CostEstimator"
+      purpose: "Predict build time and resource usage"
+      location: "engine/economics/estimator.d"
+      features:
+        - "Historical execution tracking"
+        - "Language-based heuristics"
+        - "Source count scaling"
+        - "Cache hit probability estimation"
+
+    - name: "CostOptimizer"
+      purpose: "Pareto-optimal plan selection"
+      location: "engine/economics/optimizer.d"
+      features:
+        - "Execution strategy enumeration"
+        - "Pareto frontier computation"
+        - "Budget/time constraint satisfaction"
+        - "Plan comparison and ranking"
+
+    - name: "CostTracker"
+      purpose: "Track actual execution costs"
+      location: "engine/economics/tracking.d"
+      features:
+        - "Execution recording"
+        - "Cost aggregation"
+        - "History persistence"
+        - "Estimate vs actual comparison"
+
+    - name: "ExecutionHistory"
+      purpose: "Historical data for estimation"
+      location: "engine/economics/estimator.d"
+      features:
+        - "Target-level tracking"
+        - "Exponential moving average"
+        - "JSON persistence"
+        - "Cache hit rate tracking"
+
+resource_pricing:
+  model: |
+    cost(target) = cpuCost + memoryCost + networkCost + diskIOCost
+    
+    cpuCost = cores × duration × pricePerCoreHour
+    memoryCost = memory × duration × pricePerGBHour
+    networkCost = transferSize × pricePerGB
+    diskIOCost = iops × pricePerIOP
+
+  typical_rates:
+    cpu: "$0.02-0.10/core-hour"
+    memory: "$0.005/GB-hour"
+    network: "$0.05-0.15/GB"
+    storage_io: "$0.0001/1000 IOPS"
+
+execution_strategies:
+  local:
+    cost: "$0 (developer machine)"
+    time: "Slowest (single machine)"
+    use_when: "Development, small builds"
+
+  cached:
+    cost: "~$0 (minimal lookup cost)"
+    time: "Fastest (cache hit)"
+    use_when: "Unchanged inputs"
+
+  distributed:
+    cost: "Variable (cloud instances)"
+    time: "Fast (parallelism)"
+    use_when: "Large builds, CI/CD"
+
+  premium:
+    cost: "High (dedicated instances)"
+    time: "Fastest (no contention)"
+    use_when: "Critical path, urgent builds"
+
+optimization_modes:
+  minimize_cost: |
+    $ bldr build --optimize=cost
+    Found: Local build with distributed cache
+    Cost: $0.00, Time: 8m 15s
+
+  minimize_time: |
+    $ bldr build --optimize=time
+    Using: 32 remote cores, premium instances
+    Est cost: $12.30, Est time: 1m 55s
+
+  budget_constrained: |
+    $ bldr build --budget=$5.00
+    Using: 4 remote cores, shared cache
+    Est cost: $4.87, Est time: 5m 20s
+
+  time_constrained: |
+    $ bldr build --time-limit=2m
+    Using: 16 remote cores, premium instances
+    Est cost: $8.50, Est time: 1m 55s
+
+  balanced: |
+    $ bldr build --optimize=balanced
+    Using: 8 remote cores, standard instances
+    Est cost: $3.20, Est time: 3m 40s
+
+pareto_optimality: |
+  A build plan P is Pareto-optimal if there is no other plan P' such that:
+  - cost(P') ≤ cost(P) AND time(P') ≤ time(P)
+  - with at least one strict inequality
+  
+  The Pareto frontier represents all non-dominated solutions.
+  Builder computes this frontier and selects based on constraints.
+
+cache_value: |
+  Cache hits have enormous economic value:
+  
+  expectedCost(target) = P(hit) × cacheCost + P(miss) × computeCost
+                       = P(hit) × ε + P(miss) × C
+  
+  where ε ≈ 0 (cache lookup is nearly free)
+  
+  At 80% cache hit rate: expectedCost ≈ 0.2 × computeCost
+
+speculation_integration: |
+  Speculation uses economics to make principled decisions:
+  
+  1. Only speculate when expectedValue > expectedCost
+  2. Factor in cache hit probability (don't speculate if likely cached)
+  3. Budget constraint: limit total speculation to fraction of build budget
+  4. Track ROI: timeSaved / timeWasted
+
+usage_examples:
+  - description: "Optimize for budget"
+    command: "bldr build --budget=$10.00"
+
+  - description: "Optimize for time"
+    command: "bldr build --time-limit=5m"
+
+  - description: "Use economics integration"
+    code: |
+      import engine.economics.integration;
+      
+      auto econ = new EconomicsIntegration(econOptions, cacheDir);
+      auto plan = econ.optimize(graph, constraints);
+      writeln("Plan: ", plan.strategy, " cost=$", plan.estimatedCost);
+
+  - description: "Check cost summary"
+    command: "bldr stats --cost"
+
+related: [speculation, critical-path, remote-cache, distributed, performance, caching]
+
+next_steps: |
+  - See 'bldr explain speculation' for economics-driven speculation
+  - See 'bldr explain distributed' for remote execution costs
+  - See 'bldr explain caching' for cache hit optimization
+  - See 'bldr explain performance' for optimization strategies
+

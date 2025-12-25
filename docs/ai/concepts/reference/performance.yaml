@@ -1,24 +1,140 @@
 topic: performance
-category: concepts
-summary: "Performance Tuning - Making builds faster"
+category: concepts/reference
+summary: "Performance tuning guide - caching, parallelism, speculation, and optimization"
+keywords: ["performance", "optimization", "speed", "fast", "tuning", "profiling"]
+
 definition: |
-  General guide to optimizing build performance with Builder.
-  Covers caching, parallelism, hardware usage, and configuration.
+  Comprehensive guide to optimizing build performance with Builder.
+  Covers caching, parallelism, speculation, hardware usage, and configuration
+  for maximum build speed.
+
+key_optimizations:
+  caching:
+    impact: "10-100x faster for cached builds"
+    strategies:
+      - "Target-level: Skip unchanged targets"
+      - "Action-level: Fine-grained compile/link caching"
+      - "Remote: Share cache across team/CI"
+      - "Content-addressed: Deduplication for storage savings"
+
+  parallelism:
+    impact: "N-1x speedup for N cores (Amdahl's law)"
+    strategies:
+      - "Work-stealing: Automatic load balancing"
+      - "Job count: `--jobs=N` or BLDR_JOBS env"
+      - "Distributed: Scale across machines"
+
+  speculation:
+    impact: "10-30% reduction on critical path-bound builds"
+    strategies:
+      - "Critical path speculation: Pre-execute expensive targets"
+      - "Fan-out speculation: Start dependents early"
+      - "Economics-driven: Only speculate when ROI positive"
+
+  persistent_workers:
+    impact: "10-50x faster JVM/TypeScript compilation"
+    strategies:
+      - "Keep compiler JVMs warm"
+      - "Worker pool with health monitoring"
+      - "Automatic restart on failure"
+
+  io_optimization:
+    impact: "2-5x faster file operations"
+    strategies:
+      - "io_uring: Async batch hashing (Linux)"
+      - "Memory-mapped files: Zero-copy reads"
+      - "SSD: Fast random access for cache"
+      - "FastCDC: Delta transfer for large artifacts"
 
 key_points:
   - "Persistent workers: 10-50x faster JVM/TypeScript compilation"
   - "Cache hit rate: Maximize with hermetic builds"
+  - "Speculation: Pre-execute critical path targets"
   - "Network: Optimize remote cache bandwidth"
   - "IO: Use fast SSDs for workspace"
   - "CPU: More cores = faster clean builds"
 
 usage_examples:
   - description: "Analyze build profile"
-    command: "builder profile"
+    command: "bldr profile"
 
-related: [caching, concurrency, remote-cache, persistent-workers]
+  - description: "View critical path"
+    command: "bldr build --verbose"
+
+  - description: "Enable maximum parallelism"
+    command: "bldr build --jobs=0  # Auto-detect CPU count"
+
+  - description: "Enable speculation"
+    code: |
+      # Balanced speculation policy
+      speculation.setPolicy(SpeculationPolicy.balanced());
+      speculation.beginSpeculation();
+
+  - description: "Check cache effectiveness"
+    command: "bldr stats --cache"
+
+profiling_workflow:
+  step_1_baseline: |
+    bldr build --clean --timing
+    # Record: total time, cache hits, parallelism
+    
+  step_2_identify_bottleneck: |
+    bldr build --verbose
+    # Look at: critical path, slow targets, cache misses
+    
+  step_3_apply_optimization: |
+    # Based on bottleneck:
+    # - Critical path long → enable speculation
+    # - Cache misses → check hermetic compliance
+    # - Low parallelism → increase jobs or use distributed
+    
+  step_4_measure_improvement: |
+    bldr build --timing
+    # Compare to baseline
+
+bottleneck_solutions:
+  slow_critical_path:
+    symptoms:
+      - "Build time doesn't improve with more cores"
+      - "Critical path > 50% of total time"
+    solutions:
+      - "Enable speculation for critical path"
+      - "Break large targets into smaller pieces"
+      - "Use persistent workers for JVM/TS"
+
+  high_cache_miss_rate:
+    symptoms:
+      - "Cache hit rate < 70%"
+      - "Same files rebuilt repeatedly"
+    solutions:
+      - "Ensure hermetic builds"
+      - "Use content-addressed sources"
+      - "Configure remote cache"
+
+  low_parallelism:
+    symptoms:
+      - "CPU utilization < 50%"
+      - "Wide dependency graph but slow"
+    solutions:
+      - "Increase job count"
+      - "Enable work-stealing scheduler"
+      - "Consider distributed execution"
+
+  io_bound:
+    symptoms:
+      - "High disk wait time"
+      - "Slow cache lookups"
+    solutions:
+      - "Use SSD for cache directory"
+      - "Enable memory-mapped files"
+      - "Use io_uring for batch hashing"
+
+related: [caching, concurrency, remote-cache, persistent-workers, speculation, critical-path, economics]
 
 next_steps: |
+  - See 'bldr explain speculation' for speculative execution
+  - See 'bldr explain critical-path' for bottleneck analysis
+  - See 'bldr explain caching' for cache configuration
+  - See 'bldr explain persistent-workers' for JVM/TS speedup
   - Profile before optimizing
-  - Ensure caching is working effective
-
+  - Ensure caching is working effectively

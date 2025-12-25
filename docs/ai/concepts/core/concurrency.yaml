@@ -1,25 +1,55 @@
 topic: concurrency
 category: concepts
-summary: "Concurrency - Parallel build execution"
+summary: "Concurrency - Parallel build execution with adaptive work-stealing"
 definition: |
   Builder automatically parallelizes build steps based on the dependency graph.
   It uses a work-stealing scheduler to maximize CPU utilization.
+  Adaptive thresholds auto-tune steal parameters based on observed success rates and latency.
 
 key_points:
   - "Graph-based: Executes independent tasks in parallel"
   - "Work stealing: Efficiently balances load across cores"
+  - "Speculation: Pre-execute critical path targets before inputs ready"
+  - "Adaptive tuning: Auto-adjusts minLocalQueue when success rate drops below 20%"
+  - "Latency-aware: Timeout and backoff scale with network conditions"
   - "Resource aware: Respects CPU and memory limits"
   - "Configurable: Adjust concurrency level with flags"
+
+work_stealing_strategies:
+  - "Random: Simple random victim selection"
+  - "LeastLoaded: Target least loaded peer"
+  - "MostLoaded: Target most loaded peer (best victim)"
+  - "PowerOfTwo: Power-of-two-choices (default, balanced)"
+  - "Adaptive: Dynamically switch based on success rate"
+
+adaptive_thresholds:
+  description: "EWMA-based adaptive tuning for work-stealing thresholds"
+  metrics:
+    - "successRate: Steal success rate (adjusts minLocalQueue)"
+    - "latencyUs: Network latency (adjusts timeout/backoff)"
+    - "networkErrorRate: Connection failures (adjusts stealThreshold)"
+    - "timeoutRate: Timeout frequency (adjusts stealThreshold)"
+  config: |
+    config.enableAdaptive = true;
+    config.adaptiveConfig.lowSuccessThreshold = 0.20;  // Increase threshold when below this
+    config.adaptiveConfig.evaluationWindow = 50;       // Samples before adjustment
 
 usage_examples:
   - command: "bldr build"
     description: "Build with auto-detected concurrency (work-stealing)"
   - command: "export BUILDER_JOBS=8"
     description: "Manually throttle concurrency (via environment variable, if supported)"
+  - description: "Enable adaptive work-stealing"
+    code: |
+      StealConfig config;
+      config.enableAdaptive = true;
+      config.adaptiveConfig.alpha = 0.15;  // EWMA smoothing factor
 
-related: [performance, graphcache, coordinator]
+related: [performance, graphcache, coordinator, distributed, adaptive-stealing, speculation, critical-path]
 
 next_steps: |
   - Trust the default auto-detection for most cases
   - Use '-j' to throttle builds on shared machines
+  - Enable adaptive thresholds for distributed builds
+  - bldr explain adaptive-stealing
 

@@ -64,3 +64,15 @@ public import engine.runtime.services.provenance :
     IProvenanceService,
     ProvenanceService,
     NullProvenanceService;
+
+// Speculation service
+public import engine.runtime.services.speculation :
+    ISpeculationService,
+    SpeculationService,
+    SpeculationPolicy,
+    SpeculativeTask,
+    SpeculativeStatus,
+    SpeculationStats,
+    SpeculationExecutor,
+    SpeculationExecutorStats,
+    createSpeculationExecutor;

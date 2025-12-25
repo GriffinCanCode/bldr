@@ -1,25 +1,135 @@
 topic: critical-path
-category: concepts
-summary: "Critical Path - Bottleneck analysis and profile-guided scheduling"
+category: concepts/reference
+summary: "Critical path analysis and profile-guided scheduling for build optimization"
+keywords: ["critical-path", "bottleneck", "scheduling", "profile", "latency", "parallel"]
+
 definition: |
-  The sequence of dependent actions that determines the minimum possible build time.
-  Parallelism cannot speed up the critical path. Builder uses profile-guided scheduling
-  to prioritize expensive actions on the critical path early, maximizing parallelism.
+  The critical path is the sequence of dependent actions that determines the minimum possible
+  build time. No amount of parallelism can reduce time below the critical path length.
+  
+  Builder uses profile-guided scheduling to identify and optimize the critical path:
+  1. Compute costs using historical execution data
+  2. Calculate critical path cost for each node: own cost + max downstream cost
+  3. Schedule high critical-path-cost nodes early to maximize parallelism
+  4. Use speculative execution to pre-execute likely-needed targets
+
+architecture:
+  components:
+    - name: "ProfileGuidedScheduler"
+      purpose: "Profile-based action scheduling"
+      location: "engine/distributed/coordinator/profile.d"
+      features:
+        - "Critical path cost computation"
+        - "Action profiling with cost/dependents/depth"
+        - "Priority-aware task creation"
+        - "Economics integration"
+
+    - name: "CostEstimator"
+      purpose: "Predict build time and cost"
+      location: "engine/economics/estimator.d"
+      features:
+        - "Historical execution tracking"
+        - "Language-based heuristics"
+        - "Source count scaling"
+        - "Cache hit probability estimation"
+
+    - name: "SpeculationService"
+      purpose: "Speculative execution on critical path"
+      location: "engine/runtime/services/speculation/service.d"
+      features:
+        - "Pre-execute critical path targets"
+        - "Abort on input change"
+        - "Economics-driven decisions"
+
+how_it_works:
+  critical_path_computation: |
+    1. For each node, compute: criticalPathCost = ownCost + max(dependentCosts)
+    2. ownCost = estimateNodeCostMs(node) from CostEstimator
+    3. dependentCosts = costs of all nodes that depend on this node
+    4. Nodes with highest criticalPathCost are on the critical path
+
+  scheduling_priority: |
+    score = criticalPathCost * CRITICAL_PATH_WEIGHT
+          + dependentCount * DEPENDENT_WEIGHT
+          - depth * DEPTH_PENALTY
+    
+    Higher score = scheduled earlier
+    - Critical path dominates: schedule long chains early
+    - Dependents reward: unblock parallelism
+    - Depth penalty: favor breadth-first for parallelism
+
+  speculation_integration: |
+    1. Identify critical path nodes with high costs
+    2. Speculatively start execution before inputs ready
+    3. If inputs don't change: use speculative result
+    4. If inputs change: abort and re-execute normally
 
 key_points:
-  - "Analysis: 'builder analyze-profile'"
-  - "Optimization: Break large targets"
-  - "Visualization: Gantt charts"
-  - "Profile-Guided: Uses historical execution data to estimate costs"
-  - "Scheduling: Expensive actions scheduled early to unblock dependents"
+  - "Analysis: Critical path shown in build summary with --verbose"
+  - "Optimization: Break large targets into smaller pieces"
+  - "Visualization: Gantt charts show parallel execution"
+  - "Profile-Guided: Historical data improves accuracy over time"
+  - "Speculation: Pre-execute critical path targets"
+  - "Economics: Cost/time tradeoff analysis"
 
 usage_examples:
-  - description: "Look for 'Critical Path' in build summary"
-  - description: "Profile-guided scheduling enabled by default in distributed builds"
+  - description: "View critical path in build output"
+    code: |
+      $ bldr build --verbose
+      ...
+      Critical Path: 45.2s (5 targets)
+        └─ compile_main (12.5s)
+           └─ compile_core (15.3s)
+              └─ compile_utils (8.2s)
+                 └─ generate_headers (4.8s)
+                    └─ parse_config (4.4s)
 
-related: [performance, concurrency, observability, distributed]
+  - description: "Enable profile-guided scheduling"
+    code: |
+      # Enabled by default in distributed builds
+      $ bldr build --distributed
+      
+      # Or explicitly with economics
+      $ bldr build --optimize=time
+
+  - description: "Enable speculation for critical path"
+    code: |
+      import engine.runtime.services.speculation;
+      
+      auto speculation = createSpeculationService(graph, history);
+      speculation.setPolicy(SpeculationPolicy.balanced());
+      speculation.beginSpeculation();  // Start critical path speculation
+
+optimization_strategies:
+  break_large_targets: |
+    If one target dominates the critical path, split it:
+    - Library → multiple sub-libraries
+    - Binary → shared library + thin executable
+    - Monolith → modular components
+
+  parallelize_tests: |
+    Tests are often on critical path. Parallelize with:
+    - Test sharding (split test suite)
+    - Parallel test runners
+    - Distributed test execution
+
+  cache_critical_targets: |
+    Ensure critical path targets are cached:
+    - Remote cache for team sharing
+    - Action-level cache for fine-grained hits
+    - Content-addressed inputs for deduplication
+
+  use_speculation: |
+    For long critical paths:
+    - Enable speculation service
+    - Use balanced or aggressive policy
+    - Monitor speculation effectiveness
+
+related: [speculation, performance, concurrency, observability, distributed, economics]
 
 next_steps: |
+  - See 'bldr explain speculation' for speculative execution details
+  - See 'bldr explain economics' for cost optimization
+  - See 'bldr explain distributed' for scaling across machines
   - Optimize the longest chain of dependencies
   - Historical data improves scheduling accuracy over time
-

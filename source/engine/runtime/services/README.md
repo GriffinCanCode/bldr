@@ -39,6 +39,12 @@ services/
 │   ├── service.d      # Work-stealing and thread-pool scheduling
 │   └── package.d      # Barrel exports
 │
+├── speculation/       # Speculative execution
+│   ├── service.d      # Critical path speculation service
+│   ├── executor.d     # Speculation executor integration
+│   ├── README.md      # Speculation documentation
+│   └── package.d      # Barrel exports
+│
 ├── package.d          # Root barrel export
 └── README.md          # This file
 ```
@@ -161,6 +167,32 @@ scheduler.initialize(maxParallelism: 8);
 scheduler.submit(node, Priority.High);
 auto results = scheduler.executeBatch(nodes, executor);
 ```
+
+### Speculation (`speculation/`)
+
+The **SpeculationService** provides speculative execution for critical path optimization:
+
+- **Critical path analysis** - Identify the longest weighted path
+- **Speculative execution** - Pre-execute likely-needed targets
+- **Abort semantics** - Cancel speculation if inputs change
+- **Economics integration** - Use cost estimation for decisions
+
+```d
+auto speculation = createSpeculationService(graph, executionHistory);
+speculation.setPolicy(SpeculationPolicy.balanced());
+speculation.analyzeGraph(graph);
+
+// During build loop
+if (auto result = speculation.getValidResult(targetId))
+    useSpeculativeResult(result);  // Use pre-computed result
+else
+    executeNormally(targetId);
+
+// Notify on input change
+speculation.notifyInputChanged(path, newHash);  // Aborts affected speculation
+```
+
+See `speculation/README.md` for detailed documentation.
 
 ## Usage Patterns
 

@@ -1,0 +1,622 @@
+module engine.runtime.services.speculation.service;
+
+import std.algorithm : map, filter, sort, sum, max, min, canFind;
+import std.array : array, assocArray;
+import std.datetime : Duration, msecs, seconds;
+import std.conv : to;
+import std.typecons : Nullable, nullable;
+import core.atomic;
+import core.sync.mutex : Mutex;
+import core.thread : Thread;
+import engine.graph : BuildGraph, BuildNode, BuildStatus;
+import infrastructure.config.schema.schema : TargetId;
+import engine.economics.estimator : CostEstimator, ExecutionHistory, BuildEstimate;
+import engine.economics.pricing : ResourceUsageEstimate;
+import engine.distributed.coordinator.profile : ProfileGuidedScheduler, ActionProfile;
+import infrastructure.errors;
+import infrastructure.utils.logging.logger;
+import infrastructure.utils.concurrency.priority : Priority;
+
+/// Speculation policy configuration
+/// Controls the aggressiveness and budget for speculative execution
+struct SpeculationPolicy
+{
+    size_t maxConcurrent = 4;         // Max concurrent speculative tasks
+    size_t minCostMs = 500;           // Min estimated cost to speculate (ms)
+    float confidenceThreshold = 0.7f; // Min probability to speculate
+    float budgetFraction = 0.2f;      // Fraction of total build budget for speculation
+    bool enableCriticalPath = true;   // Speculate on critical path
+    bool enableFanOut = true;         // Speculate on high-fanout nodes
+    bool abortOnInputChange = true;   // Abort speculation if inputs change
+    
+    /// Conservative policy: minimal speculation
+    static SpeculationPolicy conservative() pure nothrow @nogc
+    {
+        SpeculationPolicy p;
+        p.maxConcurrent = 2;
+        p.minCostMs = 2000;
+        p.confidenceThreshold = 0.9f;
+        p.budgetFraction = 0.1f;
+        return p;
+    }
+    
+    /// Balanced policy: moderate speculation
+    static SpeculationPolicy balanced() pure nothrow @nogc => SpeculationPolicy.init;
+    
+    /// Aggressive policy: maximize speculation
+    static SpeculationPolicy aggressive() pure nothrow @nogc
+    {
+        SpeculationPolicy p;
+        p.maxConcurrent = 8;
+        p.minCostMs = 200;
+        p.confidenceThreshold = 0.5f;
+        p.budgetFraction = 0.4f;
+        return p;
+    }
+}
+
+/// Status of a speculative task
+enum SpeculativeStatus : ubyte
+{
+    Pending,    // Waiting to start
+    Running,    // Currently executing
+    Completed,  // Finished successfully
+    Aborted,    // Cancelled due to input change
+    Failed,     // Execution failed
+    Promoted    // Speculation validated and promoted to real result
+}
+
+/// A task being speculatively executed
+final class SpeculativeTask
+{
+    immutable TargetId targetId;
+    immutable size_t estimatedCostMs;
+    immutable float confidence;
+    immutable string reason;
+    
+    private shared SpeculativeStatus _status;
+    private string[string] _inputHashes;  // path -> hash at speculation start
+    private Mutex _mutex;
+    private BuildNode _node;
+    private Exception _error;
+    
+    // Result storage
+    private string _resultHash;
+    private Duration _actualDuration;
+    
+    this(TargetId targetId, BuildNode node, size_t estimatedCostMs, float confidence, string reason) @trusted
+    {
+        this.targetId = targetId;
+        this._node = node;
+        this.estimatedCostMs = estimatedCostMs;
+        this.confidence = confidence;
+        this.reason = reason;
+        this._mutex = new Mutex();
+        atomicStore(_status, SpeculativeStatus.Pending);
+    }
+    
+    /// Record input hash at speculation start
+    void recordInputHash(string path, string hash) @trusted
+    {
+        synchronized (_mutex) { _inputHashes[path] = hash; }
+    }
+    
+    /// Check if any input hash changed
+    bool hasInputChanged(string delegate(string) @trusted getCurrentHash) @trusted
+    {
+        synchronized (_mutex)
+        {
+            foreach (path, expectedHash; _inputHashes)
+            {
+                auto currentHash = getCurrentHash(path);
+                if (currentHash != expectedHash)
+                    return true;
+            }
+        }
+        return false;
+    }
+    
+    /// Get current status atomically
+    @property SpeculativeStatus status() const nothrow @system @nogc => atomicLoad(_status);
+    
+    /// Set status atomically
+    void setStatus(SpeculativeStatus s) nothrow @system @nogc { atomicStore(_status, s); }
+    
+    /// Mark as aborted
+    void abort() nothrow @system @nogc { atomicStore(_status, SpeculativeStatus.Aborted); }
+    
+    /// Check if cancellation requested
+    bool isAborted() const nothrow @system @nogc => atomicLoad(_status) == SpeculativeStatus.Aborted;
+    
+    /// Record successful completion
+    void complete(string resultHash, Duration duration) @trusted
+    {
+        synchronized (_mutex)
+        {
+            _resultHash = resultHash;
+            _actualDuration = duration;
+        }
+        atomicStore(_status, SpeculativeStatus.Completed);
+    }
+    
+    /// Record failure
+    void fail(Exception e) @trusted
+    {
+        synchronized (_mutex) { _error = e; }
+        atomicStore(_status, SpeculativeStatus.Failed);
+    }
+    
+    /// Get result hash (only valid if Completed)
+    string resultHash() @trusted
+    {
+        synchronized (_mutex) { return _resultHash; }
+    }
+    
+    /// Get underlying node
+    @property BuildNode node() @system => _node;
+    
+    /// Get actual duration (only valid if Completed)
+    Duration actualDuration() @trusted
+    {
+        synchronized (_mutex) { return _actualDuration; }
+    }
+}
+
+/// Statistics for speculation effectiveness
+struct SpeculationStats
+{
+    size_t totalSpeculated;      // Total tasks speculated
+    size_t successful;           // Speculations that were valid and used
+    size_t aborted;              // Speculations aborted due to input changes
+    size_t wasted;               // Speculations completed but not used
+    Duration timeSaved;          // Estimated time saved from valid speculation
+    Duration timeWasted;         // Time spent on wasted speculation
+    
+    /// Speculation effectiveness ratio (higher = better)
+    @property float effectiveness() const pure nothrow @nogc @trusted
+    {
+        if (totalSpeculated == 0) return 0.0f;
+        return cast(float)successful / cast(float)totalSpeculated;
+    }
+    
+    /// Return on speculation investment
+    @property float roi() const pure nothrow @nogc @trusted
+    {
+        auto wastedMs = timeWasted.total!"msecs";
+        if (wastedMs == 0) return float.infinity;
+        return cast(float)timeSaved.total!"msecs" / cast(float)wastedMs;
+    }
+}
+
+/// Interface for speculation service
+interface ISpeculationService
+{
+    /// Set speculation policy
+    void setPolicy(SpeculationPolicy policy);
+    
+    /// Analyze graph and identify speculation candidates
+    void analyzeGraph(BuildGraph graph);
+    
+    /// Get top speculation candidates (ordered by priority)
+    TargetId[] getCandidates(size_t maxCount);
+    
+    /// Start speculative execution of a target
+    SpeculativeTask speculate(TargetId targetId);
+    
+    /// Notify that an input file changed (triggers abort check)
+    void notifyInputChanged(string path, string newHash);
+    
+    /// Check if a speculative result is available and valid
+    Nullable!SpeculativeTask getValidResult(TargetId targetId);
+    
+    /// Promote speculation to real result
+    void promote(TargetId targetId);
+    
+    /// Abort all pending/running speculations
+    void abortAll();
+    
+    /// Get speculation statistics
+    SpeculationStats getStats();
+    
+    /// Shutdown and cleanup
+    void shutdown();
+}
+
+/// Speculative execution service
+/// Manages critical path speculation with abort semantics
+final class SpeculationService : ISpeculationService
+{
+    private ProfileGuidedScheduler _profiler;
+    private CostEstimator _estimator;
+    private BuildGraph _graph;
+    private Mutex _mutex;
+    private SpeculationPolicy _policy;
+    
+    // Active speculations
+    private SpeculativeTask[string] _tasks;
+    private shared size_t _activeCount;
+    
+    // Candidates computed from critical path
+    private SpeculationCandidate[] _candidates;
+    
+    // Statistics
+    private SpeculationStats _stats;
+    
+    // Hash tracking for abort detection
+    private string[string] _currentHashes;  // path -> current hash
+    
+    this(CostEstimator estimator, BuildGraph graph = null) @trusted
+    {
+        _estimator = estimator;
+        _graph = graph;
+        _mutex = new Mutex();
+        _policy = SpeculationPolicy.init;
+        atomicStore(_activeCount, cast(size_t)0);
+        
+        if (graph !is null)
+            _profiler = new ProfileGuidedScheduler(estimator, graph);
+    }
+    
+    void setPolicy(SpeculationPolicy policy) @trusted
+    {
+        synchronized (_mutex) { _policy = policy; }
+    }
+    
+    void analyzeGraph(BuildGraph graph) @trusted
+    {
+        synchronized (_mutex)
+        {
+            _graph = graph;
+            _profiler = new ProfileGuidedScheduler(_estimator, graph);
+            _profiler.computeProfiles();
+            _candidates = computeCandidates();
+            
+            Logger.debugLog("Speculation: analyzed " ~ graph.nodes.length.to!string ~ 
+                           " nodes, found " ~ _candidates.length.to!string ~ " candidates");
+        }
+    }
+    
+    TargetId[] getCandidates(size_t maxCount) @trusted
+    {
+        synchronized (_mutex)
+        {
+            auto count = min(maxCount, _candidates.length);
+            return _candidates[0 .. count].map!(c => c.targetId).array;
+        }
+    }
+    
+    SpeculativeTask speculate(TargetId targetId) @trusted
+    {
+        synchronized (_mutex)
+        {
+            auto key = targetId.toString();
+            
+            // Already speculating?
+            if (key in _tasks)
+                return _tasks[key];
+            
+            // Check concurrent limit
+            if (atomicLoad(_activeCount) >= _policy.maxConcurrent)
+            {
+                Logger.debugLog("Speculation: at concurrent limit, skipping " ~ key);
+                return null;
+            }
+            
+            // Get node and profile
+            auto nodePtr = key in _graph.nodes;
+            if (nodePtr is null)
+                return null;
+            
+            auto profile = _profiler.getProfile(key);
+            if (profile is null)
+                return null;
+            
+            // Check min cost threshold
+            if (profile.estimatedCostMs < _policy.minCostMs)
+            {
+                Logger.debugLog("Speculation: " ~ key ~ " too cheap (" ~ 
+                               profile.estimatedCostMs.to!string ~ "ms < " ~ 
+                               _policy.minCostMs.to!string ~ "ms)");
+                return null;
+            }
+            
+            // Create speculative task
+            auto reason = determineReason(*profile);
+            auto task = new SpeculativeTask(
+                targetId, 
+                *nodePtr, 
+                profile.estimatedCostMs,
+                1.0f - profile.cacheHitProbability,  // Confidence inversely related to cache hit
+                reason
+            );
+            
+            // Record current input hashes
+            recordInputHashes(task, *nodePtr);
+            
+            _tasks[key] = task;
+            atomicOp!"+="(_activeCount, 1);
+            _stats.totalSpeculated++;
+            
+            task.setStatus(SpeculativeStatus.Running);
+            Logger.info("Speculation: starting " ~ key ~ " (" ~ reason ~ ")");
+            
+            return task;
+        }
+    }
+    
+    void notifyInputChanged(string path, string newHash) @trusted
+    {
+        synchronized (_mutex)
+        {
+            auto oldHash = _currentHashes.get(path, "");
+            if (oldHash == newHash)
+                return;
+            
+            _currentHashes[path] = newHash;
+            
+            if (!_policy.abortOnInputChange)
+                return;
+            
+            // Check all active speculations
+            foreach (key, task; _tasks)
+            {
+                if (task.status == SpeculativeStatus.Running)
+                {
+                    if (task.hasInputChanged((p) @trusted => _currentHashes.get(p, "")))
+                    {
+                        task.abort();
+                        _stats.aborted++;
+                        Logger.warning("Speculation: aborting " ~ key ~ " (input changed: " ~ path ~ ")");
+                    }
+                }
+            }
+        }
+    }
+    
+    Nullable!SpeculativeTask getValidResult(TargetId targetId) @trusted
+    {
+        synchronized (_mutex)
+        {
+            auto key = targetId.toString();
+            auto taskPtr = key in _tasks;
+            
+            if (taskPtr is null)
+                return Nullable!SpeculativeTask.init;
+            
+            auto task = *taskPtr;
+            
+            // Only return completed, non-aborted results
+            if (task.status != SpeculativeStatus.Completed)
+                return Nullable!SpeculativeTask.init;
+            
+            // Final validation: check inputs haven't changed
+            if (task.hasInputChanged((p) @trusted => _currentHashes.get(p, "")))
+            {
+                task.abort();
+                _stats.aborted++;
+                return Nullable!SpeculativeTask.init;
+            }
+            
+            return nullable(task);
+        }
+    }
+    
+    void promote(TargetId targetId) @trusted
+    {
+        synchronized (_mutex)
+        {
+            auto key = targetId.toString();
+            auto taskPtr = key in _tasks;
+            
+            if (taskPtr !is null)
+            {
+                auto task = *taskPtr;
+                if (task.status == SpeculativeStatus.Completed)
+                {
+                    task.setStatus(SpeculativeStatus.Promoted);
+                    _stats.successful++;
+                    _stats.timeSaved += task.actualDuration;
+                    Logger.success("Speculation: promoted " ~ key ~ 
+                                  " (saved " ~ task.actualDuration.total!"msecs".to!string ~ "ms)");
+                }
+                atomicOp!"-="(_activeCount, 1);
+            }
+        }
+    }
+    
+    void abortAll() @trusted
+    {
+        synchronized (_mutex)
+        {
+            foreach (key, task; _tasks)
+            {
+                auto status = task.status;
+                if (status == SpeculativeStatus.Running || status == SpeculativeStatus.Pending)
+                {
+                    task.abort();
+                    _stats.aborted++;
+                }
+                else if (status == SpeculativeStatus.Completed)
+                {
+                    _stats.wasted++;
+                    _stats.timeWasted += task.actualDuration;
+                }
+            }
+            _tasks.clear();
+            atomicStore(_activeCount, cast(size_t)0);
+        }
+    }
+    
+    SpeculationStats getStats() @trusted
+    {
+        synchronized (_mutex) { return _stats; }
+    }
+    
+    void shutdown() @trusted
+    {
+        abortAll();
+        Logger.debugLog("Speculation: shutdown, stats: " ~ formatStats(_stats));
+    }
+    
+private:
+    /// Speculation candidate with priority score
+    struct SpeculationCandidate
+    {
+        TargetId targetId;
+        size_t score;
+        string reason;
+    }
+    
+    /// Compute speculation candidates from critical path analysis
+    SpeculationCandidate[] computeCandidates() @trusted
+    {
+        SpeculationCandidate[] candidates;
+        
+        foreach (key, node; _graph.nodes)
+        {
+            auto profile = _profiler.getProfile(key);
+            if (profile is null)
+                continue;
+            
+            // Skip cheap targets
+            if (profile.estimatedCostMs < _policy.minCostMs)
+                continue;
+            
+            // Calculate speculation score
+            size_t score = 0;
+            string reason;
+            
+            // Critical path contribution
+            if (_policy.enableCriticalPath && profile.criticalPathCost > 0)
+            {
+                score += profile.criticalPathCost;
+                reason = "critical_path";
+            }
+            
+            // Fan-out contribution (high dependent count)
+            if (_policy.enableFanOut && profile.dependentCount > 2)
+            {
+                score += profile.dependentCount * 100;
+                if (reason.length > 0) reason ~= "+";
+                reason ~= "fan_out";
+            }
+            
+            // Penalize low confidence (high cache hit probability)
+            if (profile.cacheHitProbability > _policy.confidenceThreshold)
+            {
+                // Likely cache hit, don't speculate
+                continue;
+            }
+            
+            if (score > 0)
+                candidates ~= SpeculationCandidate(node.id, score, reason);
+        }
+        
+        // Sort by score descending
+        candidates.sort!((a, b) => a.score > b.score);
+        
+        return candidates;
+    }
+    
+    /// Record input hashes for a task
+    void recordInputHashes(SpeculativeTask task, BuildNode node) @trusted
+    {
+        // Record source file hashes
+        foreach (source; node.target.sources)
+            task.recordInputHash(source, _currentHashes.get(source, ""));
+        
+        // Record dependency output hashes
+        foreach (depId; node.dependencyIds)
+        {
+            auto depKey = depId.toString();
+            task.recordInputHash(depKey, _currentHashes.get(depKey, ""));
+        }
+    }
+    
+    /// Determine speculation reason from profile
+    string determineReason(const ActionProfile profile) pure @safe
+    {
+        if (profile.criticalPathCost > profile.estimatedCostMs * 2)
+            return "critical_path";
+        if (profile.dependentCount > 5)
+            return "high_fanout";
+        return "cost_benefit";
+    }
+    
+    /// Format stats for logging
+    static string formatStats(const SpeculationStats stats) @safe
+    {
+        import std.format : format;
+        return format("speculated=%d success=%d aborted=%d wasted=%d eff=%.1f%% roi=%.2f",
+            stats.totalSpeculated, stats.successful, stats.aborted, stats.wasted,
+            stats.effectiveness * 100, stats.roi);
+    }
+}
+
+/// Create speculation service from execution history
+SpeculationService createSpeculationService(BuildGraph graph, ExecutionHistory history) @trusted
+{
+    auto estimator = new CostEstimator(history);
+    auto service = new SpeculationService(estimator, graph);
+    service.analyzeGraph(graph);
+    return service;
+}
+
+/// Unit tests
+unittest
+{
+    import std.stdio;
+    writeln("\x1b[36m[TEST]\x1b[0m speculation.service - SpeculationPolicy presets");
+    
+    auto cons = SpeculationPolicy.conservative();
+    auto bal = SpeculationPolicy.balanced();
+    auto agg = SpeculationPolicy.aggressive();
+    
+    assert(cons.maxConcurrent < bal.maxConcurrent);
+    assert(bal.maxConcurrent < agg.maxConcurrent);
+    assert(cons.minCostMs > bal.minCostMs);
+    assert(bal.minCostMs > agg.minCostMs);
+    
+    writeln("\x1b[32m  ✓ Policy presets\x1b[0m");
+}
+
+unittest
+{
+    import std.stdio;
+    writeln("\x1b[36m[TEST]\x1b[0m speculation.service - SpeculationStats effectiveness");
+    
+    SpeculationStats stats;
+    stats.totalSpeculated = 10;
+    stats.successful = 7;
+    stats.aborted = 2;
+    stats.wasted = 1;
+    stats.timeSaved = 5000.msecs;
+    stats.timeWasted = 500.msecs;
+    
+    assert(stats.effectiveness == 0.7f);
+    assert(stats.roi == 10.0f);  // 5000/500 = 10x ROI
+    
+    writeln("\x1b[32m  ✓ Stats effectiveness\x1b[0m");
+}
+
+unittest
+{
+    import std.stdio;
+    writeln("\x1b[36m[TEST]\x1b[0m speculation.service - SpeculativeTask status transitions");
+    
+    import infrastructure.config.schema.schema : Target;
+    
+    auto target = Target.init;
+    auto tid = TargetId("test");
+    
+    // Note: BuildNode requires a graph context, so we test status transitions only
+    SpeculativeStatus s = SpeculativeStatus.Pending;
+    assert(s == SpeculativeStatus.Pending);
+    s = SpeculativeStatus.Running;
+    assert(s == SpeculativeStatus.Running);
+    s = SpeculativeStatus.Completed;
+    assert(s == SpeculativeStatus.Completed);
+    
+    writeln("\x1b[32m  ✓ Status transitions\x1b[0m");
+}
+

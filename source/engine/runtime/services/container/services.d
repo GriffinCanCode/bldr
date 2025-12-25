@@ -9,6 +9,7 @@ import engine.runtime.remote : IRemoteExecutionService, RemoteExecutionService, 
 import engine.caching.targets.cache;
 import engine.runtime.shutdown.shutdown : ShutdownCoordinator;
 import engine.economics.integration : EconomicsIntegration;
+import engine.economics.estimator : ExecutionHistory;
 import infrastructure.telemetry;
 import infrastructure.telemetry.distributed.tracing;
 import infrastructure.utils.logging.structured;
@@ -26,6 +27,7 @@ import frontend.cli.display.render;
 import infrastructure.errors;
 import infrastructure.di : IServiceContainer;
 import engine.workers : PersistentWorkerService, WorkerServiceConfig, initWorkerService, shutdownWorkerService;
+import engine.runtime.services.speculation : SpeculationService;
 
 /// Service container for dependency injection
 /// Implements IServiceContainer for formalized DI pattern.
@@ -335,6 +337,24 @@ final class BuildServices : IServiceContainer
     
     /// Get economics integration
     @property EconomicsIntegration economics() { return _economics; }
+    
+    /// Create speculation service for critical path optimization
+    /// Uses economics integration for cost estimation
+    SpeculationService createSpeculationService(BuildGraph graph) @trusted
+    {
+        import engine.runtime.services.speculation;
+        import engine.economics.estimator : CostEstimator;
+        
+        auto history = _economics !is null && _economics.isEnabled() 
+            ? _economics.getExecutionHistory() 
+            : new ExecutionHistory();
+        auto estimator = new CostEstimator(history);
+        auto service = new SpeculationService(estimator, graph);
+        
+        Logger.debugLog("Created speculation service for graph with " ~ 
+                       graph.nodes.length.to!string ~ " nodes");
+        return service;
+    }
     
     /// Get incremental analyzer
     @property IIncrementalAnalyzer incrementalAnalyzer() { return _incrementalAnalyzer; }

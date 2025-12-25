@@ -6,6 +6,11 @@ concepts:
     file: "concepts/core/action-cache.yaml"
     summary: "Fine-grained caching for individual build actions (compile, link, test)"
 
+  async-io:
+    file: "concepts/core/async-io.yaml"
+    summary: "Linux io_uring async I/O for batch file hashing - 3-9x faster on cold cache"
+    keywords: ["io_uring", "async", "batch", "hashing", "cold cache", "zero-copy"]
+
   artifact-management:
     file: "concepts/core/artifact-management.yaml"
     summary: "Artifact Management - Handling build outputs"
@@ -42,6 +47,11 @@ concepts:
   caching:
     file: "concepts/core/caching.yaml"
     summary: "Multi-tier caching system: target-level, action-level, and remote"
+
+  cdc:
+    file: "concepts/core/cdc.yaml"
+    summary: "Content-Defined Chunking (FastCDC) for 80-95% bandwidth savings on large artifacts"
+    keywords: ["fastcdc", "chunking", "delta", "transfer", "large", "artifact", "bandwidth"]
 
   cli:
     file: "concepts/reference/cli.yaml"
@@ -109,6 +119,11 @@ concepts:
     file: "concepts/languages/dynamic-languages.yaml"
     summary: "Dynamic Languages - Python, Ruby, PHP, Perl, Lua, R, Go, Elixir, Gleam"
     keywords: ["scripting", "interpreted", "runtime", "pip", "bundler", "composer"]
+
+  economics:
+    file: "concepts/core/economics.yaml"
+    summary: "Economic optimization - Pareto-optimal cost/time tradeoffs for builds"
+    keywords: ["economics", "cost", "optimization", "pareto", "budget", "cloud", "pricing"]
 
   ecosystem:
     file: "concepts/ecosystem/ecosystem.yaml"
@@ -213,8 +228,8 @@ concepts:
 
   persistent-workers:
     file: "concepts/reference/persistent-workers.yaml"
-    summary: "Persistent Worker Protocol - Keep JVM/TypeScript compilers warm for 10-50x faster compilation"
-    keywords: ["worker", "jvm", "javac", "kotlinc", "tsc", "swc", "warm", "startup"]
+    summary: "Persistent Worker Protocol - Keep JVM/TypeScript compilers warm across builds for 10-50x faster compilation"
+    keywords: ["worker", "jvm", "javac", "kotlinc", "tsc", "swc", "warm", "startup", "recycling", "warmth", "oom", "memory"]
 
   platforms:
     file: "concepts/config/platforms.yaml"
@@ -287,6 +302,11 @@ concepts:
     file: "concepts/languages/shell-support.yaml"
     summary: "Shell Support - Shell scripts and tests"
 
+  speculation:
+    file: "concepts/core/speculation.yaml"
+    summary: "Speculative execution for critical path optimization - pre-execute likely-needed targets"
+    keywords: ["speculation", "critical-path", "prefetch", "parallel", "abort", "economics", "lookahead"]
+
   skylib:
     file: "concepts/rules/skylib.yaml"
     summary: "Skylib - Standard library for Starlark"
@@ -356,6 +376,23 @@ concepts:
 
 
 aliases:
+  io-uring: "async-io"
+  io_uring: "async-io"
+  uring: "async-io"
+  async-hashing: "async-io"
+  batch-hash: "async-io"
+  cold-cache: "async-io"
+  adaptive-thresholds: "adaptive-stealing"
+  adaptive-tuning: "adaptive-stealing"
+  ewma: "adaptive-stealing"
+  steal-tuning: "adaptive-stealing"
+  work-steal-adaptive: "adaptive-stealing"
+  minLocalQueue: "adaptive-stealing"
+  fastcdc: "cdc"
+  chunking: "cdc"
+  delta-transfer: "cdc"
+  content-chunking: "cdc"
+  large-artifact: "cdc"
   graph-db: "graph-persistence"
   graph-sqlite: "graph-persistence"
   graph-wal: "graph-persistence"
@@ -430,6 +467,13 @@ aliases:
   persistent: "persistent-workers"
   javac-worker: "persistent-workers"
   tsc-worker: "persistent-workers"
+  warmth: "persistent-workers"
+  hot-worker: "persistent-workers"
+  worker-recycling: "persistent-workers"
+  recycler: "persistent-workers"
+  worker-oom: "persistent-workers"
+  worker-memory: "persistent-workers"
+  jit-warmth: "persistent-workers"
   csharp: "languages"
   cs: "languages"
   fsharp: "languages"
@@ -456,6 +500,16 @@ aliases:
   supply-chain: "provenance"
   sbom: "provenance"
   in-toto: "provenance"
+  speculative: "speculation"
+  speculate: "speculation"
+  lookahead: "speculation"
+  prefetch: "speculation"
+  early-execution: "speculation"
+  cost: "economics"
+  budget: "economics"
+  pricing: "economics"
+  pareto: "economics"
+  tradeoff: "economics"
 
 categories:
   - name: "core"
