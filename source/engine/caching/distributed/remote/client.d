@@ -3,7 +3,8 @@ module engine.caching.distributed.remote.client;
 import std.datetime : Clock, Duration, dur;
 import std.file : exists, read, write, remove, getSize;
 import std.path : buildPath;
-import std.algorithm : min;
+import std.algorithm : min, map;
+import std.array : array;
 import core.sync.mutex;
 import engine.caching.distributed.remote.protocol;
 import engine.caching.distributed.remote.transport;
@@ -11,6 +12,7 @@ import infrastructure.utils.files.hash : FastHash;
 import infrastructure.utils.security.integrity : IntegrityValidator;
 import infrastructure.utils.compression.compress;
 import infrastructure.utils.files.chunking : ChunkManifest, ChunkTransfer, TransferStats, ContentChunker;
+import infrastructure.utils.files.cdc : FastCDC, CDCManifest = ChunkManifest, shouldChunk, LARGE_ARTIFACT_THRESHOLD;
 import infrastructure.errors;
 
 /// Remote cache client with connection pooling and retry logic
@@ -42,6 +44,7 @@ final class RemoteCacheClient
     }
     
     /// Fetch artifact from remote cache
+    /// Automatically handles FastCDC chunked artifacts
     /// Returns: artifact data or error
     BuildResult!(ubyte[]) get(string contentHash) @trusted
     {
@@ -51,7 +54,14 @@ final class RemoteCacheClient
         
         immutable startTime = Clock.currStdTime();
         
-        // Execute with retry logic
+        // First check if this is a CDC-chunked artifact
+        immutable cdcKey = "cdc:" ~ contentHash;
+        auto cdcResult = executeWithRetry(() => transport.get(cdcKey));
+        
+        if (cdcResult.isOk)
+            return getWithFastCDC(contentHash, cdcResult.unwrap(), startTime);
+        
+        // Standard fetch
         auto result = executeWithRetry(() => transport.get(contentHash));
         
         synchronized (statsMutex)
@@ -105,6 +115,61 @@ final class RemoteCacheClient
         }
         
         return result;
+    }
+    
+    /// Retrieve large artifact from FastCDC chunks
+    private BuildResult!(ubyte[]) getWithFastCDC(string contentHash, ubyte[] manifestData, long startTime) @trusted
+    {
+        import infrastructure.utils.crypto.blake3 : toHexString;
+        
+        // Parse manifest
+        auto parseResult = CDCManifest.deserialize(manifestData);
+        if (parseResult.isErr)
+            return Err!(ubyte[], BuildError)(
+                Errors.cache("Invalid CDC manifest: " ~ parseResult.unwrapErr(), ErrorCode.CacheCorrupted).build());
+        
+        auto manifest = parseResult.unwrap();
+        
+        // Allocate output buffer
+        auto output = new ubyte[manifest.totalSize];
+        size_t bytesDownloaded = 0;
+        
+        // Download and reassemble chunks
+        foreach (ref r; manifest.refs)
+        {
+            immutable chunkHash = toHexString(r.hash[]);
+            
+            auto chunkResult = executeWithRetry(() => transport.get(chunkHash));
+            if (chunkResult.isErr)
+                return Err!(ubyte[], BuildError)(chunkResult.unwrapErr());
+            
+            auto chunkData = chunkResult.unwrap();
+            if (chunkData.length != r.length)
+                return Err!(ubyte[], BuildError)(
+                    Errors.cache("Chunk size mismatch", ErrorCode.CacheCorrupted).build());
+            
+            // Copy to output buffer
+            output[r.offset .. r.offset + r.length] = chunkData[];
+            bytesDownloaded += chunkData.length;
+        }
+        
+        // Verify reassembled hash
+        immutable actualHash = FastHash.hashBytes(output);
+        if (actualHash != contentHash)
+            return Err!(ubyte[], BuildError)(
+                Errors.cache("Reassembled artifact hash mismatch", ErrorCode.CacheCorrupted).build());
+        
+        synchronized (statsMutex)
+        {
+            stats.getRequests++;
+            stats.hits++;
+            stats.bytesDownloaded += bytesDownloaded;
+            stats.cdcChunksDownloaded += manifest.chunkCount;
+            updateLatency(startTime);
+            stats.compute();
+        }
+        
+        return Ok!(ubyte[], BuildError)(output);
     }
     
     /// Store artifact in remote cache

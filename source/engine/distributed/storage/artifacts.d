@@ -13,6 +13,7 @@ import infrastructure.errors.formatting.format : formatError = format;
 import infrastructure.utils.logging.logger;
 import infrastructure.utils.crypto.blake3 : Blake3;
 import infrastructure.utils.memory.mmap : MmapRegion, MapMode;
+import infrastructure.utils.files.cdc : FastCDC, ChunkManifest, shouldChunk, LARGE_ARTIFACT_THRESHOLD;
 
 /// Size threshold for mmap artifact reads (>256KB uses mmap)
 private enum size_t ARTIFACT_MMAP_THRESHOLD = 256 * 1024;
@@ -136,7 +137,7 @@ final class ArtifactStore
             Errors.cache("Artifact not found: " ~ spec.id.toString(), ErrorCode.CacheNotFound));
     }
     
-    /// Upload artifact
+    /// Upload artifact - uses FastCDC for large artifacts (>100MB)
     VoidBuildResult upload(ArtifactId id, const ubyte[] data) @trusted
     {
         // Verify content hash matches ID
@@ -148,6 +149,10 @@ final class ArtifactStore
             return VoidBuildResult.err(
                 Errors.generic("Artifact hash mismatch: expected " ~ id.toString() ~ 
                     " but got " ~ toHexString(actualHash[0 .. 32]).toLower(), ErrorCode.CacheCorrupted));
+        
+        // Use FastCDC for large artifacts (>100MB)
+        if (shouldChunk(data.length) && config.enableRemote && config.remoteUrl.length > 0)
+            return uploadWithCDC(id, data);
         
         // Save to local cache
         try
@@ -175,6 +180,116 @@ final class ArtifactStore
         }
         
         return Ok!BuildError();
+    }
+    
+    /// Upload large artifact using FastCDC for delta transfers
+    private VoidBuildResult uploadWithCDC(ArtifactId id, const ubyte[] data) @trusted
+    {
+        import infrastructure.utils.crypto.blake3 : toHexString;
+        
+        // Chunk data using FastCDC
+        auto cdc = FastCDC(FastCDC.Config.large());
+        auto chunkResult = cdc.chunkData(data);
+        
+        if (chunkResult.chunks.length == 0)
+            return VoidBuildResult.err(
+                Errors.cache("FastCDC chunking failed", ErrorCode.CacheWriteFailed).build());
+        
+        // Upload each chunk
+        size_t chunksUploaded = 0;
+        foreach (ref chunk; chunkResult.chunks)
+        {
+            immutable chunkHash = toHexString(chunk.hash[]);
+            immutable chunkUrl = config.remoteUrl ~ "/chunks/" ~ chunkHash;
+            
+            // Check if chunk exists
+            auto checkResult = executeHttpHead(chunkUrl);
+            if (checkResult.isOk && checkResult.unwrap())
+                continue;  // Chunk exists, skip
+            
+            // Upload chunk
+            auto chunkData = data[chunk.offset .. chunk.offset + chunk.length];
+            auto putResult = executeHttpPut(chunkUrl, chunkData);
+            if (putResult.isErr)
+            {
+                Logger.warning("Failed to upload chunk: " ~ chunkHash);
+                continue;  // Try other chunks
+            }
+            chunksUploaded++;
+        }
+        
+        // Create and upload manifest
+        ubyte[32] blobHash = id.hash;
+        auto manifest = ChunkManifest.fromResult(chunkResult, blobHash[]);
+        auto manifestData = manifest.serialize();
+        
+        immutable manifestUrl = config.remoteUrl ~ "/manifests/" ~ id.toString();
+        auto manifestResult = executeHttpPut(manifestUrl, manifestData);
+        
+        if (manifestResult.isErr)
+            Logger.warning("Failed to upload manifest for: " ~ id.toString());
+        
+        // Save to local cache
+        try { saveToLocalCache(id, data); }
+        catch (Exception e) { Logger.warning("Failed to save to local cache: " ~ e.msg); }
+        
+        Logger.debugLog("Uploaded large artifact via CDC: " ~ id.toString() ~ 
+                       " (" ~ chunksUploaded.to!string ~ "/" ~ chunkResult.chunks.length.to!string ~ " chunks uploaded)");
+        
+        return Ok!BuildError();
+    }
+    
+    /// Execute HTTP HEAD request
+    private BuildResult!bool executeHttpHead(string url) @trusted
+    {
+        import std.string : indexOf, startsWith;
+        
+        string host;
+        ushort port = 80;
+        string path;
+        
+        string remaining = url;
+        if (remaining.startsWith("http://")) remaining = remaining[7 .. $];
+        else if (remaining.startsWith("https://")) { remaining = remaining[8 .. $]; port = 443; }
+        
+        immutable slashPos = remaining.indexOf('/');
+        if (slashPos >= 0) { host = remaining[0 .. slashPos]; path = remaining[slashPos .. $]; }
+        else { host = remaining; path = "/"; }
+        
+        immutable colonPos = host.indexOf(':');
+        if (colonPos >= 0) { port = host[colonPos + 1 .. $].to!ushort; host = host[0 .. colonPos]; }
+        
+        try
+        {
+            auto addr = new InternetAddress(host, port);
+            auto socket = new TcpSocket();
+            socket.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, config.timeout);
+            socket.setOption(SocketOptionLevel.SOCKET, SocketOption.SNDTIMEO, config.timeout);
+            socket.connect(addr);
+            scope(exit) { socket.shutdown(SocketShutdown.BOTH); socket.close(); }
+            
+            string request = "HEAD " ~ path ~ " HTTP/1.1\r\nHost: " ~ host ~ "\r\nConnection: close\r\n\r\n";
+            socket.send(request);
+            
+            ubyte[1024] buffer;
+            auto received = socket.receive(buffer);
+            if (received <= 0) return Ok!(bool, BuildError)(false);
+            
+            immutable responseStr = cast(string)buffer[0 .. received];
+            immutable firstLine = responseStr[0 .. responseStr.indexOf('\r')];
+            import std.string : split;
+            auto parts = firstLine.split(' ');
+            if (parts.length >= 2)
+            {
+                immutable statusCode = parts[1].to!int;
+                return Ok!(bool, BuildError)(statusCode >= 200 && statusCode < 300);
+            }
+            return Ok!(bool, BuildError)(false);
+        }
+        catch (Exception e)
+        {
+            return Ok!(bool, BuildError)(false);  // Assume not exists on error
+        }
     }
     
     /// Check if artifact exists locally

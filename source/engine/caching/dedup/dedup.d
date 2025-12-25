@@ -6,7 +6,9 @@ import std.conv : to;
 import std.datetime : Clock, SysTime;
 import core.sync.mutex : Mutex;
 import engine.caching.storage.cas : ContentAddressableStorage;
+import engine.caching.storage.chunked : ChunkedCAS;
 import infrastructure.utils.files.hash : FastHash;
+import infrastructure.utils.files.cdc : shouldChunk, LARGE_ARTIFACT_THRESHOLD;
 import infrastructure.utils.serialization : Codec;
 import infrastructure.utils.simd.bloom : BloomFilter;
 import infrastructure.errors;
@@ -46,9 +48,11 @@ struct BlobRef
 /// - Lazy materialization: fetch blob content on-demand
 /// - Batch-optimized: minimize I/O for bulk operations
 /// - Bloom filter prefilter: eliminates 80-95% of negative lookups
+/// - FastCDC: Large blobs (>100MB) use content-defined chunking
 final class DedupEngine
 {
     private ContentAddressableStorage cas;
+    private ChunkedCAS chunkedCas;  // For large blobs (>100MB)
     private Mutex dedupMutex;
     private size_t[string] refCounts;  // hash -> reference count
     
@@ -67,7 +71,17 @@ final class DedupEngine
         this.bloomFilter = BloomFilter.create(BLOOM_EXPECTED_ITEMS, BLOOM_FPR);
     }
     
+    /// Constructor with ChunkedCAS for large blob support
+    this(ContentAddressableStorage cas, ChunkedCAS chunkedCas) @system
+    {
+        this.cas = cas;
+        this.chunkedCas = chunkedCas;
+        this.dedupMutex = new Mutex();
+        this.bloomFilter = BloomFilter.create(BLOOM_EXPECTED_ITEMS, BLOOM_FPR);
+    }
+    
     /// Store blob and get reference (deduplicates automatically)
+    /// Uses FastCDC for large blobs (>100MB)
     /// Returns: BlobRef pointing to stored content
     BuildResult!BlobRef store(const(ubyte)[] data, string path = "", bool executable = false) @system
     {
@@ -78,6 +92,33 @@ final class DedupEngine
         
         synchronized (dedupMutex)
         {
+            // Use ChunkedCAS for large blobs (>100MB)
+            if (shouldChunk(data.length) && chunkedCas !is null)
+            {
+                auto storeResult = chunkedCas.put(data);
+                if (storeResult.isErr)
+                    return Err!(BlobRef, BuildError)(storeResult.unwrapErr());
+                
+                // Track reference
+                auto count = refCounts.get(ref_.hash, 0);
+                refCounts[ref_.hash] = count + 1;
+                
+                if (bloomFilter.valid)
+                    bloomFilter.insert(ref_.hash);
+                
+                if (count == 0) {
+                    stats.uniqueBlobs++;
+                    stats.uniqueBytes += data.length;
+                    stats.largeBlobs++;
+                } else {
+                    stats.duplicateRefs++;
+                    stats.savedBytes += data.length;
+                }
+                stats.totalStores++;
+                
+                return Ok!(BlobRef, BuildError)(ref_);
+            }
+            
             // Store in CAS (handles dedup internally)
             auto storeResult = cas.putBlob(data);
             if (storeResult.isErr)
@@ -127,6 +168,7 @@ final class DedupEngine
     }
     
     /// Fetch blob content by reference
+    /// Handles both regular CAS and ChunkedCAS blobs
     BuildResult!(ubyte[]) fetch(BlobRef ref_) @system
     {
         if (!ref_.isValid)
@@ -135,6 +177,13 @@ final class DedupEngine
         synchronized (dedupMutex)
         {
             stats.totalFetches++;
+        }
+        
+        // Try ChunkedCAS first for large blobs
+        if (chunkedCas !is null && ref_.size >= LARGE_ARTIFACT_THRESHOLD)
+        {
+            if (chunkedCas.has(ref_.hash))
+                return chunkedCas.get(ref_.hash);
         }
         
         return cas.getBlob(ref_.hash);
@@ -316,6 +365,7 @@ struct DedupStats
     size_t totalStores;      // Total store operations
     size_t totalFetches;     // Total fetch operations
     size_t bloomFilterSaves; // Disk lookups avoided via bloom filter
+    size_t largeBlobs;       // Blobs stored via ChunkedCAS (>100MB)
     
     /// Deduplication ratio (lower = better dedup)
     float dedupRatio() const pure @safe

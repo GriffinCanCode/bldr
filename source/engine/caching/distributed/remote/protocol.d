@@ -150,6 +150,11 @@ struct RemoteCacheStats
     float hitRate;           // Hit rate percentage
     float averageLatency;    // Average request latency (ms)
     
+    // FastCDC delta transfer statistics
+    size_t cdcChunksUploaded;   // Chunks uploaded (new)
+    size_t cdcChunksReused;     // Chunks reused (delta savings)
+    size_t cdcChunksDownloaded; // Chunks downloaded
+    
     /// Compute derived statistics
     void compute() pure @safe nothrow
     {
@@ -158,5 +163,12 @@ struct RemoteCacheStats
             hitRate = (hits * 100.0) / total;
         else
             hitRate = 0.0;
+    }
+    
+    /// CDC bandwidth savings percentage
+    float cdcSavingsPercent() const pure @safe nothrow
+    {
+        immutable total = cdcChunksUploaded + cdcChunksReused;
+        return total > 0 ? (cdcChunksReused * 100.0f) / total : 0.0f;
     }
 }
