@@ -98,8 +98,8 @@ struct HelpCommand
         
         // Information
         printSectionHeader("INFORMATION");
-        printCommand("help", "[command]", "Show detailed help for a command");
-        printCommand("explain", "<topic>", "Browse documentation (try 'explain directory')");
+        printCommand("help", "[command]", "Show command usage and options");
+        printCommand("explain", "<topic>", "In-depth explanations and guides (try 'bldr explain')");
         terminal.writeln();
         
         // Global options
@@ -129,8 +129,11 @@ struct HelpCommand
         printExample("bldr help build", "Show detailed help for build command");
         terminal.writeln();
         
-        terminal.writeColored("For detailed help on any command, run: ", Color.Cyan);
+        terminal.writeColored("For command usage: ", Color.Cyan);
         terminal.writeColored("bldr help <command>", Color.Yellow, Style.Bold);
+        terminal.writeln();
+        terminal.writeColored("For in-depth explanations: ", Color.Cyan);
+        terminal.writeColored("bldr explain <topic>", Color.Yellow, Style.Bold);
         terminal.writeln();
         terminal.writeln();
         
@@ -1009,7 +1012,7 @@ struct HelpCommand
         terminal.writeln();
         
         string[] description = [
-            "Display help information for bldr commands."
+            "Display usage information for bldr commands."
         ];
         terminal.writeln(formatter.formatBox("bldr help [command]", description));
         terminal.writeln();
@@ -1052,6 +1055,11 @@ struct HelpCommand
         terminal.write(", ");
         terminal.writeColored("help", Color.Green);
         terminal.writeln();
+        terminal.writeln();
+        
+        printHighlight("LOOKING FOR IN-DEPTH EXPLANATIONS?",
+            "Run 'bldr explain' to browse detailed documentation and guides.\n" ~
+            "  Try 'bldr explain directory' to see all available topics.");
         terminal.writeln();
     }
 }
