@@ -319,6 +319,35 @@ Build Cost Summary:
 | **Cost Tracking** | ✅ Yes | ❌ No | ❌ No | ❌ No |
 | **Historical Learning** | ✅ Yes | ⚠️ Partial | ⚠️ Partial | ⚠️ Partial |
 
+## Profile-Guided Scheduling
+
+Builder uses economic data to inform **critical-path scheduling**. The execution history tracked by the economics module feeds into the `ProfileGuidedScheduler`, which:
+
+1. **Estimates action costs** from historical execution times
+2. **Computes critical path costs** (longest path to completion)
+3. **Prioritizes expensive actions** to unblock parallelism early
+4. **Weights by dependents** to maximize parallel work
+
+This integration is automatic when economics is enabled:
+
+```d
+// Economics integration exposes execution history
+auto history = economics.getExecutionHistory();
+
+// Profile scheduler uses history for cost estimates
+auto profileScheduler = createProfiledScheduler(graph, history);
+
+// Distributed scheduler uses profile data for priority
+distScheduler.enableProfileGuidedScheduling(profileScheduler);
+```
+
+The scheduling score formula:
+```
+score = criticalPathCost × 100 + dependentCount × 10 - depth × 1
+```
+
+This schedules long critical paths first and prioritizes actions that unblock the most work.
+
 ## Future Enhancements
 
 ### Phase 2: Apply Plans to Execution

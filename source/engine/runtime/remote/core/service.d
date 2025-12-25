@@ -9,6 +9,7 @@ import core.sync.mutex : Mutex;
 import core.thread : Thread;
 import engine.graph : BuildGraph;
 import engine.distributed.coordinator.coordinator;
+import engine.economics.estimator : ExecutionHistory;
 import engine.distributed.coordinator.registry;
 import engine.distributed.protocol.protocol : ActionId, WorkerId;
 import engine.runtime.remote.core.interface_ : IRemoteExecutionService, ServiceStatus;
@@ -104,6 +105,12 @@ struct RemoteServiceConfig
     
     Duration healthCheckInterval = 10.seconds;
     bool enableMetrics = true;
+    
+    // Profile-guided scheduling (uses economic estimator data for critical-path optimization)
+    bool enableProfileGuidedScheduling = true;
+    
+    // Execution history for profile-guided scheduling (shared from economics integration)
+    ExecutionHistory executionHistory = null;
 }
 
 /// Remote execution service
@@ -169,12 +176,14 @@ final class RemoteExecutionService : IRemoteExecutionService
         // Worker registry
         this.registry = new WorkerRegistry(config.poolConfig.workerStartTimeout);
         
-        // Coordinator
+        // Coordinator with profile-guided scheduling
         CoordinatorConfig coordConfig;
         coordConfig.host = config.coordinatorHost;
         coordConfig.port = config.coordinatorPort;
         coordConfig.workerTimeout = config.poolConfig.workerStartTimeout;
         coordConfig.enableWorkStealing = true;
+        coordConfig.enableProfileGuidedScheduling = config.enableProfileGuidedScheduling;
+        coordConfig.executionHistory = config.executionHistory;  // Share economics history
         
         this.coordinator = new Coordinator(graph, coordConfig);
         
@@ -281,11 +290,11 @@ final class RemoteExecutionService : IRemoteExecutionService
             auto coordResult = coordinator.start();
             if (coordResult.isErr)
             {
-                BuildError error = new GenericError(
-                    "Failed to start coordinator: " ~ coordResult.unwrapErr().message(),
-                    ErrorCode.InitializationFailed
+                return VoidBuildResult.err(
+                    Errors.generic("Failed to start coordinator: " ~ coordResult.unwrapErr().message(), ErrorCode.InitializationFailed)
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
                 );
-                return VoidBuildResult.err(error);
             }
             
             // Start worker pool
@@ -354,11 +363,11 @@ final class RemoteExecutionService : IRemoteExecutionService
     {
         if (!atomicLoad(running))
         {
-            auto error = new GenericError(
-                "Service not running",
-                ErrorCode.NotInitialized
+            return Err!(RemoteExecutionResult, BuildError)(
+                Errors.generic("Service not running", ErrorCode.NotInitialized)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
-            return Err!(RemoteExecutionResult, BuildError)(error);
         }
         
         return executor.execute(actionId, spec, command, workDir);
@@ -372,11 +381,11 @@ final class RemoteExecutionService : IRemoteExecutionService
     {
         if (!config.enableReapi || reapiAdapter is null)
         {
-            auto error = new GenericError(
-                "REAPI not enabled",
-                ErrorCode.NotSupported
+            return Err!(ExecuteResponse, BuildError)(
+                Errors.generic("REAPI not enabled", ErrorCode.NotSupported)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
-            return Err!(ExecuteResponse, BuildError)(error);
         }
         
         return reapiAdapter.execute(action, skipCacheLookup);
@@ -503,6 +512,14 @@ struct RemoteServiceBuilder
         config.tlsCertPath = certPath;
         config.tlsKeyPath = keyPath;
         config.tlsCaPath = caPath;
+        return this;
+    }
+    
+    /// Enable profile-guided scheduling with execution history from economics
+    ref RemoteServiceBuilder withProfileScheduling(ExecutionHistory history) return @safe nothrow @nogc
+    {
+        config.enableProfileGuidedScheduling = true;
+        config.executionHistory = history;
         return this;
     }
     

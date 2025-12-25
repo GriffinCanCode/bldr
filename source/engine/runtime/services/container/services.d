@@ -5,7 +5,7 @@ import std.conv : to;
 import engine.graph;
 import engine.runtime.core.engine : ExecutionEngine;
 import engine.runtime.services.registry : HandlerRegistry;
-import engine.runtime.remote : IRemoteExecutionService, RemoteExecutionService, RemoteServiceBuilder;
+import engine.runtime.remote : IRemoteExecutionService, RemoteExecutionService, RemoteServiceBuilder, RemoteServiceConfig;
 import engine.caching.targets.cache;
 import engine.runtime.shutdown.shutdown : ShutdownCoordinator;
 import engine.economics.integration : EconomicsIntegration;
@@ -475,13 +475,19 @@ final class BuildServices
             // For now, create minimal graph - actual graph passed during execution
             auto graph = new BuildGraph();
             
-            _remoteService = RemoteServiceBuilder.create()
+            // Build remote service with profile-guided scheduling (shares economics history)
+            auto builder = RemoteServiceBuilder.create()
                 .coordinator("0.0.0.0", 9000)  // Default coordinator
                 .pool(poolConfig)
                 .executor(executorConfig)
                 .enableReapi(9001)
-                .enableMetrics(true)
-                .build(graph);
+                .enableMetrics(true);
+            
+            // Enable profile-guided scheduling if economics is available
+            if (_economics !is null && _economics.isEnabled())
+                builder.withProfileScheduling(_economics.getExecutionHistory());
+            
+            _remoteService = builder.build(graph);
             
             // Start service
             auto startResult = _remoteService.start();

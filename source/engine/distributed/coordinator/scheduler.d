@@ -12,6 +12,7 @@ import core.thread : Thread;
 import engine.graph : BuildGraph, BuildNode;
 import engine.distributed.protocol.protocol;
 import engine.distributed.coordinator.registry;
+import engine.distributed.coordinator.profile : ProfileGuidedScheduler, ActionProfile;
 import infrastructure.config.schema.schema : TargetId;
 import infrastructure.errors;
 import infrastructure.utils.logging.logger;
@@ -82,6 +83,7 @@ private class TargetShard
 
 /// Distributed scheduler with lock striping and O(1) dependency tracking
 /// Replaces coarse-grained mutex with fine-grained sharding
+/// Supports profile-guided scheduling for critical-path optimization
 final class DistributedScheduler
 {
     private BuildGraph graph;
@@ -93,6 +95,10 @@ final class DistributedScheduler
     private SchedulerShard[SHARD_COUNT] shards;
     private TargetShard[SHARD_COUNT] targetShards;
     
+    // Profile-guided scheduling (optional)
+    private ProfileGuidedScheduler profileScheduler;
+    private bool profileGuidedEnabled;
+    
     private enum size_t MAX_RETRIES = 3;
     
     this(BuildGraph graph, WorkerRegistry registry) @trusted
@@ -100,6 +106,7 @@ final class DistributedScheduler
         this.graph = graph;
         this.registry = registry;
         atomicStore(running, true);
+        this.profileGuidedEnabled = false;
         
         foreach (i; 0 .. SHARD_COUNT)
         {
@@ -107,6 +114,24 @@ final class DistributedScheduler
             targetShards[i] = new TargetShard();
         }
     }
+    
+    /// Enable profile-guided scheduling with economic estimator
+    void enableProfileGuidedScheduling(ProfileGuidedScheduler scheduler) @trusted
+    {
+        this.profileScheduler = scheduler;
+        this.profileGuidedEnabled = scheduler !is null;
+        
+        if (profileGuidedEnabled)
+        {
+            auto stats = scheduler.getStats();
+            Logger.info("Profile-guided scheduling enabled:");
+            Logger.info("  " ~ stats.totalActions.to!string ~ " actions profiled");
+            Logger.info("  Max critical path: " ~ stats.maxCriticalPathCost.to!string ~ "ms");
+        }
+    }
+    
+    /// Check if profile-guided scheduling is active
+    bool isProfileGuided() const pure @safe nothrow @nogc => profileGuidedEnabled;
     
     /// Get shard index for ActionId
     private size_t getShardIndex(ActionId id) const pure nothrow @safe @nogc
@@ -268,13 +293,23 @@ final class DistributedScheduler
     private void addReady(SchedulerShard shard, ActionInfo info) @trusted
     {
         auto cp = toConcurrencyPriority(info.priority);
-        auto task = new Concurrency.PriorityTask!ActionId(
-            info.id, 
-            cp,
-            0, // Cost
-            0, // Depth
-            0  // Dependents
-        );
+        size_t cost = 0, depth = 0, dependents = 0;
+        
+        // Use profile data if available for critical-path scheduling
+        if (profileGuidedEnabled && profileScheduler !is null)
+        {
+            if (auto targetId = info.id in shard.actionToTarget)
+            {
+                if (auto profile = profileScheduler.getProfile(targetId.toString()))
+                {
+                    cost = profile.criticalPathCost;
+                    depth = profile.depth;
+                    dependents = profile.dependentCount;
+                }
+            }
+        }
+        
+        auto task = new Concurrency.PriorityTask!ActionId(info.id, cp, cost, depth, dependents);
         shard.readyQueue.insert(task);
     }
     

@@ -329,6 +329,19 @@ final class DistributedScheduler
 
 ### Critical Path Analysis
 
+Builder uses **profile-guided scheduling** to optimize critical path execution. Historical execution data from the economic estimator informs action priorities:
+
+```d
+/// Profile-guided scheduling uses economic data for priorities
+auto profileScheduler = createProfiledScheduler(graph, executionHistory);
+distScheduler.enableProfileGuidedScheduling(profileScheduler);
+
+// Scheduling priority = criticalPathCost × 100 + dependents × 10 - depth
+// - Expensive actions scheduled early (unblock critical path)
+// - Actions with many dependents prioritized (maximize parallelism)
+// - Depth penalty favors breadth-first (better parallelism)
+```
+
 ```d
 /// Compute critical path for priority scheduling
 final class CriticalPathAnalyzer
@@ -992,7 +1005,7 @@ bldr build --distributed --local-workers 4
 - [ ] Speculative execution
 - [ ] Action batching
 - [ ] Pipelined transfers
-- [ ] Critical path scheduling
+- [x] Critical path scheduling (profile-guided)
 
 ### Phase 6: Production Ready (1 week)
 - [ ] Docker images

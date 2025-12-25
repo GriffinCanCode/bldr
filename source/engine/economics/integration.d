@@ -9,16 +9,20 @@ import engine.economics.estimator;
 import engine.economics.strategies;
 import engine.economics.tracking;
 import engine.graph : BuildGraph;
+import engine.distributed.coordinator.profile : ProfileGuidedScheduler, createProfiledScheduler;
 import infrastructure.config.schema.schema : EconomicsConfig;
 import infrastructure.errors;
 import infrastructure.utils.logging.logger;
 
 /// Economic optimizer integration with build system
 /// Wraps optimizer with configuration and provides simple API
+/// Supports profile-guided action scheduling for critical-path optimization
 final class EconomicsIntegration
 {
     private CostOptimizer optimizer;
     private CostTracker tracker;
+    private CostEstimator estimator;
+    private ExecutionHistory history;
     private PricingConfig pricingConfig;
     private bool enabled;
     
@@ -52,14 +56,14 @@ final class EconomicsIntegration
             }
         })();
         
-        auto history = new ExecutionHistory();
+        this.history = new ExecutionHistory();
         this.tracker = new CostTracker(history, cacheDir);
         
         auto loadResult = tracker.load();
         if (loadResult.isErr)
             Logger.warning("Could not load execution history: " ~ loadResult.unwrapErr().message());
         
-        auto estimator = new CostEstimator(history);
+        this.estimator = new CostEstimator(history);
         this.optimizer = new CostOptimizer(estimator, pricingConfig);
         
         Logger.info("Economic optimizer initialized");
@@ -102,6 +106,24 @@ final class EconomicsIntegration
     
     /// Get cost tracker for recording actual costs
     CostTracker getTracker() @safe nothrow @nogc => tracker;
+    
+    /// Get execution history for profile-guided scheduling
+    ExecutionHistory getExecutionHistory() @safe nothrow @nogc => history;
+    
+    /// Get cost estimator for action profiling
+    CostEstimator getCostEstimator() @safe nothrow @nogc => estimator;
+    
+    /// Create profile-guided scheduler for a build graph
+    /// Uses historical execution data for critical-path scheduling
+    ProfileGuidedScheduler createProfileScheduler(BuildGraph graph) @trusted
+    {
+        if (!enabled || history is null)
+            return null;
+        
+        auto scheduler = createProfiledScheduler(graph, history);
+        Logger.debugLog("Created profile-guided scheduler with economic data");
+        return scheduler;
+    }
     
     /// Display plan to user
     void displayPlan(const BuildPlan plan) const @trusted

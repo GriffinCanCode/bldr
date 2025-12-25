@@ -13,6 +13,7 @@ key_points:
   - "Transport: Supports HTTP/1.1 (default), gRPC, or REAPI v2"
   - "Integration: Works with BuildBuddy, BuildBarn, Google RBE"
   - "Hash translation: Automatic BLAKE3 ↔ SHA256 for REAPI servers"
+  - "Profile-Guided: Uses historical data to schedule expensive actions early"
 
 usage_examples:
   - description: "Configure remote execution with HTTP (default)"

@@ -13,11 +13,13 @@ import engine.distributed.protocol.protocol;
 import engine.distributed.protocol.messages;
 import engine.distributed.coordinator.registry;
 import engine.distributed.coordinator.scheduler;
+import engine.distributed.coordinator.profile : ProfileGuidedScheduler, createProfiledScheduler;
 import engine.distributed.coordinator.health;
 import engine.distributed.coordinator.recover;
 import engine.distributed.coordinator.messages : CoordinatorMessageHandler;
 import engine.distributed.protocol.transport;
 import engine.distributed.worker.peers : PeerRegistry;
+import engine.economics.estimator : ExecutionHistory;
 import infrastructure.errors;
 import infrastructure.errors.formatting.format : formatError = format;
 import infrastructure.utils.logging.logger;
@@ -31,6 +33,12 @@ struct CoordinatorConfig
     Duration workerTimeout = 30.seconds;
     bool enableWorkStealing = true;
     Duration heartbeatInterval = 5.seconds;
+    
+    /// Enable profile-guided scheduling using economic estimator data
+    bool enableProfileGuidedScheduling = true;
+    
+    /// Execution history for profile-guided scheduling (optional, created if null)
+    ExecutionHistory executionHistory = null;
 }
 
 /// Build coordinator (manages distributed build execution)
@@ -42,6 +50,7 @@ final class Coordinator
     private CoordinatorConfig config;
     private WorkerRegistry registry;
     private DistributedScheduler scheduler;
+    private ProfileGuidedScheduler profileScheduler;
     private HealthMonitor healthMonitor;
     private CoordinatorRecovery recovery;
     private CoordinatorMessageHandler messageHandler;
@@ -61,6 +70,18 @@ final class Coordinator
         this.config = config;
         this.registry = new WorkerRegistry(config.workerTimeout);
         this.scheduler = new DistributedScheduler(graph, registry);
+        
+        // Enable profile-guided scheduling for critical-path optimization
+        if (config.enableProfileGuidedScheduling)
+        {
+            auto history = config.executionHistory !is null 
+                ? config.executionHistory 
+                : new ExecutionHistory();
+            this.profileScheduler = createProfiledScheduler(graph, history);
+            scheduler.enableProfileGuidedScheduling(profileScheduler);
+            Logger.info("Profile-guided scheduling enabled for critical-path optimization");
+        }
+        
         this.healthMonitor = new HealthMonitor(registry, scheduler, 
                                                 config.heartbeatInterval, config.workerTimeout);
         this.recovery = new CoordinatorRecovery(registry, scheduler, healthMonitor);
@@ -74,6 +95,12 @@ final class Coordinator
             this.peerRegistry = new PeerRegistry(WorkerId(0));  // Coordinator ID = 0
         }
     }
+    
+    /// Check if profile-guided scheduling is enabled
+    bool isProfileGuidedEnabled() const pure @safe nothrow @nogc => scheduler.isProfileGuided();
+    
+    /// Get profile scheduler for statistics (null if not enabled)
+    ProfileGuidedScheduler getProfileScheduler() @safe nothrow @nogc => profileScheduler;
     
     /// Start coordinator server
     Result!DistributedError start() @trusted

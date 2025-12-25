@@ -1,20 +1,25 @@
 topic: critical-path
 category: concepts
-summary: "Critical Path - Bottleneck analysis"
+summary: "Critical Path - Bottleneck analysis and profile-guided scheduling"
 definition: |
   The sequence of dependent actions that determines the minimum possible build time.
-  Parallelism cannot speed up the critical path.
+  Parallelism cannot speed up the critical path. Builder uses profile-guided scheduling
+  to prioritize expensive actions on the critical path early, maximizing parallelism.
 
 key_points:
   - "Analysis: 'builder analyze-profile'"
   - "Optimization: Break large targets"
   - "Visualization: Gantt charts"
+  - "Profile-Guided: Uses historical execution data to estimate costs"
+  - "Scheduling: Expensive actions scheduled early to unblock dependents"
 
 usage_examples:
   - description: "Look for 'Critical Path' in build summary"
+  - description: "Profile-guided scheduling enabled by default in distributed builds"
 
-related: [performance, concurrency, observability]
+related: [performance, concurrency, observability, distributed]
 
 next_steps: |
   - Optimize the longest chain of dependencies
+  - Historical data improves scheduling accuracy over time
 
