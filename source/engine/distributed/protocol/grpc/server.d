@@ -6,6 +6,9 @@ import std.conv : to;
 import std.algorithm : startsWith;
 import core.thread : Thread;
 import core.sync.mutex : Mutex;
+import core.sync.condition : Condition;
+import core.atomic : atomicStore, atomicLoad, atomicOp;
+import std.parallelism : totalCPUs;
 import engine.distributed.protocol.protocol;
 import engine.distributed.protocol.grpc.http2;
 import engine.distributed.protocol.grpc.frame;
@@ -25,7 +28,8 @@ struct GrpcServerConfig {
     Duration keepaliveTime = 30.seconds;     // Keepalive ping interval
     Duration keepaliveTimeout = 10.seconds;  // Keepalive timeout
     size_t maxMessageSize = 4 * 1024 * 1024; // 4MB default
-    uint workerThreads = 4;                  // Number of worker threads
+    uint workerThreads = 0;                  // Number of worker threads (0 = 2 * CPU cores)
+    size_t connectionQueueSize = 256;        // Bounded queue for pending connections
     
     static GrpcServerConfig insecure(string address) {
         GrpcServerConfig c;
@@ -45,6 +49,108 @@ struct GrpcServerConfig {
             } catch (Exception) {}
         }
         return Result("0.0.0.0", 50051);  // Default gRPC port
+    }
+}
+
+/// Bounded connection pool with structured concurrency for gRPC connections
+/// Uses fixed thread pool with work queue instead of thread-per-connection
+private final class GrpcConnectionPool {
+    private Thread[] workers;
+    private Socket[] queue;
+    private size_t queueHead, queueTail, queueSize;
+    private Mutex queueMutex;
+    private Condition workAvailable;
+    private shared bool running;
+    private immutable size_t queueCapacity;
+    private void delegate(Socket) @trusted handler;
+    
+    this(size_t workerCount, size_t queueCapacity, void delegate(Socket) @trusted handler) @trusted {
+        this.handler = handler;
+        this.queueCapacity = queueCapacity;
+        this.queue = new Socket[queueCapacity];
+        this.queueMutex = new Mutex();
+        this.workAvailable = new Condition(queueMutex);
+        atomicStore(running, true);
+        
+        immutable numWorkers = workerCount == 0 ? totalCPUs * 2 : workerCount;
+        workers.reserve(numWorkers);
+        foreach (_; 0 .. numWorkers) {
+            auto worker = new Thread(&workerLoop);
+            workers ~= worker;
+            worker.start();
+        }
+    }
+    
+    /// Submit a client socket for processing. Returns false if queue full (backpressure).
+    bool submit(Socket client) @trusted nothrow {
+        try {
+            synchronized (queueMutex) {
+                if (queueSize >= queueCapacity)
+                    return false;
+                
+                queue[queueTail] = client;
+                queueTail = (queueTail + 1) % queueCapacity;
+                queueSize++;
+                workAvailable.notify();
+            }
+            return true;
+        } catch (Exception) {
+            return false;
+        }
+    }
+    
+    /// Shutdown pool gracefully with cancellation
+    void shutdown() @trusted nothrow {
+        atomicStore(running, false);
+        
+        try {
+            synchronized (queueMutex)
+                workAvailable.notifyAll();
+            
+            foreach (worker; workers) {
+                try { worker.join(); } catch (Exception) {}
+            }
+        } catch (Exception) {}
+    }
+    
+    /// Check if pool is accepting work
+    bool isRunning() const @trusted nothrow => atomicLoad(running);
+    
+    /// Current queue depth (for monitoring)
+    size_t pendingConnections() @trusted nothrow {
+        try {
+            synchronized (queueMutex)
+                return queueSize;
+        } catch (Exception) {
+            return 0;
+        }
+    }
+    
+    private void workerLoop() @trusted {
+        while (atomicLoad(running)) {
+            Socket client;
+            
+            synchronized (queueMutex) {
+                while (queueSize == 0 && atomicLoad(running))
+                    workAvailable.wait();
+                
+                if (!atomicLoad(running) && queueSize == 0)
+                    break;
+                
+                if (queueSize > 0) {
+                    client = queue[queueHead];
+                    queue[queueHead] = null;  // Release reference for GC
+                    queueHead = (queueHead + 1) % queueCapacity;
+                    queueSize--;
+                }
+            }
+            
+            if (client !is null) {
+                try {
+                    handler(client);
+                } catch (Exception) {}
+            }
+        }
     }
 }
 
@@ -70,14 +176,15 @@ private struct ServiceEntry {
  * gRPC Server Implementation
  * 
  * HTTP/2-based server supporting REAPI and Builder's native protocol.
+ * Uses structured concurrency with bounded connection pool for resource safety.
  */
 final class GrpcServer {
     private GrpcServerConfig config;
     private Socket listener;
-    private bool running;
+    private shared bool running;
     private Mutex mutex;
     private ServiceEntry[] services;
-    private Thread[] workerThreads;
+    private GrpcConnectionPool connectionPool;
     private Thread acceptThread;
     
     /// HTTP/2 connection preface
@@ -106,7 +213,14 @@ final class GrpcServer {
             listener.bind(new InternetAddress(addr.host, addr.port));
             listener.listen(128);
             
-            running = true;
+            atomicStore(running, true);
+            
+            // Initialize connection pool with bounded queue
+            connectionPool = new GrpcConnectionPool(
+                config.workerThreads,
+                config.connectionQueueSize,
+                &handleConnection
+            );
             
             // Start accept thread
             acceptThread = new Thread(&acceptLoop);
@@ -119,9 +233,13 @@ final class GrpcServer {
         }
     }
     
-    /// Stop the server
+    /// Stop the server gracefully with proper cleanup
     void stop() @trusted {
-        running = false;
+        atomicStore(running, false);
+        
+        // Shutdown connection pool first to stop processing new work
+        if (connectionPool !is null)
+            connectionPool.shutdown();
         
         if (listener !is null) {
             try {
@@ -138,22 +256,28 @@ final class GrpcServer {
     }
     
     /// Check if server is running
-    bool isRunning() const @safe => running;
+    bool isRunning() const @trusted => atomicLoad(running);
     
     /// Get bound address
     string boundAddress() const @safe => config.address;
     
+    /// Get pending connection count (for monitoring/backpressure)
+    size_t pendingConnections() @trusted nothrow =>
+        connectionPool !is null ? connectionPool.pendingConnections() : 0;
+    
     private void acceptLoop() @trusted {
-        while (running) {
+        while (atomicLoad(running)) {
             try {
                 auto client = listener.accept();
                 if (client is null) continue;
                 
-                // Handle client in new thread
-                auto handler = new Thread(() => handleConnection(client));
-                handler.start();
+                // Submit to connection pool; reject if queue full (backpressure)
+                if (!connectionPool.submit(client)) {
+                    // Queue full - close connection gracefully
+                    safeCloseClient(client);
+                }
             } catch (Exception) {
-                if (!running) break;
+                if (!atomicLoad(running)) break;
             }
         }
     }
@@ -208,7 +332,7 @@ final class GrpcServer {
     private void processFrames(Socket client) @trusted {
         H2Stream[uint] streams;
         
-        while (running) {
+        while (atomicLoad(running)) {
             ubyte[9] headerBuf;
             auto received = client.receive(headerBuf);
             if (received != 9) break;
@@ -462,6 +586,16 @@ struct GrpcServerBuilder {
     
     ref GrpcServerBuilder withMaxMessageSize(size_t size) return @safe {
         config.maxMessageSize = size;
+        return this;
+    }
+    
+    ref GrpcServerBuilder withWorkerThreads(uint n) return @safe {
+        config.workerThreads = n;
+        return this;
+    }
+    
+    ref GrpcServerBuilder withConnectionQueueSize(size_t size) return @safe {
+        config.connectionQueueSize = size;
         return this;
     }
     
