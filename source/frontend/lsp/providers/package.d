@@ -8,6 +8,7 @@
  * - References: Find all references to a symbol
  * - Rename: Workspace-wide symbol renaming
  * - Symbols: Document outline and symbol navigation
+ * - Graph: Build dependency navigation (Go to Dependency, Find Reverse Dependencies)
  * 
  * Each provider implements a specific LSP capability and operates
  * on the workspace state maintained by the workspace module.
@@ -20,4 +21,5 @@ public import frontend.lsp.providers.definition;
 public import frontend.lsp.providers.references;
 public import frontend.lsp.providers.rename;
 public import frontend.lsp.providers.symbols;
+public import frontend.lsp.providers.graph;
 

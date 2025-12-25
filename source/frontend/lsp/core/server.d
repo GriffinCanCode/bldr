@@ -15,6 +15,7 @@ import frontend.lsp.providers.definition;
 import frontend.lsp.providers.references;
 import frontend.lsp.providers.rename;
 import frontend.lsp.providers.symbols;
+import frontend.lsp.providers.graph;
 import infrastructure.utils.logging.logger;
 
 /// LSP Server implementation
@@ -28,6 +29,7 @@ class LSPServer
     private ReferencesProvider referencesProvider;
     private RenameProvider renameProvider;
     private SymbolsProvider symbolsProvider;
+    private GraphProvider graphProvider;
     private bool running;
     private string rootUri;
     
@@ -165,6 +167,10 @@ class LSPServer
                     result = handleDocumentSymbol(json["params"]);
                     break;
                 
+                case "workspace/executeCommand":
+                    result = handleExecuteCommand(json["params"]);
+                    break;
+                
                 default:
                     Logger.warning("Unhandled request: " ~ method);
                     sendError(id, -32601, "Method not found: " ~ method);
@@ -249,7 +255,13 @@ class LSPServer
         renameProvider = RenameProvider(workspace);
         symbolsProvider = SymbolsProvider(workspace);
         
+        // Create graph provider with workspace cache directory
+        string cacheDir = uriToPath(rootUri) ~ "/.builder-cache";
+        graphProvider = GraphProvider(workspace, cacheDir);
+        
         Logger.info("Workspace root: " ~ rootUri);
+        if (graphProvider.hasGraph)
+            Logger.info("Graph provider initialized with build graph awareness");
         
         // Return capabilities
         InitializeResult result;
@@ -367,6 +379,36 @@ class LSPServer
         return JSONValue(symbolsJson);
     }
     
+    /// Handle workspace/executeCommand request
+    private JSONValue handleExecuteCommand(JSONValue params)
+    {
+        auto cmdParams = ExecuteCommandParams.fromJSON(params);
+        
+        Logger.debugLog("Execute command: " ~ cmdParams.command);
+        
+        // Parse command and delegate to graph provider
+        switch (cmdParams.command)
+        {
+            case "builder.goToDependency":
+                return graphProvider.executeCommand(GraphCommand.GoToDependency, cmdParams.arguments);
+                
+            case "builder.findReverseDependencies":
+                return graphProvider.executeCommand(GraphCommand.FindReverseDependencies, cmdParams.arguments);
+                
+            case "builder.showDependencyTree":
+                return graphProvider.executeCommand(GraphCommand.ShowDependencyTree, cmdParams.arguments);
+                
+            case "builder.showImpactAnalysis":
+                return graphProvider.executeCommand(GraphCommand.ShowImpactAnalysis, cmdParams.arguments);
+                
+            default:
+                Logger.warning("Unknown command: " ~ cmdParams.command);
+                JSONValue error;
+                error["error"] = "Unknown command: " ~ cmdParams.command;
+                return error;
+        }
+    }
+    
     /// Handle didOpen notification
     private void handleDidOpen(JSONValue params)
     {
@@ -456,6 +498,14 @@ class LSPServer
         response["error"] = error;
         
         writeMessage(response.toString());
+    }
+    
+    /// Convert file:// URI to filesystem path
+    private string uriToPath(string uri) const
+    {
+        if (uri.startsWith("file://"))
+            return uri[7 .. $];
+        return uri;
     }
 }
 

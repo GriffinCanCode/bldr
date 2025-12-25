@@ -460,7 +460,35 @@ struct ServerCapabilities
         // Document symbols
         json["documentSymbolProvider"] = true;
         
+        // Execute command (for graph navigation)
+        JSONValue executeCommandProvider;
+        executeCommandProvider["commands"] = [
+            "builder.goToDependency",
+            "builder.findReverseDependencies",
+            "builder.showDependencyTree",
+            "builder.showImpactAnalysis"
+        ];
+        json["executeCommandProvider"] = executeCommandProvider;
+        
         return json;
+    }
+}
+
+/// Execute command params
+struct ExecuteCommandParams
+{
+    string command;
+    JSONValue arguments;
+    
+    static ExecuteCommandParams fromJSON(JSONValue json)
+    {
+        ExecuteCommandParams params;
+        params.command = json["command"].str;
+        if ("arguments" in json)
+            params.arguments = json["arguments"];
+        else
+            params.arguments = JSONValue.emptyObject;
+        return params;
     }
 }
 

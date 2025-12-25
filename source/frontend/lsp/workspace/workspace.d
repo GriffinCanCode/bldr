@@ -43,10 +43,13 @@ class WorkspaceManager
     }
     
     /// Get index for direct access
-    @property ref Index getIndex()
-    {
-        return index;
-    }
+    @property ref Index getIndex() => index;
+    
+    /// Get workspace root URI
+    @property string root() const => rootUri;
+    
+    /// Get workspace root path (filesystem)
+    @property string rootPath() const => uriToPath(rootUri);
     
     /// Open a document
     void openDocument(string uri, string text, int version_)
@@ -167,8 +170,48 @@ class WorkspaceManager
     
     /// Find definition of a target
     Location* findDefinition(string targetName) const
+        => index.getDefinition(targetName);
+    
+    /// Get dependencies declared in a target's deps field
+    string[] getDeclaredDependencies(string targetName) const
     {
-        return index.getDefinition(targetName);
+        auto sym = index.getSymbol(targetName);
+        return sym !is null ? sym.deps.dup : [];
+    }
+    
+    /// Get targets that depend on a given target (from AST analysis)
+    string[] getDeclaredDependents(string targetName) const
+    {
+        string[] dependents;
+        foreach (name; index.getAllTargetNames())
+        {
+            auto sym = index.getSymbol(name);
+            if (sym is null) continue;
+            
+            foreach (dep; sym.deps)
+            {
+                auto normalized = normalizeDep(dep);
+                if (normalized == targetName)
+                {
+                    dependents ~= name;
+                    break;
+                }
+            }
+        }
+        return dependents;
+    }
+    
+    private string normalizeDep(string dep) const
+    {
+        if (dep.startsWith(":"))
+            return dep[1 .. $];
+        if (dep.startsWith("//"))
+        {
+            auto colonPos = dep.lastIndexOf(':');
+            if (colonPos != -1)
+                return dep[colonPos + 1 .. $];
+        }
+        return dep;
     }
     
     private void parseDocument(ref Document doc)
