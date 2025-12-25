@@ -217,6 +217,7 @@ struct BuilderfileEmitter
             case TargetType.Library: return "library";
             case TargetType.Test: return "test";
             case TargetType.Custom: return "custom";
+            case TargetType.Shell: return "shell";
         }
     }
     

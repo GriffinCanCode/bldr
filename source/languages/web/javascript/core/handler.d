@@ -73,6 +73,7 @@ class JavaScriptHandler : BaseLanguageHandler
                     result = runTests(target, config, jsConfig);
                     break;
                 case TargetType.Custom:
+                case TargetType.Shell:
                     result = buildCustom(target, config, jsConfig);
                     break;
             }

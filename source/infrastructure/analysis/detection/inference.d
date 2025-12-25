@@ -195,6 +195,7 @@ class TargetInference
             case TargetLanguage.OCaml:
             case TargetLanguage.Haskell:
             case TargetLanguage.Elm:
+            case TargetLanguage.Gleam:
             case TargetLanguage.CSS:
             case TargetLanguage.Protobuf:
             case TargetLanguage.Generic:

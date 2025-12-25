@@ -130,6 +130,8 @@ class TemplateGenerator
                 return generateHaskellTarget(langInfo);
             case TargetLanguage.Elm:
                 return generateElmTarget(langInfo);
+            case TargetLanguage.Gleam:
+                return generateGleamTarget(langInfo);
             case TargetLanguage.Generic:
                 return generateGenericTarget();
         }
@@ -243,6 +245,7 @@ class TemplateGenerator
             case TargetLanguage.OCaml: return "ocaml";
             case TargetLanguage.Haskell: return "haskell";
             case TargetLanguage.Elm: return "elm";
+            case TargetLanguage.Gleam: return "gleam";
             case TargetLanguage.Generic: return "generic";
         }
     }
@@ -710,6 +713,22 @@ class TemplateGenerator
         return target;
     }
     
+    /// Gleam target generation
+    private string generateGleamTarget(LanguageInfo info)
+    {
+        string sources = generateSourcesArray(info.sourceFiles, "*.gleam");
+        string targetName = generateUniqueTargetName("gleam", info);
+        string targetType = hasMainFile(info.sourceFiles) ? "executable" : "library";
+        
+        string target = format("target(\"%s\") {\n", targetName);
+        target ~= format("    type: %s;\n", targetType);
+        target ~= "    language: gleam;\n";
+        target ~= format("    sources: %s;\n", sources);
+        target ~= "}";
+        
+        return target;
+    }
+    
     /// Generic target generation (fallback)
     private string generateGenericTarget()
     {
@@ -951,6 +970,7 @@ class TemplateGenerator
                 case TargetLanguage.OCaml:
                 case TargetLanguage.Haskell:
                 case TargetLanguage.Elm:
+                case TargetLanguage.Gleam:
                 case TargetLanguage.Generic:
                     break;
             }

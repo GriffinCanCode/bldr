@@ -277,6 +277,7 @@ struct QueryFormatter
             case TargetType.Test:
                 return "orange";
             case TargetType.Custom:
+            case TargetType.Shell:
                 return "purple";
         }
     }

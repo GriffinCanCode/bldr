@@ -125,6 +125,7 @@ mixin template BuildOrchestrationMixin(TConfig, string configParserName, Context
                     result = runTests(target, config, langConfig);
                     break;
                 case TargetType.Custom:
+                case TargetType.Shell:
                     result = buildCustom(target, config, langConfig);
                     break;
             }
@@ -173,6 +174,7 @@ mixin template BuildOrchestrationMixin(TConfig, string configParserName, Context
                     result = runTests(target, config, langConfig, context);
                     break;
                 case TargetType.Custom:
+                case TargetType.Shell:
                     result = buildCustom(target, config, langConfig, context);
                     break;
             }
@@ -223,6 +225,7 @@ mixin template SimpleBuildOrchestrationMixin(TConfig, string configParserName)
                 result = runTests(target, config, langConfig);
                 break;
             case TargetType.Custom:
+            case TargetType.Shell:
                 result = buildCustom(target, config, langConfig);
                 break;
         }

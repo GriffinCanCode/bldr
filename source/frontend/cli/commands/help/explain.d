@@ -597,23 +597,32 @@ struct ExplainCommand
                 multilineTarget = null;
             }
             
-            // Pop stack to correct indent level
+            // Pop stack to correct indent level (but don't pop past array containers)
             while (stack.length > 1 && indent <= stack[$ - 1].indent)
+            {
+                // If this is an array item, don't pop past the array's parent
+                if (stripped.startsWith("- ") && indent == stack[$ - 1].indent)
+                    break;
                 stack = stack[0 .. $ - 1];
+            }
             
             auto currentSection = stack[$ - 1].section;
-            
-            // Ensure current section is an object (not array or null type)
-            if ((*currentSection).type != JSONType.object)
-                (*currentSection).object = null;
             
             if (stripped.endsWith(":") && !stripped.canFind(": "))
             {
                 // New section (no value after colon)
+                // Ensure current section is an object first
+                if ((*currentSection).type != JSONType.object && 
+                    (*currentSection).type != JSONType.array)
+                    (*currentSection).object = null;
+                    
                 auto key = stripped[0 .. $ - 1].strip();
-                (*currentSection).object[key] = JSONValue();
-                (*currentSection)[key].object = null;
-                stack ~= StackEntry(&(*currentSection)[key], indent);
+                if ((*currentSection).type == JSONType.object)
+                {
+                    (*currentSection).object[key] = JSONValue();
+                    (*currentSection)[key].object = null;
+                    stack ~= StackEntry(&(*currentSection)[key], indent);
+                }
             }
             else if (stripped.startsWith("- "))
             {

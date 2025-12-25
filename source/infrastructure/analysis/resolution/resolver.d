@@ -189,6 +189,9 @@ class DependencyResolver
             case TargetLanguage.Elixir:
                 target = resolveElixirImport(importName);
                 break;
+            case TargetLanguage.Gleam:
+                target = resolveGleamImport(importName);
+                break;
             case TargetLanguage.Lua:
                 target = resolveLuaImport(importName);
                 break;
@@ -463,6 +466,24 @@ class DependencyResolver
             {
                 string snakeCase = importName.replace(".", "_").toLower;
                 if (source.canFind(snakeCase))
+                    return target.name;
+            }
+        }
+        
+        return "";
+    }
+    
+    private string resolveGleamImport(string importName)
+    {
+        // Gleam imports use forward slashes: gleam/io, my_package/module
+        // Convert to target reference
+        
+        foreach (ref target; config.targets)
+        {
+            foreach (source; target.sources)
+            {
+                string snakeCase = importName.replace("/", "_").toLower;
+                if (source.canFind(snakeCase) || source.canFind(importName.replace("/", "/")))
                     return target.name;
             }
         }

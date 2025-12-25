@@ -92,6 +92,7 @@ class ElmHandler : BaseLanguageHandler
                 result = runTests(target, config, elmConfig);
                 break;
             case TargetType.Custom:
+            case TargetType.Shell:
                 result = buildCustom(target, config, elmConfig);
                 break;
         }

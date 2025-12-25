@@ -77,6 +77,7 @@ class ElixirHandler : BaseLanguageHandler
                 result = runTests(target, config, elixirConfig, elixirCmd, mixCmd);
                 break;
             case TargetType.Custom:
+            case TargetType.Shell:
                 result = buildCustom(target, config, elixirConfig, elixirCmd, mixCmd);
                 break;
         }

@@ -26,6 +26,11 @@ concepts:
     file: "concepts/reference/bldrquery.yaml"
     summary: "BldrQuery - Query language for the build graph"
 
+  builderfile:
+    file: "concepts/reference/builderfile.yaml"
+    summary: "Builderfile syntax - Define build targets with Builder's DSL"
+    keywords: ["syntax", "dsl", "config", "target", "build file"]
+
   build-graph:
     file: "concepts/core/build-graph.yaml"
     summary: "Build Graph - The core data structure"
@@ -318,6 +323,10 @@ aliases:
   isolation: "hermetic"
   builderspace: "workspace"
   config: "workspace"
+  build-file: "builderfile"
+  buildfile: "builderfile"
+  dsl: "builderfile"
+  syntax: "builderfile"
   target: "targets"
   build: "targets"
   rule: "rules-api"

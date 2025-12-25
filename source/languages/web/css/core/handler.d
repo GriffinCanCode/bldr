@@ -71,6 +71,7 @@ class CSSHandler : BaseLanguageHandler
                 result = validateCSS(target, config, cssConfig);
                 break;
             case TargetType.Custom:
+            case TargetType.Shell:
                 result = compileCSS(target, config, cssConfig);
                 break;
         }

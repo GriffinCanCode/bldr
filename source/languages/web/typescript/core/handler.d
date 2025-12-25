@@ -83,6 +83,7 @@ class TypeScriptHandler : BaseLanguageHandler
                 result = runTests(target, config, tsConfig);
                 break;
             case TargetType.Custom:
+            case TargetType.Shell:
                 result = buildCustom(target, config, tsConfig);
                 break;
         }

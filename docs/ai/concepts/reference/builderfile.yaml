@@ -1,0 +1,198 @@
+topic: builderfile
+category: reference
+summary: "Builderfile syntax - Define build targets with Builder's DSL"
+definition: |
+  A Builderfile is Builder's configuration file that defines build targets using a simple
+  domain-specific language (DSL). It describes what to build, how to build it, and the
+  dependencies between targets. Builderfiles use a familiar syntax similar to Bazel/Buck
+  but simpler and more readable.
+
+key_points:
+  - "One Builderfile per package/directory"
+  - "Supports all languages: Python, Go, Rust, TypeScript, C++, Java, and more"
+  - "Declarative syntax with imperative escape hatches"
+  - "Dependency management via deps array"
+  - "Language-specific configuration blocks"
+  - "Comments with // or /* */"
+  - "File extension: no extension (just 'Builderfile')"
+
+syntax_overview: |
+  target("<name>") {
+      type: <type>;
+      language: <language>;
+      sources: [<files>];
+      deps: [<dependencies>];
+      output: "<output-path>";
+      config: { ... };
+  }
+
+target_types:
+  - "executable - Produces a runnable binary or script"
+  - "library - Produces a reusable library/module"
+  - "test - Defines a test suite"
+  - "custom - Custom build steps with shell commands"
+  - "shell - Run arbitrary shell commands"
+
+supported_languages:
+  - "python, go, rust, typescript, javascript, java, cpp, c"
+  - "ruby, perl, php, elixir, lua, r, nim, zig, swift, kotlin"
+  - "csharp, fsharp, scala, ocaml, haskell, elm, gleam"
+
+basic_fields:
+  - name: "type"
+    desc: "Target type: executable, library, test, custom, shell (or genrule)"
+    required: true
+  - name: "language"
+    desc: "Programming language (python, go, rust, typescript, zig, gleam, etc.)"
+    required: "for language-specific targets"
+  - name: "sources"
+    desc: "Array of source files or glob patterns"
+    required: "for most targets"
+  - name: "deps"
+    desc: "Array of dependencies (local with : prefix or external)"
+    required: false
+  - name: "output"
+    desc: "Output file/directory path"
+    required: false
+  - name: "visibility"
+    desc: "Access control: public, private, or package list"
+    required: false
+  - name: "command"
+    desc: "Shell command to execute (required for shell/genrule targets)"
+    required: "for shell targets"
+  - name: "workdir"
+    desc: "Working directory for command execution"
+    required: false
+  - name: "root"
+    desc: "Root directory for language toolchains (e.g., Zig build.zig location)"
+    required: false
+
+usage_examples:
+  - description: "Simple Python executable"
+    code: |
+      target("hello") {
+          type: executable;
+          language: python;
+          sources: ["main.py"];
+      }
+
+  - description: "Library with dependencies"
+    code: |
+      target("math-lib") {
+          type: library;
+          language: python;
+          sources: ["lib/*.py"];
+      }
+      
+      target("calculator") {
+          type: executable;
+          language: python;
+          sources: ["calc.py"];
+          deps: [":math-lib"];
+      }
+
+  - description: "Go with language-specific config"
+    code: |
+      target("server") {
+          type: executable;
+          language: go;
+          sources: ["*.go"];
+          
+          go: {
+              "mode": "executable",
+              "trimpath": "true",
+              "ldflags": ["-s", "-w"]
+          };
+      }
+
+  - description: "TypeScript with bundling"
+    code: |
+      target("app") {
+          type: executable;
+          language: typescript;
+          sources: ["src/**/*.ts"];
+          output: "dist/app.js";
+          
+          config: {
+              "mode": "bundle",
+              "compiler": "esbuild",
+              "minify": "true"
+          };
+      }
+
+  - description: "Rust with Cargo options"
+    code: |
+      target("cli") {
+          type: executable;
+          language: rust;
+          sources: ["src/*.rs"];
+          
+          langConfig: {
+              "rust": "{
+                  \"profile\": \"release\",
+                  \"edition\": \"2021\",
+                  \"lto\": \"thin\"
+              }"
+          };
+      }
+
+  - description: "Test target"
+    code: |
+      target("tests") {
+          type: test;
+          language: python;
+          sources: ["tests/*.py"];
+          deps: [":my-lib"];
+      }
+
+  - description: "Shell target (arbitrary commands)"
+    code: |
+      target("gleam-build") {
+          type: shell;
+          command: "gleam build";
+          workdir: "./gleam-project";
+          sources: ["gleam-project/src/**/*.gleam"];
+      }
+
+  - description: "Zig project in subdirectory"
+    code: |
+      target("scorer") {
+          type: executable;
+          language: zig;
+          root: "./scorer";
+          sources: ["scorer/src/**/*.zig"];
+      }
+
+dependency_syntax:
+  - pattern: ":target-name"
+    meaning: "Local target in same package"
+  - pattern: "//path/to:target"
+    meaning: "Target in another package"
+  - pattern: "@external//pkg:target"
+    meaning: "External dependency"
+
+glob_patterns:
+  - pattern: "*.py"
+    meaning: "All .py files in current directory"
+  - pattern: "**/*.ts"
+    meaning: "All .ts files recursively"
+  - pattern: "src/**/*.go"
+    meaning: "All .go files under src/ recursively"
+
+related:
+  - workspace
+  - targets
+  - starlark
+  - rules-api
+
+references:
+  - "User guide: docs/user-guides/EXAMPLES.md"
+  - "Language configs: docs/features/languages.md"
+
+next_steps: |
+  - See 'bldr explain workspace' for project-wide configuration (Builderspace)
+  - See 'bldr explain targets' for detailed target types documentation
+  - Run 'bldr wizard' to generate a Builderfile for your project
+  - Run 'bldr infer' to auto-detect project structure
+
+
