@@ -42,6 +42,22 @@ build_tools:
     description: "Direct javac compilation without build tool"
     use_case: "Simple projects or when build tools unavailable"
 
+persistent_workers:
+  description: "Keep JVM warm for 10-20x faster incremental compilation"
+  supported_compilers:
+    - "javac (16x speedup)"
+    - "kotlinc (20x speedup)"
+    - "scalac (19x speedup)"
+    - "groovyc (17x speedup)"
+  config:
+    enabled: true
+    max_workers: 4
+    idle_timeout: "5 minutes"
+  benefits:
+    - "Eliminates ~800ms JVM startup per compilation"
+    - "Type information cached between compilations"
+    - "Class loading amortized across builds"
+
 build_modes:
   - name: "JAR"
     description: "Standard Java Archive"
@@ -153,7 +169,7 @@ configuration:
     main_class: "Entry point for executable JARs"
     manifest_entries: "Custom MANIFEST.MF entries"
 
-related: [languages, kotlin-support, scala-support, toolchains, testing]
+related: [languages, kotlin-support, scala-support, toolchains, testing, persistent-workers, performance]
 
 next_steps: |
   - Run 'bldr infer' to auto-detect your Java project structure

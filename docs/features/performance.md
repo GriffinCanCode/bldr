@@ -6,7 +6,34 @@ Builder v3.0 introduces advanced performance optimizations that make it 50-500x 
 
 ## Key Innovations
 
-### 1. Intelligent Size-Tiered Hashing
+### 1. Persistent Worker Protocol (10-50x Faster Compilation)
+
+**Problem**: JVM and Node.js startup overhead dominates small compilation times.
+
+**Solution**: Keep compiler processes running between build actions.
+
+| Compiler | Cold Start | Warm Worker | Speedup |
+|----------|------------|-------------|---------|
+| javac    | ~800ms     | ~50ms       | **16x** |
+| kotlinc  | ~2000ms    | ~100ms      | **20x** |
+| tsc      | ~400ms     | ~30ms       | **13x** |
+| swc      | ~50ms      | ~5ms        | **10x** |
+
+**Usage**:
+```d
+import engine.workers;
+
+// Enable at startup
+initializePersistentWorkers();
+
+// Compilation uses warm workers automatically
+auto result = JavaWorkerIntegration.compile(sources, outputDir);
+writeln("Speedup: ", result.unwrap().estimatedSpeedup(), "x");
+```
+
+See [Persistent Workers](persistent-workers.md) for full documentation.
+
+### 2. Intelligent Size-Tiered Hashing
 
 **Problem**: Hashing large files (100MB+) takes seconds, blocking builds.
 

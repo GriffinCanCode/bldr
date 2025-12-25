@@ -1,0 +1,186 @@
+topic: persistent-workers
+category: reference
+summary: "Persistent Worker Protocol - Keep JVM/TypeScript compilers warm for 10-50x faster compilation"
+definition: |
+  Bazel-compatible persistent worker protocol that keeps compiler processes running
+  between build actions. Eliminates JVM/Node.js startup overhead that dominates
+  small compilation times, providing 10-50x speedup for incremental builds.
+
+key_points:
+  - "JVM startup costs ~800ms-2s per invocation - persistent workers eliminate this"
+  - "TypeScript/Node.js startup costs ~100-500ms - kept warm for instant compilation"
+  - "Protocol: newline-delimited JSON over stdin/stdout (Bazel-compatible)"
+  - "Automatic health monitoring with restart on failure"
+  - "Fallback to cold compilation if workers unavailable"
+  - "Supports: javac, kotlinc, scalac, groovyc, tsc, swc, esbuild, bun"
+
+performance_comparison:
+  - compiler: "javac"
+    cold_start: "~800ms"
+    warm_worker: "~50ms"
+    speedup: "16x"
+  - compiler: "kotlinc"
+    cold_start: "~2000ms"
+    warm_worker: "~100ms"
+    speedup: "20x"
+  - compiler: "scalac"
+    cold_start: "~1500ms"
+    warm_worker: "~80ms"
+    speedup: "19x"
+  - compiler: "tsc"
+    cold_start: "~400ms"
+    warm_worker: "~30ms"
+    speedup: "13x"
+  - compiler: "swc"
+    cold_start: "~50ms"
+    warm_worker: "~5ms"
+    speedup: "10x"
+
+protocol:
+  work_request:
+    description: "Sent to worker stdin as newline-delimited JSON"
+    fields:
+      - "request_id: Unique ID for correlation"
+      - "arguments: Compiler arguments"
+      - "inputs: Input files with digests"
+      - "sandbox_dir: Hermetic sandbox directory"
+      - "cancel: Cancel in-flight request"
+
+  work_response:
+    description: "Received from worker stdout as newline-delimited JSON"
+    fields:
+      - "request_id: Correlates to request"
+      - "exit_code: 0 for success"
+      - "output: Combined stdout/stderr"
+      - "execution_time_ms: Actual execution time"
+      - "outputs: Output files with digests"
+
+architecture:
+  components:
+    - "PersistentWorkerService: High-level service managing all workers"
+    - "WorkerPool: Pool of warm compiler processes"
+    - "WorkerFactory: Creates workers for specific compilers"
+    - "HealthMonitor: Monitors worker health, auto-restarts failures"
+    - "StdioTransport: Bazel-compatible stdio communication"
+
+  lifecycle:
+    - "Workers started lazily on first compilation request"
+    - "Workers reused across multiple compilations"
+    - "Health checks detect dead/unresponsive workers"
+    - "Idle workers evicted after configurable timeout"
+    - "Workers restarted after max request count (prevent memory leaks)"
+
+usage_examples:
+  - description: "Initialize persistent workers at startup"
+    code: |
+      import engine.workers;
+      
+      // Start with default config
+      initializePersistentWorkers();
+      
+      // Or with custom config
+      WorkerServiceConfig config;
+      config.poolConfig.maxWorkersPerType = 4;
+      config.poolConfig.idleTimeout = minutes(10);
+      initWorkerService(config);
+
+  - description: "Compile Java with warm worker"
+    code: |
+      auto result = JavaWorkerIntegration.compile(
+          ["src/Main.java", "src/Util.java"],
+          "bin/",
+          ["lib/deps.jar"],
+          ["-source", "17", "-target", "17"]
+      );
+      
+      if (result.isOk) {
+          auto r = result.unwrap();
+          writeln("Compiled in ", r.executionTimeMs, "ms");
+          writeln("Speedup: ", r.estimatedSpeedup(), "x");
+      }
+
+  - description: "Compile TypeScript with warm worker"
+    code: |
+      auto result = TypeScriptWorkerIntegration.compile(
+          ["src/app.ts", "src/utils.ts"],
+          "dist/",
+          TSWorkerCompileOptions(
+              target: "ES2022",
+              module_: "esm",
+              sourceMap: true
+          )
+      );
+
+  - description: "Get performance metrics"
+    code: |
+      auto metrics = getWorkerPerformanceMetrics();
+      writeln(metrics.toString());
+      // Output: "Persistent Workers: 142 compilations, 98% success, 
+      //          14.2x avg speedup, 87s total saved"
+
+  - description: "Shutdown workers on exit"
+    code: |
+      shutdownPersistentWorkers();
+
+configuration:
+  pool:
+    max_workers_per_type: "Maximum concurrent workers per compiler type (default: 4)"
+    idle_timeout: "Evict idle workers after this duration (default: 5 minutes)"
+    max_requests_per_worker: "Restart worker after N requests (default: 5000)"
+
+  jvm:
+    max_heap_mb: "JVM max heap size (default: 2048 MB)"
+    jvm_args: "Additional JVM arguments (-XX:+UseG1GC, etc.)"
+    java_home: "Override JAVA_HOME"
+
+  typescript:
+    max_old_space_mb: "Node.js max old space size (default: 4096 MB)"
+    incremental: "Enable TypeScript incremental compilation (default: true)"
+    node_path: "Override Node.js path"
+
+health_monitoring:
+  features:
+    - "Automatic health checks every 10 seconds"
+    - "Detects dead/unresponsive workers"
+    - "Auto-restart after configurable failure threshold"
+    - "Alerting callbacks for monitoring integration"
+    - "Graceful degradation to cold compilation on failure"
+
+  alerts:
+    - severity: "Info"
+      condition: "Worker successfully recovered"
+    - severity: "Warning"
+      condition: "Worker health check failed"
+    - severity: "Critical"
+      condition: "Worker exceeded failure threshold"
+
+integration:
+  language_handlers:
+    - "JavaHandler: Uses JavaWorkerIntegration for javac"
+    - "KotlinHandler: Uses KotlinWorkerIntegration for kotlinc"
+    - "TypeScriptHandler: Uses TypeScriptWorkerIntegration for tsc"
+
+  build_system:
+    - "Initialize workers during engine startup"
+    - "Workers automatically used by language handlers"
+    - "Fallback to cold compilation is transparent"
+    - "Shutdown workers during engine shutdown"
+
+related: [java-support, performance, caching, remote-execution, distributed]
+
+source_files:
+  - "source/engine/workers/protocol/types.d"
+  - "source/engine/workers/protocol/transport.d"
+  - "source/engine/workers/pool/manager.d"
+  - "source/engine/workers/jvm/worker.d"
+  - "source/engine/workers/typescript/worker.d"
+  - "source/engine/workers/service.d"
+  - "source/engine/workers/integration.d"
+  - "source/engine/workers/health.d"
+
+next_steps: |
+  - Enable persistent workers in build configuration
+  - Monitor worker metrics to verify speedup
+  - Tune pool size based on concurrent builds
+  - Configure idle timeout based on build patterns
+

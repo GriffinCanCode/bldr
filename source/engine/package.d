@@ -10,6 +10,7 @@
  * - caching: Multi-tier caching (local, action, remote, distributed)
  * - distributed: Distributed build execution with work-stealing
  * - provenance: SLSA-compliant build provenance for supply chain security
+ * - workers: Persistent worker protocol for JVM/TypeScript (10-50x faster compilation)
  */
 module engine;
 
@@ -19,4 +20,5 @@ public import engine.compilation;
 public import engine.caching;
 public import engine.distributed;
 public import engine.provenance;
+public import engine.workers;
 

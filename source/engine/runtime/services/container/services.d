@@ -24,6 +24,7 @@ import infrastructure.analysis.tracking.tracker : FileChangeTracker;
 import frontend.cli.events.events;
 import frontend.cli.display.render;
 import infrastructure.errors;
+import engine.workers : PersistentWorkerService, WorkerServiceConfig, initWorkerService, shutdownWorkerService;
 
 /// Service container for dependency injection
 /// Manages the lifecycle and wiring of core build system components
@@ -51,6 +52,7 @@ final class BuildServices
     private ShutdownCoordinator _shutdownCoordinator;
     private EconomicsIntegration _economics;
     private IIncrementalAnalyzer _incrementalAnalyzer;
+    private PersistentWorkerService _persistentWorkers;
     
     /// Create services with production configuration
     this(WorkspaceConfig config, BuildOptions options)
@@ -101,6 +103,10 @@ final class BuildServices
         // Initialize remote execution service (if enabled)
         Logger.debugLog("BuildServices: Initializing remote execution");
         this._initializeRemoteExecution(config, options);
+        
+        // Initialize persistent worker service for JVM/TypeScript compilation speedup
+        Logger.debugLog("BuildServices: Initializing persistent workers");
+        this._initializePersistentWorkers(options);
         
         // Initialize telemetry
         Logger.debugLog("BuildServices: Initializing telemetry");
@@ -405,6 +411,15 @@ final class BuildServices
     {
         Logger.debugLog("Shutting down services...");
         
+        // Stop persistent worker service (saves metrics)
+        if (_persistentWorkers !is null)
+        {
+            Logger.debugLog("Shutting down persistent workers...");
+            _persistentWorkers.stop();
+            _persistentWorkers = null;
+            shutdownWorkerService();
+        }
+        
         // Stop remote execution service
         if (_remoteService !is null)
         {
@@ -523,6 +538,60 @@ final class BuildServices
     bool hasRemoteExecution() const @property
     {
         return _remoteService !is null;
+    }
+    
+    /// Initialize persistent worker service for JVM/TypeScript compilation
+    /// Provides 10-50x speedup by keeping compilers warm
+    private void _initializePersistentWorkers(BuildOptions options) @trusted
+    {
+        import std.process : environment;
+        import core.time : minutes;
+        
+        // Check if persistent workers should be disabled via environment
+        auto workersDisabled = environment.get("BUILDER_WORKERS_DISABLED", "0");
+        if (workersDisabled == "1" || workersDisabled == "true")
+        {
+            Logger.debugLog("Persistent workers disabled via environment");
+            return;
+        }
+        
+        try
+        {
+            // Configure worker pool based on available cores
+            import std.parallelism : totalCPUs;
+            
+            WorkerServiceConfig config;
+            config.poolConfig.maxWorkersPerType = totalCPUs > 4 ? 4 : 2;
+            config.poolConfig.idleTimeout = minutes(5);
+            config.enableJVMWorkers = true;
+            config.enableTSWorkers = true;
+            
+            // Create and start service
+            _persistentWorkers = new PersistentWorkerService(config);
+            _persistentWorkers.start();
+            
+            // Also initialize global service for integration layer
+            initWorkerService(config);
+            
+            Logger.debugLog("Persistent workers initialized (JVM/TypeScript 10-50x speedup)");
+        }
+        catch (Exception e)
+        {
+            Logger.warning("Failed to initialize persistent workers: " ~ e.msg);
+            _persistentWorkers = null;
+        }
+    }
+    
+    /// Get persistent worker service (if available)
+    PersistentWorkerService persistentWorkers() @property
+    {
+        return _persistentWorkers;
+    }
+    
+    /// Check if persistent workers are available
+    bool hasPersistentWorkers() const @property
+    {
+        return _persistentWorkers !is null;
     }
 }
 

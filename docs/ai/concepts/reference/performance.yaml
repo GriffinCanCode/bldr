@@ -6,6 +6,7 @@ definition: |
   Covers caching, parallelism, hardware usage, and configuration.
 
 key_points:
+  - "Persistent workers: 10-50x faster JVM/TypeScript compilation"
   - "Cache hit rate: Maximize with hermetic builds"
   - "Network: Optimize remote cache bandwidth"
   - "IO: Use fast SSDs for workspace"
@@ -15,7 +16,7 @@ usage_examples:
   - description: "Analyze build profile"
     command: "builder profile"
 
-related: [caching, concurrency, remote-cache]
+related: [caching, concurrency, remote-cache, persistent-workers]
 
 next_steps: |
   - Profile before optimizing
