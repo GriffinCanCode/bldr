@@ -57,7 +57,7 @@ public import engine.runtime.services.scheduling :
     SchedulingService,
     SchedulingMode,
     SchedulingStats,
-    BuildResult;
+    NodeBuildResult;
 
 // Provenance service
 public import engine.runtime.services.provenance :

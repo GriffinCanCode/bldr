@@ -71,13 +71,13 @@ class ScopeManager
             auto stack = symbols[name];
             if (!stack.empty && stack[$ - 1].scopeLevel == scopeLevel)
             {
-                auto error = new ParseError(
-                    "Variable '" ~ name ~ "' is already defined in this scope",
-                    null
+                return VoidBuildResult.err(
+                    Errors.parse("", "Variable '" ~ name ~ "' is already defined in this scope")
+                        .withSuggestion("Use a different variable name")
+                        .withSuggestion("Or use assignment instead of re-declaration")
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
                 );
-                error.addSuggestion("Use a different variable name");
-                error.addSuggestion("Or use assignment instead of re-declaration");
-                return VoidBuildResult.err(error);
             }
         }
         
@@ -119,13 +119,13 @@ class ScopeManager
     {
         if (name !in symbols || symbols[name].empty)
         {
-            auto error = new ParseError(
-                "Undefined variable '" ~ name ~ "'",
-                null
+            return VoidBuildResult.err(
+                Errors.parse("", "Undefined variable '" ~ name ~ "'")
+                    .withSuggestion("Define variable with 'let " ~ name ~ " = ...'")
+                    .withSuggestion("Check for typos in variable name")
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
-            error.addSuggestion("Define variable with 'let " ~ name ~ " = ...'");
-            error.addSuggestion("Check for typos in variable name");
-            return VoidBuildResult.err(error);
         }
         
         auto stack = symbols[name];
@@ -133,13 +133,13 @@ class ScopeManager
         
         if (sym.isConst)
         {
-            auto error = new ParseError(
-                "Cannot assign to const variable '" ~ name ~ "'",
-                null
+            return VoidBuildResult.err(
+                Errors.parse("", "Cannot assign to const variable '" ~ name ~ "'")
+                    .withSuggestion("Use 'let' instead of 'const' for mutable variables")
+                    .withSuggestion("Create a new variable with a different name")
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
-            error.addSuggestion("Use 'let' instead of 'const' for mutable variables");
-            error.addSuggestion("Create a new variable with a different name");
-            return VoidBuildResult.err(error);
         }
         
         // Update value
@@ -154,14 +154,14 @@ class ScopeManager
     {
         if (name !in symbols || symbols[name].empty)
         {
-            auto error = new ParseError(
-                "Undefined variable '" ~ name ~ "'",
-                null
+            return BuildResult!Value.err(
+                Errors.parse("", "Undefined variable '" ~ name ~ "'")
+                    .withSuggestion("Define variable with 'let " ~ name ~ " = ...'")
+                    .withSuggestion("Check for typos in variable name")
+                    .withSuggestion("Ensure variable is defined before use")
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
-            error.addSuggestion("Define variable with 'let " ~ name ~ " = ...'");
-            error.addSuggestion("Check for typos in variable name");
-            error.addSuggestion("Ensure variable is defined before use");
-            return BuildResult!Value.err(error);
         }
         
         auto stack = symbols[name];

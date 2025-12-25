@@ -543,7 +543,7 @@ final class ReapiV2Server {
     
     /// Handle incoming REAPI request
     Result!(ubyte[], string) handleRequest(string path, string method, const ubyte[] body_) @trusted {
-        import std.string : startsWith;
+        import std.string : startsWith, indexOf;
         
         // Capabilities endpoint
         if (path.startsWith("/v2/") && path.indexOf("/capabilities") >= 0) {

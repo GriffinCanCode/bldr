@@ -1,9 +1,10 @@
 module engine.graph.persistence.adapter;
 
 import std.datetime : Clock;
+import std.conv : to;
 import engine.graph.core.graph;
 import engine.graph.persistence.index;
-import infrastructure.config.schema.schema : Target, TargetId;
+import infrastructure.config.schema.schema : Target, TargetId, TargetType;
 import infrastructure.errors;
 
 /// Adapter bridging in-memory BuildGraph and SQLite GraphIndex
@@ -44,7 +45,7 @@ struct GraphAdapter
         {
             GraphNodeEntry entry;
             entry.nodeId = node.id.toString();
-            entry.targetType = node.target.type;
+            entry.targetType = node.target.type.to!string;
             entry.targetName = node.target.name;
             entry.outputPath = node.target.outputPath;
             entry.status = node.status;
@@ -87,7 +88,7 @@ struct GraphAdapter
             // Create minimal target
             Target target;
             target.name = entry.targetName;
-            target.type = entry.targetType;
+            target.type = entry.targetType.to!TargetType;
             target.outputPath = entry.outputPath;
             
             // Add to graph
@@ -143,7 +144,7 @@ struct GraphAdapter
         
         GraphNodeEntry entry;
         entry.nodeId = node.id.toString();
-        entry.targetType = node.target.type;
+        entry.targetType = node.target.type.to!string;
         entry.targetName = node.target.name;
         entry.outputPath = node.target.outputPath;
         entry.status = node.status;

@@ -1,6 +1,7 @@
 module tests.unit.caching.index_test;
 
 import engine.caching.index;
+import std.conv : to;
 import std.datetime : Clock, SysTime;
 import std.file : exists, rmdirRecurse, mkdirRecurse;
 import std.path : buildPath;
@@ -252,9 +253,4 @@ unittest
     assert(!index.hasAction("action-to-delete"));
 }
 
-private string to(T)(T val) pure @safe
-{
-    import std.conv : to;
-    return std.conv.to!string(val);
-}
 

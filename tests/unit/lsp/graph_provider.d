@@ -3,7 +3,7 @@ module tests.unit.lsp.graph_provider;
 import std.stdio;
 import std.algorithm;
 import std.array;
-import std.json;
+import std.json : JSONValue, JSONType, parseJSON;
 import std.conv : to;
 import std.file : exists, mkdirRecurse, rmdirRecurse, write;
 import std.path : buildPath;
@@ -90,7 +90,7 @@ unittest
     // Should return empty array (no targets in empty workspace)
     auto result = provider.executeCommand(GraphCommand.GoToDependency, args);
     
-    Assert.isTrue(result.type == JSONValue.Type.array);
+    Assert.isTrue(result.type == JSONType.array);
     Assert.equal(result.array.length, 0);
     
     writeln("\x1b[32m  ✓ executeCommand handles GoToDependency\x1b[0m");
@@ -109,7 +109,7 @@ unittest
     
     auto result = provider.executeCommand(GraphCommand.FindReverseDependencies, args);
     
-    Assert.isTrue(result.type == JSONValue.Type.array);
+    Assert.isTrue(result.type == JSONType.array);
     Assert.equal(result.array.length, 0);
     
     writeln("\x1b[32m  ✓ executeCommand handles FindReverseDependencies\x1b[0m");
@@ -128,7 +128,7 @@ unittest
     // Without graph, should return error
     auto result = provider.executeCommand(GraphCommand.ShowDependencyTree, args);
     
-    Assert.isTrue("error" in result);
+    Assert.isTrue(("error" in result) !is null);
     
     writeln("\x1b[32m  ✓ ShowDependencyTree returns error when graph unavailable\x1b[0m");
 }
@@ -145,7 +145,7 @@ unittest
     
     auto result = provider.executeCommand(GraphCommand.ShowImpactAnalysis, args);
     
-    Assert.isTrue("error" in result);
+    Assert.isTrue(("error" in result) !is null);
     
     writeln("\x1b[32m  ✓ ShowImpactAnalysis returns error when graph unavailable\x1b[0m");
 }
@@ -219,7 +219,7 @@ unittest
     auto params = ExecuteCommandParams.fromJSON(json);
     
     Assert.equal(params.command, "builder.goToDependency");
-    Assert.isTrue("uri" in params.arguments);
+    Assert.isTrue(("uri" in params.arguments) !is null);
     
     writeln("\x1b[32m  ✓ ExecuteCommandParams parses correctly\x1b[0m");
 }
@@ -235,7 +235,7 @@ unittest
     auto params = ExecuteCommandParams.fromJSON(json);
     
     Assert.equal(params.command, "builder.showDependencyTree");
-    Assert.isTrue(params.arguments.type == JSONValue.Type.object);
+    Assert.isTrue(params.arguments.type == JSONType.object);
     
     writeln("\x1b[32m  ✓ ExecuteCommandParams handles missing arguments\x1b[0m");
 }
@@ -257,15 +257,15 @@ unittest
     auto result = provider.executeCommand(GraphCommand.GoToDependency, args);
     
     // Result should be an array
-    Assert.isTrue(result.type == JSONValue.Type.array);
+    Assert.isTrue(result.type == JSONType.array);
     
     // Each item should have expected fields (if any results)
     foreach (item; result.array)
     {
-        Assert.isTrue("targetName" in item);
-        Assert.isTrue("targetType" in item);
-        Assert.isTrue("depth" in item);
-        Assert.isTrue("location" in item);
+        Assert.isTrue(("targetName" in item) !is null);
+        Assert.isTrue(("targetType" in item) !is null);
+        Assert.isTrue(("depth" in item) !is null);
+        Assert.isTrue(("location" in item) !is null);
     }
     
     writeln("\x1b[32m  ✓ JSON response has correct structure\x1b[0m");
@@ -284,7 +284,7 @@ unittest
     auto result = provider.executeCommand(GraphCommand.ShowDependencyTree, args);
     
     // Should have error field (no graph available)
-    Assert.isTrue("error" in result);
+    Assert.isTrue(("error" in result) !is null);
     Assert.isTrue(result["error"].str.length > 0);
     
     writeln("\x1b[32m  ✓ ShowDependencyTree returns proper error JSON\x1b[0m");
@@ -302,7 +302,7 @@ unittest
     
     auto result = provider.executeCommand(GraphCommand.ShowImpactAnalysis, args);
     
-    Assert.isTrue("error" in result);
+    Assert.isTrue(("error" in result) !is null);
     
     writeln("\x1b[32m  ✓ ShowImpactAnalysis returns proper error JSON\x1b[0m");
 }
@@ -323,7 +323,7 @@ unittest
     auto result = provider.executeCommand(GraphCommand.GoToDependency, args);
     
     // Should not crash with nested URI
-    Assert.isTrue(result.type == JSONValue.Type.array);
+    Assert.isTrue(result.type == JSONType.array);
     
     writeln("\x1b[32m  ✓ URI extracted correctly from textDocument\x1b[0m");
 }
@@ -339,13 +339,13 @@ unittest
     JSONValue args1;
     args1["target"] = "myapp";
     auto result1 = provider.executeCommand(GraphCommand.ShowDependencyTree, args1);
-    Assert.isTrue("error" in result1); // Expected - no graph
+    Assert.isTrue(("error" in result1) !is null); // Expected - no graph
     
     // Test with 'targetName' key
     JSONValue args2;
     args2["targetName"] = "mylib";
     auto result2 = provider.executeCommand(GraphCommand.ShowImpactAnalysis, args2);
-    Assert.isTrue("error" in result2);
+    Assert.isTrue(("error" in result2) !is null);
     
     writeln("\x1b[32m  ✓ Target name extraction works with different keys\x1b[0m");
 }
@@ -364,12 +364,12 @@ unittest
     args["transitive"] = true;
     
     auto result = provider.executeCommand(GraphCommand.GoToDependency, args);
-    Assert.isTrue(result.type == JSONValue.Type.array);
+    Assert.isTrue(result.type == JSONType.array);
     
     // Test with transitive=false
     args["transitive"] = false;
     result = provider.executeCommand(GraphCommand.GoToDependency, args);
-    Assert.isTrue(result.type == JSONValue.Type.array);
+    Assert.isTrue(result.type == JSONType.array);
     
     writeln("\x1b[32m  ✓ Boolean extraction handles true/false correctly\x1b[0m");
 }
@@ -388,7 +388,7 @@ unittest
     
     // Should not crash with empty args
     auto result = provider.executeCommand(GraphCommand.GoToDependency, emptyArgs);
-    Assert.isTrue(result.type == JSONValue.Type.array);
+    Assert.isTrue(result.type == JSONType.array);
     
     writeln("\x1b[32m  ✓ Empty arguments handled gracefully\x1b[0m");
 }
@@ -405,7 +405,7 @@ unittest
     args["position"] = JSONValue(["line": 0, "character": 0]);
     
     auto result = provider.executeCommand(GraphCommand.FindReverseDependencies, args);
-    Assert.isTrue(result.type == JSONValue.Type.array);
+    Assert.isTrue(result.type == JSONType.array);
     
     writeln("\x1b[32m  ✓ Position at line 0 handled correctly\x1b[0m");
 }
@@ -422,7 +422,7 @@ unittest
     args["position"] = JSONValue(["line": 99999, "character": 99999]);
     
     auto result = provider.executeCommand(GraphCommand.GoToDependency, args);
-    Assert.isTrue(result.type == JSONValue.Type.array);
+    Assert.isTrue(result.type == JSONType.array);
     
     writeln("\x1b[32m  ✓ Large position values handled gracefully\x1b[0m");
 }
@@ -439,7 +439,7 @@ unittest
     args["position"] = JSONValue(["line": 0, "character": 0]);
     
     auto result = provider.executeCommand(GraphCommand.GoToDependency, args);
-    Assert.isTrue(result.type == JSONValue.Type.array);
+    Assert.isTrue(result.type == JSONType.array);
     
     writeln("\x1b[32m  ✓ Special characters in URI handled\x1b[0m");
 }
@@ -462,7 +462,7 @@ unittest
     foreach (cmd; getSupportedCommands())
     {
         auto result = provider.executeCommand(cmd, args);
-        Assert.isTrue(result.type == JSONValue.Type.array || result.type == JSONValue.Type.object);
+        Assert.isTrue(result.type == JSONType.array || result.type == JSONType.object);
     }
     
     writeln("\x1b[32m  ✓ All commands execute without crash\x1b[0m");

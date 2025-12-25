@@ -396,9 +396,10 @@ struct GraphProvider
 
     private bool extractBool(JSONValue args, string key, bool defaultVal)
     {
-        if (key in args && args[key].type == JSONValue.Type.true_)
+        import std.json : JSONType;
+        if (key in args && args[key].type == JSONType.true_)
             return true;
-        if (key in args && args[key].type == JSONValue.Type.false_)
+        if (key in args && args[key].type == JSONType.false_)
             return false;
         return defaultVal;
     }

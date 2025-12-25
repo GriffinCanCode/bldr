@@ -181,7 +181,10 @@ final class WatchModeService
         
         writeln();
         auto buildMsg = "Build #" ~ _buildNumber.to!string;
-        (_lastBuildSuccess ? &Logger.success : &Logger.error)(buildMsg ~ (_lastBuildSuccess ? " completed successfully" : " failed"));
+        if (_lastBuildSuccess)
+            Logger.success(buildMsg ~ " completed successfully");
+        else
+            Logger.error(buildMsg ~ " failed");
         Logger.info("Watching for changes...");
         writeln();
     }

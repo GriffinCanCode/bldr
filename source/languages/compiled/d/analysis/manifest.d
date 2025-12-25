@@ -99,13 +99,12 @@ class DubManifest
         }
         else
         {
-            auto error = new ParseError(
-                manifestPath,
-                "Unknown manifest format: " ~ ext ~ " (expected .json or .sdl)"
-            );
-            error.addSuggestion("Use dub.json or dub.sdl as the manifest file name");
-            error.addContext(ErrorContext("parsing DUB manifest", manifestPath));
-            error.addSuggestion("See DUB manifest format: https://dub.pm/package-format-json");
+            auto error = Errors.parse(manifestPath, "Unknown manifest format: " ~ ext ~ " (expected .json or .sdl)")
+                .withSuggestion("Use dub.json or dub.sdl as the manifest file name")
+                .withContext("parsing DUB manifest", manifestPath)
+                .withSuggestion("See DUB manifest format: https://dub.pm/package-format-json")
+                .withLocation(__FILE__, __LINE__)
+                .build();
             return Err!(PackageManifest, BuildError)(error);
         }
     }

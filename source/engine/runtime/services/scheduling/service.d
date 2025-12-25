@@ -41,7 +41,7 @@ interface ISchedulingService
     BuildNode[] dequeueReady(size_t maxCount);
     
     /// Execute a batch of nodes in parallel
-    BuildResult[] executeBatch(BuildNode[] nodes, BuildResult delegate(BuildNode) @system executor);
+    NodeBuildResult[] executeBatch(BuildNode[] nodes, NodeBuildResult delegate(BuildNode) @system executor);
     
     /// Wait for all submitted tasks to complete
     void waitForCompletion();
@@ -59,8 +59,8 @@ interface ISchedulingService
     size_t workerCount();
 }
 
-/// Build result for a single node
-struct BuildResult
+/// Build result for a single node execution
+struct NodeBuildResult
 {
     string targetId;
     bool success = false;
@@ -166,7 +166,7 @@ final class SchedulingService : ISchedulingService
         return batch;
     }
     
-    BuildResult[] executeBatch(BuildNode[] nodes, BuildResult delegate(BuildNode) @system executor) @trusted
+    NodeBuildResult[] executeBatch(BuildNode[] nodes, NodeBuildResult delegate(BuildNode) @system executor) @trusted
     {
         if (!_isActive)
             assert(false, "Scheduler not initialized");
@@ -174,7 +174,7 @@ final class SchedulingService : ISchedulingService
         if (nodes.length == 0)
             return [];
         
-        BuildResult[] results;
+        NodeBuildResult[] results;
         
         final switch (mode)
         {

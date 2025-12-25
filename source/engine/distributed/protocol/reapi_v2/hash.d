@@ -77,6 +77,7 @@ final class HashTranslator {
     void registerContent(const ubyte[] content) @trusted {
         import infrastructure.utils.crypto.blake3 : Blake3;
         import std.digest.sha : SHA256;
+        import std.digest : digest;
         
         // Compute BLAKE3
         auto blake3 = Blake3(0);
@@ -86,7 +87,7 @@ final class HashTranslator {
         blake3Hash[] = blake3Result[0 .. 32];
         
         // Compute SHA256
-        ubyte[32] sha256Hash = SHA256.digest(content);
+        ubyte[32] sha256Hash = digest!SHA256(content);
         
         registerPair(blake3Hash, sha256Hash);
     }
@@ -141,7 +142,8 @@ ubyte[32] computeBlake3(const ubyte[] data) @trusted {
 /// Compute SHA256 hash of data
 ubyte[32] computeSha256(const ubyte[] data) @trusted {
     import std.digest.sha : SHA256;
-    return SHA256.digest(data);
+    import std.digest : digest;
+    return digest!SHA256(data);
 }
 
 /// Create ReapiDigest from content with specified function

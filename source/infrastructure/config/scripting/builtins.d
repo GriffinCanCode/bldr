@@ -119,11 +119,13 @@ class BuiltinRegistry
     {
         if (name !in functions)
         {
-            auto error = new ParseError("Undefined function '" ~ name ~ "'", null);
-            error.addSuggestion("Check function name spelling");
-            error.addSuggestion("Use one of the built-in functions: " ~ 
-                                functions.keys.join(", "));
-            return BuildResult!BuiltinFunction.err(error);
+            return BuildResult!BuiltinFunction.err(
+                Errors.parse("", "Undefined function '" ~ name ~ "'")
+                    .withSuggestion("Check function name spelling")
+                    .withSuggestion("Use one of the built-in functions: " ~ functions.keys.join(", "))
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         return BuildResult!BuiltinFunction.ok(functions[name]);
     }
@@ -133,8 +135,11 @@ class BuiltinRegistry
     {
         if (name !in signatures)
         {
-            auto error = new ParseError("Undefined function '" ~ name ~ "'", null);
-            return BuildResult!FunctionSignature.err(error);
+            return BuildResult!FunctionSignature.err(
+                Errors.parse("", "Undefined function '" ~ name ~ "'")
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         return BuildResult!FunctionSignature.ok(signatures[name]);
     }
@@ -757,7 +762,10 @@ private BuildResult!Value ok(Value v) @system
 
 private BuildResult!Value err(string msg) @system
 {
-    auto error = new ParseError(msg, null);
-    return BuildResult!Value.err(error);
+    return BuildResult!Value.err(
+        Errors.parse("", msg)
+            .withLocation(__FILE__, __LINE__)
+            .build()
+    );
 }
 

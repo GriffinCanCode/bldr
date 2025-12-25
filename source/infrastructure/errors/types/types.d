@@ -58,7 +58,7 @@ abstract class BaseBuildError : Exception, BuildError
         return categoryOf(_code);
     }
     
-    string message() const
+    override string message() const
     {
         return _message;
     }

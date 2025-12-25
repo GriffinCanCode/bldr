@@ -219,22 +219,22 @@ final class CircuitBreaker
                     }
                 }
                 
-                BuildError error = new SystemError(
-                    "Circuit breaker open for endpoint: " ~ endpoint,
-                    ErrorCode.NetworkError
+                return VoidBuildResult.err(
+                    Errors.system("Circuit breaker open for endpoint: " ~ endpoint, ErrorCode.NetworkError)
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
                 );
-                return VoidBuildResult.err(error);
             
             case BreakerState.HalfOpen:
                 synchronized (mutex)
                 {
                     if (halfOpenRequests >= config.halfOpenMaxRequests)
                     {
-                        BuildError error = new SystemError(
-                            "Circuit breaker half-open, max test requests reached: " ~ endpoint,
-                            ErrorCode.NetworkError
+                        return VoidBuildResult.err(
+                            Errors.system("Circuit breaker half-open, max test requests reached: " ~ endpoint, ErrorCode.NetworkError)
+                                .withLocation(__FILE__, __LINE__)
+                                .build()
                         );
-                        return VoidBuildResult.err(error);
                     }
                     halfOpenRequests++;
                 }
@@ -243,7 +243,7 @@ final class CircuitBreaker
     }
     
     /// Record request result
-    private void recordResult(T)(BuildResult!T result, Duration duration) @trusted
+    private void recordResult(T)(Result!(T, BuildError) result, Duration duration) @trusted
     {
         immutable currentState = atomicLoad(state);
         RequestResult outcome;

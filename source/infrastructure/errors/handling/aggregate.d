@@ -151,7 +151,7 @@ struct ErrorAggregator(T)
 
 /// Convenience function to aggregate an array of results
 AggregatedResult!T aggregate(T)(
-    BuildResult!T[] results,
+    Result!(T, BuildError)[] results,
     AggregationPolicy policy = AggregationPolicy.CollectAll)
 {
     auto agg = ErrorAggregator!T(policy);
@@ -169,7 +169,7 @@ AggregatedResult!T aggregate(T)(
 /// Process items with a function that returns Results, aggregating the outcomes
 AggregatedResult!R aggregateMap(T, R)(
     T[] items,
-    BuildResult!R delegate(T) fn,
+    Result!(R, BuildError) delegate(T) fn,
     AggregationPolicy policy = AggregationPolicy.CollectAll)
 {
     auto agg = ErrorAggregator!R(policy);
@@ -187,7 +187,7 @@ AggregatedResult!R aggregateMap(T, R)(
 /// Process items with a function that returns array Results, flattening the results
 AggregatedResult!R aggregateFlatMap(T, R)(
     T[] items,
-    BuildResult!(R[]) delegate(T) fn,
+    Result!(R[], BuildError) delegate(T) fn,
     AggregationPolicy policy = AggregationPolicy.CollectAll)
 {
     auto agg = ErrorAggregator!R(policy);

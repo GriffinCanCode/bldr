@@ -232,7 +232,10 @@ struct SemanticAnalyzer
             if (litExpr.value.kind == LiteralKind.String)
                 return Ok!(string, BuildError)(litExpr.value.asString());
             return Err!(string, BuildError)(
-                new ParseError("Expected string", null));
+                Errors.parse("", "Expected string")
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         
         if (auto identExpr = cast(const IdentExpr)expr)
@@ -242,7 +245,10 @@ struct SemanticAnalyzer
         }
         
         return Err!(string, BuildError)(
-            new ParseError("Expected string literal", null));
+            Errors.parse("", "Expected string literal")
+                .withLocation(__FILE__, __LINE__)
+                .build()
+        );
     }
     
     private BuildResult!(string[]) extractStringArray(const Expr expr) @system
@@ -253,7 +259,10 @@ struct SemanticAnalyzer
         }
         
         return Err!(string[], BuildError)(
-            new ParseError("Expected array of strings", null));
+            Errors.parse("", "Expected array of strings")
+                .withLocation(__FILE__, __LINE__)
+                .build()
+        );
     }
     
     private BuildResult!(string[string]) extractStringMap(const Expr expr) @system
@@ -264,7 +273,10 @@ struct SemanticAnalyzer
         }
         
         return Err!(string[string], BuildError)(
-            new ParseError("Expected map of strings", null));
+            Errors.parse("", "Expected map of strings")
+                .withLocation(__FILE__, __LINE__)
+                .build()
+        );
     }
     
     private BuildResult!TargetType extractType(const Expr expr) @system
@@ -340,7 +352,10 @@ struct SemanticAnalyzer
         }
         
         return Err!(string, BuildError)(
-            new ParseError("Expected map for language config", null));
+            Errors.parse("", "Expected map for language config")
+                .withLocation(__FILE__, __LINE__)
+                .build()
+        );
     }
     
     // ========================================================================
@@ -354,9 +369,9 @@ struct SemanticAnalyzer
     
     private BuildResult!T error(T)(string message, Location loc) @system
     {
-        auto err = new ParseError(loc.file, message, ErrorCode.InvalidFieldValue);
-        err.line = loc.line;
-        err.column = loc.column;
+        auto err = Errors.parse(loc.file, message, ErrorCode.InvalidFieldValue)
+            .withLocation(loc.file, loc.line)
+            .build();
         return Err!(T, BuildError)(err);
     }
 }

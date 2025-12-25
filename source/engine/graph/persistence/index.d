@@ -71,11 +71,23 @@ final class GraphIndex
         replayJournal();
     }
     
-    ~this() @trusted { if (!closed) try close(); catch (Exception) {} }
+    ~this() @trusted nothrow { 
+        // Don't call close() during GC - the mutex may already be finalized
+        // Destructor is for emergency cleanup only; prefer explicit close() calls
+        if (!closed && dbMutex !is null) {
+            closed = true;
+            // Finalize statements and close DB without synchronization
+            // since we can't safely acquire mutex during GC
+            finalizeStatements();
+            if (db !is null) sqlite3_close_v2(db);
+            db = null;
+        }
+    }
     
     /// Close database connection
     void close() @system
     {
+        if (dbMutex is null) return;
         synchronized (dbMutex)
         {
             if (closed) return;

@@ -235,8 +235,8 @@ final class RemoteCacheClient
         catch (Exception) {}
     }
     
-    private BuildResult!T executeWithRetry(T)(
-        BuildResult!T delegate() @trusted operation
+    private Result!(T, BuildError) executeWithRetry(T)(
+        Result!(T, BuildError) delegate() operation
     ) @trusted
     {
         size_t attempts = 0;

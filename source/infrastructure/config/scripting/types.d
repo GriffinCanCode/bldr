@@ -377,8 +377,11 @@ struct TargetConfig
     {
         if (!v.isMap())
         {
-            auto error = new ParseError("Target configuration must be a map", null);
-            return BuildResult!TargetConfig.err(error);
+            return BuildResult!TargetConfig.err(
+                Errors.parse("", "Target configuration must be a map")
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         
         TargetConfig config;
@@ -387,8 +390,11 @@ struct TargetConfig
         // Required: type
         if ("type" !in map)
         {
-            auto error = new ParseError("Target must have 'type' field", null);
-            return BuildResult!TargetConfig.err(error);
+            return BuildResult!TargetConfig.err(
+                Errors.parse("", "Target must have 'type' field")
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         config.type = map["type"].asString();
         

@@ -8,5 +8,5 @@ public import engine.runtime.services.scheduling.service :
     SchedulingService,
     SchedulingMode,
     SchedulingStats,
-    BuildResult;
+    NodeBuildResult;
 

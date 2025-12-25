@@ -55,7 +55,7 @@ public import infrastructure.toolchain.registry;
 // Provider system (Local, Repository-based providers)
 public import infrastructure.toolchain.providers;
 
-import infrastructure.errors : Result, BuildError, Ok, Err, SystemError, ErrorCode;
+import infrastructure.errors : Result, BuildResult, BuildError, Ok, Err, SystemError, ErrorCode, Errors;
 import std.range : empty;
 
 /// Convenience function to get a toolchain by name with optional version constraint
@@ -70,7 +70,9 @@ BuildResult!Toolchain getToolchainByName(string name, string versionConstraint =
         if (toolchains.empty)
         {
             return Err!(Toolchain, BuildError)(
-                new SystemError("Toolchain not found: " ~ name, ErrorCode.ToolNotFound));
+                Errors.system("Toolchain not found: " ~ name, ErrorCode.ToolNotFound)
+                    .withLocation(__FILE__, __LINE__)
+                    .build());
         }
         // Return latest version
         return Ok!(Toolchain, BuildError)(toolchains[$ - 1]);

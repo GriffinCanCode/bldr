@@ -63,14 +63,16 @@ abstract class BaseMigrator : IMigrator
     /// Helper to create migration error
     protected BuildError migrationError(string message, string filePath, string context = "") @system
     {
-        import infrastructure.errors : ParseError, ErrorCode;
+        import infrastructure.errors : ErrorCode;
         
-        auto error = new ParseError(filePath, message, ErrorCode.MigrationFailed);
+        auto builder = Errors.parse(filePath, message, ErrorCode.MigrationFailed);
         if (context.length > 0)
-            error.addContext(ErrorContext("migration_context", context));
-        error.addSuggestion("Check the input file syntax is valid for " ~ systemName());
-        error.addSuggestion("Review migration limitations using 'bldr migrate --help'");
-        return error;
+            builder = builder.withContext("migration_context", context);
+        return builder
+            .withSuggestion("Check the input file syntax is valid for " ~ systemName())
+            .withSuggestion("Review migration limitations using 'bldr migrate --help'")
+            .withLocation(__FILE__, __LINE__)
+            .build();
     }
     
     /// Helper to create result with warnings

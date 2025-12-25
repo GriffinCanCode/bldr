@@ -40,8 +40,11 @@ public import infrastructure.errors.types.network;
 public import infrastructure.errors.formatting.format;
 public import infrastructure.errors.handling.recovery;
 public import infrastructure.errors.handling.aggregate;
-public import infrastructure.errors.adaptation.adapt;
 public import infrastructure.errors.helpers;
 public import infrastructure.errors.utils.snippets;
 public import infrastructure.errors.utils.fuzzy;
+
+// Note: adaptation.adapt is not publicly exported to avoid circular dependency
+// with infrastructure.config.schema.schema. Import directly if needed:
+// import infrastructure.errors.adaptation.adapt;
 

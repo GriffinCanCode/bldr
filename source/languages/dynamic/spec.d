@@ -142,7 +142,9 @@ struct LanguageSpec
         }
         catch (Exception e)
         {
-            auto error = new ParseError(jsonPath, "Failed to parse language spec: " ~ e.msg, ErrorCode.ParseFailed);
+            auto error = Errors.parse(jsonPath, "Failed to parse language spec: " ~ e.msg, ErrorCode.ParseFailed)
+                .withLocation(__FILE__, __LINE__)
+                .build();
             return Err!(LanguageSpec, BuildError)(error);
         }
     }
@@ -213,7 +215,9 @@ final class SpecRegistry
         }
         catch (Exception e)
         {
-            auto error = new BuildFailureError("spec-registry", "Failed to load specs: " ~ e.msg, ErrorCode.InternalError);
+            auto error = Errors.build("spec-registry", "Failed to load specs: " ~ e.msg, ErrorCode.InternalError)
+                .withLocation(__FILE__, __LINE__)
+                .build();
             return Err!(size_t, BuildError)(error);
         }
         

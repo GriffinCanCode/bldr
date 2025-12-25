@@ -1,6 +1,6 @@
 module engine.graph.persistence.queries;
 
-import std.algorithm : map, filter, sort, uniq;
+import std.algorithm : map, filter, sort, uniq, reverse;
 import std.array : array, appender;
 import std.range : take;
 import engine.graph.persistence.index;

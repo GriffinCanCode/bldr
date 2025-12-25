@@ -50,9 +50,12 @@ class MacroExpander
     {
         if (name !in macros)
         {
-            auto error = new ParseError("Undefined macro '" ~ name ~ "'", null);
-            error.addSuggestion("Define macro with 'macro " ~ name ~ "(...) { ... }'");
-            return BuildResult!(TargetDeclStmt[]).err(error);
+            return BuildResult!(TargetDeclStmt[]).err(
+                Errors.parse("", "Undefined macro '" ~ name ~ "'")
+                    .withSuggestion("Define macro with 'macro " ~ name ~ "(...) { ... }'")
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         
         auto macro_ = macros[name];
@@ -60,12 +63,12 @@ class MacroExpander
         // Check arity
         if (args.length != macro_.parameters.length)
         {
-            auto error = new ParseError(
-                "Macro '" ~ name ~ "' expects " ~ macro_.parameters.length.to!string ~
-                " arguments, got " ~ args.length.to!string,
-                null
+            return BuildResult!(TargetDeclStmt[]).err(
+                Errors.parse("", "Macro '" ~ name ~ "' expects " ~ macro_.parameters.length.to!string ~
+                    " arguments, got " ~ args.length.to!string)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
-            return BuildResult!(TargetDeclStmt[]).err(error);
         }
         
         // Create new scope for macro expansion
@@ -133,8 +136,11 @@ class MacroExpander
         auto iterable = iterableResult.unwrap();
         if (!iterable.isArray())
         {
-            auto error = new ParseError("For loop requires array iterable", null);
-            return BuildResult!(TargetDeclStmt[]).err(error);
+            return BuildResult!(TargetDeclStmt[]).err(
+                Errors.parse("", "For loop requires array iterable")
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         
         TargetDeclStmt[] targets;

@@ -6,7 +6,7 @@ import std.conv;
 import std.string;
 
 /// Import Result type for error handling
-import infrastructure.errors : Result, BuildError, ParseError;
+import infrastructure.errors : Result, BuildResult, BuildError, ParseError, Errors;
 
 /// Strongly-typed target identifier
 /// Represents a fully-qualified target in the format: workspace//path:name
@@ -39,11 +39,14 @@ struct TargetId
     {
         if (qualified.empty)
         {
-            auto error = new ParseError("Empty target ID - target identifier cannot be empty", null);
-            error.addSuggestion("Provide a valid target identifier in the format 'name' or 'namespace:name'");
-            error.addSuggestion("Check that the target definition has a non-empty 'name' field");
-            error.addSuggestion("See docs/architecture/DSL.md for target naming conventions");
-            return BuildResult!TargetId.err(error);
+            return BuildResult!TargetId.err(
+                Errors.parse("", "Empty target ID - target identifier cannot be empty")
+                    .withSuggestion("Provide a valid target identifier in the format 'name' or 'namespace:name'")
+                    .withSuggestion("Check that the target definition has a non-empty 'name' field")
+                    .withSuggestion("See docs/architecture/DSL.md for target naming conventions")
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         
         string workspace = "";
@@ -73,11 +76,14 @@ struct TargetId
         // Validate name is not empty
         if (name.empty)
         {
-            auto error = new ParseError("Target name cannot be empty in qualified ID: " ~ qualified, null);
-            error.addSuggestion("Ensure target names are non-empty after namespace delimiter");
-            error.addSuggestion("Format should be 'name' or 'namespace:name' where both parts are non-empty");
-            error.addSuggestion("Check for trailing colons or double colons in target IDs");
-            return BuildResult!TargetId.err(error);
+            return BuildResult!TargetId.err(
+                Errors.parse("", "Target name cannot be empty in qualified ID: " ~ qualified)
+                    .withSuggestion("Ensure target names are non-empty after namespace delimiter")
+                    .withSuggestion("Format should be 'name' or 'namespace:name' where both parts are non-empty")
+                    .withSuggestion("Check for trailing colons or double colons in target IDs")
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         
         return BuildResult!TargetId.ok(TargetId(workspace, path, name));
