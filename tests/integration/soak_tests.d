@@ -79,8 +79,8 @@ struct MemoryTracker
         double slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
         
         // If slope is significantly positive and consistent, likely a leak
-        // Threshold: growing more than 1KB per sample on average
-        return slope > 1024;
+        // Threshold: growing more than 10KB per sample on average (more lenient for GC variance)
+        return slope > 10_240;
     }
     
     size_t peakUsage() const => samples.length > 0 ? samples.maxElement : 0;

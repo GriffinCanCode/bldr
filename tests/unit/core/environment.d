@@ -184,7 +184,13 @@ unittest
     writeln("TEST: Critical environment variable detection");
     
     auto env1 = BuildEnvironment.snapshot();
-    auto env2 = env1;
+    
+    // Create a copy with duplicated AAs to avoid aliasing
+    BuildEnvironment env2;
+    env2.toolVersions = env1.toolVersions.dup;
+    env2.envVars = env1.envVars.dup;
+    env2.system = env1.system;
+    env2.buildTime = env1.buildTime;
     
     // Non-critical variable change should not affect compatibility
     env2.envVars["NON_CRITICAL_VAR"] = "test_value";
@@ -211,7 +217,13 @@ unittest
     writeln("TEST: BuildEnvironment with missing tools");
     
     auto env1 = BuildEnvironment.snapshot();
-    auto env2 = env1;
+    
+    // Create a proper copy with duplicated AAs
+    BuildEnvironment env2;
+    env2.toolVersions = env1.toolVersions.dup;
+    env2.envVars = env1.envVars.dup;
+    env2.system = env1.system;
+    env2.buildTime = env1.buildTime;
     
     // Remove a tool from env2
     if (env2.toolVersions.length > 0)

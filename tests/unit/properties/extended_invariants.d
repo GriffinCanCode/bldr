@@ -682,7 +682,8 @@ unittest
             deps[name] = [];
             
             // Add deps on earlier targets only (ensures DAG)
-            auto depCount = uniform(0, min(3, t), rng);
+            auto maxDeps = min(3, t);
+            auto depCount = maxDeps > 0 ? uniform(0, maxDeps, rng) : 0;
             foreach (d; 0 .. depCount)
             {
                 auto depIdx = uniform(0, t, rng);

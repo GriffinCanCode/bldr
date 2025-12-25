@@ -338,17 +338,20 @@ class ResilientPluginSystem
     
     private bool isRetryable(BuildError error) const
     {
+        import std.uni : toLower;
         // Crash, timeout, and resource errors are retryable
         // Invalid JSON and schema errors are not
-        string msg = error.message();
+        string msg = error.message().toLower();
         
+        // Non-retryable errors (check first)
+        if (msg.canFind("invalid") || msg.canFind("schema") || 
+            msg.canFind("malformed") || msg.canFind("json"))
+            return false;
+        
+        // Retryable errors
         if (msg.canFind("crashed") || msg.canFind("timeout") || 
             msg.canFind("hung") || msg.canFind("resources"))
             return true;
-        
-        if (msg.canFind("invalid") || msg.canFind("schema") || 
-            msg.canFind("malformed"))
-            return false;
         
         return true;  // Default: retry
     }
@@ -466,11 +469,11 @@ unittest
     auto system = new ResilientPluginSystem();
     auto plugin = new ChaoticMockPlugin("hang-plugin", "/usr/local/bin/hang");
     
-    // Inject hang chaos
+    // Inject hang chaos - set maxFaults high so it hangs on all retries
     PluginChaosConfig hangChaos;
     hangChaos.type = PluginChaosType.Hang;
     hangChaos.probability = 1.0;
-    hangChaos.maxFaults = 1;
+    hangChaos.maxFaults = 10;  // More than max retries
     plugin.addChaos(hangChaos);
     
     system.addPlugin(plugin);
@@ -482,12 +485,12 @@ unittest
     auto result = system.executeWithRetry("hang-plugin", request, shortTimeout);
     auto elapsed = MonoTime.currTime - startTime;
     
-    // Should detect hang and timeout
+    // Should detect hang and timeout after exhausting retries
     Assert.isTrue(result.isErr, "Should detect hang");
     
     // Should not wait too long (respects timeout)
     Logger.info("Hang detected in " ~ elapsed.total!"msecs".to!string ~ "ms");
-    Assert.isTrue(elapsed.total!"msecs" < 2000, "Should timeout quickly");
+    Assert.isTrue(elapsed.total!"msecs" < 5000, "Should timeout reasonably quickly");
     
     writeln("  \x1b[32m✓ Hang detection test passed\x1b[0m");
 }

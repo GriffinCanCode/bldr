@@ -131,9 +131,19 @@ void testASTDependencyCache()
     assert(retrieved.symbols.length == 1);
     assert(retrieved.symbols[0].name == "TestClass");
     
-    // Test change analysis
-    FileAST ast2 = ast1;
-    ast2.symbols[0].contentHash = "class_hash_2"; // Changed
+    // Test change analysis - create a new AST with different content hash
+    FileAST ast2;
+    ast2.filePath = "test1.cpp";
+    ast2.fileHash = "hash1";
+    
+    ASTSymbol symbol2;
+    symbol2.name = "TestClass";
+    symbol2.type = SymbolType.Class;
+    symbol2.startLine = 10;
+    symbol2.endLine = 30;
+    symbol2.contentHash = "class_hash_2"; // Different hash
+    
+    ast2.symbols = [symbol2];
     
     auto changedSymbols = ast2.getChangedSymbols(ast1);
     assert(changedSymbols.length == 1, "Expected 1 changed symbol");

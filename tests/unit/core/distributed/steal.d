@@ -75,7 +75,7 @@ unittest
     Assert.equal(config.retryBackoff, 100.msecs);
     Assert.equal(config.maxRetries, 5);
     Assert.equal(config.minLocalQueue, 4);
-    Assert.equal(config.stealThreshold, 0.7);
+    Assert.equal(config.stealThreshold, 0.7f);
     
     writeln("\x1b[32m  ✓ StealConfig custom values work\x1b[0m");
 }
@@ -285,9 +285,11 @@ unittest
     req.thief = thiefId;
     req.victim = selfId;
     
-    // Simulate finding an action
+    // Simulate finding an action with valid 32-byte hash
+    ubyte[32] mockHash;
+    mockHash[] = 0;
     auto mockAction = new ActionRequest(
-        ActionId([0]), "cmd", null, [], [], Capabilities(), Priority.Normal, 1.seconds
+        ActionId(mockHash), "cmd", null, [], [], Capabilities(), Priority.Normal, 1.seconds
     );
     
     auto result = engine.handleStealRequest(req, delegate ActionRequest() { return mockAction; });
@@ -506,7 +508,9 @@ unittest
     Assert.isFalse(result1.hasWork);
     
     // Just above threshold - should allow (if delegate returns work)
-    auto mockAction = new ActionRequest(ActionId([0]), "cmd", null, [], [], Capabilities(), Priority.Normal, 1.seconds);
+    ubyte[32] mockHash;
+    mockHash[] = 0;
+    auto mockAction = new ActionRequest(ActionId(mockHash), "cmd", null, [], [], Capabilities(), Priority.Normal, 1.seconds);
     auto result2 = engine.handleStealRequest(req, delegate ActionRequest() { return mockAction; });
     Assert.isTrue(result2.hasWork);
     

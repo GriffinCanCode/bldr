@@ -63,9 +63,9 @@ unittest
     graph.addTarget(target2);
     graph.addTarget(target3);
     
-    // All targets are independent, should be built in parallel
+    // All targets are independent (including lib), should be built in parallel
     auto readyNodes = graph.getReadyNodes();
-    Assert.equal(readyNodes.length, 3);
+    Assert.equal(readyNodes.length, 4);
     
     // Verify all can be marked as ready simultaneously
     Assert.isTrue(readyNodes.all!(n => n.isReady(graph)));
