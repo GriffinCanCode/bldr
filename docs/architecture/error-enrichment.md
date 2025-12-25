@@ -2,26 +2,26 @@
 
 ## Overview
 
-This document describes the comprehensive error enrichment system that provides rich, actionable error messages throughout Builder. The system automatically adds context, file locations, and specific suggestions to help users quickly diagnose and fix issues.
+Builder provides a comprehensive error enrichment system that automatically adds context, file locations, and actionable suggestions to error messages. This helps users diagnose and resolve issues efficiently.
 
-## Key Components
+## Components
 
-### 1. Enhanced Suggestion Generator
+### SuggestionGenerator
 
 **Location**: `source/infrastructure/errors/formatting/suggestions.d`
 
-The `SuggestionGenerator` now provides comprehensive suggestions for all error codes:
+Generates contextual suggestions based on error codes:
 
-- **IO Errors** (5000-5999): File operation failures with permission and path suggestions
-- **Parse Errors** (2000-2999): Syntax validation with format-specific guidance
-- **Analysis Errors** (3000-3999): Dependency resolution with graph visualization commands
+- **IO Errors** (5000-5999): File operation failures with permission and path guidance
+- **Parse Errors** (2000-2999): Syntax validation with format-specific help
+- **Analysis Errors** (3000-3999): Dependency resolution with graph commands
 - **Build Errors** (1000-1999): Compilation failures with debugging commands
 - **Cache Errors** (4000-4999): Cache operation issues with cleanup commands
-- **System Errors** (8000-8999): Process and memory errors with resource management tips
+- **System Errors** (8000-8999): Process and memory errors with resource tips
 - **Language Errors** (7000-7999): Compiler errors with toolchain guidance
-- **Plugin/LSP/Watch Errors**: Specialized suggestions for each subsystem
+- **Plugin/LSP/Watch Errors**: Subsystem-specific suggestions
 
-### 2. Error Builder Helpers
+### Error Builder Helpers
 
 **Location**: `source/infrastructure/errors/helpers/builders.d`
 
@@ -30,9 +30,8 @@ Smart error constructors that automatically add:
 - **Source location tracking**: Captures file and line where error was created
 - **Operation context**: What was being attempted when error occurred
 - **File-type specific suggestions**: Different guidance based on file being processed
-- **Common remediation steps**: Pre-configured fixes for each error type
 
-#### Available Helpers
+Available helpers:
 
 ```d
 // Parse errors with file-type specific suggestions
@@ -57,7 +56,7 @@ auto error = createCacheError(message, code, cachePath);
 auto error = createSystemError(message, code);
 ```
 
-### 3. Manifest-Specific Error Helpers
+### Manifest-Specific Helpers
 
 **Location**: `source/infrastructure/errors/helpers/manifests.d`
 
@@ -88,7 +87,7 @@ ecosystemToolMissingError(tool, type);
 
 ## Error Context Chain
 
-Errors now include a context chain showing the operation stack:
+Errors include a context chain showing the operation stack:
 
 ```
 [Parse:ParseFailed] Failed to parse package.json: Invalid JSON
@@ -107,53 +106,34 @@ Suggestions:
 
 The system recognizes file types and provides targeted help:
 
-### package.json (npm/yarn/pnpm)
-- JSON validation commands
-- Trailing comma detection
-- npm-specific documentation links
-
-### Cargo.toml (Rust)
-- TOML syntax validation
-- cargo check commands
-- Cargo documentation links
-
-### go.mod (Go)
-- go mod tidy commands
-- Module path verification
-
-### pyproject.toml / setup.py (Python)
-- pip install validation
-- Python packaging guides
-
-### composer.json (PHP)
-- composer validate commands
-- PHP packaging documentation
-
-### Builderfile
-- Builder syntax documentation
-- Reinitialization commands
-- Field validation guides
+| File | Suggestions |
+|------|-------------|
+| `package.json` | JSON validation, npm commands, trailing comma detection |
+| `Cargo.toml` | TOML syntax validation, cargo check commands |
+| `go.mod` | go mod tidy commands, module path verification |
+| `pyproject.toml` / `setup.py` | pip install validation, packaging guides |
+| `composer.json` | composer validate commands |
+| `Builderfile` | DSL syntax documentation, field validation |
 
 ## Automatic Location Tracking
 
-All error helpers automatically capture:
+Error helpers capture:
 - Source file where error was created
 - Line number in source
 - Function/operation context
 
-This enables precise error tracking for debugging and issue reporting.
+This enables precise error tracking for debugging.
 
-## Usage Examples
+## Usage
 
 ### Before (Basic Error)
 
 ```d
-// Old style - minimal context
 auto error = new ParseError(filePath, "Parse error: " ~ e.msg, ErrorCode.ParseFailed);
 return Result.err(error);
 ```
 
-**Output**:
+Output:
 ```
 [Parse:ParseFailed] Parse error: unexpected token
   File: package.json
@@ -162,11 +142,10 @@ return Result.err(error);
 ### After (Enriched Error)
 
 ```d
-// New style - rich context and suggestions
 return Result.err(manifestParseError(filePath, "npm", "Invalid JSON: " ~ e.msg));
 ```
 
-**Output**:
+Output:
 ```
 [Parse:ParseFailed] Failed to parse npm manifest: Invalid JSON: unexpected token
   → during: parsing npm manifest at npm.d:60
@@ -183,52 +162,26 @@ Suggestions:
 ## Integration Points
 
 ### Manifest Parsers
-All ecosystem manifest parsers updated:
-- ✅ `npm.d` - Node.js package.json
-- ✅ `cargo.d` - Rust Cargo.toml
-- ✅ `go.d` - Go go.mod
-- ✅ `python.d` - Python pyproject.toml/setup.py
-- ✅ `composer.d` - PHP composer.json
+- `npm.d` - Node.js package.json
+- `cargo.d` - Rust Cargo.toml
+- `go.d` - Go go.mod
+- `python.d` - Python pyproject.toml/setup.py
+- `composer.d` - PHP composer.json
 
 ### Build Pipeline
-- ✅ `parser.d` - Configuration parsing
-- ✅ `analyzer.d` - Incremental analysis
-- ✅ `cas.d` - Cache operations
+- `parser.d` - Configuration parsing
+- `analyzer.d` - Incremental analysis
+- `cas.d` - Cache operations
 
-### Language Handlers
-- ✅ `base.d` - Base language handler (already had good errors)
-
-## Benefits
-
-### For Users
-1. **Faster Problem Resolution**: Specific commands to run
-2. **Better Understanding**: Context shows what was happening
-3. **Self-Service**: Documentation links for learning
-4. **Reduced Frustration**: Clear next steps instead of cryptic messages
-
-### For Developers
-1. **Easier Debugging**: Source location in errors
-2. **Consistent Format**: All errors follow same pattern
-3. **Easy to Extend**: Add new error types with helpers
-4. **Better Bug Reports**: Users can provide detailed error context
-
-### For Support
-1. **Fewer Questions**: Errors include common solutions
-2. **Faster Triage**: Context shows exact failure point
-3. **Better Patterns**: Track common error categories
-4. **Documentation Gaps**: See what docs users need
-
-## Error Formatting Options
-
-Errors support rich formatting:
+## Formatting Options
 
 ```d
 FormatOptions opts;
 opts.colors = true;           // ANSI colors in terminal
-opts.showCode = true;         // Show error code (e.g., ParseFailed)
-opts.showCategory = true;     // Show category (e.g., Parse)
+opts.showCode = true;         // Show error code
+opts.showCategory = true;     // Show category
 opts.showContexts = true;     // Show context chain
-opts.showSuggestions = true;  // Show helpful suggestions
+opts.showSuggestions = true;  // Show suggestions
 opts.showTimestamp = false;   // Show when error occurred
 opts.maxWidth = 80;           // Wrap long lines
 
@@ -237,31 +190,15 @@ string formatted = format(error, opts);
 
 ## Suggestion Types
 
-The system uses typed suggestions for semantic clarity:
-
-- **Command**: Runnable CLI commands with syntax
-- **Documentation**: Links to relevant docs/guides
+- **Command**: Runnable CLI commands
+- **Documentation**: Links to relevant docs
 - **FileCheck**: File/permission validation steps
-- **Configuration**: Config file changes needed
-- **General**: General advice/information
-
-Each type is formatted differently for visual scanning.
-
-## Future Enhancements
-
-Potential improvements:
-
-1. **Interactive Mode**: Let users choose from suggestions
-2. **AI Integration**: Generate custom solutions based on context
-3. **Error Analytics**: Track most common errors for UX improvements
-4. **Solution Database**: Crowdsourced fixes from community
-5. **IDE Integration**: Jump to file/line from error messages
-6. **Localization**: Translate errors and suggestions
-7. **Error Templates**: User-customizable error formats
+- **Configuration**: Config file changes
+- **General**: General advice
 
 ## Migration Guide
 
-To adopt enriched errors in new code:
+To adopt enriched errors:
 
 1. Import helpers:
    ```d
@@ -292,15 +229,6 @@ To adopt enriched errors in new code:
 
 ## Testing
 
-Error enrichment can be tested by:
-
-1. Triggering error conditions
-2. Verifying context chain is present
-3. Checking suggestions are appropriate
-4. Ensuring file types are recognized
-5. Validating location tracking
-
-Example test:
 ```d
 // Trigger parse error with invalid JSON
 auto result = parser.parse("invalid.json");
@@ -317,8 +245,3 @@ foreach (s; error.suggestions())
         hasJSONValidation = true;
 assert(hasJSONValidation);
 ```
-
-## Conclusion
-
-The error enrichment system transforms Builder's error messages from basic notifications into actionable guides that help users quickly understand and resolve issues. By providing context, specific commands, and relevant documentation, the system reduces friction and improves the overall developer experience.
-
