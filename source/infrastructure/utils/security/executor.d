@@ -1,10 +1,11 @@
 module infrastructure.utils.security.executor;
 
 import std.process;
-import std.algorithm;
+import std.algorithm : canFind, filter, map, remove;
 import std.array;
-import std.string;
+import std.string : startsWith, replace, indexOf, toUpper, strip;
 import std.path : baseName, dirName;
+import std.range : empty;
 import infrastructure.utils.security.validation;
 import infrastructure.utils.logging.logger;
 import engine.runtime.hermetic;
@@ -52,7 +53,7 @@ private struct AuditRedactor
             arg.canFind("PASS=") || arg.canFind("SECRET=") ||
             arg.canFind("API_KEY") || arg.canFind("ACCESS_TOKEN"))
         {
-            auto eqPos = arg.indexOf('=');
+            auto eqPos = indexOf(arg, '=');
             if (eqPos >= 0)
             {
                 return arg[0 .. eqPos + 1] ~ "***REDACTED***";
@@ -115,7 +116,7 @@ private struct AuditRedactor
         ];
         
         auto redacted = keys.map!((k) {
-            auto upper = k.toUpper();
+            auto upper = toUpper(k);
             foreach (pattern; sensitivePatterns)
             {
                 if (upper.canFind(pattern))

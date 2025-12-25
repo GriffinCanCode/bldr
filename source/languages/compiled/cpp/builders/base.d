@@ -469,36 +469,54 @@ abstract class BaseCppBuilder : CppBuilder
 /// Module-level helper to build compiler flags (for use without class instance)
 string[] buildCompilerFlags(in CppConfig config, bool isCpp)
 {
-    import std.conv : to;
-    
     string[] flags;
     
-    // Standard
-    final switch (isCpp ? config.cppStandard : CppStandard.Cpp14) // Convert to string-based comparison
+    // Standard - handle all CppStandard enum values
+    final switch (isCpp ? config.cppStandard : CppStandard.Cpp14)
     {
         case CppStandard.Cpp98: flags ~= "-std=c++98"; break;
+        case CppStandard.Cpp03: flags ~= "-std=c++03"; break;
         case CppStandard.Cpp11: flags ~= "-std=c++11"; break;
         case CppStandard.Cpp14: flags ~= "-std=c++14"; break;
         case CppStandard.Cpp17: flags ~= "-std=c++17"; break;
         case CppStandard.Cpp20: flags ~= "-std=c++20"; break;
         case CppStandard.Cpp23: flags ~= "-std=c++23"; break;
+        case CppStandard.Cpp26: flags ~= "-std=c++26"; break;
+        case CppStandard.GnuCpp98: flags ~= "-std=gnu++98"; break;
+        case CppStandard.GnuCpp03: flags ~= "-std=gnu++03"; break;
+        case CppStandard.GnuCpp11: flags ~= "-std=gnu++11"; break;
+        case CppStandard.GnuCpp14: flags ~= "-std=gnu++14"; break;
+        case CppStandard.GnuCpp17: flags ~= "-std=gnu++17"; break;
+        case CppStandard.GnuCpp20: flags ~= "-std=gnu++20"; break;
+        case CppStandard.GnuCpp23: flags ~= "-std=gnu++23"; break;
+        case CppStandard.GnuCpp26: flags ~= "-std=gnu++26"; break;
     }
     
     // Optimization
     final switch (config.optLevel)
     {
-        case OptimizationLevel.Debug: flags ~= "-O0"; break;
-        case OptimizationLevel.Release: flags ~= "-O2"; break;
-        case OptimizationLevel.Speed: flags ~= "-O3"; break;
-        case OptimizationLevel.Size: flags ~= "-Os"; break;
-        case OptimizationLevel.Custom: break;
+        case OptLevel.O0: flags ~= "-O0"; break;
+        case OptLevel.O1: flags ~= "-O1"; break;
+        case OptLevel.O2: flags ~= "-O2"; break;
+        case OptLevel.O3: flags ~= "-O3"; break;
+        case OptLevel.Os: flags ~= "-Os"; break;
+        case OptLevel.Ofast: flags ~= "-Ofast"; break;
+        case OptLevel.Og: flags ~= "-Og"; break;
     }
     
     // Debug info
     if (config.debugInfo) flags ~= "-g";
     
-    // Warnings
-    foreach (warn; config.warnings) flags ~= warn;
+    // Warnings - use warning level
+    final switch (config.warnings)
+    {
+        case WarningLevel.None: break;
+        case WarningLevel.Default: break;
+        case WarningLevel.Extra: flags ~= "-Wall"; break;
+        case WarningLevel.All: flags ~= ["-Wall", "-Wextra"]; break;
+        case WarningLevel.Pedantic: flags ~= ["-Wall", "-Wextra", "-Wpedantic"]; break;
+        case WarningLevel.Error: flags ~= ["-Wall", "-Wextra", "-Werror"]; break;
+    }
     
     // Defines
     foreach (def; config.defines) flags ~= "-D" ~ def;
