@@ -9,6 +9,9 @@ import infrastructure.config.scripting.expander;
 import infrastructure.config.workspace.ast;
 import infrastructure.errors;
 
+// Need Closure from types for first-class functions
+alias Closure = infrastructure.config.scripting.types.Closure;
+
 /// Statement interpreter that executes Tier 1 programmability features
 /// 
 /// This interpreter:
@@ -82,12 +85,33 @@ class Interpreter
         return evaluator.defineVariable(stmt.name, valueResult.unwrap(), stmt.isConst);
     }
     
-    /// Execute function declaration
+    /// Execute function declaration - creates closure capturing current scope
     private Result!BuildError executeFunctionDecl(FunctionDeclStmt stmt) @system
     {
-        // Store function definition (closure support available in full scripting tier)
-        // Basic implementation for Tier 1
-        return Result!BuildError.ok();
+        // Capture current lexical environment for closure
+        Closure closure;
+        closure.name = stmt.name;
+        closure.params = stmt.params;
+        closure.body_ = stmt.body;
+        closure.lambdaBody = null;
+        closure.capturedEnv = captureEnvironment();
+        
+        // Store as first-class function value
+        auto fnValue = Value.makeFunction(closure);
+        return evaluator.defineVariable(stmt.name, fnValue, true);  // Functions are immutable
+    }
+    
+    /// Capture current scope for closures
+    private Value[string] captureEnvironment() @system
+    {
+        Value[string] env;
+        foreach (name; evaluator.scopeManager().definedNames())
+        {
+            auto lookupResult = evaluator.scopeManager().lookup(name);
+            if (lookupResult.isOk)
+                env[name] = lookupResult.unwrap();
+        }
+        return env;
     }
     
     /// Execute macro declaration
@@ -216,10 +240,18 @@ class Interpreter
         return Result!BuildError.ok();
     }
     
-    /// Execute return statement
+    /// Execute return statement - sets return value for function exit
     private Result!BuildError executeReturnStmt(ReturnStmt stmt) @system
     {
-        // Return statements not yet fully supported in MVP
+        // Return statements are handled by the evaluator's executeStmt
+        // This path is for top-level returns (which are no-ops outside functions)
+        if (stmt.value)
+        {
+            auto result = evaluateExpr(stmt.value);
+            if (result.isErr)
+                return Result!BuildError.err(result.unwrapErr());
+            // Top-level return - value is discarded
+        }
         return Result!BuildError.ok();
     }
     

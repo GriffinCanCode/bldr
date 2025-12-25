@@ -19,6 +19,33 @@ enum ValueType
     Target
 }
 
+/// Forward declaration for AST types
+import infrastructure.config.workspace.ast : Stmt, Expr, Parameter;
+
+/// Closure captures lexical environment for first-class functions
+struct Closure
+{
+    string name;                    // Function name (empty for lambdas)
+    Parameter[] params;             // Parameter definitions
+    Stmt[] body_;                   // Function body statements
+    Expr lambdaBody;                // Lambda expression body (for single-expr lambdas)
+    Value[string] capturedEnv;      // Captured lexical environment
+    
+    /// Check if this is a lambda (single expression body)
+    bool isLambda() const pure nothrow @nogc @safe { return lambdaBody !is null; }
+    
+    /// Get parameter count
+    size_t arity() const pure nothrow @nogc @safe { return params.length; }
+    
+    /// Get parameter names  
+    const(string)[] paramNames() const pure @safe
+    {
+        import std.algorithm : map;
+        import std.array : array;
+        return params.map!(p => p.name).array;
+    }
+}
+
 /// Runtime value with dynamic type
 struct Value
 {
@@ -87,6 +114,15 @@ struct Value
         return v;
     }
     
+    /// Create function/closure value (first-class functions)
+    static Value makeFunction(Closure closure) @trusted
+    {
+        Value v;
+        v.type_ = ValueType.Function;
+        v.data_ = closure;
+        return v;
+    }
+    
     /// Get type
     ValueType type() const pure nothrow @nogc @safe
     {
@@ -133,6 +169,12 @@ struct Value
     bool isTarget() const pure nothrow @nogc @safe
     {
         return type_ == ValueType.Target;
+    }
+    
+    /// Check if function/closure
+    bool isFunction() const pure nothrow @nogc @safe
+    {
+        return type_ == ValueType.Function;
     }
     
     /// Get as bool (throws if not bool)
@@ -183,6 +225,14 @@ struct Value
         return cast(TargetConfig)data_.get!TargetConfig;
     }
     
+    /// Get as closure (throws if not function)
+    Closure asClosure() const @trusted
+    {
+        if (!isFunction())
+            throw new Exception("Value is not a function");
+        return cast(Closure)data_.get!Closure;
+    }
+    
     /// Convert to bool (truthiness)
     bool toBool() const @trusted
     {
@@ -231,7 +281,8 @@ struct Value
             case ValueType.Target:
                 return "<target>";
             case ValueType.Function:
-                return "<function>";
+                auto closure = asClosure();
+                return closure.name.length ? "<fn " ~ closure.name ~ ">" : "<lambda>";
             default:
                 return "<unknown>";
         }

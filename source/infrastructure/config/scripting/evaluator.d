@@ -10,18 +10,26 @@ import infrastructure.config.scripting.builtins;
 import infrastructure.config.workspace.ast;
 import infrastructure.errors;
 
+alias Closure = infrastructure.config.scripting.types.Closure;
+alias Stmt = infrastructure.config.workspace.ast.Stmt;
+alias Parameter = infrastructure.config.workspace.ast.Parameter;
+
 /// Expression evaluator with type checking
 class Evaluator
 {
     private ScopeManager scope_;
     private BuiltinRegistry builtins;
     private bool typeCheckOnly;  // If true, only check types without evaluation
+    private Value returnValue;   // Return value from function execution
+    private bool hasReturned;    // Flag for early return control flow
     
     this() @system
     {
         scope_ = new ScopeManager();
         builtins = new BuiltinRegistry();
         typeCheckOnly = false;
+        returnValue = Value.makeNull();
+        hasReturned = false;
     }
     
     /// Get scope manager
@@ -133,8 +141,15 @@ class Evaluator
         }
         else if (auto lambda = cast(LambdaExpr)expr)
         {
-            // Lambda expressions not yet implemented in MVP
-            return err("Lambda expressions not yet supported");
+            // Create closure capturing current environment
+            Closure closure;
+            closure.name = "";  // Anonymous
+            closure.params = lambda.params.map!(p => Parameter(p, null)).array;
+            closure.body_ = [];
+            closure.lambdaBody = lambda.body;
+            closure.capturedEnv = captureCurrentEnv();
+            
+            return ok(Value.makeFunction(closure));
         }
         
         return err("Unknown expression type: " ~ expr.nodeType());
@@ -393,8 +408,152 @@ class Evaluator
             return Result!(Value, BuildError).err(error);
         }
         
-        // User-defined functions not yet implemented in MVP
-        return err("User-defined function calls not yet implemented");
+        auto fnValue = lookupResult.unwrap();
+        if (!fnValue.isFunction())
+            return err("'" ~ name ~ "' is not callable");
+        
+        return invokeClosure(fnValue.asClosure(), args);
+    }
+    
+    /// Invoke a closure with arguments, setting up proper scope
+    Result!(Value, BuildError) invokeClosure(Closure closure, Value[] args) @system
+    {
+        // Validate argument count
+        if (args.length < closure.arity())
+        {
+            size_t required = 0;
+            foreach (p; closure.params)
+                if (!p.hasDefault()) required++;
+            
+            if (args.length < required)
+                return err("Function '" ~ closure.name ~ "' expects " ~ required.to!string ~ 
+                          " arguments, got " ~ args.length.to!string);
+        }
+        
+        // Enter function scope with captured environment
+        scope_.enterScope();
+        scope(exit) scope_.exitScope();
+        
+        // Restore captured closure environment
+        foreach (name, value; closure.capturedEnv)
+            scope_.define(name, value, true);
+        
+        // Bind parameters
+        foreach (i, param; closure.params)
+        {
+            Value argValue = (i < args.length) ? args[i] 
+                : (param.hasDefault() ? evaluate(param.defaultValue).unwrap() : Value.makeNull());
+            auto defResult = scope_.define(param.name, argValue, false);
+            if (defResult.isErr)
+                return Result!(Value, BuildError).err(defResult.unwrapErr());
+        }
+        
+        // Handle lambda (single expression body)
+        if (closure.isLambda())
+            return evaluate(closure.lambdaBody);
+        
+        // Execute function body statements
+        returnValue = Value.makeNull();
+        hasReturned = false;
+        
+        foreach (stmt; closure.body_)
+        {
+            auto result = executeStmt(stmt);
+            if (result.isErr)
+                return Result!(Value, BuildError).err(result.unwrapErr());
+            if (hasReturned)
+                break;
+        }
+        
+        return ok(returnValue);
+    }
+    
+    /// Execute statement (for function body execution)
+    private Result!BuildError executeStmt(Stmt stmt) @system
+    {
+        import infrastructure.config.workspace.ast : ReturnStmt, VarDeclStmt, ExprStmt, 
+            IfStmt, ForStmt, BlockStmt;
+        
+        if (auto ret = cast(ReturnStmt)stmt)
+        {
+            if (ret.value)
+            {
+                auto result = evaluate(ret.value);
+                if (result.isErr)
+                    return Result!BuildError.err(result.unwrapErr());
+                returnValue = result.unwrap();
+            }
+            hasReturned = true;
+            return Result!BuildError.ok();
+        }
+        else if (auto varDecl = cast(VarDeclStmt)stmt)
+        {
+            auto valResult = evaluate(varDecl.initializer);
+            if (valResult.isErr)
+                return Result!BuildError.err(valResult.unwrapErr());
+            return scope_.define(varDecl.name, valResult.unwrap(), varDecl.isConst);
+        }
+        else if (auto exprStmt = cast(ExprStmt)stmt)
+        {
+            auto result = evaluate(exprStmt.expr);
+            if (result.isErr)
+                return Result!BuildError.err(result.unwrapErr());
+            return Result!BuildError.ok();
+        }
+        else if (auto ifStmt = cast(IfStmt)stmt)
+        {
+            auto condResult = evaluate(ifStmt.condition);
+            if (condResult.isErr)
+                return Result!BuildError.err(condResult.unwrapErr());
+            
+            auto branch = condResult.unwrap().toBool() ? ifStmt.thenBranch : ifStmt.elseBranch;
+            foreach (s; branch)
+            {
+                auto r = executeStmt(s);
+                if (r.isErr) return r;
+                if (hasReturned) break;
+            }
+            return Result!BuildError.ok();
+        }
+        else if (auto forStmt = cast(ForStmt)stmt)
+        {
+            auto iterResult = evaluate(forStmt.iterable);
+            if (iterResult.isErr)
+                return Result!BuildError.err(iterResult.unwrapErr());
+            
+            if (!iterResult.unwrap().isArray())
+                return Result!BuildError.err(new ParseError("For loop requires array", null));
+            
+            scope_.enterScope();
+            scope(exit) scope_.exitScope();
+            
+            foreach (elem; iterResult.unwrap().asArray())
+            {
+                scope_.define(forStmt.variable, elem, false);
+                foreach (s; forStmt.body)
+                {
+                    auto r = executeStmt(s);
+                    if (r.isErr) return r;
+                    if (hasReturned) break;
+                }
+                if (hasReturned) break;
+            }
+            return Result!BuildError.ok();
+        }
+        else if (auto block = cast(BlockStmt)stmt)
+        {
+            scope_.enterScope();
+            scope(exit) scope_.exitScope();
+            foreach (s; block.stmts)
+            {
+                auto r = executeStmt(s);
+                if (r.isErr) return r;
+                if (hasReturned) break;
+            }
+            return Result!BuildError.ok();
+        }
+        
+        return Result!BuildError.ok();
     }
     
     /// Evaluate array indexing
@@ -588,6 +747,19 @@ class Evaluator
             case LiteralKind.Map:
                 return Result!(ScriptTypeInfo, BuildError).ok(ScriptTypeInfo.simple(ValueType.Map));
         }
+    }
+    
+    /// Capture current scope for closures
+    private Value[string] captureCurrentEnv() @system
+    {
+        Value[string] env;
+        foreach (name; scope_.definedNames())
+        {
+            auto lookupResult = scope_.lookup(name);
+            if (lookupResult.isOk)
+                env[name] = lookupResult.unwrap();
+        }
+        return env;
     }
     
     // Helper methods

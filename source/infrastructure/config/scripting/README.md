@@ -6,7 +6,10 @@
 
 This module implements functional DSL extensions for Builderfiles, enabling:
 - **Variables**: `let` and `const` bindings
-- **Functions**: Pure functions for code reuse
+- **Functions**: Pure functions with closures for code reuse
+- **First-class Functions**: Pass functions as values, return from functions
+- **Lambdas**: Anonymous functions `|x| x * 2`
+- **Closures**: Functions capture their lexical environment
 - **Conditionals**: `if`/`else` statements
 - **Loops**: `for` loops and `range()` iteration
 - **Macros**: Code generation at parse time
@@ -54,6 +57,7 @@ This module implements functional DSL extensions for Builderfiles, enabling:
 ### types.d
 - `Value`: Runtime value with dynamic type
 - `ValueType`: Type enumeration (Null, Bool, Number, String, Array, Map, Function, Target)
+- `Closure`: First-class function with captured lexical environment
 - `TargetConfig`: Target configuration structure
 - `TypeInfo`: Type information for expressions
 
@@ -61,6 +65,7 @@ This module implements functional DSL extensions for Builderfiles, enabling:
 - Variant-based value representation
 - Type-safe conversions
 - Efficient equality comparison
+- Closures capture environment at definition time
 
 ### scopemanager.d
 - `ScopeManager`: Lexical scope management
@@ -144,7 +149,7 @@ for pkg in packages {
 }
 ```
 
-### Functions
+### Functions with Closures
 ```d
 fn pythonLib(name, srcs) {
     return {
@@ -155,6 +160,32 @@ fn pythonLib(name, srcs) {
 }
 
 target("utils") = pythonLib("utils", ["lib/utils.py"]);
+
+// Closures capture their environment
+fn makeAdder(n) {
+    return |x| x + n;  // Lambda captures 'n'
+}
+
+let add5 = makeAdder(5);
+let result = add5(10);  // Returns 15
+```
+
+### First-Class Functions
+```d
+// Functions as values
+fn double(x) { return x * 2; }
+fn triple(x) { return x * 3; }
+
+let ops = [double, triple];  // Array of functions
+
+// Higher-order functions
+fn apply(fn, val) { return fn(val); }
+let result = apply(double, 5);  // Returns 10
+
+// Lambdas
+let square = |x| x * x;
+let nums = [1, 2, 3];
+// Use with built-in map: map(nums, square)
 ```
 
 ### Macros
@@ -183,6 +214,9 @@ genServices([
 - [x] Built-in functions (`builtins.d`)
 - [x] Expression evaluator (`evaluator.d`)
 - [x] Macro expander (`expander.d`)
+- [x] Closures and first-class functions
+- [x] Lambda expressions
+- [x] Return statements with early exit
 
 ### Phase 2: Parser Integration 🚧
 - [ ] Extend lexer with new tokens
@@ -273,11 +307,12 @@ dmd -unittest -main config/scripting/*.d -of=test-scripting
 ## Next Steps
 
 1. **Parser Integration**: Wire evaluator into DSL parser
-2. **Statement Execution**: Implement for loops and conditionals
-3. **Function Definitions**: Support user-defined functions
-4. **Macro System**: Complete macro expansion
-5. **Documentation**: User guide and examples
-6. **Testing**: Comprehensive test suite
+2. **Statement Execution**: Implement for loops and conditionals ✅
+3. **Function Definitions**: Support user-defined functions ✅
+4. **Closures**: First-class functions with captured environment ✅
+5. **Macro System**: Complete macro expansion
+6. **Documentation**: User guide and examples
+7. **Testing**: Comprehensive test suite
 
 ## Design Decisions
 
