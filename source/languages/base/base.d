@@ -7,6 +7,7 @@ import infrastructure.telemetry.distributed.tracing;
 import engine.caching.actions.action;
 import infrastructure.utils.logging.structured;
 import infrastructure.utils.simd.capabilities;
+import infrastructure.di : IServiceContainer, NullServiceContainer;
 import infrastructure.errors;
 
 /// Action recording callback for fine-grained caching
@@ -18,17 +19,24 @@ alias ActionRecorder = void delegate(ActionId actionId, string[] inputs, string[
 alias DependencyRecorder = void delegate(string sourceFile, string[] dependencies);
 
 /// Build context with action-level caching and incremental compilation support
-/// Extended to include SIMD capabilities and observability (tracer, logger)
+/// Uses IServiceContainer for formalized dependency injection of observability services.
+/// 
+/// Service Container Pattern:
+/// - All services accessed via `services` property
+/// - Null-safe: services container never null, individual services may be
+/// - Testable: inject MockServiceContainer for unit tests
+/// 
+/// Example:
+///   auto services = new MockServiceContainer();
+///   auto ctx = BuildContext(target, config, services);
 struct BuildContext
 {
     Target target;
     WorkspaceConfig config;
-    ActionRecorder recorder;         // Optional action recorder
-    DependencyRecorder depRecorder;  // Optional dependency recorder
-    SIMDCapabilities simd;           // SIMD capabilities (null if not available)
-    bool incrementalEnabled;         // Whether incremental compilation is enabled
-    Tracer tracer;                   // Distributed tracer (null if not available)
-    StructuredLogger logger;         // Structured logger (null if not available)
+    IServiceContainer services;
+    ActionRecorder recorder;
+    DependencyRecorder depRecorder;
+    bool incrementalEnabled;
     
     /// Record an action for fine-grained caching
     void recordAction(ActionId actionId, string[] inputs, string[] outputs, string[string] metadata, bool success)
@@ -45,16 +53,21 @@ struct BuildContext
     }
     
     /// Check if SIMD acceleration is available
-    bool hasSIMD() const pure nothrow
-    {
-        return simd !is null && simd.active;
-    }
+    bool hasSIMD() const @trusted nothrow => services !is null && services.hasSIMD;
+    
+    /// Check if tracing is available
+    bool hasTracing() const @trusted nothrow => services !is null && services.hasTracing;
+    
+    /// Check if logging is available
+    bool hasLogging() const @trusted nothrow => services !is null && services.hasLogging;
     
     /// Check if incremental compilation is enabled
-    bool hasIncremental() const pure nothrow
-    {
-        return incrementalEnabled && depRecorder !is null;
-    }
+    bool hasIncremental() const pure nothrow => incrementalEnabled && depRecorder !is null;
+    
+    // Convenience accessors
+    @property Tracer tracer() @trusted => services !is null ? services.tracer : null;
+    @property StructuredLogger logger() @trusted => services !is null ? services.logger : null;
+    @property SIMDCapabilities simd() @trusted => services !is null ? services.simd : null;
 }
 
 /// Base interface for language-specific build handlers

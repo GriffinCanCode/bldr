@@ -43,11 +43,11 @@ struct BuildContext
 
 Usage:
 ```d
-// In ExecutionEngine:
+// In ExecutionEngine (using IServiceContainer):
 BuildContext buildContext;
 buildContext.target = target;
-buildContext.config = config;
-buildContext.simd = simdCaps;
+buildContext.config = services.config;
+buildContext.services = services;  // IServiceContainer
 buildContext.recorder = (actionId, inputs, outputs, metadata, success) {
     cache.recordAction(actionId, inputs, outputs, metadata, success);
 };
@@ -81,19 +81,19 @@ auto results = SIMDParallel.mapSIMD(data, func);
 
 **After:**
 ```d
-// In BuildServices:
+// In BuildServices (implements IServiceContainer):
 auto caps = SIMDCapabilities.detect();
 
-// Pass through context:
+// Pass through IServiceContainer:
 BuildContext ctx;
-ctx.simd = caps;
+ctx.services = services;  // IServiceContainer
 
 // Use context-aware operations:
-auto simdCtx = createSIMDContext(ctx.simd);
+auto simdCtx = createSIMDContext(ctx.simd);  // Via services
 auto results = simdCtx.mapParallel(data, func);
 ```
 
-**Status:** Deprecated, marked with `@deprecated` attribute
+**Status:** Fully migrated to IServiceContainer ✅
 
 ### 2. ShutdownCoordinator ✅
 
@@ -161,19 +161,19 @@ auto logger = getStructuredLogger();  // Global singleton
 
 **After:**
 ```d
-// In BuildServices:
+// In BuildServices (implements IServiceContainer):
 this._structuredLogger = new StructuredLogger(minLevel);
 
-// Passed through BuildContext:
+// Passed through IServiceContainer:
 BuildContext context;
-context.logger = observability.logger;
+context.services = services;  // IServiceContainer
 
 // Used in handlers:
-if (context.logger !is null)
+if (context.hasLogging())
     context.logger.info("Building target", fields);
 ```
 
-**Status:** Fully migrated ✅
+**Status:** Fully migrated to IServiceContainer ✅
 
 ### 6. Distributed Tracer ✅
 
@@ -185,22 +185,22 @@ auto tracer = getTracer();  // Global singleton
 
 **After:**
 ```d
-// In BuildServices:
+// In BuildServices (implements IServiceContainer):
 this._tracer = new Tracer(exporter);
 
-// Passed through BuildContext:
+// Passed through IServiceContainer:
 BuildContext context;
-context.tracer = observability.tracer;
+context.services = services;  // IServiceContainer
 
 // Used in handlers:
-if (context.tracer !is null) {
+if (context.hasTracing()) {
     auto span = context.tracer.startSpan("operation");
     // ... work
     context.tracer.finishSpan(span);
 }
 ```
 
-**Status:** Fully migrated ✅
+**Status:** Fully migrated to IServiceContainer ✅
 
 ### 7. Hermetic Audit Logger ✅
 
@@ -531,49 +531,86 @@ All remaining global state has been eliminated:
 
 ### Migration Pattern
 
-All observability components now follow this pattern:
+All observability components now use IServiceContainer:
 
 ```d
-// 1. Create in BuildServices
+// 1. Create in BuildServices (implements IServiceContainer)
 this._structuredLogger = new StructuredLogger(minLevel);
 this._tracer = new Tracer(exporter);
 
 // 2. Inject into ObservabilityService
 auto observability = new ObservabilityService(_publisher, _tracer, _structuredLogger);
 
-// 3. Pass through BuildContext
+// 3. Pass IServiceContainer through BuildContext
 BuildContext context;
-context.tracer = observability.tracer;
-context.logger = observability.logger;
+context.services = services;  // IServiceContainer
 
-// 4. Use in handlers (with null checks)
-if (context.tracer !is null) {
+// 4. Use in handlers (with hasX() checks)
+if (context.hasTracing()) {
     auto span = context.tracer.startSpan("operation");
     // ... work ...
     context.tracer.finishSpan(span);
 }
 
-if (context.logger !is null) {
+if (context.hasLogging()) {
     context.logger.info("Message", fields);
 }
 ```
 
-### Extended BuildContext
+### Extended BuildContext with IServiceContainer
 
-`BuildContext` now provides complete execution environment:
+`BuildContext` uses formalized dependency injection via `IServiceContainer`:
 
 ```d
 struct BuildContext
 {
     Target target;                   // Target to build
     WorkspaceConfig config;          // Workspace configuration
+    IServiceContainer services;      // Service container (DI)
     ActionRecorder recorder;         // Action-level caching
     DependencyRecorder depRecorder;  // Incremental compilation
-    SIMDCapabilities simd;           // Hardware acceleration
-    Tracer tracer;                   // Distributed tracing
-    StructuredLogger logger;         // Structured logging
     bool incrementalEnabled;         // Incremental flag
+    
+    // Convenience accessors via service container
+    @property Tracer tracer() => services !is null ? services.tracer : null;
+    @property StructuredLogger logger() => services !is null ? services.logger : null;
+    @property SIMDCapabilities simd() => services !is null ? services.simd : null;
+    
+    // Service availability checks
+    bool hasTracing() const => services !is null && services.hasTracing;
+    bool hasLogging() const => services !is null && services.hasLogging;
+    bool hasSIMD() const => services !is null && services.hasSIMD;
 }
+```
+
+### IServiceContainer Interface
+
+```d
+interface IServiceContainer
+{
+    @property Tracer tracer();
+    @property StructuredLogger logger();
+    @property SIMDCapabilities simd();
+    @property WorkspaceConfig config();
+    
+    bool hasTracing() const;
+    bool hasLogging() const;
+    bool hasSIMD() const;
+}
+```
+
+### Mock Service Container for Testing
+
+```d
+// Test code - inject mock services
+auto services = new MockServiceContainer(config);
+auto ctx = BuildContext();
+ctx.target = target;
+ctx.config = config;
+ctx.services = services;
+
+// Or use NullServiceContainer for minimal testing
+ctx.services = new NullServiceContainer();
 ```
 
 All language handlers receive complete context with zero global dependencies.

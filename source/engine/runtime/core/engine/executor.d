@@ -12,7 +12,7 @@ import engine.runtime.services;
 import frontend.cli.events.events;
 import infrastructure.telemetry.distributed.tracing : Span, SpanKind, SpanStatus;
 import infrastructure.utils.logging.logger;
-import infrastructure.utils.simd.capabilities;
+import infrastructure.di : IServiceContainer;
 import infrastructure.errors;
 import engine.runtime.hermetic.determinism;
 
@@ -26,14 +26,14 @@ struct BuildResult
 }
 
 /// Engine executor - handles individual target builds
+/// Uses IServiceContainer for dependency injection of observability services.
 struct EngineExecutor
 {
     private ICacheService cache;
     private IObservabilityService observability;
     private IResilienceService resilience;
     private IHandlerRegistry handlers;
-    private WorkspaceConfig config;
-    private SIMDCapabilities simdCaps;
+    private IServiceContainer services;
     
     /// Initialize executor with services
     void initialize(
@@ -41,16 +41,14 @@ struct EngineExecutor
         IObservabilityService observability,
         IResilienceService resilience,
         IHandlerRegistry handlers,
-        WorkspaceConfig config,
-        SIMDCapabilities simdCaps
+        IServiceContainer services
     ) @trusted
     {
         this.cache = cache;
         this.observability = observability;
         this.resilience = resilience;
         this.handlers = handlers;
-        this.config = config;
-        this.simdCaps = simdCaps;
+        this.services = services;
     }
     
     /// Build a single node
@@ -120,19 +118,16 @@ struct EngineExecutor
             auto compileSpan = observability.startSpan("compile", SpanKind.Internal, targetSpan);
             observability.setSpanAttribute(compileSpan, "target.sources_count", target.sources.length.to!string);
             
-            // Create build context with action recorder, SIMD, observability, and incremental support
+            // Create build context with service container (DI pattern)
             BuildContext buildContext;
             buildContext.target = target;
-            buildContext.config = config;
-            buildContext.simd = simdCaps;
-            buildContext.tracer = observability.tracer;
-            buildContext.logger = observability.logger;
-            buildContext.incrementalEnabled = config.options.incremental;
+            buildContext.config = services.config;
+            buildContext.services = services;
+            buildContext.incrementalEnabled = services.config.options.incremental;
             buildContext.recorder = (actionId, inputs, outputs, metadata, success) {
                 cache.recordAction(actionId, inputs, outputs, metadata, success);
             };
             buildContext.depRecorder = (sourceFile, dependencies) {
-                // Dependency recording handled by language handlers
                 Logger.debugLog("Dependencies recorded for " ~ sourceFile);
             };
             
@@ -164,7 +159,7 @@ struct EngineExecutor
                 node.resetRetries();
                 
                 // Automatic determinism verification if enabled
-                if (config.options.determinism.verifyAutomatic)
+                if (services.config.options.determinism.verifyAutomatic)
                 {
                     auto verifySpan = observability.startSpan("determinism-verify", SpanKind.Internal, targetSpan);
                     scope(exit) observability.finishSpan(verifySpan);
@@ -216,21 +211,22 @@ struct EngineExecutor
     {
         try
         {
+            auto cfg = buildContext.services.config;
             Logger.info("Performing automatic determinism verification for " ~ target.name);
             observability.logInfo("Starting automatic determinism verification", [
                 "target.name": target.name,
-                "iterations": config.options.determinism.verifyIterations.to!string
+                "iterations": cfg.options.determinism.verifyIterations.to!string
             ]);
             
             // Create verification configuration from build options
             VerificationConfig verifyConfig;
             verifyConfig.mode = VerificationMode.Automatic;
-            verifyConfig.iterations = config.options.determinism.verifyIterations;
-            verifyConfig.failOnViolation = config.options.determinism.strictMode;
-            verifyConfig.outputDir = config.options.cacheDir ~ "/verify";
+            verifyConfig.iterations = cfg.options.determinism.verifyIterations;
+            verifyConfig.failOnViolation = cfg.options.determinism.strictMode;
+            verifyConfig.outputDir = cfg.options.cacheDir ~ "/verify";
             
             // Parse strategy from config
-            final switch (config.options.determinism.verifyStrategy)
+            final switch (cfg.options.determinism.verifyStrategy)
             {
                 case "hash":
                     verifyConfig.strategy = VerificationStrategy.ContentHash;
@@ -293,7 +289,7 @@ struct EngineExecutor
                 observability.setSpanAttribute(verifySpan, "determinism.verified", "false");
                 
                 // Fail build if strict mode
-                if (config.options.determinism.strictMode)
+                if (cfg.options.determinism.strictMode)
                 {
                     Logger.error("Build failed due to potential non-determinism (strict mode)");
                     Logger.info("Run 'bldr verify " ~ target.name ~ "' for full verification");

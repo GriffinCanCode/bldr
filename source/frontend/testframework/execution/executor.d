@@ -367,11 +367,12 @@ final class TestExecutor
                 );
             }
             
-            // Build/run the test with context
+            // Build/run the test with context using service container (DI pattern)
             BuildContext buildContext;
             buildContext.target = target;
             buildContext.config = wsConfig;
-            buildContext.incrementalEnabled = false; // Tests always run fresh
+            buildContext.services = services;  // Inject service container
+            buildContext.incrementalEnabled = false;  // Tests always run fresh
             
             auto buildResult = handler.buildWithContext(buildContext);
             

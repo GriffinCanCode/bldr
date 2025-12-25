@@ -50,13 +50,15 @@ Each language has a modular structure with:
 
 ```d
 import languages;
+import infrastructure.di : NullServiceContainer;
 
 auto handler = LanguageFactory.create("python");
 auto deps = handler.analyzeDependencies(sourceFile);
-// Build with context (provides access to caching, incremental, SIMD)
+// Build with context (IServiceContainer provides tracer, logger, SIMD)
 BuildContext context;
 context.target = target;
 context.config = config;
+context.services = services;  // Or NullServiceContainer() for testing
 handler.buildWithContext(context);
 ```
 

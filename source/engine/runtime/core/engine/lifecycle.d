@@ -13,7 +13,8 @@ import engine.runtime.services;
 import frontend.cli.events.events;
 import infrastructure.telemetry.distributed.tracing : Span, SpanKind, SpanStatus;
 import infrastructure.utils.logging.logger;
-import infrastructure.utils.simd.capabilities;
+import infrastructure.di : IServiceContainer;
+import infrastructure.utils.simd.capabilities : SIMDCapabilities;
 import infrastructure.errors;
 
 /// Engine lifecycle management (initialization, shutdown, state)
@@ -22,38 +23,35 @@ struct EngineLifecycle
     private enum size_t LARGE_BUILD_THRESHOLD = 100;
     
     private BuildGraph graph;
-    private WorkspaceConfig config;
     private ISchedulingService scheduling;
     private ICacheService cache;
     private IObservabilityService observability;
     private IResilienceService resilience;
     private IHandlerRegistry handlers;
-    private SIMDCapabilities simdCaps;
+    private IServiceContainer services;
     
     private shared size_t activeTasks;
     private shared size_t failedTasks;
     private bool _isShutdown = false;
     
-    /// Initialize lifecycle with services
+    /// Initialize lifecycle with services and service container
     void initialize(
         BuildGraph graph,
-        WorkspaceConfig config,
         ISchedulingService scheduling,
         ICacheService cache,
         IObservabilityService observability,
         IResilienceService resilience,
         IHandlerRegistry handlers,
-        SIMDCapabilities simdCaps
+        IServiceContainer services
     ) @trusted
     {
         this.graph = graph;
-        this.config = config;
         this.scheduling = scheduling;
         this.cache = cache;
         this.observability = observability;
         this.resilience = resilience;
         this.handlers = handlers;
-        this.simdCaps = simdCaps;
+        this.services = services;
         
         atomicStore(activeTasks, cast(size_t)0);
         atomicStore(failedTasks, cast(size_t)0);
@@ -71,9 +69,9 @@ struct EngineLifecycle
         cache.close();
         observability.flush();
         
-        // Shutdown SIMD capabilities
-        if (simdCaps !is null)
-            simdCaps.shutdown();
+        // Shutdown SIMD capabilities via service container
+        if (services !is null && services.simd !is null)
+            services.simd.shutdown();
     }
     
     /// Check if shutdown has been initiated
@@ -120,14 +118,14 @@ struct EngineLifecycle
     
     /// Access to services
     @trusted {
-        BuildGraph getGraph() { return graph; }
-        WorkspaceConfig getConfig() { return config; }
-        ISchedulingService getScheduling() { return scheduling; }
-        ICacheService getCache() { return cache; }
-        IObservabilityService getObservability() { return observability; }
-        IResilienceService getResilience() { return resilience; }
-        IHandlerRegistry getHandlers() { return handlers; }
-        SIMDCapabilities getSIMDCapabilities() { return simdCaps; }
+        BuildGraph getGraph() => graph;
+        WorkspaceConfig getConfig() => services !is null ? services.config : WorkspaceConfig.init;
+        ISchedulingService getScheduling() => scheduling;
+        ICacheService getCache() => cache;
+        IObservabilityService getObservability() => observability;
+        IResilienceService getResilience() => resilience;
+        IHandlerRegistry getHandlers() => handlers;
+        IServiceContainer getServices() => services;
     }
 }
 

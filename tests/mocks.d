@@ -22,10 +22,12 @@ import engine.runtime.hermetic : SandboxSpec;
 /// Usage in tests: auto result = testBuild(handler, target, config);
 Result!(string, BuildError) testBuild(LanguageHandler handler, Target target, WorkspaceConfig config)
 {
+    import infrastructure.di : NullServiceContainer;
     BuildContext context;
     context.target = target;
     context.config = config;
-    context.incrementalEnabled = false; // Tests run fresh by default
+    context.services = new NullServiceContainer(config);
+    context.incrementalEnabled = false;
     return handler.buildWithContext(context);
 }
 

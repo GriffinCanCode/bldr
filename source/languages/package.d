@@ -57,6 +57,7 @@ module languages;
 ///   BuildContext context;
 ///   context.target = target;
 ///   context.config = config;
+///   context.services = services;  // IServiceContainer (DI)
 ///   handler.buildWithContext(context);
 
 public import languages.base.base;

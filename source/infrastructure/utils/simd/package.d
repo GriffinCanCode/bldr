@@ -40,11 +40,11 @@ module infrastructure.utils.simd;
 ///   auto results = simdCtx.mapParallel(data, (x) => x * 2);
 ///   auto hashes = simdCtx.hashBatch(byteArrays);
 ///   
-///   // Pass through BuildContext
+///   // Pass through BuildContext via IServiceContainer
 ///   BuildContext ctx;
-///   ctx.simd = caps;
+///   ctx.services = services;  // IServiceContainer with SIMD
 ///   if (ctx.hasSIMD()) {
-///       // SIMD-accelerated operations
+///       // SIMD-accelerated operations via ctx.simd
 ///   }
 ///
 /// Legacy Usage (Global State - Deprecated):

@@ -24,16 +24,23 @@ import infrastructure.analysis.tracking.tracker : FileChangeTracker;
 import frontend.cli.events.events;
 import frontend.cli.display.render;
 import infrastructure.errors;
+import infrastructure.di : IServiceContainer;
 import engine.workers : PersistentWorkerService, WorkerServiceConfig, initWorkerService, shutdownWorkerService;
 
 /// Service container for dependency injection
-/// Manages the lifecycle and wiring of core build system components
+/// Implements IServiceContainer for formalized DI pattern.
 /// 
 /// Design Pattern: Service Locator + Dependency Injection
 /// - Centralizes service creation and configuration
+/// - Implements IServiceContainer for testability
 /// - Enables testing with mock implementations
 /// - Reduces coupling between command handlers and concrete types
-final class BuildServices
+/// 
+/// Usage:
+///   auto services = new BuildServices(config, options);
+///   BuildContext ctx;
+///   ctx.services = services;  // Inject container
+final class BuildServices : IServiceContainer
 {
     private WorkspaceConfig _config;
     private DependencyAnalyzer _analyzer;
@@ -272,29 +279,53 @@ final class BuildServices
         this._shutdownCoordinator = new ShutdownCoordinator();
     }
     
-    /// Get workspace configuration
-    @property WorkspaceConfig config() { return _config; }
+    // ========== IServiceContainer Interface Implementation ==========
+    
+    @trusted nothrow {
+        /// Get distributed tracer (IServiceContainer)
+        @property Tracer tracer() => _tracer;
+        
+        /// Get structured logger (IServiceContainer)
+        @property StructuredLogger logger() => _structuredLogger;
+        
+        /// Get SIMD capabilities (IServiceContainer)
+        @property SIMDCapabilities simd() => _simdCapabilities;
+        
+        /// Get workspace configuration (IServiceContainer)
+        @property WorkspaceConfig config() => _config;
+        
+        /// Check if tracing is available (IServiceContainer)
+        bool hasTracing() const => _tracer !is null;
+        
+        /// Check if structured logging is available (IServiceContainer)
+        bool hasLogging() const => _structuredLogger !is null;
+        
+        /// Check if SIMD acceleration is available (IServiceContainer)
+        bool hasSIMD() const => _simdCapabilities !is null && _simdCapabilities.active;
+    }
+    
+    // ========== Additional Service Accessors ==========
     
     /// Get dependency analyzer
-    @property DependencyAnalyzer analyzer() { return _analyzer; }
+    @property DependencyAnalyzer analyzer() => _analyzer;
     
     /// Get build cache
-    @property BuildCache cache() { return _cache; }
+    @property BuildCache cache() => _cache;
     
     /// Get event publisher
-    @property EventPublisher publisher() { return _publisher; }
+    @property EventPublisher publisher() => _publisher;
     
     /// Get telemetry collector (may be null if disabled)
-    @property TelemetryCollector telemetryCollector() { return _telemetryCollector; }
+    @property TelemetryCollector telemetryCollector() => _telemetryCollector;
     
     /// Get telemetry storage (may be null if disabled)
-    @property TelemetryStorage telemetryStorage() { return _telemetryStorage; }
+    @property TelemetryStorage telemetryStorage() => _telemetryStorage;
     
     /// Check if telemetry is enabled
-    @property bool telemetryEnabled() { return _telemetryEnabled; }
+    @property bool telemetryEnabled() => _telemetryEnabled;
     
-    /// Get SIMD capabilities
-    @property SIMDCapabilities simdCapabilities() { return _simdCapabilities; }
+    /// Get SIMD capabilities (legacy name, use `simd` for IServiceContainer)
+    @property SIMDCapabilities simdCapabilities() => _simdCapabilities;
     
     /// Get handler registry
     @property HandlerRegistry registry() { return _registry; }
@@ -360,19 +391,15 @@ final class BuildServices
         // Create resilience service
         auto resilience = new ResilienceService(enableRetries, enableCheckpoints, ".");
         
-        // Use existing handler registry (already initialized in constructor)
-        // No need to create/initialize again - avoids duplicate handler registration
-        
-        // Create execution engine with SIMD capabilities
+        // Create execution engine with service container (this implements IServiceContainer)
         return new ExecutionEngine(
             graph,
-            _config,
             scheduling,
             cacheService,
             observability,
             resilience,
             _registry,
-            _simdCapabilities
+            this  // Pass self as IServiceContainer
         );
     }
     

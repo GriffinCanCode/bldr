@@ -14,7 +14,7 @@ import engine.runtime.services;
 import frontend.cli.events.events;
 import infrastructure.telemetry.distributed.tracing : Span, SpanKind, SpanStatus;
 import infrastructure.utils.logging.logger;
-import infrastructure.utils.simd.capabilities;
+import infrastructure.di : IServiceContainer;
 import infrastructure.errors;
 
 // Import split modules
@@ -32,6 +32,7 @@ public import engine.runtime.core.engine.discovery;
 /// - ObservabilityService: events, tracing, logging
 /// - ResilienceService: retry and checkpoint logic
 /// - HandlerRegistry: language handler dispatch
+/// - IServiceContainer: DI container for observability
 /// - DynamicGraph: optional runtime dependency discovery
 final class ExecutionEngine
 {
@@ -43,14 +44,13 @@ final class ExecutionEngine
     
     this(
         BuildGraph graph,
-        WorkspaceConfig config,
         ISchedulingService scheduling,
         ICacheService cache,
         IObservabilityService observability,
         IResilienceService resilience,
         IHandlerRegistry handlers,
-        SIMDCapabilities simdCaps = null,
-        bool enableDynamicGraph = true  // Enable by default
+        IServiceContainer services,
+        bool enableDynamicGraph = true
     ) @trusted
     {
         this.useDynamicGraph = enableDynamicGraph;
@@ -64,14 +64,13 @@ final class ExecutionEngine
         
         // Initialize lifecycle
         lifecycle.initialize(
-            graph, config, scheduling, cache, 
-            observability, resilience, handlers, simdCaps
+            graph, scheduling, cache, 
+            observability, resilience, handlers, services
         );
         
-        // Initialize executor
+        // Initialize executor with service container
         executor.initialize(
-            cache, observability, resilience, 
-            handlers, config, simdCaps
+            cache, observability, resilience, handlers, services
         );
         
         // Initialize coordinator

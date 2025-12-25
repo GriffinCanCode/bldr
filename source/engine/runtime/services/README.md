@@ -141,6 +141,7 @@ if (handler !is null)
     BuildContext context;
     context.target = target;
     context.config = config;
+    context.services = services;  // IServiceContainer (DI)
     auto result = handler.buildWithContext(context);
 }
 ```
