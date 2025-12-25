@@ -52,6 +52,9 @@ public import engine.runtime.hermetic.monitoring;
 // Determinism enforcement
 public import engine.runtime.hermetic.determinism;
 
+// Enhanced sandbox (OS-level isolation)
+public import engine.runtime.hermetic.sandbox;
+
 // Platform-specific implementations
 version(linux)
 {
