@@ -2,26 +2,76 @@ module infrastructure.errors.handling.result;
 
 import std.traits;
 import std.conv;
+import core.memory : GC;
+import core.stdc.string : memset;
 import infrastructure.errors.types.types : internalError;
+
+/// Check if a type can be safely copied in a Result
+/// This must be conservative - if in doubt, treat as non-copyable
+private template IsTrulyCopyable(T)
+{
+    static if (!is(T == struct))
+        enum IsTrulyCopyable = true;
+    else static if (__traits(hasMember, T, "__xpostblit") && 
+                    is(typeof(__traits(getMember, T.init, "__xpostblit")) == void function() @disable))
+        enum IsTrulyCopyable = false;
+    else static if (__traits(hasMember, T, "__postblit"))
+        // Check if postblit is disabled by checking if it compiles
+        enum IsTrulyCopyable = __traits(compiles, { T x = void; T y = x; });
+    else
+        // For structs without explicit postblit, check all fields recursively
+        enum IsTrulyCopyable = () {
+            static foreach (field; T.tupleof)
+            {
+                static if (!IsTrulyCopyable!(typeof(field)))
+                    return false;
+            }
+            return true;
+        }();
+}
 
 /// Algebraic result type representing either success (Ok) or failure (Err)
 /// Inspired by Rust's Result<T, E> with D-specific optimizations
+/// Supports both copyable and non-copyable types via static dispatch
 struct Result(T, E)
 {
     private bool _isOk;
-    private union
+    
+    // Use pointer for non-copyable types, direct storage for copyable types
+    static if (IsTrulyCopyable!T)
     {
-        T _value;
-        E _error;
+        private union { T _value; E _error; }
+    }
+    else
+    {
+        private T* _valuePtr;  // Heap-allocated for non-copyable types
+        private E _error;
     }
     
     /// Create a successful result (@system: union access controlled by _isOk flag)
-    static Result ok(T value) @system
+    static if (IsTrulyCopyable!T)
     {
-        Result r;
-        r._isOk = true;
-        r._value = value;
-        return r;
+        static Result ok(T value) @system
+        {
+            Result r;
+            r._isOk = true;
+            r._value = value;
+            return r;
+        }
+    }
+    else
+    {
+        static Result ok(ref T value) @system
+        {
+            import core.stdc.string : memcpy;
+            Result r;
+            r._isOk = true;
+            r._valuePtr = cast(T*)GC.malloc(T.sizeof);
+            memcpy(r._valuePtr, &value, T.sizeof);
+            // Clear source to prevent double cleanup
+            memset(&value, 0, T.sizeof);
+            return r;
+        }
     }
     
     /// Create an error result (@system: union access controlled by _isOk flag)
@@ -34,16 +84,10 @@ struct Result(T, E)
     }
     
     /// Check if result is Ok
-    @property bool isOk() const pure nothrow @nogc
-    {
-        return _isOk;
-    }
+    @property bool isOk() const pure nothrow @nogc => _isOk;
     
     /// Check if result is Err
-    @property bool isErr() const pure nothrow @nogc
-    {
-        return !_isOk;
-    }
+    @property bool isErr() const pure nothrow @nogc => !_isOk;
     
     /// Format error for exception message
     private string formatError(string prefix = "Called unwrap on an error") const
@@ -57,29 +101,57 @@ struct Result(T, E)
     }
     
     /// Unwrap value (throws if error)
-    T unwrap() @system
+    static if (IsTrulyCopyable!T)
     {
-        if (!_isOk) assert(false, "Result unwrap failed: " ~ formatError());
-        return _value;
+        T unwrap() @system
+        {
+            if (!_isOk) assert(false, "Result unwrap failed: " ~ formatError());
+            return _value;
+        }
+    }
+    else
+    {
+        ref T unwrap() @system
+        {
+            if (!_isOk) assert(false, "Result unwrap failed: " ~ formatError());
+            return *_valuePtr;
+        }
     }
     
     /// Unwrap with contextual error message (Rust-style expect)
-    T expect(string context) @system
+    static if (IsTrulyCopyable!T)
     {
-        if (!_isOk) assert(false, "Result unwrap failed: " ~ formatError(context));
-        return _value;
+        T expect(string context) @system
+        {
+            if (!_isOk) assert(false, "Result unwrap failed: " ~ formatError(context));
+            return _value;
+        }
+    }
+    else
+    {
+        ref T expect(string context) @system
+        {
+            if (!_isOk) assert(false, "Result unwrap failed: " ~ formatError(context));
+            return *_valuePtr;
+        }
     }
     
-    /// Unwrap or return default value
-    T unwrapOr(T defaultValue) @system
+    /// Unwrap or return default value (only for copyable types)
+    static if (IsTrulyCopyable!T)
     {
-        return _isOk ? _value : defaultValue;
+        T unwrapOr(T defaultValue) @system
+        {
+            return _isOk ? _value : defaultValue;
+        }
     }
     
-    /// Unwrap or compute default value lazily
-    T unwrapOrElse(T delegate() fn)
+    /// Unwrap or compute default value lazily (only for copyable types)
+    static if (IsTrulyCopyable!T)
     {
-        return _isOk ? _value : fn();
+        T unwrapOrElse(T delegate() fn)
+        {
+            return _isOk ? _value : fn();
+        }
     }
     
     /// Get error (throws if ok)
@@ -89,48 +161,72 @@ struct Result(T, E)
         return _error;
     }
     
-    /// Map success value to new type
-    Result!(U, E) map(U)(U delegate(T) fn)
+    /// Map success value to new type (only for copyable types)
+    static if (IsTrulyCopyable!T)
     {
-        if (_isOk)
-            return Result!(U, E).ok(fn(_value));
-        else
-            return Result!(U, E).err(_error);
+        Result!(U, E) map(U)(U delegate(T) fn)
+        {
+            if (_isOk)
+                return Result!(U, E).ok(fn(_value));
+            else
+                return Result!(U, E).err(_error);
+        }
     }
     
-    /// Map error to new type
-    Result!(T, F) mapErr(F)(F delegate(E) fn)
+    /// Map error to new type (only for copyable T)
+    static if (IsTrulyCopyable!T)
     {
-        if (_isOk)
-            return Result!(T, F).ok(_value);
-        else
-            return Result!(T, F).err(fn(_error));
+        Result!(T, F) mapErr(F)(F delegate(E) fn)
+        {
+            if (_isOk)
+                return Result!(T, F).ok(_value);
+            else
+                return Result!(T, F).err(fn(_error));
+        }
     }
     
-    /// Chain operations (flatMap/bind)
-    Result!(U, E) andThen(U)(Result!(U, E) delegate(T) fn)
+    /// Chain operations (flatMap/bind) - only for copyable types
+    static if (IsTrulyCopyable!T)
     {
-        if (_isOk)
-            return fn(_value);
-        else
-            return Result!(U, E).err(_error);
+        Result!(U, E) andThen(U)(Result!(U, E) delegate(T) fn)
+        {
+            if (_isOk)
+                return fn(_value);
+            else
+                return Result!(U, E).err(_error);
+        }
     }
     
-    /// Apply function if error
-    Result!(T, E) orElse(Result!(T, E) delegate(E) fn)
+    /// Apply function if error (only for copyable types)
+    static if (IsTrulyCopyable!T)
     {
-        if (_isOk)
-            return Result!(T, E).ok(_value);
-        else
-            return fn(_error);
+        Result!(T, E) orElse(Result!(T, E) delegate(E) fn)
+        {
+            if (_isOk)
+                return Result!(T, E).ok(_value);
+            else
+                return fn(_error);
+        }
     }
     
     /// Inspect value without consuming (for debugging)
-    ref Result inspect(void delegate(ref const T) fn) return
+    static if (IsTrulyCopyable!T)
     {
-        if (_isOk)
-            fn(_value);
-        return this;
+        ref Result inspect(void delegate(ref const T) fn) return
+        {
+            if (_isOk)
+                fn(_value);
+            return this;
+        }
+    }
+    else
+    {
+        ref Result inspect(void delegate(ref const T) fn) return
+        {
+            if (_isOk)
+                fn(*_valuePtr);
+            return this;
+        }
     }
     
     /// Inspect error without consuming (for debugging)
@@ -141,18 +237,80 @@ struct Result(T, E)
         return this;
     }
     
-    /// Match on result (pattern matching style)
-    U match(U)(U delegate(T) onOk, U delegate(E) onErr)
+    /// Match on result (pattern matching style) - only for copyable types
+    static if (IsTrulyCopyable!T)
     {
-        if (_isOk)
-            return onOk(_value);
-        else
-            return onErr(_error);
+        U match(U)(U delegate(T) onOk, U delegate(E) onErr)
+        {
+            if (_isOk)
+                return onOk(_value);
+            else
+                return onErr(_error);
+        }
+    }
+    else
+    {
+        U match(U)(U delegate(ref T) onOk, U delegate(E) onErr)
+        {
+            if (_isOk)
+                return onOk(*_valuePtr);
+            else
+                return onErr(_error);
+        }
     }
 }
 
-/// Helper to create Ok result
-Result!(T, E) Ok(T, E)(T value) @system { return Result!(T, E).ok(value); }
+/// Specialization for void value type (used by BuildResult!void)
+struct Result(T : void, E)
+{
+    private bool _isOk;
+    private E _error;
+    
+    /// Create a successful void result
+    static Result ok() @system
+    {
+        Result r;
+        r._isOk = true;
+        return r;
+    }
+    
+    /// Create an error result
+    static Result err(E error) @system
+    {
+        Result r;
+        r._isOk = false;
+        r._error = error;
+        return r;
+    }
+    
+    @property bool isOk() const pure nothrow @nogc => _isOk;
+    @property bool isErr() const pure nothrow @nogc => !_isOk;
+    
+    /// Unwrap error (asserts if Ok)
+    E unwrapErr() @system
+    {
+        assert(!_isOk, "Called unwrapErr on Ok result");
+        return _error;
+    }
+    
+    /// Get error or null
+    const(E)* err() const @system => _isOk ? null : &_error;
+}
+
+/// Helper to create Ok result (copyable types)
+Result!(T, E) Ok(T, E)(T value) @system if (IsTrulyCopyable!T)
+{
+    return Result!(T, E).ok(value);
+}
+
+/// Helper to create Ok result (non-copyable types)
+Result!(T, E) Ok(T, E)(ref T value) @system if (!IsTrulyCopyable!T)
+{
+    return Result!(T, E).ok(value);
+}
+
+/// Helper to create Ok void result
+Result!(void, E) Ok(T : void, E)() @system { return Result!(void, E).ok(); }
 
 /// Helper to create Err result
 Result!(T, E) Err(T, E)(E error) @system { return Result!(T, E).err(error); }

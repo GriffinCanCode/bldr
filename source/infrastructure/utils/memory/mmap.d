@@ -76,7 +76,9 @@ void resetMmapStats() @safe nothrow @nogc { _stats = MmapStats.init; }
 final class MmapRegion
 {
     private void* _ptr;
+    private void* _basePtr;      // Actual mmap'd address (page-aligned)
     private size_t _length;
+    private size_t _mapLength;   // Actual mmap'd length (includes alignment padding)
     private MapMode _mode;
     private bool _valid;
     
@@ -144,19 +146,30 @@ final class MmapRegion
                 return null;
             }
             
+            // Align offset down to page boundary (mmap requires page-aligned offsets)
+            immutable ps = pageSize();
+            immutable alignedOffset = offset & ~(ps - 1);
+            immutable offsetDelta = offset - alignedOffset;
+            immutable mapLen = length + offsetDelta;
+            
+            region._mapLength = mapLen;
+            
             // Map memory
             int prot = (mode == MapMode.ReadOnly) ? PROT_READ : (PROT_READ | PROT_WRITE);
             int mapFlags = (mode == MapMode.Private) ? MAP_PRIVATE : MAP_SHARED;
             
-            region._ptr = mmap(null, length, prot, mapFlags, region._fd, offset);
+            region._basePtr = mmap(null, mapLen, prot, mapFlags, region._fd, alignedOffset);
             
-            if (region._ptr == MAP_FAILED)
+            if (region._basePtr == MAP_FAILED)
             {
                 close(region._fd);
                 region._fd = -1;
                 if (error) *error = "mmap failed: " ~ errnoString();
                 return null;
             }
+            
+            // Adjust pointer to requested offset within the mapped region
+            region._ptr = region._basePtr + offsetDelta;
         }
         version(Windows)
         {
@@ -188,11 +201,13 @@ final class MmapRegion
                 return null;
             }
             
-            // Map view
+            // Map view (Windows handles alignment internally)
             DWORD mapAccess = (mode == MapMode.ReadOnly) ? FILE_MAP_READ :
                              (mode == MapMode.Private) ? FILE_MAP_COPY : FILE_MAP_ALL_ACCESS;
             
-            region._ptr = MapViewOfFile(region._mapHandle, mapAccess, 0, cast(DWORD)offset, length);
+            region._basePtr = MapViewOfFile(region._mapHandle, mapAccess, 0, cast(DWORD)offset, length);
+            region._ptr = region._basePtr;
+            region._mapLength = length;
             
             if (region._ptr is null)
             {
@@ -222,18 +237,20 @@ final class MmapRegion
         
         auto region = new MmapRegion();
         region._length = length;
+        region._mapLength = length;
         region._mode = MapMode.Private;
         
         version(Posix)
         {
-            region._ptr = mmap(null, length, PROT_READ | PROT_WRITE,
-                              MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+            region._basePtr = mmap(null, length, PROT_READ | PROT_WRITE,
+                                   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
             
-            if (region._ptr == MAP_FAILED)
+            if (region._basePtr == MAP_FAILED)
             {
                 if (error) *error = "Anonymous mmap failed: " ~ errnoString();
                 return null;
             }
+            region._ptr = region._basePtr;
         }
         version(Windows)
         {
@@ -248,7 +265,8 @@ final class MmapRegion
                 return null;
             }
             
-            region._ptr = MapViewOfFile(region._mapHandle, FILE_MAP_ALL_ACCESS, 0, 0, length);
+            region._basePtr = MapViewOfFile(region._mapHandle, FILE_MAP_ALL_ACCESS, 0, 0, length);
+            region._ptr = region._basePtr;
             
             if (region._ptr is null)
             {
@@ -274,16 +292,16 @@ final class MmapRegion
         
         version(Posix)
         {
-            if (_ptr !is null && _ptr != MAP_FAILED)
-                munmap(_ptr, _length);
+            if (_basePtr !is null && _basePtr != MAP_FAILED)
+                munmap(_basePtr, _mapLength);
             if (_fd >= 0)
                 close(_fd);
             _fd = -1;
         }
         version(Windows)
         {
-            if (_ptr !is null)
-                UnmapViewOfFile(_ptr);
+            if (_basePtr !is null)
+                UnmapViewOfFile(_basePtr);
             if (_mapHandle !is null)
                 CloseHandle(_mapHandle);
             if (_fileHandle != INVALID_HANDLE_VALUE)
@@ -291,6 +309,7 @@ final class MmapRegion
         }
         
         _ptr = null;
+        _basePtr = null;
         _valid = false;
         _stats.mappingsClosed++;
     }
@@ -334,7 +353,7 @@ final class MmapRegion
     {
         version(Posix)
         {
-            if (!_valid || _ptr is null) return;
+            if (!_valid || _basePtr is null) return;
             
             int madv;
             final switch (advice)
@@ -346,7 +365,7 @@ final class MmapRegion
                 case MapAdvice.DontNeed:   madv = MADV_DONTNEED; break;
             }
             
-            madvise(_ptr, _length, madv);
+            madvise(_basePtr, _mapLength, madv);
         }
         // Windows: no direct equivalent, hints via PrefetchVirtualMemory (Win8+)
     }
@@ -354,45 +373,45 @@ final class MmapRegion
     /// Synchronize changes to underlying file (for ReadWrite mode)
     bool sync(bool async = false) @system nothrow
     {
-        if (!_valid || _ptr is null || _mode == MapMode.ReadOnly) return false;
+        if (!_valid || _basePtr is null || _mode == MapMode.ReadOnly) return false;
         
         version(Posix)
         {
-            return msync(_ptr, _length, async ? MS_ASYNC : MS_SYNC) == 0;
+            return msync(_basePtr, _mapLength, async ? MS_ASYNC : MS_SYNC) == 0;
         }
         version(Windows)
         {
-            return FlushViewOfFile(_ptr, _length) != 0;
+            return FlushViewOfFile(_basePtr, _mapLength) != 0;
         }
     }
     
     /// Lock pages in physical memory (prevent swapping)
     bool lock() @system nothrow
     {
-        if (!_valid || _ptr is null) return false;
+        if (!_valid || _basePtr is null) return false;
         
         version(Posix)
         {
-            return mlock(_ptr, _length) == 0;
+            return mlock(_basePtr, _mapLength) == 0;
         }
         version(Windows)
         {
-            return VirtualLock(_ptr, _length) != 0;
+            return VirtualLock(_basePtr, _mapLength) != 0;
         }
     }
     
     /// Unlock pages from physical memory
     bool unlock() @system nothrow
     {
-        if (!_valid || _ptr is null) return false;
+        if (!_valid || _basePtr is null) return false;
         
         version(Posix)
         {
-            return munlock(_ptr, _length) == 0;
+            return munlock(_basePtr, _mapLength) == 0;
         }
         version(Windows)
         {
-            return VirtualUnlock(_ptr, _length) != 0;
+            return VirtualUnlock(_basePtr, _mapLength) != 0;
         }
     }
     
