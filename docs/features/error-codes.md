@@ -1,45 +1,38 @@
 # Error Codes Reference
 
-Builder uses a comprehensive error code system to help you quickly identify and resolve issues. Each error includes:
+Builder uses a structured error code system for programmatic error handling. Each error includes:
 
-- **Error Code**: A unique numeric identifier (e.g., `2000`)
-- **Error Category**: High-level classification (e.g., `Parse`)
+- **Error Code**: Numeric identifier (e.g., `2000`)
+- **Error Category**: Classification (Build, Parse, Analysis, etc.)
+- **Recoverability**: Fatal, Transient (retryable), or User (configuration issue)
 - **Message**: Human-readable description
-- **File/Line Info**: Exact location of the error (when available)
-- **Code Snippet**: Context showing the problematic code
-- **Suggestions**: Actionable steps to resolve the issue
-- **"Did you mean?" hints**: Automatic typo detection for field names and targets
+- **File/Line Info**: Location when available
+- **Code Snippet**: Context showing the error location
+- **Suggestions**: Actionable resolution steps
+- **"Did you mean?" hints**: Fuzzy matching for typos in field names and targets
 
 ## Error Code Ranges
 
-- **0-999**: General errors
-- **1000-1999**: Build execution errors
-- **2000-2999**: Parse/configuration errors
-- **3000-3999**: Dependency analysis errors
-- **4000-4999**: Cache and repository errors
-- **5000-5999**: I/O and filesystem errors
-- **6000-6999**: Graph-related errors
-- **7000-7999**: Language handler errors
-- **8000-8999**: System-level errors
-- **9000-9999**: LSP and watch mode errors
-
----
-
-## General Errors (0-999)
-
-### `0` - UnknownError
-
-**Description**: An unexpected error occurred that doesn't fit into any specific category.
-
-**Example**:
-```
-[Internal:UnknownError] An unexpected error occurred
-```
-
-**Suggestions**:
-- Run with `--verbose` for more details
-- Check system logs
-- Report as a bug with reproduction steps
+| Range | Category | Description |
+|-------|----------|-------------|
+| 0-999 | General | Unknown/unexpected errors |
+| 1000-1999 | Build | Build execution errors |
+| 2000-2999 | Parse | Configuration parsing errors |
+| 3000-3999 | Analysis | Dependency analysis errors |
+| 4000-4599 | Cache | Cache and repository errors |
+| 5000-5999 | IO | File system errors |
+| 6000-6999 | Graph | Dependency graph errors |
+| 7000-7999 | Language | Language handler errors |
+| 8000-8999 | System | System-level errors |
+| 9000-9999 | Internal | Internal/unexpected errors |
+| 10000-10999 | Telemetry | Telemetry errors |
+| 11000-11999 | Tracing | Distributed tracing errors |
+| 12000-12999 | Distributed | Distributed build errors |
+| 13000-13999 | Plugin | Plugin system errors |
+| 14000-14999 | LSP | Language Server Protocol errors |
+| 15000-15999 | Watch | Watch mode errors |
+| 16000-16999 | Config | Configuration/validation errors |
+| 17000-17999 | Migration | Migration errors |
 
 ---
 
@@ -47,9 +40,8 @@ Builder uses a comprehensive error code system to help you quickly identify and 
 
 ### `1000` - BuildFailed
 
-**Description**: A target failed to build successfully.
+Build execution failed.
 
-**Example**:
 ```
 [Build:BuildFailed] Build failed for target 'my-app'
   File: Builderfile
@@ -59,76 +51,57 @@ Builder uses a comprehensive error code system to help you quickly identify and 
 Suggestions:
   - Run with verbose output: bldr build --verbose
   - Check for compilation errors in source files
-  - Verify all dependencies are properly configured
 ```
-
-**Resolution**:
-- Check compiler/tool output for specific errors
-- Verify all source files compile individually
-- Ensure dependencies are built successfully
-
----
 
 ### `1001` - BuildTimeout
 
-**Description**: Build process exceeded the configured timeout.
+Build exceeded configured timeout.
 
-**Example**:
 ```
 [Build:BuildTimeout] Build timed out after 300 seconds for target 'slow-build'
   Target: slow-build
   Timeout: 300s
 
 Suggestions:
-  - Increase timeout in configuration: timeout: 600
+  - Increase timeout in configuration
   - Check for infinite loops or blocking operations
 ```
 
-**Resolution**:
-- Increase timeout value in Builderfile
-- Profile build to identify bottlenecks
-- Break large targets into smaller ones
+**Recoverability**: Transient (can retry with longer timeout)
 
----
+### `1002` - BuildCancelled
+
+Build was cancelled (e.g., user interrupt).
 
 ### `1003` - TargetNotFound
 
-**Description**: Referenced target doesn't exist in the build configuration.
+Referenced target doesn't exist.
 
-**Example**:
 ```
 [Build:TargetNotFound] Target 'my-ap' not found. Did you mean 'my-app'?
 
 Suggestions:
-  - Check if the target name is spelled correctly (typos detected automatically)
   - List available targets: bldr query --targets
-  - Check target name spelling in Builderfile
+  - Check target name spelling
 ```
 
-**Resolution**:
-- Check for typos in target name
-- Verify target is defined in Builderfile
-- Use `bldr query --targets` to list valid targets
-
----
+**Recoverability**: User (fix target name)
 
 ### `1004` - HandlerNotFound
 
-**Description**: No language handler available for the specified language.
+No language handler for the specified language.
 
-**Example**:
 ```
 [Build:HandlerNotFound] No handler found for language 'fortran'
 
 Suggestions:
-  - Verify language handler is installed for this file type
   - List supported languages: bldr query --languages
+  - Check 'language' field spelling
 ```
 
-**Resolution**:
-- Check if language is supported by Builder
-- Install required language plugin
-- Verify language name is correct
+### `1005` - OutputMissing
+
+Expected build output not found after execution.
 
 ---
 
@@ -136,9 +109,8 @@ Suggestions:
 
 ### `2000` - ParseFailed
 
-**Description**: Failed to parse build configuration file.
+Failed to parse configuration file.
 
-**Example**:
 ```
 [Parse:ParseFailed] Unexpected character '}' in Builderfile
   File: Builderfile:15:3
@@ -150,25 +122,16 @@ Suggestions:
   16 | }
 
 Suggestions:
-  - Review Builderfile syntax documentation: docs/user-guides/examples.md
   - Check for missing commas, brackets, or quotes
-  - Check for typos in field names or keywords
+  - Validate syntax: docs/user-guides/examples.md
 ```
-
-**Resolution**:
-- Check for syntax errors at indicated line
-- Ensure all brackets/braces are balanced
-- Validate JSON/TOML syntax
-
----
 
 ### `2001` - InvalidJson
 
-**Description**: JSON syntax error in configuration file.
+JSON syntax error.
 
-**Example**:
 ```
-[Parse:InvalidJson] Invalid JSON: trailing comma after last element
+[Parse:InvalidJson] Invalid JSON: trailing comma
   File: package.json:8:5
 
    6 |     "name": "my-project",
@@ -177,70 +140,31 @@ Suggestions:
      |    ^
 
 Suggestions:
-  - Validate JSON syntax: cat package.json | python3 -m json.tool
-  - Check for trailing commas (not allowed in JSON)
-  - Verify all strings are properly quoted
+  - Validate JSON: python3 -m json.tool < file.json
+  - Remove trailing commas
 ```
-
-**Resolution**:
-- Remove trailing commas
-- Use a JSON validator
-- Check quote matching
-
----
 
 ### `2002` - InvalidBuildFile
 
-**Description**: Builderfile structure is invalid or missing required fields.
-
-**Example**:
-```
-[Parse:InvalidBuildFile] Builderfile is missing required 'targets' field
-
-Suggestions:
-  - Create a valid Builderfile: bldr init
-  - See Builderfile examples: docs/user-guides/examples.md
-  - Check for required fields: targets array
-```
-
-**Resolution**:
-- Initialize with `bldr init`
-- Review Builderfile structure in documentation
-- Ensure all required fields are present
-
----
+Builderfile structure invalid or missing required fields.
 
 ### `2003` - MissingField
 
-**Description**: A required configuration field is missing.
+Required configuration field missing.
 
-**Example**:
 ```
 [Parse:MissingField] Missing required field 'name' in target definition
   File: Builderfile:10:1
 
-   9 | {
-  10 |   "type": "executable",
-  11 |   "language": "go"
-  12 | }
-
 Suggestions:
-  - Add the required field to your configuration
+  - Add the required field
   - See configuration schema: docs/architecture/dsl.md
 ```
 
-**Resolution**:
-- Add the missing field
-- Check documentation for required fields
-- Review similar examples
-
----
-
 ### `2004` - InvalidFieldValue
 
-**Description**: Field value doesn't match expected type or enum.
+Field value doesn't match expected type or has typo.
 
-**Example**:
 ```
 [Parse:InvalidFieldValue] Unknown field 'languag'. Did you mean 'language'?
   File: Builderfile:12:3
@@ -248,43 +172,23 @@ Suggestions:
   11 |   "name": "my-app",
   12 |   "languag": "python",
       |   ^^^^^^^^
-  13 |   "type": "executable"
-
-Suggestions:
-  - Check the field value against allowed types/enums
-  - Review field requirements: docs/architecture/dsl.md
-  - Check for typos in field names
 ```
-
-**Resolution**:
-- Fix typo in field name
-- Check allowed values for the field
-- Verify field type matches schema
-
----
 
 ### `2005` - InvalidGlob
 
-**Description**: Glob pattern syntax is invalid.
+Glob pattern syntax error.
 
-**Example**:
 ```
 [Parse:InvalidGlob] Invalid glob pattern: 'src/[*.d'
-  File: Builderfile:15:15
-
-  14 |   "sources": [
-  15 |     "src/[*.d"
-      |          ^^^^^
 
 Suggestions:
   - Check glob pattern syntax (e.g., src/**/*.d)
-  - Test glob pattern: ls -d src/**/*.d
+  - Test pattern: ls -d src/**/*.d
 ```
 
-**Resolution**:
-- Fix glob pattern syntax
-- Test pattern in shell
-- Use standard glob wildcards: `*`, `**`, `?`, `[...]`
+### `2006` - InvalidConfiguration
+
+General configuration error.
 
 ---
 
@@ -292,30 +196,12 @@ Suggestions:
 
 ### `3000` - AnalysisFailed
 
-**Description**: Dependency analysis failed for a target.
-
-**Example**:
-```
-[Analysis:AnalysisFailed] Failed to analyze imports for target 'web-app'
-  Target: web-app
-
-Suggestions:
-  - Run with verbose output: bldr build --verbose
-  - Check for syntax errors in source files
-```
-
-**Resolution**:
-- Check source file syntax
-- Verify import paths
-- Review language-specific requirements
-
----
+Dependency analysis failed.
 
 ### `3001` - ImportResolutionFailed
 
-**Description**: Unable to resolve an imported module or file.
+Unable to resolve an import.
 
-**Example**:
 ```
 [Analysis:ImportResolutionFailed] Cannot resolve import './util/helpers'
   Target: web-app
@@ -324,58 +210,30 @@ Suggestions:
 
 Suggestions:
   - Verify imported file exists
-  - Check import paths in configuration
-  - Ensure dependencies are properly declared
+  - Check import path syntax
 ```
-
-**Resolution**:
-- Check file exists at import path
-- Verify import path syntax
-- Add missing dependencies
-
----
 
 ### `3002` - CircularDependency
 
-**Description**: Circular dependency detected in build graph.
+Circular dependency detected.
 
-**Example**:
 ```
 [Analysis:CircularDependency] Circular dependency detected
   Dependency cycle:
     app → lib-a → lib-b → app
 
 Suggestions:
-  - Visualize dependency graph to identify cycle: bldr query --graph
-  - Break the cycle by removing or refactoring dependencies
+  - Visualize graph: bldr query --graph
+  - Break the cycle by refactoring
 ```
-
-**Resolution**:
-- Identify the cycle in dependency chain
-- Refactor to remove circular dependency
-- Extract common code to a new module
-
----
 
 ### `3003` - MissingDependency
 
-**Description**: Referenced dependency is not defined.
+Referenced dependency not defined.
 
-**Example**:
-```
-[Analysis:MissingDependency] Dependency 'utils-lib' not found for target 'app'
-  Target: app
-  Missing dependency: utils-lib
+### `3004` - InvalidImport
 
-Suggestions:
-  - Add missing dependency to target configuration
-  - Check available targets: bldr query --targets
-```
-
-**Resolution**:
-- Define the missing target
-- Check dependency name for typos
-- Ensure target is in workspace
+Invalid import statement syntax.
 
 ---
 
@@ -383,125 +241,134 @@ Suggestions:
 
 ### `4000` - CacheLoadFailed
 
-**Description**: Failed to load data from cache.
+Failed to load from cache.
 
-**Example**:
-```
-[Cache:CacheLoadFailed] Failed to load cached build for 'my-app'
+**Recoverability**: Transient
 
-Suggestions:
-  - Clear cache and retry: bldr clean --cache
-  - Check cache directory permissions
-```
+### `4001` - CacheSaveFailed
 
-**Resolution**:
-- Clear cache with `bldr clean --cache`
-- Check filesystem permissions
-- Verify cache directory is not corrupted
-
----
+Failed to save to cache.
 
 ### `4002` - CacheCorrupted
 
-**Description**: Cache data is corrupted or invalid.
+Cache data corrupted.
 
-**Example**:
 ```
-[Cache:CacheCorrupted] Cache entry corrupted for target 'my-lib'
-
 Suggestions:
-  - Clear the corrupted cache: bldr clean --cache
+  - Clear cache: bldr clean --cache
   - Rebuild from clean state
 ```
 
-**Resolution**:
-- Delete cache directory
-- Rebuild from scratch
-- Check for disk errors
+### `4007` - NetworkError (4013)
+
+Network error during remote cache operation.
+
+**Recoverability**: Transient
+
+### Repository Errors (4500-4599)
+
+- `4500` - RepositoryError
+- `4501` - RepositoryNotFound
+- `4502` - RepositoryFetchFailed (Transient)
+- `4503` - RepositoryVerificationFailed
+- `4504` - VerificationFailed
+- `4505` - RepositoryInvalid
+- `4506` - RepositoryTimeout (Transient)
+- `4507` - RepositoryAlreadyAdded
 
 ---
 
-### `4007` - NetworkError
-
-**Description**: Network error during remote cache operation.
-
-**Example**:
-```
-[Cache:NetworkError] Failed to fetch from remote cache: connection timeout
-
-Suggestions:
-  - Check network connectivity
-  - Verify proxy settings if behind a firewall
-  - Test network access: curl -v <cache-url>
-```
-
-**Resolution**:
-- Check internet connection
-- Verify cache server is accessible
-- Configure proxy if needed
-
----
-
-## I/O Errors (5000-5999)
+## IO Errors (5000-5999)
 
 ### `5000` - FileNotFound
 
-**Description**: Specified file does not exist.
+File does not exist.
 
-**Example**:
 ```
 [IO:FileNotFound] File not found: 'src/main.go'
 
 Suggestions:
-  - Verify the file path is correct and the file exists
-  - Check current directory contents: ls -la
+  - Verify file path: ls -la
+  - Check for typos
 ```
-
-**Resolution**:
-- Check file path is correct
-- Verify file exists in filesystem
-- Check for typos in path
-
----
 
 ### `5001` - FileReadFailed
 
-**Description**: Failed to read file contents.
+Failed to read file.
 
-**Example**:
+### `5002` - FileWriteFailed
+
+Failed to write file.
+
+### `5003` - FileDeleteFailed
+
+Failed to delete file.
+
+### `5004` - DirectoryNotFound
+
+Directory does not exist.
+
+### `5005` - PermissionDenied
+
+Insufficient permissions.
+
 ```
-[IO:FileReadFailed] Failed to read file: 'config.toml': Permission denied
-
 Suggestions:
-  - Check file read permissions: ls -l config.toml
-  - Add read permission: chmod +r config.toml
+  - Check permissions: ls -l <file>
+  - Add permission: chmod +x <file>
 ```
-
-**Resolution**:
-- Check file permissions
-- Verify file is not locked
-- Ensure sufficient access rights
 
 ---
 
-### `5004` - PermissionDenied
+## Graph Errors (6000-6999)
 
-**Description**: Insufficient permissions for operation.
+### `6000` - GraphCycle
 
-**Example**:
-```
-[IO:PermissionDenied] Permission denied: cannot execute './build.sh'
+Cycle detected in dependency graph.
 
-Suggestions:
-  - Check file permissions: ls -l ./build.sh
-  - Add execute permission: chmod +x ./build.sh
-  - Try running with appropriate user/group ownership
-```
+### `6001` - GraphInvalid
 
-**Resolution**:
-- Add required permissions with `chmod`
-- Run with appropriate user
-- Check ownership with `ls -l`
+Invalid graph structure.
+
+### `6002` - NodeNotFound
+
+Graph node not found.
+
+### `6003` - EdgeInvalid
+
+Invalid graph edge.
+
+---
+
+## Language Errors (7000-7999)
+
+### `7000` - SyntaxError
+
+Source file syntax error.
+
+### `7001` - CompilationFailed
+
+Compilation failed.
+
+### `7002` - ValidationFailed
+
+Code validation failed.
+
+### `7003` - UnsupportedLanguage
+
+Language not supported.
+
+### `7004` - MissingCompiler
+
+Required compiler not found.
+
+### `7005` - MacroExpansionFailed
+
+Macro expansion failed.
+
+### `7006` - MacroLoadFailed
+
+Failed to load macro.
 
 ---
 
@@ -509,83 +376,246 @@ Suggestions:
 
 ### `8000` - ProcessSpawnFailed
 
-**Description**: Failed to spawn subprocess.
+Failed to spawn process.
 
-**Example**:
 ```
 [System:ProcessSpawnFailed] Failed to execute command 'gcc'
   Command: gcc -o app main.c
   Exit code: 127
 
 Suggestions:
-  - Check if required tool is installed and in PATH: which gcc
-  - Verify command permissions and PATH
-  - Run command manually to debug: gcc -o app main.c
+  - Check if tool is installed: which gcc
+  - Verify PATH configuration
 ```
 
-**Resolution**:
-- Install required tool
-- Add tool to PATH
-- Verify tool is executable
+### `8001` - ProcessTimeout
+
+Process exceeded timeout.
+
+**Recoverability**: Transient
+
+### `8002` - ProcessCrashed
+
+Process crashed.
+
+### `8003` - OutOfMemory
+
+Memory allocation failed.
+
+### `8004` - ThreadPoolError
+
+Thread pool error.
 
 ---
 
-## LSP Errors (9000-9999)
+## Plugin Errors (13000-13999)
 
-### `9001` - LSPInitializationFailed
+### `13000` - PluginError
 
-**Description**: Language Server Protocol initialization failed.
+General plugin error.
 
-**Example**:
-```
-[LSP:LSPInitializationFailed] Failed to initialize LSP server
+### `13001` - PluginNotFound
 
-Suggestions:
-  - Check LSP server configuration
-  - Verify workspace is initialized
-  - Restart editor/IDE
-```
+Plugin not found.
 
-**Resolution**:
-- Restart LSP server
-- Check logs for detailed errors
-- Verify workspace setup
+### `13002` - PluginLoadFailed
 
----
+Failed to load plugin.
 
-## Error Code Summary Table
+### `13003` - PluginCrashed
 
-| Code | Name | Category | Common Causes |
-|------|------|----------|---------------|
-| 0 | UnknownError | Internal | Unexpected conditions |
-| 1000 | BuildFailed | Build | Compilation errors |
-| 1001 | BuildTimeout | Build | Slow builds, infinite loops |
-| 1003 | TargetNotFound | Build | Typos, missing targets |
-| 1004 | HandlerNotFound | Build | Unsupported language |
-| 2000 | ParseFailed | Parse | Syntax errors |
-| 2001 | InvalidJson | Parse | JSON syntax errors |
-| 2002 | InvalidBuildFile | Parse | Missing required fields |
-| 2003 | MissingField | Parse | Configuration incomplete |
-| 2004 | InvalidFieldValue | Parse | Wrong type or typo |
-| 2005 | InvalidGlob | Parse | Invalid pattern syntax |
-| 3000 | AnalysisFailed | Analysis | Source file errors |
-| 3001 | ImportResolutionFailed | Analysis | Missing imports |
-| 3002 | CircularDependency | Analysis | Dependency cycle |
-| 3003 | MissingDependency | Analysis | Undefined dependency |
-| 4000 | CacheLoadFailed | Cache | Cache read errors |
-| 4002 | CacheCorrupted | Cache | Corrupted cache data |
-| 4007 | NetworkError | Cache | Network issues |
-| 5000 | FileNotFound | IO | Missing files |
-| 5001 | FileReadFailed | IO | Permission issues |
-| 5004 | PermissionDenied | IO | Access denied |
-| 8000 | ProcessSpawnFailed | System | Tool not found |
-| 9001 | LSPInitializationFailed | LSP | LSP setup issues |
+Plugin crashed during execution.
+
+### `13004` - PluginTimeout
+
+Plugin operation timed out.
+
+**Recoverability**: Transient
+
+### `13005` - PluginInvalidResponse
+
+Plugin returned invalid response.
+
+### `13006` - PluginProtocolError
+
+Plugin protocol violation.
+
+### `13007` - PluginVersionMismatch
+
+Plugin version incompatible.
+
+### `13008` - PluginCapabilityMissing
+
+Plugin missing required capability.
 
 ---
 
-## Using Error Codes Programmatically
+## LSP Errors (14000-14999)
 
-Error codes can be caught and handled programmatically:
+### `14000` - LSPError
+
+General LSP error.
+
+### `14001` - LSPInitializationFailed
+
+LSP server failed to initialize.
+
+### `14002` - LSPInvalidRequest
+
+Invalid LSP request.
+
+### `14003` - LSPMethodNotFound
+
+LSP method not found.
+
+### `14004` - LSPInvalidParams
+
+Invalid LSP parameters.
+
+### `14005` - LSPDocumentNotFound
+
+Document not found in LSP workspace.
+
+### `14006` - LSPParseError
+
+LSP parse error.
+
+### `14007` - LSPServerCrashed
+
+LSP server crashed.
+
+### `14008` - LSPTimeout
+
+LSP operation timed out.
+
+**Recoverability**: Transient
+
+### `14009` - LSPInvalidPosition
+
+Invalid position in document.
+
+### `14010` - LSPWorkspaceNotInitialized
+
+LSP workspace not initialized.
+
+---
+
+## Watch Errors (15000-15999)
+
+### `15000` - WatchError
+
+General watch mode error.
+
+### `15001` - WatcherInitFailed
+
+Failed to initialize file watcher.
+
+### `15002` - WatcherNotSupported
+
+File watcher not supported on platform.
+
+### `15003` - WatcherCrashed
+
+File watcher crashed.
+
+**Recoverability**: Transient
+
+### `15004` - FileWatchFailed
+
+Failed to watch specific file.
+
+**Recoverability**: Transient
+
+### `15005` - DebounceError
+
+Watch debounce error.
+
+### `15006` - TooManyWatchTargets
+
+Too many files to watch.
+
+---
+
+## Config Errors (16000-16999)
+
+### `16000` - ConfigError
+
+General configuration error.
+
+### `16001` - InvalidWorkspace
+
+Invalid workspace configuration.
+
+### `16002` - InvalidTarget
+
+Invalid target configuration.
+
+### `16003` - InvalidInput
+
+Invalid input.
+
+### `16004` - SchemaValidationFailed
+
+Schema validation failed.
+
+### `16005` - DeprecatedField
+
+Deprecated field used.
+
+### `16006` - RequiredFieldMissing
+
+Required field missing.
+
+### `16007` - DuplicateTarget
+
+Duplicate target name.
+
+### `16008` - ConfigConflict
+
+Configuration conflict.
+
+---
+
+## Migration Errors (17000-17999)
+
+### `17000` - MigrationFailed
+
+Migration from another build system failed.
+
+---
+
+## Recoverability Classification
+
+Errors are classified by recoverability:
+
+| Classification | Description | Action |
+|----------------|-------------|--------|
+| **Fatal** | Cannot recover, build fails | Fix configuration or code |
+| **Transient** | Temporary, can retry | Automatic retry with backoff |
+| **User** | Configuration/usage error | User must fix |
+
+### Transient Errors (Auto-Retry)
+
+```
+BuildTimeout, CacheLoadFailed, CacheTimeout, NetworkError,
+ProcessTimeout, CoordinatorTimeout, WorkerTimeout,
+ArtifactTransferFailed, PluginTimeout, LSPTimeout,
+WatcherCrashed, FileWatchFailed, RepositoryFetchFailed,
+RepositoryTimeout
+```
+
+### User Errors (Fix Required)
+
+```
+ParseFailed, InvalidJson, InvalidBuildFile, MissingField,
+InvalidFieldValue, TargetNotFound, FileNotFound,
+CircularDependency, MissingDependency, SyntaxError,
+UnsupportedLanguage, MissingCompiler
+```
+
+---
+
+## Programmatic Error Handling
 
 ```d
 import infrastructure.errors;
@@ -595,7 +625,6 @@ if (result.isErr)
 {
     auto error = result.unwrapErr();
     
-    // Check error code
     switch (error.code())
     {
         case ErrorCode.FileNotFound:
@@ -605,7 +634,8 @@ if (result.isErr)
             // Handle parse error
             break;
         default:
-            // Generic handling
+            if (error.recoverable())
+                // Retry operation
             break;
     }
 }
@@ -613,28 +643,29 @@ if (result.isErr)
 
 ---
 
-## Tips for Error Resolution
+## Fuzzy Matching ("Did You Mean?")
 
-1. **Read the full error message**: Error codes include file, line, and column information
-2. **Check code snippets**: The context shows exactly where the issue is
-3. **Follow suggestions**: Actionable steps are provided for each error
-4. **Use "did you mean?" hints**: Automatic typo detection helps catch common mistakes
-5. **Enable verbose output**: Run with `--verbose` for more details
-6. **Check documentation**: Links to relevant docs are included in suggestions
+Builder uses Levenshtein distance to suggest corrections for typos:
+
+```d
+import infrastructure.errors.utils.fuzzy : didYouMean, findSimilar;
+
+// Find similar strings
+auto matches = findSimilar("executble", ["executable", "library"]);
+// Returns: ["executable"]
+
+// Create suggestion message
+auto message = didYouMean("languag", ["language", "type", "sources"]);
+// Returns: "Did you mean 'language'?"
+```
 
 ---
 
-## Reporting Issues
+## Tips for Resolution
 
-If you encounter an error that:
-- Has unclear messaging
-- Provides incorrect suggestions
-- Should include typo detection but doesn't
-
-Please report it with:
-- Full error output
-- Builderfile content
-- Steps to reproduce
-
-This helps us improve error messages for everyone!
-
+1. **Read full error message**: Includes file, line, and column
+2. **Check code snippets**: Shows exact error location
+3. **Follow suggestions**: Actionable steps provided
+4. **Use fuzzy hints**: Automatic typo detection
+5. **Enable verbose output**: `bldr build --verbose`
+6. **Check documentation**: Links included in suggestions

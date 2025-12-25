@@ -1,31 +1,45 @@
 # Incremental Compilation
 
-Module-level incremental compilation system that minimizes rebuilds by tracking file-level dependencies and recompiling only affected source files when dependencies change.
+Module-level incremental compilation minimizes rebuilds by tracking file-level dependencies and recompiling only affected source files when dependencies change.
 
 ## Overview
 
-Builder's incremental compilation system extends beyond action-level caching to provide sophisticated, language-aware dependency tracking. When a header file or module changes, only the source files that transitively depend on it are recompiled, dramatically reducing build times for large projects.
+Builder's incremental compilation extends beyond action-level caching to provide language-aware dependency tracking. When a header file or module changes, only the source files that transitively depend on it are recompiled.
 
 ## Architecture
 
-### Core Components
+### Components
 
-1. **Dependency Cache** (`source/caching/incremental/dependency.d`)
-   - Tracks file-to-file dependencies
-   - Persists dependency graphs across builds
-   - Analyzes which files need recompilation based on changes
+**Dependency Cache**: `source/engine/caching/incremental/`
 
-2. **Incremental Engine** (`source/compilation/incremental/engine.d`)
-   - Orchestrates minimal rebuild determination
-   - Integrates with ActionCache for dual-level optimization
-   - Supports multiple compilation strategies
+```
+incremental/
+├── dependency.d    # DependencyCache - file dependency tracking
+├── storage.d       # Binary storage for dependency data
+├── schema.d        # Serializable types
+└── ast_dependency.d # AST-level dependency tracking
+```
 
-3. **Language Analyzers** (`source/languages/*/analysis/incremental.d`)
-   - Language-specific dependency extraction
-   - Resolves imports/includes to absolute file paths
-   - Filters external dependencies (standard libraries, third-party packages)
+**Incremental Engine**: `source/engine/compilation/incremental/`
 
-### How It Works
+```
+incremental/
+├── engine.d        # IncrementalEngine - rebuild determination
+├── analyzer.d      # DependencyAnalyzer interface
+├── ast_engine.d    # AST-level incremental engine
+└── package.d       # Public API
+```
+
+**Language Analyzers**: `source/languages/*/analysis/incremental.d`
+
+- C++: `source/languages/compiled/cpp/analysis/incremental.d`
+- Rust: `source/languages/compiled/rust/analysis/incremental.d`
+- Go: `source/languages/scripting/go/analysis/incremental.d`
+- TypeScript: `source/languages/web/typescript/analysis/incremental.d`
+- Java: `source/languages/jvm/java/analysis/incremental.d`
+- D: `source/languages/compiled/d/analysis/incremental.d`
+
+### Flow
 
 ```
 ┌──────────────────┐
@@ -55,38 +69,81 @@ Builder's incremental compilation system extends beyond action-level caching to 
 └──────────────────────────┘
 ```
 
+## Core Types
+
+### DependencyAnalyzer Interface
+
+```d
+interface DependencyAnalyzer
+{
+    BuildResult!(string[]) analyzeDependencies(
+        string sourceFile,
+        string[] includePaths = []
+    ) @system;
+    
+    string resolveDependency(
+        string dependency,
+        string sourceDir,
+        string[] searchPaths = []
+    ) @system;
+    
+    bool isExternalDependency(string dependency) @system;
+}
+```
+
+### FileDependency
+
+```d
+struct FileDependency
+{
+    string sourceFile;
+    string[] dependencies;
+    string sourceHash;
+    string[] depHashes;
+    SysTime timestamp;
+    
+    bool isValid() const @system;
+    bool hasDependencyChanges() const @system;
+}
+```
+
+### IncrementalResult
+
+```d
+struct IncrementalResult
+{
+    string[] filesToCompile;
+    string[] cachedFiles;
+    CompilationStrategy strategy;
+    string[string] reasons;
+    size_t totalFiles;
+    size_t compiledFiles;
+    size_t cachedFiles_;
+    float reductionRate;
+}
+```
+
 ## Supported Languages
 
 ### C++
-- Header dependency tracking via `#include` analysis
-- Resolves headers through include paths
-- Filters standard library headers (STL, C standard library)
-- Tracks transitive dependencies
+
+Analyzes `#include` directives:
 
 ```d
-// Example: C++ incremental compilation
 auto analyzer = new CppDependencyAnalyzer(["/path/to/include"]);
 auto deps = analyzer.analyzeDependencies("main.cpp");
 // Returns: ["header.h", "utils.h"] (resolved to absolute paths)
 ```
 
-### D
-- Module dependency tracking via `import` statements
-- Resolves module names to source files
-- Filters Phobos and Druntime modules
-- Supports package.d files
-
-```d
-auto analyzer = new DDependencyAnalyzer("/project/root", ["/path/to/imports"]);
-auto deps = analyzer.analyzeDependencies("main.d");
-// Returns: ["mymodule.d", "utils/package.d"]
-```
+Features:
+- Header dependency tracking
+- Resolves through include paths
+- Filters STL and C standard library headers
+- Tracks transitive dependencies
 
 ### Rust
-- Uses Cargo metadata for accurate dependency tracking
-- Parses `mod` and `use` statements
-- Resolves modules following Rust's file structure rules
-- Filters standard library crates
+
+Uses Cargo metadata for dependency tracking:
 
 ```d
 auto analyzer = new RustDependencyAnalyzer("/path/to/rust/project");
@@ -94,11 +151,14 @@ auto deps = analyzer.analyzeDependencies("main.rs");
 // Returns: ["module.rs", "utils/mod.rs"]
 ```
 
+Features:
+- Parses `mod` and `use` statements
+- Follows Rust file structure rules
+- Filters standard library crates
+
 ### Go
-- Detects module path from `go.mod`
-- Parses import statements (single and block)
-- Resolves imports to package directories
-- Filters standard library packages
+
+Parses import statements:
 
 ```d
 auto analyzer = new GoDependencyAnalyzer("/path/to/go/module");
@@ -106,12 +166,14 @@ auto deps = analyzer.analyzeDependencies("main.go");
 // Returns: ["package/file1.go", "package/file2.go"]
 ```
 
+Features:
+- Detects module path from `go.mod`
+- Parses single and block imports
+- Filters standard library packages
+
 ### TypeScript
-- Loads tsconfig.json for configuration
-- Parses import/export/require statements
-- Resolves relative and absolute imports
-- Filters node_modules dependencies
-- Supports multiple file extensions (.ts, .tsx, .d.ts, .js, .jsx)
+
+Parses import/export statements:
 
 ```d
 auto analyzer = new TypeScriptDependencyAnalyzer("/path/to/project");
@@ -119,35 +181,42 @@ auto deps = analyzer.analyzeDependencies("main.ts");
 // Returns: ["./module.ts", "./utils/index.ts"]
 ```
 
+Features:
+- Loads tsconfig.json
+- Resolves relative and absolute imports
+- Filters node_modules
+- Supports .ts, .tsx, .d.ts, .js, .jsx
+
 ### Java
-- Tracks class dependencies via import statements
-- Resolves qualified class names to source files
-- Filters JDK standard library
-- Supports multiple source paths
+
+Tracks class dependencies:
 
 ```d
 auto analyzer = new JavaDependencyAnalyzer("/project/root", ["src/main/java"]);
 auto deps = analyzer.analyzeDependencies("Main.java");
-// Returns: ["com/example/Module.java", "com/example/Utils.java"]
+// Returns: ["com/example/Module.java"]
 ```
+
+Features:
+- Resolves qualified class names
+- Filters JDK standard library
+- Supports multiple source paths
 
 ## Usage
 
 ### Basic Example
 
 ```d
-import caching.incremental.dependency;
-import caching.actions.action;
-import compilation.incremental.engine;
+import engine.caching.incremental.dependency;
+import engine.caching.actions.action;
+import engine.compilation.incremental.engine;
 
-// Initialize caches
+// Initialize
 auto depCache = new DependencyCache(".builder-cache/incremental");
 auto actionCache = new ActionCache(".builder-cache/actions");
-
-// Create incremental engine
 auto engine = new IncrementalEngine(depCache, actionCache);
 
-// Determine what needs rebuilding
+// Determine rebuild set
 auto result = engine.determineRebuildSet(
     allSourceFiles,
     changedFiles,
@@ -155,13 +224,12 @@ auto result = engine.determineRebuildSet(
     (file) => makeMetadata(file)
 );
 
-// Compile only necessary files
+// Compile necessary files
 foreach (file; result.filesToCompile)
 {
     auto deps = analyzer.analyzeDependencies(file);
     compile(file);
     
-    // Record successful compilation
     engine.recordCompilation(
         file,
         deps.unwrap(),
@@ -176,47 +244,20 @@ writeln("Compiled: ", result.compiledFiles, "/", result.totalFiles);
 writeln("Reduction: ", result.reductionRate, "%");
 ```
 
-### Integration with Language Handlers
-
-Language handlers can use the BuildContext to record dependencies:
-
-```d
-override Result!(string, BuildError) buildWithContext(BuildContext context)
-{
-    if (context.hasIncremental())
-    {
-        // Analyze dependencies for each source file
-        foreach (source; context.target.sources)
-        {
-            auto deps = analyzer.analyzeDependencies(source);
-            if (deps.isOk)
-            {
-                // Record dependencies for incremental compilation
-                context.recordDependencies(source, deps.unwrap());
-            }
-        }
-    }
-    
-    // Continue with compilation...
-}
-```
-
-### Advanced: Custom Dependency Analyzer
-
-Implement the `DependencyAnalyzer` interface for custom languages:
+### Custom Analyzer
 
 ```d
 class MyLanguageAnalyzer : BaseDependencyAnalyzer
 {
-    override Result!(string[], BuildError) analyzeDependencies(
+    override BuildResult!(string[]) analyzeDependencies(
         string sourceFile,
         string[] searchPaths = []
     ) @system
     {
-        // 1. Parse source file for import/require statements
+        // 1. Parse source file for imports
         auto imports = parseImports(sourceFile);
         
-        // 2. Resolve to absolute file paths
+        // 2. Resolve to absolute paths
         string[] resolved;
         foreach (imp; imports)
         {
@@ -228,12 +269,11 @@ class MyLanguageAnalyzer : BaseDependencyAnalyzer
             }
         }
         
-        return Result!(string[], BuildError).ok(resolved);
+        return BuildResult!(string[]).ok(resolved);
     }
     
     override bool isExternalDependency(string importPath) @system
     {
-        // Determine if this is a standard library or third-party dependency
         return importPath.startsWith("std.") || 
                importPath.canFind("node_modules");
     }
@@ -242,18 +282,22 @@ class MyLanguageAnalyzer : BaseDependencyAnalyzer
 
 ## Compilation Strategies
 
-The incremental engine supports three strategies:
-
 ### Full
-Rebuild everything regardless of caches or dependencies.
+
+Rebuild everything regardless of caches.
+
 ```d
 auto engine = new IncrementalEngine(
     depCache, actionCache, CompilationStrategy.Full
 );
 ```
 
+Use for CI or when caches are untrusted.
+
 ### Incremental (Default)
-Rebuild files with action cache misses or dependency changes, including transitive dependents.
+
+Rebuild files with cache misses or dependency changes, plus transitive dependents.
+
 ```d
 auto engine = new IncrementalEngine(
     depCache, actionCache, CompilationStrategy.Incremental
@@ -261,7 +305,9 @@ auto engine = new IncrementalEngine(
 ```
 
 ### Minimal
-Rebuild only files that directly changed or have action cache misses. Does not transitively rebuild dependents.
+
+Rebuild only directly changed files or cache misses. Skip transitive dependents.
+
 ```d
 auto engine = new IncrementalEngine(
     depCache, actionCache, CompilationStrategy.Minimal
@@ -270,33 +316,28 @@ auto engine = new IncrementalEngine(
 
 ## Performance
 
-### Reduction Rates
-
-Typical reduction rates (percentage of files that don't need recompilation):
+### Typical Reduction Rates
 
 | Scenario | Reduction | Example |
 |----------|-----------|---------|
-| Header change | 70-90% | Changed 1 header, recompile 10/100 files |
-| Source change | 90-99% | Changed 1 source, recompile 1/100 files |
-| Config change | 0% | Changed flags, recompile all |
-| No changes | 100% | No files changed, recompile 0/100 files |
+| Header change | 70-90% | 1 header → rebuild 10/100 files |
+| Source change | 90-99% | 1 source → rebuild 1/100 files |
+| Config change | 0% | Rebuild all |
+| No changes | 100% | Rebuild 0/100 files |
 
-### C++ Project Example
+### Example: C++ Project
 
-Project: 500 source files, 200 headers
+Project: 500 sources, 200 headers
 - Full build: 500 compilations (~10 minutes)
-- Header change affecting 10%: 50 compilations (~1 minute)
+- Header change (10%): 50 compilations (~1 minute)
 - Source file change: 1 compilation (~1 second)
-- **90-99% reduction in rebuild time for typical changes**
 
 ## Caching Layers
-
-Builder uses a three-tier caching strategy:
 
 ```
 ┌─────────────────────────────────┐
 │  Layer 1: Action Cache          │ ← Per-file compilation cache
-│  - Caches individual compile    │
+│  - Caches individual compiles   │
 │  - Input hash validation        │
 └────────────┬────────────────────┘
              │
@@ -317,7 +358,7 @@ Builder uses a three-tier caching strategy:
 
 ## Best Practices
 
-### 1. Enable Incremental Compilation
+### Enable Incremental Compilation
 
 ```d
 BuildContext context;
@@ -327,16 +368,14 @@ context.depRecorder = (source, deps) {
 };
 ```
 
-### 2. Use Watch Mode
+### Use Watch Mode
 
-Combine with watch mode for optimal developer experience:
 ```bash
 bldr build --watch --incremental
 ```
 
-### 3. Configure Include/Import Paths
+### Configure Include Paths
 
-Ensure analyzers have correct search paths:
 ```d
 auto analyzer = new CppDependencyAnalyzer([
     "include",
@@ -345,21 +384,19 @@ auto analyzer = new CppDependencyAnalyzer([
 ]);
 ```
 
-### 4. Periodic Cache Cleanup
+### Periodic Cache Cleanup
 
-Dependency caches can grow over time. Clear periodically:
 ```bash
 bldr clean --incremental-cache
 ```
 
-### 5. CI/CD Integration
+### CI/CD
 
-For CI builds, consider full rebuilds with caching:
 ```bash
-# Development: incremental
+# Development
 bldr build --incremental
 
-# CI: full with caching for reproducibility
+# CI (full with caching for reproducibility)
 bldr build --strategy=full
 ```
 
@@ -367,53 +404,28 @@ bldr build --strategy=full
 
 ### Current Limitations
 
-1. **Macro Changes**: C++ macro changes in headers may not trigger correct rebuilds
-2. **Template Instantiations**: Template changes may not track all instantiation sites
-3. **Dynamic Imports**: Runtime-determined imports cannot be tracked statically
-4. **Build Script Generation**: Generated code dependencies require explicit marking
+1. **C++ Macros**: Macro changes in headers may not trigger correct rebuilds
+2. **Templates**: Template changes may not track all instantiation sites
+3. **Dynamic Imports**: Runtime-determined imports not tracked statically
+4. **Generated Code**: Generated code dependencies require explicit marking
 
-### Workarounds
-
-For macro-heavy code:
-```d
-// Mark target as always rebuild if macros change
-context.target.langConfig["rebuild_on_macro_change"] = "true";
-```
-
-For generated code:
-```d
-// Use discovery system to declare generated dependencies
-auto discovery = DiscoveryPatterns.codeGeneration(
-    originTarget,
-    generatedFiles,
-    "generated"
-);
-```
-
-## Implementation Details
-
-### Dependency Cache Storage
+### Storage Format
 
 Binary format for efficient I/O:
 - Version byte
 - Entry count
-- For each entry:
-  - Source file path (length-prefixed string)
-  - Dependency count
-  - Dependency paths (length-prefixed strings)
-  - Source hash
-  - Dependency hashes
-  - Timestamp (64-bit)
+- For each entry: source path, dependency count, dependencies, hashes, timestamp
 
 ### Change Detection
 
-Two-phase algorithm:
+Two-phase:
 1. **Fast Path**: Check metadata (mtime) for quick filtering
 2. **Slow Path**: Compute content hash for definitive validation
 
 ### Transitive Analysis
 
-Uses breadth-first search to find all transitive dependencies:
+Breadth-first search for transitive dependencies:
+
 ```d
 string[] getTransitiveDependencies(string source) {
     queue = [source];
@@ -421,21 +433,18 @@ string[] getTransitiveDependencies(string source) {
     while (!queue.empty) {
         current = queue.dequeue();
         deps = getDependencies(current);
-        foreach (dep; deps) {
-            if (dep not in visited) {
-                queue.enqueue(dep);
-                visited.add(dep);
-            }
+        foreach (dep; deps.filter!(d => d !in visited && !isExternal(d))) {
+            queue.enqueue(dep);
+            visited.add(dep);
         }
     }
     return visited;
 }
 ```
 
-## See Also
+## Related Documentation
 
-- [Action Caching](caching.md) - Per-action compilation caching
-- [Graph Cache](graphcache.md) - Build graph caching
-- [Watch Mode](watch.md) - Continuous incremental builds
-- [Performance](performance.md) - Performance optimization strategies
-
+- [Action Caching](caching.md)
+- [Graph Cache](graphcache.md)
+- [Watch Mode](../user-guides/watch.md)
+- [Performance](performance.md)

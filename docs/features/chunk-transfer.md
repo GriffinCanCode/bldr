@@ -1,35 +1,49 @@
 # Content-Defined Chunking for Network Transfer
 
-**Status:** ✅ Implemented  
-**Performance Impact:** High - 40-90% bandwidth savings for modified large files
+**Status:** Implemented  
+**Module:** `infrastructure.utils.files.cdc`, `engine.caching.storage.chunked`
 
 ## Overview
 
-Content-defined chunking extends Builder's Rabin fingerprinting system to enable efficient network transfers for artifact store uploads and distributed cache operations. Only changed chunks are transferred, dramatically reducing bandwidth usage for large files.
+Content-defined chunking enables efficient network transfers for large build artifacts by splitting files at content-dependent boundaries. Only changed chunks are transferred, reducing bandwidth for incremental changes.
+
+Builder uses **FastCDC** (gear-based rolling hash) for chunking, which is 2-3x faster than Rabin fingerprinting while achieving comparable deduplication ratios.
 
 ## Architecture
 
-### Foundation: Rabin Fingerprinting
+### FastCDC Algorithm
 
-The chunking system uses Rabin fingerprinting with a rolling hash to identify content-defined chunk boundaries:
+The chunking system uses gear-based rolling hash for fast boundary detection:
 
 ```d
-// Rabin fingerprint parameters
-private enum ulong POLYNOMIAL = 0x3DA3358B4DC173;
-private enum uint WINDOW_SIZE = 64;
+// Fingerprint update: fp = (fp << 1) + gear[byte]
+// Gear table: 256 pseudo-random 64-bit values (deterministic PRNG)
 
-// Chunk size constraints
-private enum size_t MIN_CHUNK = 2_048;      // 2 KB minimum
-private enum size_t AVG_CHUNK = 16_384;     // 16 KB average
-private enum size_t MAX_CHUNK = 65_536;     // 64 KB maximum
+// Chunk size configurations
+struct Config {
+    size_t minSize;   // Minimum chunk size
+    size_t avgSize;   // Target average chunk size
+    size_t maxSize;   // Maximum chunk size
+    
+    // Presets:
+    static Config artifact() => Config(2048, 16384, 65536);   // 2KB-16KB-64KB
+    static Config large() => Config(8192, 65536, 262144);     // 8KB-64KB-256KB
+    static Config small() => Config(1024, 4096, 16384);       // 1KB-4KB-16KB
+}
 ```
 
-**Why Content-Defined?**
-- Fixed-size chunks fail when bytes are inserted/deleted
-- Content-defined boundaries shift naturally with content changes
-- Only affected chunks need to be retransmitted
+### Normalized Chunking
 
-**Example:**
+FastCDC uses normalized chunking with two-phase boundary detection for more consistent chunk sizes:
+
+1. **Phase 1** (minSize → avgSize): Stricter mask - fewer boundaries
+2. **Phase 2** (avgSize → maxSize): Relaxed mask - more boundaries
+3. **Phase 3**: Force boundary at maxSize
+
+### Content-Defined Boundaries
+
+Content-defined boundaries shift naturally with content changes, unlike fixed-size chunks:
+
 ```
 File: ABCDEFGHIJKLMNOPQRSTUVWXYZ
 Chunks: ABC|DEFGH|IJKLM|NOPQR|STUVWXYZ
@@ -38,516 +52,330 @@ After inserting "123" at position 5:
 File: ABCDE123FGHIJKLMNOPQRSTUVWXYZ
 Chunks: ABC|DE123FGH|IJKLM|NOPQR|STUVWXYZ
 
-Only one chunk changed! (DE123FGH)
-Network transfer: 1 chunk instead of entire file
+Only one chunk changed (DE123FGH)
 ```
 
-### Components
+## Components
 
-#### 1. Content Chunker (`utils/files/chunking.d`)
+### 1. FastCDC Engine (`infrastructure/utils/files/cdc.d`)
 
-Core chunking engine with SIMD-accelerated rolling hash:
+High-performance chunking for build artifacts:
 
 ```d
-auto result = ContentChunker.chunkFile("large_binary.o");
+import infrastructure.utils.files.cdc;
 
-writeln("File hash: ", result.combinedHash);
-writeln("Chunks: ", result.chunks.length);
+auto cdc = FastCDC(FastCDC.Config.large());  // 8KB-64KB-256KB
+auto result = cdc.chunkFile("output/app.exe");
 
-foreach (chunk; result.chunks)
-{
-    writeln("  Offset: ", chunk.offset, 
+// Result contains:
+// - chunks: Array of Chunk (offset, length, hash)
+// - totalSize: Original file size
+// - combinedHash: BLAKE3 hash of all chunk hashes
+```
+
+**Chunk Structure:**
+```d
+struct Chunk {
+    size_t offset;     // Byte offset in source
+    size_t length;     // Chunk length
+    ubyte[32] hash;    // BLAKE3 256-bit hash
+}
+```
+
+### 2. ChunkedCAS (`engine/caching/storage/chunked.d`)
+
+Content-addressable storage with automatic chunking for large blobs:
+
+```d
+import engine.caching.storage.chunked;
+
+auto store = new ChunkedCAS(".builder-cache");
+
+// Store - automatically chunks large data (>100MB)
+auto hash = store.put(largeBinaryData).unwrap();
+
+// Get manifest for delta transfer
+auto manifest = store.getManifest(hash).unwrap();
+
+// Find missing chunks (for upload)
+auto missing = store.findMissingChunks(manifest.refs.map!(r => r.hash).array);
+
+// Retrieve (automatically reassembles)
+auto data = store.get(hash).unwrap();
+```
+
+**Storage Layout:**
+```
+.builder-cache/
+├── blobs/      # Small blobs (whole-file storage)
+├── chunks/     # Individual chunk storage (sharded by first 2 hex chars)
+└── manifests/  # Chunk manifests for chunked blobs
+```
+
+### 3. Chunk Manifest
+
+Stores metadata about chunked blobs without chunk contents:
+
+```d
+struct ChunkManifest {
+    ubyte[32] blobHash;    // Original blob hash
+    ubyte[32] rootHash;    // Merkle root of chunks
+    size_t totalSize;      // Original size
+    size_t chunkCount;     // Number of chunks
+    ChunkRef[] refs;       // Chunk references (offset, length, hash)
+}
+```
+
+### 4. Content Chunker (`infrastructure/utils/files/chunking.d`)
+
+Original Rabin-based chunking (for smaller files):
+
+```d
+import infrastructure.utils.files.chunking;
+
+auto result = ContentChunker.chunkFile("binary.o");
+
+foreach (chunk; result.chunks) {
+    writeln("Offset: ", chunk.offset,
             " Length: ", chunk.length,
             " Hash: ", chunk.hash);
 }
 ```
 
-**Features:**
-- SIMD-accelerated rolling hash for performance
-- BLAKE3 hashing for chunk content (SIMD-optimized)
-- Serializable chunk metadata for caching
-- Chunk comparison for deduplication
-
-#### 2. Chunk Transfer (`utils/files/chunking.d`)
-
-Network transfer interface for chunk-based uploads/downloads:
-
+**Rabin Parameters:**
 ```d
-// Upload entire file using chunks
-auto uploadResult = ChunkTransfer.uploadFileChunked(
-    "large_binary.o",
-    (chunkHash, chunkData) {
-        return remoteCacheClient.putChunk(chunkHash, chunkData);
-    }
-);
-
-// Upload only changed chunks (incremental)
-auto updateResult = ChunkTransfer.uploadChangedChunks(
-    "large_binary.o",
-    newManifest,
-    oldManifest,
-    (chunkHash, chunkData) {
-        return remoteCacheClient.putChunk(chunkHash, chunkData);
-    }
-);
-
-writeln("Transferred: ", updateResult.stats.bytesTransferred);
-writeln("Saved: ", updateResult.stats.bytesSaved);
-writeln("Efficiency: ", updateResult.stats.savingsPercent(), "%");
+enum ulong POLYNOMIAL = 0x3DA3358B4DC173;
+enum uint WINDOW_SIZE = 64;
+enum size_t MIN_CHUNK = 2_048;   // 2 KB
+enum size_t AVG_CHUNK = 16_384;  // 16 KB
+enum size_t MAX_CHUNK = 65_536;  // 64 KB
 ```
-
-**Capabilities:**
-- Full file upload with chunking
-- Incremental upload (only changed chunks)
-- Chunk-based download with verification
-- Transfer statistics and efficiency metrics
-
-#### 3. Chunk Manifest (`utils/files/chunking.d`)
-
-Tracks chunk metadata for remote files:
-
-```d
-struct ChunkManifest
-{
-    string fileHash;           // Hash of entire file
-    Chunk[] chunks;            // List of chunks
-    size_t totalSize;          // Total file size
-}
-```
-
-**Storage:**
-- Stored in remote cache with `.manifest` suffix
-- JSON serialization for portability
-- Enables chunk comparison and deduplication
-
-#### 4. Remote Cache Client Integration (`caching/distributed/remote/client.d`)
-
-Extended with chunk-based transfer API:
-
-```d
-// Upload large file using chunks
-auto uploadResult = cacheClient.putFileChunked(
-    "large_binary.o",
-    fileHash
-);
-
-// Incremental update (only changed chunks)
-auto updateResult = cacheClient.updateFileChunked(
-    "large_binary.o",
-    newFileHash,
-    oldFileHash
-);
-
-writeln("Bandwidth saved: ", updateResult.savingsPercent(), "%");
-
-// Download using chunks
-auto downloadResult = cacheClient.getFileChunked(
-    fileHash,
-    "output_binary.o"
-);
-```
-
-**Features:**
-- Automatic threshold detection (> 1MB uses chunking)
-- Fallback to regular transfer for small files
-- Manifest management and caching
-- Transfer statistics and metrics
-
-#### 5. Artifact Manager Integration (`runtime/remote/artifacts.d`)
-
-Artifact uploads/downloads automatically use chunking:
-
-```d
-// Automatically uses chunking for large files
-auto uploadResult = artifactManager.uploadInputs(sandboxSpec);
-
-// Incremental upload with bandwidth savings
-auto updateResult = artifactManager.uploadInputIncremental(
-    inputPath,
-    newArtifactId,
-    oldArtifactId
-);
-
-writeln("Saved ", updateResult.bytesSaved, " bytes");
-```
-
-**Transparency:**
-- Automatic detection of large files
-- Seamless integration with existing APIs
-- Backward compatibility maintained
 
 ## Use Cases
 
-### 1. Artifact Store Uploads
+### Artifact Store Uploads
 
-**Scenario:** Large binary artifacts (compiled objects, libraries, executables)
+Large binary artifacts with incremental changes:
 
-**Problem:**
-- Compiler outputs can be 10-100MB+
-- Small code changes cause full reupload
-- Network bandwidth is wasted
-
-**Solution:**
 ```d
-// First upload
-auto upload1 = cacheClient.putFileChunked("app.o", hash1);
-// Uploads: 100 MB (all chunks)
+// First upload: full file
+auto upload1 = store.put(appBinary);  // Uploads 100 MB
 
 // After small code change
-auto upload2 = cacheClient.updateFileChunked("app.o", hash2, hash1);
-// Uploads: 5 MB (only changed chunks)
-// Saved: 95 MB (95% bandwidth reduction)
+auto upload2 = store.put(updatedAppBinary);  // Uploads ~5 MB (changed chunks only)
 ```
 
-**Real-World Example:**
-```
-File: libcore.a (50 MB)
-Change: Modified 3 functions in one module
+### Distributed Cache Transfers
 
-Without chunking: Upload 50 MB
-With chunking:    Upload 2.5 MB (5% changed)
-Bandwidth saved:  47.5 MB (95%)
-```
+CI/CD pipelines sharing cache across machines:
 
-### 2. Distributed Cache Transfers
-
-**Scenario:** CI/CD pipelines sharing cache across machines
-
-**Problem:**
-- Build artifacts frequently updated
-- Multiple machines pulling/pushing
-- Limited network bandwidth
-
-**Solution:**
 ```d
 // Machine A: Build and upload
-auto buildResult = build("app");
-cacheClient.putFileChunked("app.o", buildResult.hash);
+auto hash = store.put(buildOutput).unwrap();
 
-// Machine B: Pull from cache
-auto pullResult = cacheClient.getFileChunked(buildResult.hash, "app.o");
-
-// Machine A: Rebuild after small change
-auto rebuildResult = build("app");
-cacheClient.updateFileChunked("app.o", rebuildResult.hash, buildResult.hash);
-// Only changed chunks transferred
-```
-
-**CI/CD Pipeline Example:**
-```
-Pipeline: 10 build stages, 500 MB of artifacts
-
-Without chunking:
-- Stage 1: Upload 500 MB
-- Stage 2: Download 500 MB, Upload 500 MB
-- Stage 3: Download 500 MB, Upload 500 MB
-- ...
-- Total: 10 GB uploaded, 9 GB downloaded
-
-With chunking (10% change per stage):
-- Stage 1: Upload 500 MB
-- Stage 2: Download 500 MB, Upload 50 MB
-- Stage 3: Download 50 MB, Upload 50 MB
-- ...
-- Total: 950 MB uploaded, 950 MB downloaded
-- Bandwidth saved: 90% (17.1 GB → 1.9 GB)
-```
-
-### 3. Remote Execution
-
-**Scenario:** Sending inputs to remote workers
-
-**Problem:**
-- Large input files sent to multiple workers
-- Same inputs used across many tasks
-- Network becomes bottleneck
-
-**Solution:**
-```d
-// Upload inputs once, reuse chunks
-foreach (worker; workers)
-{
-    auto result = artifactManager.uploadInputs(taskSpec);
-    // Only missing chunks uploaded to each worker
-    // Chunk deduplication across tasks
-}
+// Machine B: Download (finds missing chunks)
+auto manifest = remoteStore.getManifest(hash).unwrap();
+auto missing = localStore.findMissingChunks(manifest.refs.map!(r => r.hash).array);
+// Only download missing chunks
 ```
 
 ## Performance
 
-### Benchmark: Large Binary (50 MB)
+### Benchmark: Large Binary (150 MB with FastCDC)
 
-| Scenario | Without Chunking | With Chunking | Bandwidth Saved |
-|----------|------------------|---------------|-----------------|
-| Initial upload | 50 MB | 50 MB | 0% (baseline) |
-| 1% code change | 50 MB | 2.5 MB | **95%** |
-| 5% code change | 50 MB | 7.5 MB | **85%** |
-| 10% code change | 50 MB | 15 MB | **70%** |
-| 25% code change | 50 MB | 25 MB | **50%** |
+| Scenario | Without CDC | With CDC | Bandwidth Saved |
+|----------|-------------|----------|-----------------|
+| Initial upload | 150 MB | 150 MB | 0% (baseline) |
+| 1% code change | 150 MB | 3 MB | 98% |
+| 5% code change | 150 MB | 10 MB | 93% |
+| 10% code change | 150 MB | 18 MB | 88% |
 
-### Benchmark: CI/CD Pipeline (500 MB artifacts)
+### Chunking Throughput
 
-| Pipeline Stages | Without Chunking | With Chunking | Time Saved |
-|----------------|------------------|---------------|------------|
-| 5 stages | 2.5 GB transfer | 750 MB transfer | **3.5 minutes** (100 Mbps) |
-| 10 stages | 5 GB transfer | 1 GB transfer | **8 minutes** (100 Mbps) |
-| 20 stages | 10 GB transfer | 1.5 GB transfer | **17 minutes** (100 Mbps) |
+- **FastCDC**: ~500 MB/s (gear hash + BLAKE3)
+- **Rabin**: ~200 MB/s
 
-**Assumptions:**
-- 10% change rate per stage
-- 100 Mbps network bandwidth
-- Typical cloud CI/CD environment
+### Overhead
 
-### Overhead Analysis
+- **150 MB file**: ~300ms chunking time
+- **Manifest storage**: ~50 KB per 150MB file
+- **Chunk lookup**: O(1) hash table
 
-**Chunking Overhead:**
-- Initial chunking: ~500 MB/s (SIMD-optimized)
-- 50 MB file: ~100ms chunking time
-- Manifest storage: ~5 KB per file
-- Chunk lookup: O(1) hash table
+### Threshold Selection
 
-**Break-Even Point:**
-```
-Network time saved > Chunking overhead
-Transfer savings > 100ms
-
-For 50 MB file on 100 Mbps network:
-- Full transfer: 4 seconds
-- 5% change transfer: 200ms + 100ms = 300ms
-- Time saved: 3.7 seconds (92% faster)
-```
-
-**Threshold Selection:**
-- Files < 1 MB: Use regular transfer (overhead not worth it)
-- Files ≥ 1 MB: Use chunking (significant savings)
+- Files < 1 MB: Regular transfer (chunking overhead not worth it)
+- Files ≥ 1 MB: Chunking provides savings
 
 ## Implementation Details
 
-### SIMD Acceleration
+### BLAKE3 Chunk Hashing
 
-Chunking uses SIMD operations for performance:
+Each chunk is hashed with BLAKE3 for integrity and deduplication:
 
 ```d
-// SIMD-accelerated rolling hash
-if (offset + i >= WINDOW_SIZE) {
-    fingerprint = SIMDOps.rollingHash(window, WINDOW_SIZE);
-}
+auto hasher = Blake3(0);
+hasher.put(chunkData);
+auto hash = hasher.finish(32)[0 .. 32];  // 256-bit hash
 ```
-
-**Benefits:**
-- 3-4x faster rolling hash computation
-- ~500 MB/s chunking throughput
-- Minimal CPU overhead
 
 ### Chunk Verification
 
-Downloaded chunks are verified for integrity:
+Downloaded chunks are verified:
 
 ```d
-// Verify chunk hash
 auto hasher = Blake3(0);
 hasher.put(chunkData);
-auto actualHash = hasher.finishHex();
+auto actualHash = hasher.finish(32)[0 .. 32];
 
-if (actualHash != chunk.hash)
-{
+if (actualHash != expectedHash)
     return Err("Chunk hash mismatch");
-}
 ```
 
-**Protection:**
-- Detects corruption during transfer
-- Ensures data integrity
-- Fails fast on mismatch
+### Sharded Storage
 
-### Manifest Caching
+Chunks are stored in sharded directories for filesystem performance:
 
-Chunk manifests are cached for efficiency:
+```
+chunks/
+├── ab/
+│   └── abc123...  # Full hash as filename
+├── cd/
+│   └── cde456...
+└── ef/
+    └── efg789...
+```
+
+## Statistics
+
+The `ChunkedCAS` tracks deduplication statistics:
 
 ```d
-// Manifest stored with special key
-immutable manifestKey = fileHash ~ ".manifest";
-cacheClient.put(manifestKey, manifestData);
-```
-
-**Benefits:**
-- O(1) lookup for chunk list
-- Enables chunk comparison
-- Small storage overhead (~5 KB)
-
-### Compression Interaction
-
-Chunking works alongside compression:
-
-```d
-// 1. Chunk file into content-defined boundaries
-auto chunks = ContentChunker.chunkFile("binary.o");
-
-// 2. Compress each chunk individually
-foreach (chunk; chunks)
-{
-    auto compressed = compressor.compress(chunkData);
-    cacheClient.putChunk(chunk.hash, compressed);
+struct ChunkStats {
+    size_t chunkedBlobs;       // Large blobs stored as chunks
+    size_t totalChunks;        // Total chunks created
+    size_t chunksStored;       // Unique chunks stored
+    size_t chunkBytesStored;   // Bytes in chunk storage
+    size_t chunkHits;          // Chunk dedup hits
+    size_t manifestsStored;    // Manifests created
+    size_t blobHits;           // Full blob dedup hits
+    
+    double dedupRatio() => totalChunks > 0 ? 100.0 * chunkHits / totalChunks : 0.0;
 }
-```
 
-**Advantages:**
-- Better compression ratio (similar content grouped)
-- Deduplication still works (chunks compressed independently)
-- Smaller network transfers
+auto stats = store.getStats();
+writeln("Deduplication ratio: ", stats.dedupRatio(), "%");
+```
 
 ## Limitations
 
-### Not Suitable For
+### Not Optimal For
 
-1. **Small Files (< 1 MB)**
-   - Overhead exceeds savings
-   - Use regular transfer
-
-2. **Completely New Files**
-   - No chunks to deduplicate
-   - Same as full upload
-
-3. **Random Binary Changes**
-   - Content-defined boundaries don't help
-   - Use case: encrypted files, random data
+1. **Small files (< 1 MB)**: Overhead exceeds savings
+2. **Completely new files**: No chunks to deduplicate
+3. **Random binary changes**: Encrypted files, random data
 
 ### Edge Cases
 
-**Worst Case: Adversarial Input**
-```
-File: Random bytes with no patterns
-Result: Every byte change shifts all boundaries
-Mitigation: Threshold detection (fallback to regular transfer)
-```
+**Adversarial Input:**
+Random bytes with no patterns cause all boundaries to shift. The system falls back to regular transfer when savings are minimal.
 
 **Chunk Boundary Shift:**
-```
-File: ABCDEFGHIJKLMNOPQRSTUVWXYZ
-Chunks: ABC|DEFGH|IJKLM|NOPQR|STUVWXYZ
-
-Insert "123" at beginning:
-File: 123ABCDEFGHIJKLMNOPQRSTUVWXYZ
-Chunks: 123A|BCD|EFGHIJKLM|NOPQR|STUVWXYZ
-
-Result: All boundaries shifted (worst case)
-Reality: Boundaries stabilize after window (64 bytes)
-```
+Insertions near file start can cascade boundary shifts. However, boundaries stabilize after the rolling window (64 bytes for Rabin, variable for FastCDC).
 
 ## Configuration
 
-### Tuning Parameters
-
-Chunk size constraints are tunable:
+### Chunk Size Tuning
 
 ```d
-// In utils/files/chunking.d
-private enum size_t MIN_CHUNK = 2_048;      // 2 KB minimum
-private enum size_t AVG_CHUNK = 16_384;     // 16 KB average
-private enum size_t MAX_CHUNK = 65_536;     // 64 KB maximum
+// For large binaries (>100MB)
+auto cdc = FastCDC(FastCDC.Config.large());  // 8KB-64KB-256KB
+
+// For standard artifacts
+auto cdc = FastCDC(FastCDC.Config.artifact());  // 2KB-16KB-64KB
+
+// For fine-grained deduplication
+auto cdc = FastCDC(FastCDC.Config.small());  // 1KB-4KB-16KB
 ```
 
 **Trade-offs:**
-- **Smaller chunks**: More deduplication, more overhead
+- **Smaller chunks**: More deduplication, more manifest overhead
 - **Larger chunks**: Less deduplication, less overhead
-- **Default (16 KB avg)**: Balanced for most use cases
 
-### Threshold Configuration
+## Delta Transfer Protocol
 
-Chunking threshold can be adjusted:
+For large artifact transfers, Builder includes a full delta transfer protocol (`engine.caching.distributed.remote.delta`):
+
+### DeltaTransfer Class
+
+Enables 80-95% bandwidth savings for large artifact transfers:
 
 ```d
-// In caching/distributed/remote/client.d
-if (fileSize < 1_048_576)  // 1 MB threshold
-{
-    // Use regular transfer for small files
+import engine.caching.distributed.remote.delta;
+
+auto delta = new DeltaTransfer(transport, localStore);
+
+// Upload with delta (only new chunks)
+auto result = delta.upload(hash, data);
+if (result.isOk) {
+    auto stats = result.unwrap();
+    writeln("Transferred: ", stats.bytesTransferred);
+    writeln("Saved: ", stats.savingsPercent(), "%");
+}
+
+// Download with delta (reuses local chunks)
+auto downloaded = delta.download(remoteHash);
+```
+
+**Protocol Flow:**
+1. Client sends manifest hash to server
+2. Server responds with list of missing chunks
+3. Client uploads only missing chunks
+4. Server stores manifest linking to chunks
+
+### RsyncDelta
+
+Rsync-style delta compression for binary diffs:
+
+```d
+auto rsync = new RsyncDelta(4096);  // 4KB block size
+
+// Generate signatures from base data (server-side)
+auto sigs = rsync.generateSignatures(oldData);
+
+// Compute delta instructions (client-side)
+auto delta = rsync.computeDelta(newData, sigs);
+
+// Apply delta to reconstruct (server-side)
+auto newData = rsync.applyDelta(oldData, delta);
+```
+
+### Transfer Statistics
+
+```d
+struct TransferResult {
+    string blobHash;
+    size_t totalSize;
+    size_t bytesTransferred;
+    size_t bytesSaved;
+    size_t chunksTotal;
+    size_t chunksTransferred;
+    Duration duration;
+    
+    double savingsPercent();   // (totalSize - bytesTransferred) / totalSize
+    double efficiency();       // (chunksTotal - chunksTransferred) / chunksTotal
+    double throughput();       // bytes/sec
 }
 ```
 
-## Future Enhancements
+## See Also
 
-### Planned
-
-- [ ] Cross-file deduplication (reuse chunks across files)
-- [ ] Delta compression for unchanged but shifted chunks
-- [ ] Parallel chunk upload/download
-- [ ] Chunk prefetching for predictable access patterns
-
-### Research
-
-- [ ] Variable chunk size based on file type
-- [ ] ML-based boundary prediction
-- [ ] Zero-copy chunk transfer
-- [ ] GPU-accelerated chunking for huge files
+- [Remote Caching](./remotecache.md)
+- [CAS Design](../architecture/cachedesign.md)
+- [Distributed Builds](./distributed.md)
+- [Action Caching](./caching.md)
 
 ## References
 
+- [FastCDC Paper (USENIX ATC '16)](https://www.usenix.org/conference/atc16/technical-sessions/presentation/xia)
 - [Rabin Fingerprinting](https://en.wikipedia.org/wiki/Rabin_fingerprint)
-- [Content-Defined Chunking](https://moinakg.wordpress.com/2013/06/22/high-performance-content-defined-chunking/)
 - [rsync Algorithm](https://rsync.samba.org/tech_report/)
-- [FastCDC: Fast Content-Defined Chunking](https://www.usenix.org/conference/atc16/technical-sessions/presentation/xia)
-
-## Usage Examples
-
-### Example 1: Artifact Upload
-
-```d
-import caching.distributed.remote.client;
-import utils.files.chunking;
-
-auto cacheClient = new RemoteCacheClient(config);
-
-// Upload large artifact
-auto uploadResult = cacheClient.putFileChunked(
-    "build/libcore.a",
-    fileHash
-);
-
-if (uploadResult.isOk)
-{
-    auto upload = uploadResult.unwrap();
-    writeln("Uploaded ", upload.stats.chunksTransferred, " chunks");
-    writeln("Transferred ", upload.stats.bytesTransferred, " bytes");
-}
-```
-
-### Example 2: Incremental Update
-
-```d
-// Initial version
-auto v1Result = cacheClient.putFileChunked("app.o", hash1);
-
-// Modified version
-auto v2Result = cacheClient.updateFileChunked("app.o", hash2, hash1);
-
-writeln("Bandwidth saved: ", v2Result.savingsPercent(), "%");
-writeln("Bytes saved: ", v2Result.bytesSaved);
-```
-
-### Example 3: Download
-
-```d
-// Download using chunks (with verification)
-auto downloadResult = cacheClient.getFileChunked(
-    fileHash,
-    "output/app.o"
-);
-
-if (downloadResult.isOk)
-{
-    auto stats = downloadResult.unwrap();
-    writeln("Downloaded ", stats.totalChunks, " chunks");
-    writeln("Integrity verified: ✓");
-}
-```
-
-## Conclusion
-
-Content-defined chunking provides significant bandwidth savings (40-90%) for large file transfers in Builder's distributed cache and artifact store. The implementation leverages existing Rabin fingerprinting infrastructure and integrates transparently with existing APIs.
-
-**Key Benefits:**
-- **Bandwidth Efficiency**: 40-90% reduction for modified files
-- **Transparent**: Automatic detection and fallback
-- **Performant**: SIMD-accelerated, minimal overhead
-- **Reliable**: Chunk verification and integrity checks
-

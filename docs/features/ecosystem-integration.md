@@ -1,27 +1,20 @@
 # Ecosystem Integration
 
-**Auto-Generation of Build Targets from Package Manifests**
+Builder integrates with language ecosystems through manifest parsing (package.json, Cargo.toml, pyproject.toml, etc.). When you run `bldr init`, it:
 
-## Overview
-
-Builder now deeply integrates with language ecosystems through intelligent parsing of package manifests (package.json, Cargo.toml, pyproject.toml, etc.). When you run `bldr init`, it automatically:
-
-1. **Scans for package manifests** across 26 supported languages
-2. **Extracts project metadata**: entry points, dependencies, scripts, framework hints
-3. **Generates optimized Builderfile** with smart defaults based on actual project structure
-4. **Provides 80% working builds** out-of-the-box for most projects
-
-This brings Builder's zero-config capabilities to professional-grade level, matching and exceeding tools like Pants and Bazel's auto-target generation.
+1. Scans for package manifests across supported languages
+2. Extracts project metadata: entry points, dependencies, scripts, framework hints
+3. Generates a Builderfile with appropriate defaults based on project structure
 
 ## Architecture
 
-### Manifest Parsing Layer
+### Manifest Parsing
 
 **Location**: `source/infrastructure/analysis/manifests/`
 
 ```
 manifests/
-├── types.d          # Common types (ManifestInfo, Dependency, Script)
+├── types.d          # Common types (ManifestInfo, Dependency, Script, IManifestParser)
 ├── npm.d            # package.json parser (JS/TS)
 ├── cargo.d          # Cargo.toml parser (Rust)
 ├── python.d         # pyproject.toml, setup.py, requirements.txt (Python)
@@ -30,13 +23,38 @@ manifests/
 └── composer.d       # composer.json parser (PHP)
 ```
 
-**Key Innovation**: Unified manifest parsing interface that both `bldr init` and `bldr migrate` use, eliminating code duplication.
+### Core Types
+
+```d
+/// Parsed manifest information
+struct ManifestInfo
+{
+    string name;              // Package/project name
+    string version_;          // Version string
+    string[] entryPoints;     // Main entry points
+    string[] sources;         // Source file patterns
+    string[] tests;           // Test file patterns
+    Dependency[] dependencies;// Direct dependencies
+    Script[string] scripts;   // Build/run scripts
+    TargetLanguage language;  // Detected language
+    TargetType suggestedType; // Suggested target type
+    string[string] metadata;  // Additional metadata
+}
+
+/// Manifest parser interface
+interface IManifestParser
+{
+    BuildResult!ManifestInfo parse(string filePath) @system;
+    bool canParse(string filePath) const @safe;
+    string name() const pure nothrow @safe;
+}
+```
 
 ### Enhanced Detection
 
 **Location**: `source/infrastructure/analysis/detection/enhanced.d`
 
-Extends the base `ProjectDetector` with manifest parsing:
+The `EnhancedProjectDetector` extends base detection with manifest parsing:
 
 ```d
 auto detector = new EnhancedProjectDetector(".");
@@ -44,30 +62,30 @@ auto enhanced = detector.detectEnhanced();
 // enhanced.manifestInfo contains parsed data for each language
 ```
 
-### Smart Template Generation
+### Template Generation
 
 **Location**: `source/infrastructure/analysis/detection/generator.d`
 
-`EnhancedTemplateGenerator` uses manifest data to generate context-aware targets:
+`EnhancedTemplateGenerator` uses manifest data to generate context-aware targets with:
 
-- **Entry points** from package.json `main`, Cargo.toml `[[bin]]`, etc.
-- **Framework detection** (React, Django, Gin, etc.) with appropriate configs
-- **Test patterns** based on project conventions
-- **Dependency hints** as comments in generated Builderfile
+- Entry points from package.json `main`, Cargo.toml `[[bin]]`, etc.
+- Framework detection (React, Django, Gin) with appropriate configs
+- Test patterns based on project conventions
+- Dependency hints as comments
 
 ## Supported Ecosystems
 
-### 1. **JavaScript/TypeScript (npm/yarn/pnpm)**
+### JavaScript/TypeScript (npm/yarn/pnpm)
 
 Parses `package.json` to extract:
 - Entry points: `main`, `module`, `browser` fields
 - TypeScript detection via dependencies
 - Framework detection: React, Vue, Angular, Next.js, Vite
-- Scripts that become Builder targets
+- Scripts mapped to Builder targets
 - Dependencies (runtime, dev, peer, optional)
 
-**Example Output**:
-```javascript
+**Generated Output**:
+```d
 target("my-app") {
     type: executable;
     language: typescript;
@@ -83,7 +101,7 @@ target("my-app") {
 }
 ```
 
-### 2. **Rust (Cargo)**
+### Rust (Cargo)
 
 Parses `Cargo.toml` to extract:
 - Package name and edition
@@ -91,8 +109,8 @@ Parses `Cargo.toml` to extract:
 - Dependencies (runtime, dev, build)
 - Framework detection: actix-web, rocket, axum
 
-**Example Output**:
-```rust
+**Generated Output**:
+```d
 target("my-rust-app") {
     type: executable;
     language: rust;
@@ -105,7 +123,7 @@ target("my-rust-app") {
 }
 ```
 
-### 3. **Python**
+### Python
 
 Parses `pyproject.toml`, `setup.py`, `requirements.txt`:
 - Project name, version, description
@@ -113,8 +131,8 @@ Parses `pyproject.toml`, `setup.py`, `requirements.txt`:
 - Framework detection: Django, Flask, FastAPI
 - Dependencies with dev/runtime separation
 
-**Example Output**:
-```python
+**Generated Output**:
+```d
 target("my-python-app") {
     type: executable;
     language: python;
@@ -129,7 +147,7 @@ target("my-python-app") {
 }
 ```
 
-### 4. **Go**
+### Go
 
 Parses `go.mod`:
 - Module name and Go version
@@ -137,22 +155,26 @@ Parses `go.mod`:
 - Framework detection: gin, echo, fiber
 - Dependency extraction from require blocks
 
-### 5. **PHP (Composer)**
+### PHP (Composer)
 
 Parses `composer.json`:
 - Package name and version
 - Dependencies (require, require-dev)
 - Entry point detection
 
-### 6. **Java (Maven)**
+### Java (Maven)
 
-Placeholder for `pom.xml` parsing (extensible architecture ready)
+Parses `pom.xml`:
+- GroupId, artifactId, version
+- Dependencies from `<dependencies>` section
+- Source/output directories from build configuration
+- Packaging type mapping to target type
 
 ## Integration Points
 
-### 1. Init Command Enhancement
+### Init Command
 
-`bldr init` now uses manifest parsing:
+`bldr init` uses manifest parsing:
 
 ```bash
 $ cd my-react-app
@@ -167,147 +189,71 @@ $ bldr init
 ✓ Created .builderignore
 ```
 
-Generated Builderfile automatically includes:
-- Correct entry point from package.json
-- Framework-specific bundling config
-- Dependency notes
+### Migration System
 
-### 2. Migration System Refactoring
+The migration system reuses manifest parsers. Migrators call `parser.parse(filePath)` to extract dependency information from existing build configurations.
 
-The migration system now reuses manifest parsers:
+### Zero-Config Builds
 
-**Before**:
-- Duplicate JSON parsing in `npm.d` migrator
-- Separate TOML parsing in `cargo.d` migrator
-- ~300 lines of duplicate code
-
-**After**:
-- Single manifest parser per ecosystem
-- Migrators call `parser.parse(filePath)`
-- ~50 lines per migrator
-- **DRY principle enforced**
-
-### 3. Zero-Config Builds
-
-Manifest parsing enhances the existing zero-config system:
-- If no Builderfile exists, Builder can now parse manifests to infer sophisticated targets
-- 80% of projects work without any configuration
-- Remaining 20% need minimal tweaks (mostly custom build steps)
+Manifest parsing enhances zero-config: if no Builderfile exists, Builder parses manifests to infer targets.
 
 ## Design Principles
 
-### 1. **No SOC Violations**
+### Interface Consistency
 
-- Reused existing `infrastructure/analysis/` structure
-- Extended `detection/` package with manifest parsing
-- Migration system refactored to use shared parsers
-- Zero new top-level packages
-
-### 2. **Elegant Abstraction**
+All parsers implement `IManifestParser`:
 
 ```d
 interface IManifestParser {
-    Result!(ManifestInfo, BuildError) parse(string filePath);
-    bool canParse(string filePath);
-    string name();
+    BuildResult!ManifestInfo parse(string filePath) @system;
+    bool canParse(string filePath) const @safe;
+    string name() const pure nothrow @safe;
 }
 ```
 
-Simple interface, language-specific implementations.
-
-### 3. **Type Safety**
+### Type Safety
 
 All manifest data flows through strongly-typed structures:
 - `ManifestInfo`: Parsed manifest data
-- `Dependency`: Typed dependencies (runtime, dev, peer, build)
+- `Dependency`: Typed dependencies (Runtime, Development, Peer, Build, Optional)
 - `Script`: Build/test scripts with inferred target types
 
-### 4. **Error Handling**
+### Error Handling
 
-Uses Builder's Result type for elegant error propagation:
+Uses Builder's Result type for error propagation:
 ```d
 auto result = parser.parse("package.json");
 if (result.isErr)
-    return result.unwrapErr(); // Structured error with context
+    return result.unwrapErr();
 auto manifest = result.unwrap();
 ```
 
 ## Performance
 
-- **Manifest parsing**: <5ms per file (simple regex/JSON)
-- **Enhanced detection**: +10ms over base detection (negligible)
-- **Template generation**: <1ms (string concatenation)
-- **Overall init time**: ~50ms (dominated by file I/O)
+- Manifest parsing: <5ms per file
+- Enhanced detection: +10ms over base detection
+- Template generation: <1ms
 
 ## Future Enhancements
 
-### Lockfile Parsing (Deferred)
+### Lockfile Parsing
 
-Next phase will add transitive dependency resolution:
+Next phase adds transitive dependency resolution:
 - `package-lock.json` / `yarn.lock` / `pnpm-lock.yaml`
 - `Cargo.lock`
 - `go.sum`
 - `poetry.lock`
 
-This enables:
-- Reproducible builds with pinned dependencies
-- Dependency graph visualization
-- Security audit integration
-
 ### Workspace/Monorepo Support
 
-Enhance manifest parsing for:
+Enhanced manifest parsing for:
 - npm workspaces (`workspaces` field in package.json)
 - Cargo workspaces (`[workspace]` in Cargo.toml)
 - Go workspaces (go.work)
 
-Auto-generate targets for each workspace member.
-
 ### Framework-Specific Optimizations
 
-Add specialized configs for:
+Specialized configs for:
 - Next.js: SSR/SSG detection, API routes as separate targets
-- Django: Identify apps, generate migration targets
-- Gin/Echo: Extract route definitions, generate OpenAPI targets
-
-## Comparison with Industry
-
-### vs Bazel
-
-**Bazel**: Manual BUILD file creation, some auto-generation via Gazelle (Go-specific)
-**Builder**: Universal auto-generation across 26 languages from native manifests
-
-### vs Pants
-
-**Pants**: Strong auto-target generation, requires `pants.toml`
-**Builder**: Works directly with native manifests (package.json, Cargo.toml)
-
-### vs Buck2
-
-**Buck2**: Manual BUCK file creation, no auto-generation
-**Builder**: Full auto-generation with framework detection
-
-**Builder's Advantage**: Native ecosystem integration means zero learning curve for developers familiar with their language's tools.
-
-## Testing
-
-Validated with real-world projects:
-- ✅ React + TypeScript + Vite project (create-vite template)
-- ✅ Rust CLI tool with dependencies
-- ✅ Python Flask API
-- ✅ Go microservice with Gin
-- ✅ Multi-language monorepo (JS + Python + Go)
-
-All achieved 80-100% working builds from `bldr init` alone.
-
-## Summary
-
-This ecosystem integration feature demonstrates Builder's architectural elegance:
-- **Reused existing patterns** (no new packages)
-- **Eliminated duplication** (migration + init share parsers)
-- **Type-safe throughout** (no `any` types, strong error handling)
-- **Extensible design** (new languages = new parser class)
-- **Professional-grade UX** (80% working builds out-of-box)
-
-Builder now competes with and exceeds industry leaders in auto-target generation while maintaining its core advantages: speed, simplicity, and universal language support.
-
+- Django: App identification, migration targets
+- Gin/Echo: Route definitions, OpenAPI targets

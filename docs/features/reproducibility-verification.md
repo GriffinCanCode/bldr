@@ -1,52 +1,50 @@
 # Build Reproducibility Verification
 
+Automatic two-build comparison for determinism verification.
+
 ## Overview
 
-Builder implements automatic two-build comparison for determinism verification. This system goes beyond hermetic isolation to actively verify that builds produce bit-for-bit identical outputs across multiple runs.
+Beyond hermetic isolation, bldr actively verifies that builds produce bit-for-bit identical outputs across multiple runs. This catches non-deterministic compilers, timestamps, randomness, and other sources of variation.
 
 ## Architecture
 
 ### Components
 
-The reproducibility verification system consists of four main components:
-
 1. **DeterminismEnforcer** (`engine/runtime/hermetic/determinism/enforcer.d`)
    - Executes builds with determinism enforcement
-   - Manages syscall interception for time(), random(), etc.
-   - Supports multi-run verification with automatic comparison
+   - Manages syscall interception for time(), random()
+   - Supports multi-run verification
 
 2. **DeterminismVerifier** (`engine/runtime/hermetic/determinism/verifier.d`)
-   - Compares build outputs across multiple runs
-   - Multiple verification strategies: hash-based, bitwise, fuzzy, structural
-   - Supports ELF, archive, and object file format awareness
+   - Compares build outputs across runs
+   - Strategies: hash-based, bitwise, fuzzy, structural
+   - ELF, archive, and object file format awareness
 
 3. **NonDeterminismDetector** (`engine/runtime/hermetic/determinism/detector.d`)
-   - Analyzes compiler commands for potential non-determinism sources
-   - Compiler-specific detection (GCC, Clang, Rust, Go, etc.)
-   - Pattern matching for timestamps, UUIDs, and other sources
+   - Analyzes compiler commands for non-determinism sources
+   - Compiler-specific detection (GCC, Clang, Rust, Go)
+   - Pattern matching for timestamps, UUIDs
 
 4. **RepairEngine** (`engine/runtime/hermetic/determinism/repair.d`)
    - Generates actionable repair suggestions
-   - Compiler-specific flags and environment variable recommendations
-   - Priority-based suggestions (critical, high, medium, low)
+   - Compiler-specific flags and environment variables
+   - Priority-based suggestions
 
 5. **DeterminismIntegration** (`engine/runtime/hermetic/determinism/integration.d`)
-   - High-level integration layer for build system
+   - High-level integration for build system
    - Automatic two-build comparison
-   - Report generation and persistence
+   - Report generation
 
 ## Usage
 
-### Command-Line Interface
+### CLI
 
-#### Quick Check (Static Analysis Only)
+#### Quick Check (Static Analysis)
 
 ```bash
 # Analyze command for potential issues without building
 bldr verify //main:app --quick
 ```
-
-This performs static analysis of the compiler command to identify potential non-determinism sources.
 
 #### Full Verification (Two-Build Comparison)
 
@@ -71,10 +69,10 @@ bldr verify //main:app --strategy structural
 #### In Builderfile
 
 ```d
-// Enable automatic verification for all targets
+// Enable automatic verification
 determinism {
     enabled: true;
-    verifyAutomatic: true;     // Automatic two-build comparison
+    verifyAutomatic: true;      // Automatic two-build comparison
     verifyIterations: 2;        // Number of builds to compare
     strictMode: false;          // Fail build if non-deterministic
     verifyStrategy: "hash";     // Verification strategy
@@ -86,7 +84,6 @@ target("myapp") {
     type: executable;
     sources: ["src/**/*.rs"];
     
-    // Target-specific determinism settings
     determinism: {
         enabled: true;
         verifyAutomatic: true;
@@ -109,7 +106,6 @@ export BUILDER_DETERMINISM=strict
 export BUILDER_VERIFY_ITERATIONS=3
 
 # Fixed build timestamp
-export BUILD_TIMESTAMP=1640995200
 export SOURCE_DATE_EPOCH=1640995200
 
 # PRNG seed
@@ -123,8 +119,7 @@ export RANDOM_SEED=42
 Fast verification using BLAKE3 hashing:
 - Computes content hash of each output file
 - Compares hashes across builds
-- Memory efficient, good for large files
-- **Best for**: Most builds, CI/CD pipelines
+- Memory efficient for large files
 
 ```bash
 bldr verify //main:app --strategy hash
@@ -134,9 +129,7 @@ bldr verify //main:app --strategy hash
 
 Thorough byte-by-byte comparison:
 - Reads entire file contents
-- Compares bit-for-bit
 - Identifies first difference location
-- **Best for**: Critical builds, security-sensitive code
 
 ```bash
 bldr verify //main:app --strategy bitwise
@@ -147,8 +140,7 @@ bldr verify //main:app --strategy bitwise
 Ignores metadata and timestamps:
 - Strips ELF/archive metadata (timestamps, UIDs, build IDs)
 - Compares content after normalization
-- Useful for legacy builds
-- **Best for**: Partially deterministic builds
+- Useful for partially deterministic builds
 
 ```bash
 bldr verify //main:app --strategy fuzzy
@@ -160,7 +152,6 @@ Format-aware structural comparison:
 - Understands ELF, archive, Mach-O formats
 - Compares logical structure, not raw bytes
 - Strips timestamps, UUIDs, paths
-- **Best for**: Debug builds with metadata
 
 ```bash
 bldr verify //main:app --strategy structural
@@ -170,7 +161,7 @@ bldr verify //main:app --strategy structural
 
 ### Automatic Detection
 
-The system automatically detects common non-determinism sources:
+Common non-determinism sources:
 
 1. **Timestamp Embedding**
    - Compiler macros (__DATE__, __TIME__)
@@ -195,11 +186,10 @@ The system automatically detects common non-determinism sources:
 5. **Thread Scheduling**
    - Parallel build ordering
    - Race conditions
-   - Non-deterministic scheduling
 
 ### Repair Suggestions
 
-When non-determinism is detected, the system generates actionable repair plans:
+When non-determinism is detected:
 
 ```
 ╔══════════════════════════════════════════════════════════════╗
@@ -230,15 +220,11 @@ Issue 2/3:
   Compiler flags to add:
     -ffile-prefix-map=/workspace/=./
     -fdebug-prefix-map=/workspace/=./
-
-────────────────────────────────────────────────────────────
 ```
 
-## Integration with Build System
+## Integration
 
-### Automatic Verification
-
-Enable automatic verification in your build configuration:
+### Build System Integration
 
 ```d
 // Builderfile
@@ -246,18 +232,18 @@ workspace {
     options: {
         determinism: {
             enabled: true;
-            verifyAutomatic: true;  // Enable automatic two-build comparison
+            verifyAutomatic: true;
             verifyIterations: 2;
         };
     };
 }
 ```
 
-When enabled, Builder will:
+When enabled, bldr will:
 1. Build the target normally
-2. Immediately rebuild with same inputs
+2. Rebuild with same inputs
 3. Compare outputs using configured strategy
-4. Report any differences
+4. Report differences
 5. Generate repair plan if non-deterministic
 
 ### CI/CD Integration
@@ -272,15 +258,15 @@ When enabled, Builder will:
 In CI/CD:
 - Use `--strict` to fail on non-determinism
 - Use `--iterations 3` or higher for confidence
-- Archive verification reports for debugging
+- Archive verification reports
 
-## Performance Considerations
+## Performance
 
 ### Overhead
 
 - **Syscall Interception**: ~1-2% overhead via LD_PRELOAD
-- **Hash Verification**: <100ms for typical build outputs
-- **Multiple Runs**: Linear with iteration count (2x for 2 iterations)
+- **Hash Verification**: <100ms for typical outputs
+- **Multiple Runs**: Linear with iteration count
 - **Detection**: <10ms for static analysis
 
 ### Optimization Strategies
@@ -288,26 +274,18 @@ In CI/CD:
 1. **Incremental Verification**
    - Only verify changed outputs
    - Reuse hashes from previous runs
-   - **Speedup**: 10-100x for incremental builds
 
-2. **Sampling Verification**
-   - Verify random subset of outputs
-   - Statistical confidence with fewer builds
-   - **Speedup**: 10x with 95% confidence
-
-3. **Parallel Verification**
+2. **Parallel Verification**
    - Hash files concurrently
    - SIMD-accelerated hashing (BLAKE3)
-   - **Speedup**: Nx (N = CPU cores)
 
-4. **Cached Results**
+3. **Cached Results**
    - Store verification results in action cache
    - Skip verification for cached actions
-   - **Speedup**: Near-instant for cache hits
 
 ## Output Reports
 
-Verification generates detailed JSON reports:
+Verification generates JSON reports:
 
 ```json
 {
@@ -328,14 +306,13 @@ Verification generates detailed JSON reports:
 }
 ```
 
-Reports are saved to `.builder-verify/report.json` by default.
+Reports saved to `.builder-verify/report.json` by default.
 
 ## Compiler-Specific Guidance
 
 ### GCC / G++
 
 ```bash
-# Required flags for determinism
 -frandom-seed=42
 -ffile-prefix-map=/workspace/=./
 -fdebug-prefix-map=/workspace/=./
@@ -344,7 +321,6 @@ Reports are saved to `.builder-verify/report.json` by default.
 ### Clang / Clang++
 
 ```bash
-# Required flags
 -fdebug-prefix-map=/workspace/=./
 -Wno-builtin-macro-redefined
 -D__DATE__="Jan 01 2022"
@@ -371,7 +347,6 @@ go build -trimpath -buildmode=default
 ### D (DMD / LDC / GDC)
 
 ```bash
-# Set SOURCE_DATE_EPOCH
 export SOURCE_DATE_EPOCH=1640995200
 
 # GDC follows GCC flags
@@ -397,7 +372,6 @@ gdc -frandom-seed=42 -ffile-prefix-map=/workspace/=./
    ```bash
    bldr verify //target:name
    ```
-   The repair plan will show exact flags to add.
 
 ### False Positives
 
@@ -410,14 +384,13 @@ If builds are deterministic but verification fails:
 
 2. **Check File Timestamps**
    ```bash
-   # Normalize timestamps
    touch -t 202201010000 output/*
    ```
 
 3. **Review Metadata**
    Use `readelf`, `objdump`, or `strings` to inspect binaries.
 
-## Security Considerations
+## Security
 
 ### Supply Chain Security
 
@@ -431,12 +404,10 @@ Deterministic builds are critical for supply chain security:
 2. **Reproducible Releases**
    - Anyone can verify official releases
    - Build from source and compare
-   - Cryptographic proof of authenticity
 
 3. **Byzantine Fault Tolerance**
    - Majority voting across build workers
    - Detect tampered outputs
-   - Trustless verification
 
 ### Threat Model
 
@@ -446,33 +417,9 @@ Deterministic builds are critical for supply chain security:
 - Compromised workers (cross-verification)
 
 **Not Protected Against:**
-- Compiler backdoors (still trust compiler)
-- Source code tampering (no source verification)
-- Side channels (timing, cache attacks)
-
-## Future Enhancements
-
-### Planned Features
-
-1. **Distributed Verification Network**
-   - Cross-verify builds across multiple machines
-   - Byzantine consensus protocol
-   - Cryptographic proof of determinism
-
-2. **Binary Analysis**
-   - Deep inspection of binaries
-   - Extract embedded timestamps
-   - Suggest binary patches
-
-3. **ML-Based Detection**
-   - Learn non-determinism patterns
-   - Predict likely sources
-   - Auto-generate fixes
-
-4. **Formal Verification**
-   - SMT-based proofs of determinism
-   - Model checking for builds
-   - Correctness guarantees
+- Compiler backdoors
+- Source code tampering
+- Side channels
 
 ## References
 
@@ -483,12 +430,8 @@ Deterministic builds are critical for supply chain security:
 
 ### Tools
 
-- [diffoscope](https://diffoscope.org/) - In-depth binary comparison
-- [reprotest](https://salsa.debian.org/reproducible-builds/reprotest) - Test reproducibility
-
-### Academic Papers
-
-- [Reproducible Builds: Increasing the Integrity of Software Supply Chains](https://arxiv.org/abs/2104.06020)
+- [diffoscope](https://diffoscope.org/) — In-depth binary comparison
+- [reprotest](https://salsa.debian.org/reproducible-builds/reprotest) — Test reproducibility
 
 ## See Also
 
@@ -496,4 +439,3 @@ Deterministic builds are critical for supply chain security:
 - [Hermetic Builds](hermetic.md)
 - [Action-Level Caching](caching.md)
 - [Remote Execution](remote-execution.md)
-

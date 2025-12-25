@@ -16,6 +16,7 @@ key_points:
   - "Hash translation: Automatic BLAKE3 ↔ SHA256 for REAPI servers"
   - "Profile-Guided: Uses historical data to schedule expensive actions early"
   - "Work-Stealing: Efficient load balancing across workers"
+  - "Adaptive Thresholds: Auto-tune steal parameters based on success rate and latency"
 
 transport_options:
   http:
@@ -104,7 +105,7 @@ architecture: |
             │ (BuildBuddy, etc.)   │        │  (Content-Addressed) │
             └──────────────────────┘        └──────────────────────┘
 
-related: [remote-cache, hermetic, action-cache, grpc-transport, reapi-v2, remote-execution]
+related: [remote-cache, hermetic, action-cache, grpc-transport, reapi-v2, remote-execution, adaptive-stealing]
 
 location: "source/engine/distributed/"
 

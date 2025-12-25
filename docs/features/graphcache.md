@@ -1,149 +1,183 @@
+# Graph Cache
+
+Dependency graph caching eliminates re-analysis overhead by caching the validated `BuildGraph` structure. This provides significant speedup for incremental builds where configuration files haven't changed.
+
 ## Overview
 
-Dependency graph caching eliminates the overhead of re-analyzing the full build graph on every build by caching the validated `BuildGraph` structure. This provides 10-50x speedup for incremental builds where configuration files haven't changed.
-
-### Performance Impact
-
-- **Before:** 100-500ms analysis overhead for 1000+ targets
-- **After:** Sub-millisecond cache validation (< 5ms typical)
-- **Speedup:** 10-50x for unchanged graphs
-- **ROI:** Massive for large monorepos
-
----
+- **Location**: `.builder-cache/graph.bin` and `.builder-cache/graph-metadata.bin`
+- **Typical speedup**: 10-50x for unchanged graphs
+- **Cache validation**: Two-tier (metadata hash → content hash)
+- **Thread-safe**: Concurrent access via mutex
 
 ## Architecture
 
 ### Components
 
-#### 1. **GraphStorage** (`source/engine/graph/caching/storage.d`)
+**Location**: `source/engine/graph/caching/`
 
-Binary serialization for `BuildGraph` with custom format:
-
-```d
-struct GraphStorage
-{
-    static ubyte[] serialize(BuildGraph graph);
-    static BuildGraph deserialize(ubyte[] data);
-}
+```
+caching/
+├── cache.d      # GraphCache - main cache implementation
+├── storage.d    # GraphStorage - binary serialization
+├── schema.d     # Serializable types with versioning
+├── mapped.d     # Memory-mapped access for large graphs
+└── package.d    # Public API
 ```
 
-**Features:**
-- Custom binary format (MAGIC: `0x42475246` = "BGRF")
-- Version-tagged for forward compatibility
-- Serializes full topology (nodes + edges + metadata)
-- ~10x faster than JSON, ~40% smaller
-- Preserves all state: status, hashes, retry counts, validation
-
-**Format Structure:**
-```
-[MAGIC:4][VERSION:1][NODE_COUNT:4]
-[NODES...]
-[EDGE_COUNT:4]
-[EDGES...]
-[ROOT_COUNT:4]
-[ROOTS...]
-[VALIDATION_MODE:1][VALIDATED:1]
-```
-
-#### 2. **GraphCache** (`source/engine/graph/caching/cache.d`)
+### GraphCache
 
 High-performance cache with two-tier validation:
 
 ```d
-class GraphCache
+final class GraphCache
 {
-    BuildGraph get(const(string)[] configFiles);
-    void put(BuildGraph graph, const(string)[] configFiles);
-    void invalidate();
-    void clear();
-    Stats getStats();
+    BuildGraph get(scope const(string)[] configFiles) @system;
+    void put(BuildGraph graph, scope const(string)[] configFiles) @system;
+    void invalidate() @system nothrow;
+    void clear() @system;
+    Stats getStats() const @system;
+}
+
+struct Stats
+{
+    size_t hits;
+    size_t misses;
+    float hitRate;
+    size_t metadataHits;    // Fast path
+    size_t contentHashes;   // Slow path
+    float metadataHitRate;
 }
 ```
 
-**Features:**
-- Two-tier validation: metadata hash (fast) → content hash (slow)
-- SIMD-accelerated hash comparisons
-- BLAKE3-based integrity signatures
-- Thread-safe concurrent access
-- Automatic expiration (30 days)
+### GraphStorage
 
-**Cache Location:**
-```
-.builder-cache/
-  ├── graph.bin           # Serialized BuildGraph
-  └── graph-metadata.bin  # File hashes for validation
-```
-
-#### 3. **DependencyAnalyzer Integration**
-
-The analyzer now checks cache before analysis:
+Binary serialization using schema-based codec:
 
 ```d
-// Try to load from cache first
-auto cachedGraph = graphCache.get(configFiles);
-if (cachedGraph !is null)
+struct GraphStorage
 {
-    Logger.success("Loaded dependency graph from cache");
-    return cachedGraph;
+    static ubyte[] serialize(BuildGraph graph) @system;
+    static BuildGraph deserialize(scope ubyte[] data) @system;
 }
-
-// Cache miss - analyze and cache result
-auto graph = analyzeAndBuildGraph();
-graphCache.put(graph, configFiles);
 ```
 
----
+**Format**: Custom binary with magic number `0x42475246` ("BGRF") and schema versioning.
+
+### Schema
+
+```d
+@Serializable(SchemaVersion(1, 0), 0x42475246)
+struct SerializableBuildGraph
+{
+    @Field(1) SerializableBuildNode[] nodes;
+    @Field(2) string[] rootIds;
+    @Field(3) uint validationMode;
+    @Field(4) bool isValidated;
+}
+```
 
 ## Validation Strategy
 
 ### Two-Tier Validation
 
-The cache uses a two-tier validation strategy for optimal performance:
+**Tier 1: Metadata Hash (Fast Path)**
+- Computes hash of `size + mtime` for each config file
+- Compares with cached metadata hash
+- Typical time: microseconds per file
+- Handles most unchanged file cases
 
-#### Tier 1: Metadata Hash (Fast Path)
-- Compute `BLAKE3(size + mtime)` for each config file
-- Compare with cached metadata hash
-- **Typical time:** 1-5 microseconds per file
-- **Success rate:** 95%+ for unchanged files
-
-#### Tier 2: Content Hash (Slow Path)
+**Tier 2: Content Hash (Slow Path)**
 - Only triggered if metadata changed
-- Compute `BLAKE3(file_content)` for changed files
-- Compare with cached content hash
-- **Typical time:** 1-10 milliseconds per file
-- **Handles:** File touch, metadata-only changes
+- Computes content hash for changed files
+- Handles `touch` and metadata-only changes
+- Typical time: milliseconds per file
 
 ### Invalidation Triggers
 
-Cache is invalidated when:
-1. Any `Builderfile` changes (content)
-2. `Builderspace` changes (content)
-3. New config files added
-4. Config files deleted
-5. Cache signature verification fails
-6. Cache expires (> 30 days old)
+Cache invalidates when:
+- Any `Builderfile` content changes
+- `Builderspace` content changes
+- Config files added or deleted
+- Integrity signature verification fails
+- Cache expires (default: 30 days)
 
----
+## Usage
+
+### Automatic (Default)
+
+Graph caching is automatic:
+
+```bash
+# First build: analyzes and caches graph
+$ bldr build
+
+# Subsequent builds: loads from cache if unchanged
+$ bldr build
+```
+
+### Manual Management
+
+```bash
+# Clear graph cache
+$ bldr clean --graph-cache
+
+# Force rebuild
+$ bldr build --no-cache
+```
+
+### Programmatic
+
+```d
+import engine.graph.caching;
+
+auto cache = new GraphCache(".builder-cache");
+
+// Get cached graph
+auto graph = cache.get(configFiles);
+if (graph !is null) {
+    // Use cached graph
+}
+
+// Store graph
+cache.put(graph, configFiles);
+
+// Statistics
+auto stats = cache.getStats();
+writefln("Hit rate: %.1f%%", stats.hitRate);
+```
 
 ## Implementation Details
 
-### BuildGraph Accessors
+### Integrity Validation
 
-Added package-level accessors for cache restoration:
+Cache uses workspace-specific integrity signatures:
 
 ```d
-// BuildGraph
-@property package void validationMode(ValidationMode mode);
-@property package void validated(bool v);
+// Graph signed with workspace key
+auto signed = validator.signWithMetadata(graphData);
 
-// BuildNode
-package void setRetryAttempts(size_t count);
-package void setPendingDeps(size_t count);
+// Verification on load
+if (!validator.verifyWithMetadata(signed))
+    throw new Exception("Signature verification failed");
+```
+
+### Memory-Mapped Loading
+
+For large graphs (>1MB), uses mmap for reduced memory copies:
+
+```d
+private enum size_t GRAPH_MMAP_THRESHOLD = 1024 * 1024;
+
+if (fileSize >= GRAPH_MMAP_THRESHOLD)
+{
+    region = MmapRegion.map(cacheFilePath, MapMode.ReadOnly);
+    fileData = region[].dup;
+}
 ```
 
 ### Config File Collection
 
-Automatically discovers all configuration files:
+Discovers all configuration files:
 
 ```d
 private string[] collectConfigFiles()
@@ -163,97 +197,36 @@ private string[] collectConfigFiles()
 }
 ```
 
-### Graph Filtering
-
-Supports target filtering on cached graphs:
-
-```d
-private BuildGraph filterGraph(BuildGraph graph, string targetFilter)
-{
-    // Create filtered subgraph
-    // Preserves topology while including only matching targets
-    // Revalidates after filtering
-}
-```
-
----
-
-## Usage
-
-### Automatic (Default)
-
-Graph caching is automatic - no configuration needed:
-
-```bash
-# First build: analyzes and caches graph
-$ bldr build
-
-# Subsequent builds: loads from cache (if unchanged)
-$ bldr build  # ← 10-50x faster analysis!
-```
-
-### Manual Cache Management
-
-```bash
-# Clear graph cache
-$ bldr clean --graph-cache
-
-# Invalidate and rebuild
-$ bldr build --no-cache
-```
-
-### Programmatic Usage
-
-```d
-import core.graph.cache;
-
-auto cache = new GraphCache(".builder-cache");
-
-// Get cached graph
-auto graph = cache.get(configFiles);
-if (graph !is null) {
-    // Use cached graph
-}
-
-// Store graph
-cache.put(graph, configFiles);
-
-// Statistics
-auto stats = cache.getStats();
-writefln("Hit rate: %.1f%%", stats.hitRate);
-```
-
----
-
-## Performance Characteristics
+## Performance
 
 ### Space Complexity
-- **Per Target:** ~100-500 bytes (compressed)
-- **1000 targets:** ~100-500 KB
-- **10000 targets:** ~1-5 MB
+
+- Per target: ~100-500 bytes
+- 1000 targets: ~100-500 KB
+- 10000 targets: ~1-5 MB
 
 ### Time Complexity
-- **Cache Hit (fast path):** O(files) metadata hashes ≈ 1-5ms
-- **Cache Hit (slow path):** O(files) content hashes ≈ 10-50ms
-- **Cache Miss:** O(V + E) full analysis ≈ 100-500ms
-- **Serialization:** O(V + E) ≈ 10-20ms
-- **Deserialization:** O(V + E) ≈ 5-10ms
+
+| Operation | Complexity | Typical Time |
+|-----------|------------|--------------|
+| Cache hit (fast path) | O(files) | 1-5ms |
+| Cache hit (slow path) | O(files) | 10-50ms |
+| Cache miss | O(V + E) | 100-500ms |
+| Serialization | O(V + E) | 10-20ms |
+| Deserialization | O(V + E) | 5-10ms |
 
 ### Optimizations
-- **SIMD-accelerated:** Hash comparisons use SIMD operations
-- **Two-tier hashing:** Metadata check before expensive content hash
-- **Binary format:** 10x faster than JSON serialization
-- **Zero-copy:** Strings reference deserialized buffer
-- **Pre-allocation:** Reserves capacity to avoid rehashing
 
----
+- SIMD-accelerated hash comparisons
+- Two-tier hashing avoids expensive content hash when possible
+- Binary format (faster than JSON)
+- Memory-mapped I/O for large graphs
+- Pre-allocation to avoid rehashing
 
 ## Testing
 
-### Unit Tests
-
 ```d
-// Test serialization roundtrip
+// Serialization roundtrip
 unittest
 {
     auto graph = createTestGraph();
@@ -262,7 +235,7 @@ unittest
     assert(graphsEqual(graph, deserialized));
 }
 
-// Test cache hit/miss
+// Cache hit/miss
 unittest
 {
     auto cache = new GraphCache();
@@ -273,109 +246,28 @@ unittest
 }
 ```
 
-### Integration Tests
+## Integration
 
-```bash
-# Test cache across builds
-$ bldr build          # Populates cache
-$ touch src/main.d       # Change source (not config)
-$ bldr build          # Should use cache
+### DependencyAnalyzer
 
-# Test invalidation
-$ echo "# comment" >> Builderfile  # Change config
-$ bldr build          # Should invalidate and rebuild
-```
-
----
-
-## Monitoring
-
-### Cache Statistics
+The analyzer checks cache before analysis:
 
 ```d
-auto stats = graphCache.getStats();
+// Try cache first
+auto cachedGraph = graphCache.get(configFiles);
+if (cachedGraph !is null)
+{
+    Logger.success("Loaded dependency graph from cache");
+    return cachedGraph;
+}
 
-writeln("Graph Cache Statistics:");
-writefln("  Hits:              %d", stats.hits);
-writefln("  Misses:            %d", stats.misses);
-writefln("  Hit Rate:          %.1f%%", stats.hitRate);
-writefln("  Fast Path:         %.1f%%", stats.metadataHitRate);
+// Cache miss - analyze and cache
+auto graph = analyzeAndBuildGraph();
+graphCache.put(graph, configFiles);
 ```
-
-### Performance Metrics
-
-Track via telemetry:
-- Cache hit/miss ratio
-- Analysis time savings
-- Cache file size
-- Validation time (fast vs slow path)
-
----
-
-## Future Enhancements
-
-### Potential Improvements
-
-1. **Incremental Updates**
-   - Only reanalyze changed targets
-   - Partial graph updates
-   - **Effort:** 2-3 weeks
-   - **ROI:** 2-5x additional speedup
-
-2. **Distributed Cache**
-   - Share graphs across CI runners
-   - Remote cache integration
-   - **Effort:** 3-4 weeks
-   - **ROI:** Massive for CI/CD
-
-3. **Compression**
-   - zstd compression for large graphs
-   - Trade CPU for disk space
-   - **Effort:** 1-2 days
-   - **ROI:** 50-70% size reduction
-
-4. **Cache Warming**
-   - Pre-populate cache on checkout
-   - CI cache artifacts
-   - **Effort:** 1 week
-   - **ROI:** Zero-latency first build
-
----
 
 ## Related Documentation
 
-- [Architecture Overview](../architecture/overview.md)
 - [Parse Cache](./parsecache.md) - AST caching
 - [Action Cache](./caching.md) - Build action caching
-- [Performance Guide](./performance.md) - Optimization strategies
-
----
-
-## Metrics & Success Criteria
-
-### Success Criteria
-- ✅ 10x+ speedup for unchanged graphs
-- ✅ Sub-5ms cache validation (typical)
-- ✅ Automatic invalidation on config changes
-- ✅ Zero configuration required
-- ✅ Thread-safe implementation
-
-### Measured Results
-- **Analysis time (cold):** 180ms (1000 targets)
-- **Analysis time (cached):** 3ms (1000 targets)
-- **Speedup:** 60x ✅
-- **Cache size:** 420KB (1000 targets)
-- **Hit rate:** 98% (measured over 100 builds)
-
----
-
-## Contributors
-
-- Griffin Strier (Implementation)
-- Design based on existing cache patterns (ParseCache, BuildCache)
-
----
-
-**Document Version:** 1.0  
-**Last Updated:** November 2, 2025  
-**Status:** Production Ready ✅
+- [Performance](./performance.md) - Optimization strategies

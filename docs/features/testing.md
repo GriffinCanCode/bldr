@@ -1,24 +1,24 @@
-# Advanced Test Execution
+# Test Execution
 
 ## Overview
 
-Builder provides enterprise-grade test execution with intelligent features that go beyond traditional build systems like Bazel:
+Builder's test framework provides intelligent test execution with:
 
-- **Adaptive Test Sharding**: Content-based distribution with historical optimization
-- **Multi-Level Caching**: Skip unchanged tests with hermetic environment verification
-- **Bayesian Flaky Detection**: Statistical modeling with automatic quarantine
-- **Smart Retry Logic**: Confidence-based adaptive retries
-- **Test Analytics**: Health metrics and performance insights
+- **Adaptive Sharding**: Content-based or historical execution time distribution
+- **Result Caching**: Skip unchanged tests with hermetic environment verification
+- **Flaky Detection**: Bayesian statistical modeling with automatic quarantine
+- **Adaptive Retry**: Confidence-based retry counts with exponential backoff
+- **Analytics**: Health metrics and performance insights
 
 ## Quick Start
 
-### 1. Initialize Configuration
+### Initialize Configuration
 
 ```bash
 bldr test --init-config
 ```
 
-This creates `.buildertest` with sensible defaults:
+Creates `.buildertest` with defaults:
 
 ```json
 {
@@ -30,7 +30,7 @@ This creates `.buildertest` with sensible defaults:
 }
 ```
 
-### 2. Run Tests
+### Run Tests
 
 ```bash
 # Use default configuration
@@ -47,215 +47,282 @@ bldr test --no-cache --no-retry
 
 ### Configuration File (`.buildertest`)
 
-All test settings can be configured in `.buildertest` (JSON format):
-
 ```json
 {
-  // Execution
   "parallel": true,
-  "jobs": 0,  // 0 = auto-detect
+  "jobs": 0,
   
-  // Sharding
   "shard": true,
-  "shardCount": 0,  // 0 = optimal
+  "shardCount": 0,
   "shardStrategy": "adaptive",
   
-  // Caching
   "cache": true,
   "cacheDir": ".builder-cache/tests",
   "cacheMaxAge": 30,
   "hermetic": true,
   
-  // Retry & Flaky Detection
   "retry": true,
   "maxRetries": 3,
   "detectFlaky": true,
   "quarantineFlaky": true,
   "skipQuarantined": false,
   
-  // Reporting
   "analytics": false,
   "verbose": false,
   "failFast": false,
   
-  // Output
   "junit": false,
   "junitPath": "test-results.xml"
 }
 ```
 
-### Command-Line Flags
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `parallel` | bool | true | Enable parallel execution |
+| `jobs` | int | 0 | Parallel jobs (0 = auto-detect CPU count) |
+| `shard` | bool | true | Enable test sharding |
+| `shardCount` | int | 0 | Shard count (0 = auto-calculate) |
+| `shardStrategy` | string | "adaptive" | Sharding algorithm |
+| `cache` | bool | true | Enable result caching |
+| `cacheDir` | string | ".builder-cache/tests" | Cache directory |
+| `cacheMaxAge` | int | 30 | Cache expiry in days |
+| `hermetic` | bool | true | Verify environment for cache validity |
+| `retry` | bool | true | Enable automatic retry |
+| `maxRetries` | int | 3 | Maximum retry attempts |
+| `detectFlaky` | bool | true | Enable flaky test detection |
+| `quarantineFlaky` | bool | true | Auto-quarantine flaky tests |
+| `skipQuarantined` | bool | false | Skip quarantined tests |
+| `analytics` | bool | false | Generate analytics report |
+| `verbose` | bool | false | Verbose output |
+| `failFast` | bool | false | Stop on first failure |
+| `junit` | bool | false | Generate JUnit XML |
+| `junitPath` | string | "test-results.xml" | JUnit output path |
+
+### CLI Flags
 
 CLI flags override config file settings:
 
 ```bash
-# Execution
 bldr test -j 8                    # 8 parallel jobs
 bldr test --shards 16             # 16 test shards
 bldr test --no-shard              # Disable sharding
-
-# Caching
 bldr test --no-cache              # Disable caching
 bldr test --no-retry              # Disable retry
-
-# Output
 bldr test --analytics             # Generate analytics
 bldr test --junit results.xml     # JUnit XML output
 bldr test -v                      # Verbose output
 ```
 
-## Features
+## Test Sharding
 
-### 1. Test Sharding
+Distributes tests across workers for parallel execution.
 
-Distribute tests across workers for optimal parallelism.
+### Strategies
 
-**Strategies:**
+| Strategy | Description | Use Case |
+|----------|-------------|----------|
+| `adaptive` | Uses historical execution times, greedy bin-packing | Default, optimal load balance |
+| `content` | BLAKE3-based consistent hashing | Deterministic, distributed caching |
+| `round-robin` | Simple modulo distribution | Predictable, simple |
+| `load` | Same as adaptive, work-stealing compatible | Dynamic rebalancing |
 
-- **Adaptive** (default): Uses historical execution times for balanced distribution
-- **Content**: BLAKE3-based consistent hashing (deterministic)
-- **Round-Robin**: Simple distribution
-- **Load**: Dynamic work-stealing
+### Adaptive Algorithm
 
-**Example:**
+1. Retrieves historical test execution times (defaults to 1000ms if no history)
+2. Sorts tests by duration descending
+3. Uses greedy bin-packing: assigns each test to the shard with minimum current load
+4. Computes load balance as `(maxDuration - minDuration) / avgDuration`
 
-```bash
-# Auto-detect optimal shards
-bldr test
-
-# Specify shard count
-bldr test --shards 8
-
-# Change strategy in .buildertest
+```d
+// Implementation: source/frontend/testframework/sharding/strategy.d
+foreach (test; tests.sortByDuration.descending)
 {
-  "shardStrategy": "content"  // deterministic sharding
+    minLoadShard = findMinLoadShard(shardLoads);
+    assign(test, minLoadShard);
+    shardLoads[minLoadShard] += test.duration;
 }
 ```
 
-**How it works:**
-1. Analyzes historical test execution times
-2. Uses greedy bin-packing algorithm to balance load
-3. Distributes tests across workers
-4. Supports work-stealing for dynamic rebalancing
+### Content-Based Sharding
 
-### 2. Test Result Caching
+For deterministic distribution across runs:
 
-Skip tests whose inputs haven't changed.
+```json
+{
+  "shardStrategy": "content"
+}
+```
 
-**Cache Keys:**
-- Test source code (BLAKE3 hash)
+Uses BLAKE3 hash of test ID to consistently assign tests to shards. Useful for:
+- Distributed caching (same test always on same shard)
+- Debugging shard-specific issues
+- Reproducible CI runs
+
+## Test Result Caching
+
+Skips tests whose inputs haven't changed.
+
+### Cache Key Components
+
+- Test source code hash (via `FastHash`)
 - Dependencies
 - Configuration
-- Environment (hermetic verification)
+- Environment hash (if hermetic mode enabled)
 
-**Example:**
+### Cache Validation
 
-```bash
-# Enable caching (default)
-bldr test
-
-# Disable caching
-bldr test --no-cache
-
-# Configure in .buildertest
+```d
+// Implementation: source/frontend/testframework/caching/cache.d
+bool isCached(testId, contentHash, envHash)
 {
-  "cache": true,
-  "hermetic": true,  // verify environment
-  "cacheMaxAge": 30  // cache for 30 days
+    entry = entries[testId];
+    if (entry.contentHash != contentHash) return false;
+    if (config.hermetic && entry.envHash != envHash) return false;
+    if (age > config.maxAge) return false;
+    return true;
 }
 ```
 
-**Cache Invalidation:**
-- Test code changes
-- Dependency changes
+### Hermetic Verification
+
+When `hermetic: true`, the cache validates that the environment hash matches. The environment hash includes:
+- Relevant environment variables
+- Tool versions
+
+```d
+static string computeEnvHash(envVars, toolVersions)
+{
+    // Sort env vars for deterministic hash
+    keys = envVars.keys.sort();
+    envString = keys.map!(k => k ~ "=" ~ envVars[k]).join("\n");
+    return FastHash.hashString(envString ~ toolVersions);
+}
+```
+
+### Cache Invalidation
+
+Cache entries are invalidated when:
+- Test source code changes
+- Dependencies change
 - Environment changes (if hermetic)
 - Configuration changes
-- Cache age exceeds maxAge
+- Cache age exceeds `cacheMaxAge`
 
-### 3. Flaky Test Detection
+## Flaky Test Detection
 
-Bayesian statistical model identifies flaky tests.
+Uses Bayesian statistical modeling to identify flaky tests.
 
-**How it works:**
-1. Tracks test pass/fail history
-2. Calculates flakiness probability using Beta distribution
-3. Confidence levels: None, Low, Medium, High, VeryHigh
-4. Automatic quarantine for confirmed flaky tests
+### Flakiness Probability
 
-**Example:**
+Calculated using a Beta distribution with Jeffrey's prior (0.5, 0.5):
 
-```bash
-# Enable detection (default)
-bldr test
-
-# Skip quarantined tests
-bldr test --skip-quarantined
-
-# Configure in .buildertest
+```d
+// Implementation: source/frontend/testframework/flaky/detector.d
+double probability()
 {
-  "detectFlaky": true,
-  "quarantineFlaky": true,
-  "skipQuarantined": false
+    alpha = failures + 0.5;
+    beta = (totalRuns - failures) + 0.5;
+    return alpha / (alpha + beta);  // Expected value of Beta distribution
 }
 ```
 
-**Quarantine Criteria:**
+### Confidence Levels
+
+| Level | Probability Range |
+|-------|------------------|
+| None | < 10% |
+| Low | 10-30% |
+| Medium | 30-60% |
+| High | 60-85% |
+| VeryHigh | > 85% |
+
+### Quarantine Criteria
+
+A test is automatically quarantined when:
 - VeryHigh confidence (>85% probability)
-- Medium+ confidence with multiple recent failures
-- Temporal patterns detected
+- Medium+ confidence with ≥2 consecutive failures
+- Medium+ confidence with ≥3 failures in <10 runs
 
-### 4. Smart Retry Logic
+### Temporal Pattern Detection
 
-Adaptive retries based on flakiness confidence.
+The detector analyzes failure intervals to identify patterns:
 
-**Retry Strategy:**
-- Stable tests: 1 attempt (no retries)
-- Low flakiness: 2 attempts
-- Medium flakiness: 3 attempts  
-- High flakiness: 4 attempts
-- Very high flakiness: 5 attempts
+| Pattern | Detection |
+|---------|-----------|
+| TimeOfDay | ~24 hour failure intervals |
+| DayOfWeek | ~168 hour failure intervals |
+| LoadBased | High variance in failure intervals |
 
-**Exponential Backoff:**
-```
-delay = initialDelay * (backoff ^ attempt)
-```
+## Adaptive Retry
 
-**Example:**
+Retry count scales with flakiness confidence.
 
-```bash
-# Enable retry (default)
-bldr test
+### Retry Strategy
 
-# Disable retry
-bldr test --no-retry
+| Flakiness Confidence | Max Attempts |
+|---------------------|--------------|
+| None (stable) | 1 (no retries) |
+| Low | 2 |
+| Medium | 3 |
+| High | 4 |
+| VeryHigh | 5 |
 
-# Configure in .buildertest
+### Exponential Backoff
+
+```d
+// Implementation: source/frontend/testframework/flaky/retry.d
+Duration getRetryDelay(attempt)
 {
-  "retry": true,
-  "maxRetries": 3
+    multiplier = backoffMultiplier ^ attempt;  // default: 2.0
+    delayMs = initialDelay.msecs * multiplier; // default: 100ms
+    return min(delayMs, maxDelay);             // default max: 10s
 }
 ```
 
-### 5. Test Analytics
+Example delays with defaults:
+- Attempt 1: 100ms
+- Attempt 2: 200ms
+- Attempt 3: 400ms
+- Attempt 4: 800ms
+- Attempt 5: 1600ms
 
-Comprehensive test suite health analysis.
+## Test Analytics
 
-**Metrics:**
-- Overall health score (A+ to D)
-- Pass rate
-- Stability (inverse of flakiness)
-- Performance score
-- Flaky test count
-- Slow test identification
-
-**Example:**
+Generate health metrics and performance insights.
 
 ```bash
-# Generate analytics report
 bldr test --analytics
 ```
 
-**Output:**
+### Health Metrics
+
+| Metric | Calculation |
+|--------|-------------|
+| Pass rate | passed / total |
+| Stability | 1.0 - average flakiness score |
+| Performance | cached / total |
+| Overall health | (passRate + stability + performance) / 3 |
+
+### Health Grades
+
+| Grade | Overall Health |
+|-------|---------------|
+| A+ | ≥ 95% |
+| A | ≥ 90% |
+| B+ | ≥ 85% |
+| B | ≥ 80% |
+| C | ≥ 70% |
+| D | < 70% |
+
+### Performance Insights
+
+- Total, average, median duration
+- P95 and P99 duration
+- Slow tests (> P95)
+- Parallel efficiency
+- Recommended shard count (based on duration variance)
+
+### Sample Report
 
 ```
 ═══════════════════════════════════════════
@@ -292,34 +359,20 @@ Recommendations:
   • Improve test parallelization
 ```
 
-## Comparison with Bazel
+## Execution Modes
 
-| Feature | Builder | Bazel |
-|---------|---------|-------|
-| **Test Sharding** | ✅ Adaptive (historical) | ✅ Static |
-| **Test Caching** | ✅ Multi-level + hermetic | ✅ Basic |
-| **Flaky Detection** | ✅ Bayesian inference | ✅ Basic (after N runs) |
-| **Retry Logic** | ✅ Adaptive (confidence-based) | ✅ Fixed count |
-| **Analytics** | ✅ Comprehensive insights | ❌ None |
-| **Work Stealing** | ✅ Dynamic rebalancing | ❌ Static assignment |
-| **Configuration** | ✅ .buildertest file | ❌ Command-line only |
-
-### Advantages Over Bazel
-
-1. **Smarter Sharding**: Uses historical execution times, not just file count
-2. **Hermetic Caching**: Verifies environment hasn't changed
-3. **Statistical Flaky Detection**: Bayesian model vs. simple threshold
-4. **Adaptive Retries**: Retry count based on flakiness confidence
-5. **Built-in Analytics**: No external tools needed
-6. **Config File**: Reusable, version-controlled settings
+| Mode | Description |
+|------|-------------|
+| Sequential | Single-threaded, no parallelism |
+| Parallel | Parallel execution using `std.parallelism` |
+| Sharded | Explicit sharding with configurable strategy |
+| Distributed | Reserved for future distributed execution |
 
 ## Best Practices
 
-### 1. Enable All Features
+### Enable All Features
 
-Let Builder's intelligent systems work for you:
-
-```.buildertest
+```json
 {
   "shard": true,
   "cache": true,
@@ -329,7 +382,7 @@ Let Builder's intelligent systems work for you:
 }
 ```
 
-### 2. Use Hermetic Tests
+### Hermetic Tests
 
 Enable hermetic verification for reliable caching:
 
@@ -344,110 +397,37 @@ Ensure tests:
 - Don't write to global locations
 - Clean up after themselves
 
-### 3. Monitor Analytics
-
-Regular run analytics to identify issues:
-
-```bash
-bldr test --analytics
-```
-
-Act on recommendations:
-- Fix or quarantine flaky tests
-- Optimize slow tests (P95+)
-- Adjust shard count if efficiency < 70%
-
-### 4. Version Control Config
-
-Commit `.buildertest` to share settings:
-
-```bash
-git add .buildertest
-git commit -m "Add test configuration"
-```
-
-### 5. CI/CD Integration
-
-Optimize for CI environments:
+### CI/CD Configuration
 
 ```json
 {
   "parallel": true,
   "shard": true,
   "cache": true,
-  "skipQuarantined": true,  // Skip known flaky tests
+  "skipQuarantined": true,
   "analytics": true,
   "junit": true
 }
 ```
 
-## Advanced Usage
-
-### Custom Shard Strategy
-
-For deterministic sharding (same tests always go to same shard):
-
-```json
-{
-  "shardStrategy": "content"
-}
-```
-
-Useful for:
-- Distributed caching
-- Shard-specific resource allocation
-- Debugging shard-specific issues
-
 ### Quarantine Workflow
 
-1. **Detect flaky tests:**
-```bash
-bldr test --analytics
-```
-
-2. **Skip quarantined in CI:**
-```json
-{
-  "skipQuarantined": true
-}
-```
-
-3. **Fix and release:**
-```bash
-# Run only quarantined tests
-bldr query 'attr(quarantined, 1, tests(//...))'
-```
-
-### Performance Tuning
-
-Experiment with shard count:
-
-```bash
-# Try different shard counts
-bldr test --shards 4
-bldr test --shards 8
-bldr test --shards 16
-
-# Check analytics for optimal setting
-bldr test --shards 8 --analytics
-```
-
-Look for:
-- Parallel efficiency > 70%
-- Low load balance score
-- Minimal idle time
+1. Run with analytics to identify flaky tests
+2. Enable `skipQuarantined` in CI to avoid blocking
+3. Fix flaky tests separately
+4. Release from quarantine after fixing
 
 ## Troubleshooting
 
 ### Tests Not Cached
 
-**Check:**
+Check:
 1. Hermetic mode enabled but environment changed
 2. Test sources modified
 3. Dependencies changed
-4. Cache age exceeded
+4. Cache age exceeded `cacheMaxAge`
 
-**Solution:**
+Solution:
 ```bash
 # Disable hermetic if environment varies
 bldr test --hermetic=false
@@ -456,78 +436,64 @@ bldr test --hermetic=false
 rm -rf .builder-cache/tests
 ```
 
-### False Flaky Detection
-
-**Symptoms:** Stable tests marked as flaky
-
-**Solution:**
-Increase detection threshold in custom code or run more iterations to build confidence.
-
 ### Poor Shard Balance
 
-**Symptoms:** Some workers idle while others busy
+Symptoms: Some workers idle while others busy
 
-**Solution:**
-```bash
-# Use adaptive strategy
-# In .buildertest:
+Solution:
+```json
 {
-  "shardStrategy": "adaptive"
+  "shardStrategy": "adaptive",
+  "shardCount": 16
 }
-
-# Increase shard count
-bldr test --shards 16
 ```
+
+### False Flaky Detection
+
+Symptoms: Stable tests marked as flaky
+
+Cause: Minimum 3 runs required for detection. Increase test runs to build confidence.
 
 ## API Reference
 
-See [Testing User Guide](../user-guides/TESTING.md) for programmatic usage.
+### TestExecutor
 
-## Migration Guide
-
-### From Basic Test Command
-
-Old:
-```bash
-bldr test --verbose --fail-fast
-```
-
-New:
-```bash
-bldr test --init-config
-bldr test -v --fail-fast
-```
-
-### From Bazel
-
-Old (`BUILD.bazel`):
-```python
-test(
-    name = "my_test",
-    shard_count = 4,
-)
-```
-
-New (`.buildertest`):
-```json
+```d
+final class TestExecutor
 {
-  "shard": true,
-  "shardCount": 4,
-  "shardStrategy": "adaptive"
+    this(TestExecutionConfig config);
+    TestResult[] execute(Target[] targets, WorkspaceConfig ws, BuildServices services);
 }
 ```
 
-Then:
-```bash
-bldr test
+### FlakyDetector
+
+```d
+final class FlakyDetector
+{
+    void recordExecution(string testId, bool passed, SysTime timestamp);
+    bool isFlaky(string testId);
+    bool isQuarantined(string testId);
+    FlakyRecord getRecord(string testId);
+    FlakyRecord[] getFlakyTests();
+}
 ```
 
-## Future Enhancements
+### TestCache
 
-Planned features:
-- Distributed test execution
-- Test impact analysis
-- Coverage-guided test selection
-- ML-based test prioritization
-- Real-time test result streaming
+```d
+final class TestCache
+{
+    bool isCached(string testId, string contentHash, string envHash);
+    TestResult get(string testId);
+    void put(string testId, string contentHash, string envHash, TestResult result);
+    void invalidate(string testId);
+    void flush();
+}
+```
 
+## See Also
+
+- [User Guide: Testing](../user-guides/TESTING.md)
+- [Hermetic Builds](hermetic.md)
+- [Performance](performance.md)

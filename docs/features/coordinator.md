@@ -1,105 +1,111 @@
 # Cache Coordinator Architecture
 
-**Status:** ✅ **IMPLEMENTED**  
-**Date:** November 2, 2025  
-**Priority:** HIGH
-
----
+**Status:** Implemented  
+**Module:** `engine.caching.coordinator`
 
 ## Overview
 
-The Cache Coordinator provides unified orchestration of all caching tiers in Builder, eliminating the previous fragmentation where `BuildCache`, `ActionCache`, and `DistributedCache` operated independently.
+The Cache Coordinator provides unified orchestration of all caching tiers, eliminating fragmentation where `BuildCache`, `ActionCache`, and `DistributedCache` operated independently.
 
-### Key Improvements
+### Features
 
 1. **Single Source of Truth** - One coordinator for all cache operations
-2. **Event-Driven Telemetry** - Automatic metrics collection for observability
+2. **Event-Driven Telemetry** - Automatic metrics collection
 3. **Content-Addressable Storage** - Deduplication across targets/actions
 4. **Garbage Collection** - Automatic cleanup of orphaned artifacts
-5. **Simplified Integration** - Clean API for language handlers
-
----
+5. **Bloom Filters** - Fast negative lookups
+6. **Batch Validation** - Parallel cache checking
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                   CacheCoordinator                       │
-│  (Orchestrates all caching tiers + emits events)        │
+│              (Unified cache orchestration)               │
 ├─────────────────────────────────────────────────────────┤
 │                                                          │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │
-│  │BuildCache   │  │ActionCache  │  │RemoteCache  │    │
-│  │(Targets)    │  │(Actions)    │  │(Distributed)│    │
-│  └─────────────┘  └─────────────┘  └─────────────┘    │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     │
+│  │BuildCache   │  │ActionCache  │  │RemoteCache  │     │
+│  │(Targets)    │  │(Actions)    │  │(Distributed)│     │
+│  └─────────────┘  └─────────────┘  └─────────────┘     │
 │                                                          │
 │  ┌─────────────────────────────────────────────────┐   │
 │  │   ContentAddressableStorage (CAS)               │   │
 │  │   - Deduplication by content hash               │   │
 │  │   - Reference counting                          │   │
-│  │   - Sharded storage for performance             │   │
+│  │   - Sharded storage (2-char prefix)             │   │
+│  └─────────────────────────────────────────────────┘   │
+│                                                          │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │   Bloom Filters (fast negative lookups)         │   │
+│  │   - targetBloom: 50K entries, 0.1% FPR          │   │
+│  │   - actionBloom: 100K entries, 0.1% FPR         │   │
 │  └─────────────────────────────────────────────────┘   │
 │                                                          │
 │  ┌─────────────────────────────────────────────────┐   │
 │  │   CacheGarbageCollector                         │   │
-│  │   - Reachability-based collection               │   │
 │  │   - Mark-and-sweep orphaned blobs               │   │
 │  └─────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────┘
                           │
                           ▼
                   ┌───────────────┐
-                  │  EventPublisher│
-                  │  (telemetry)   │
+                  │EventPublisher │
+                  │ (telemetry)   │
                   └───────────────┘
-                          │
-                          ▼
-              ┌──────────────────────┐
-              │ CacheMetricsCollector │
-              └──────────────────────┘
 ```
-
----
 
 ## Components
 
-### 1. CacheCoordinator (`core.caching.coordinator`)
+### CacheCoordinator
 
-Unified interface for all cache operations.
+Unified interface for all cache operations:
+
+```d
+final class CacheCoordinator {
+    private CacheIndex sharedIndex;       // SQLite index
+    private BuildCache targetCache;
+    private ActionCache actionCache;
+    private DependencyCache depCache;
+    private IncrementalFilter filter;
+    private RemoteCacheClient remoteCache;
+    private ContentAddressableStorage cas;
+    private CacheGarbageCollector gc;
+    private SourceRepository sourceRepo;
+    private SourceTracker sourceTracker;
+    private DedupStore dedupStore;
+    private BloomFilter targetBloom;
+    private BloomFilter actionBloom;
+    private EventPublisher publisher;
+}
+```
 
 **Key Methods:**
 ```d
-// Check cache (all tiers)
-bool isCached(string targetId, string[] sources, string[] deps);
+// Target cache operations
+bool isCached(string targetId, const(string)[] sources, const(string)[] deps);
+void update(string targetId, const(string)[] sources, const(string)[] deps, string outputHash);
 
-// Batch validation (3-5x speedup)
+// Batch validation
 BatchValidationResult batchValidate(const(TargetValidationRequest)[] requests);
-
-// Update cache (with remote push)
-void update(string targetId, string[] sources, string[] deps, string outputHash);
+BatchActionValidationResult batchValidateActions(const(ActionValidationRequest)[] requests);
 
 // Action cache operations
-bool isActionCached(ActionId actionId, string[] inputs, string[string] metadata);
-BatchActionValidationResult batchValidateActions(const(ActionValidationRequest)[] requests);
-void recordAction(ActionId actionId, string[] inputs, string[] outputs, ...);
+bool isActionCached(ActionId actionId, const(string)[] inputs, const(string[string]) metadata);
+void recordAction(ActionId actionId, const(string)[] inputs, const(string)[] outputs,
+                  const(string[string]) metadata, bool success);
 
 // Maintenance
 void flush();
 void close();
-Result!(size_t, BuildError) runGC();
+BuildResult!size_t runGC();
+CacheCoordinatorStats getStats();
 ```
 
-### 2. ContentAddressableStorage (`core.caching.storage.cas`)
+### ContentAddressableStorage
 
-Deduplicates artifacts by content hash.
+Deduplicates artifacts by content hash:
 
-**Features:**
-- Automatic deduplication (same content = one blob)
-- Reference counting for safe deletion
-- Sharded storage (first 2 chars of hash) for filesystem performance
-- Thread-safe operations
-
-**API:**
 ```d
 Result!(string, BuildError) putBlob(const(ubyte)[] data);  // Returns hash
 Result!(ubyte[], BuildError) getBlob(string hash);
@@ -108,188 +114,24 @@ void addRef(string hash);
 bool removeRef(string hash);  // Returns true if deletable
 ```
 
-### 3. CacheGarbageCollector (`core.caching.storage.gc`)
+### CacheGarbageCollector
 
-Cleans up orphaned artifacts.
+Cleans up orphaned artifacts:
 
-**Algorithm:**
 1. **Mark Phase**: Collect all referenced hashes from caches
 2. **Sweep Phase**: Remove unreferenced blobs from CAS
 
-**Usage:**
 ```d
-auto gc = new CacheGarbageCollector(cas, publisher);
-auto result = gc.collect(targetCache, actionCache);
-// Result: { blobsCollected, bytesFreed, orphansFound }
+auto result = coordinator.runGC().unwrap();
+writeln("Freed ", result, " bytes");
 ```
 
-### 4. Cache Events (`core.caching.events`)
+## Batch Validation
 
-Type-safe events for telemetry integration.
+Validate multiple cache entries in parallel using work-stealing scheduler.
 
-**Event Types:**
-- `CacheHitEvent` / `CacheMissEvent`
-- `CacheUpdateEvent`
-- `CacheEvictionEvent`
-- `RemoteCacheEvent` (hit/miss/push/pull)
-- `CacheGCEvent`
-- `ActionCacheEvent`
+### Target Validation
 
-### 5. CacheMetricsCollector (`core.caching.metrics`)
-
-Subscribes to cache events and aggregates statistics.
-
-**Metrics Tracked:**
-- Hit/miss rates (target, action, remote)
-- Latencies (lookup, update, network, GC)
-- Storage (bytes stored/served/evicted/collected)
-- Operations (updates, evictions, GC runs)
-
----
-
-## Integration
-
-### Service Layer
-
-`CacheService` now uses `CacheCoordinator` internally:
-
-```d
-// source/engine/runtime/services/caching/service.d
-final class CacheService : ICacheService
-{
-    private CacheCoordinator coordinator;
-    private CacheMetricsCollector metricsCollector;
-    
-    this(string cacheDir, EventPublisher publisher = null)
-    {
-        // Initialize metrics if publisher available
-        if (publisher !is null)
-        {
-            this.metricsCollector = new CacheMetricsCollector();
-            publisher.subscribe(this.metricsCollector);
-        }
-        
-        // Initialize coordinator
-        this.coordinator = new CacheCoordinator(cacheDir, publisher);
-    }
-    
-    bool isCached(...) { return coordinator.isCached(...); }
-    void update(...) { coordinator.update(...); }
-    void recordAction(...) { coordinator.recordAction(...); }
-}
-```
-
-### ExecutionEngine
-
-Engine uses `ICacheService` interface (no changes needed):
-
-```d
-final class ExecutionEngine
-{
-    private ICacheService cache;
-    
-    // Cache operations
-    if (!cache.isCached(targetId, sources, deps)) {
-        // Build
-        cache.update(targetId, sources, deps, outputHash);
-    }
-}
-```
-
-### Language Handlers
-
-Use `ActionCacheHelper` for simplified integration:
-
-```d
-import core.caching.helpers : ActionCacheHelper;
-
-class MyHandler : BaseLanguageHandler
-{
-    private ActionCacheHelper actionHelper;
-    
-    this(CacheCoordinator coordinator)
-    {
-        this.actionHelper = ActionCacheHelper.withCoordinator(coordinator);
-    }
-    
-    Result!(string, BuildError) buildImpl(...)
-    {
-        foreach (source; target.sources)
-        {
-            auto actionId = ActionId(target.name, ActionType.Compile, hash, source);
-            
-            // Check cache
-            if (actionHelper.isCached(actionId, [source], metadata))
-            {
-                writeln("  [Cached] ", source);
-                continue;
-            }
-            
-            // Execute and record
-            auto result = compile(source);
-            actionHelper.record(actionId, [source], [output], metadata, result.isOk);
-        }
-    }
-}
-```
-
----
-
-## Batch Validation (NEW)
-
-**Status:** ✅ **IMPLEMENTED**  
-**Expected Speedup:** 3-5x for validating multiple targets
-
-### Overview
-
-Batch validation allows validating multiple cache entries in parallel, dramatically improving performance when checking many targets at once (e.g., during incremental builds or graph traversal).
-
-### How It Works
-
-```d
-// Traditional: O(n) sequential validations
-foreach (target; targets) {
-    if (coordinator.isCached(target.id, target.sources, target.deps)) {
-        // cached
-    }
-}
-
-// Batch: O(n/cores) with work-stealing scheduler
-auto requests = targets.map!(t => 
-    TargetValidationRequest(t.id, t.sources, t.deps)
-).array;
-
-auto results = coordinator.batchValidate(requests);
-
-// Check individual results
-foreach (target; targets) {
-    auto result = results.results[target.id];
-    if (result.cached) {
-        // cached (result.fromRemote indicates source)
-    }
-}
-
-// Or use aggregate statistics
-writeln("Cache hit rate: ", results.hitRate(), "%");
-writeln("Remote cache hits: ", results.remoteCachedTargets);
-```
-
-### Use Cases
-
-1. **Graph Traversal**: Validate all nodes before execution
-2. **Incremental Builds**: Check which targets need rebuilding
-3. **Cache Warming**: Pre-check availability of remote artifacts
-4. **Build Planning**: Determine execution strategy based on cache state
-
-### Performance Characteristics
-
-- **Small batches (< 5)**: Sequential validation (avoids overhead)
-- **Medium batches (5-50)**: Work-stealing parallelism
-- **Large batches (50+)**: Maximum speedup (~3-5x on typical hardware)
-
-### API Reference
-
-**Target Validation:**
 ```d
 struct TargetValidationRequest {
     string targetId;
@@ -316,7 +158,20 @@ struct BatchValidationResult {
 }
 ```
 
-**Action Validation:**
+**Usage:**
+```d
+auto requests = targets.map!(t => 
+    TargetValidationRequest(t.id, t.sources, t.deps)
+).array;
+
+auto results = coordinator.batchValidate(requests);
+
+writeln("Cache hit rate: ", results.hitRate() * 100, "%");
+writeln("Remote hits: ", results.remoteCachedTargets);
+```
+
+### Action Validation
+
 ```d
 struct ActionValidationRequest {
     ActionId actionId;
@@ -333,170 +188,199 @@ struct BatchActionValidationResult {
     
     float hitRate() const;
 }
+
+auto results = coordinator.batchValidateActions(actionRequests);
 ```
 
-### Example: Build Planner
+### Performance
+
+- **Single target**: Sequential (avoids overhead)
+- **Multiple targets**: Work-stealing parallelism
+- **Expected speedup**: 3-5x for large batches
+
+## Bloom Filters
+
+Fast negative lookups for cache entries:
 
 ```d
-final class BuildPlanner {
-    private CacheCoordinator coordinator;
+// Fast path: bloom filter says definitely not cached
+if (targetBloom.valid && !targetBloom.mayContain(targetId)) {
+    return false;  // Skip actual cache check
+}
+
+// Bloom filter says maybe cached, do actual check
+return targetCache.isCached(targetId, sources, deps);
+```
+
+**Configuration:**
+- Target bloom: 50,000 entries, 0.1% false positive rate
+- Action bloom: 100,000 entries, 0.1% false positive rate
+
+## Statistics
+
+```d
+struct CacheCoordinatorStats {
+    // Target cache
+    size_t targetCacheEntries;
+    size_t targetCacheSize;
+    float targetHitRate;
     
-    BuildPlan createPlan(BuildGraph graph) {
-        // Collect all targets
-        auto allTargets = graph.getAllTargets();
-        
-        // Batch validate all at once
-        auto requests = allTargets.map!(t =>
-            TargetValidationRequest(t.id, t.sources, t.deps)
-        ).array;
-        
-        auto results = coordinator.batchValidate(requests);
-        
-        // Partition into cached vs needs-build
-        string[] cachedTargets;
-        string[] buildTargets;
-        
-        foreach (target; allTargets) {
-            if (results.results[target.id].cached)
-                cachedTargets ~= target.id;
-            else
-                buildTargets ~= target.id;
+    // Action cache
+    size_t actionCacheEntries;
+    size_t actionCacheSize;
+    float actionHitRate;
+    
+    // CAS
+    size_t uniqueBlobs;
+    size_t totalBlobSize;
+    float deduplicationRatio;
+    
+    // Remote cache
+    size_t remoteHits;
+    size_t remoteMisses;
+    float remoteHitRate;
+    
+    // Source repository
+    size_t sourcesStored;
+    size_t sourceDeduplicationHits;
+    ulong sourceBytes;
+    ulong sourceBytesSaved;
+    float sourceDeduplicationRatio;
+    
+    // Deduplication
+    size_t dedupUniqueBlobs;
+    size_t dedupDuplicateRefs;
+    ulong dedupSavedBytes;
+    float dedupEfficiency;
+}
+
+auto stats = coordinator.getStats();
+writeln("Target cache entries: ", stats.targetCacheEntries);
+writeln("Action hit rate: ", stats.actionHitRate * 100, "%");
+writeln("Deduplication ratio: ", stats.deduplicationRatio * 100, "%");
+```
+
+## Integration
+
+### CacheService
+
+`CacheService` wraps `CacheCoordinator` for dependency injection:
+
+```d
+final class CacheService : ICacheService {
+    private CacheCoordinator coordinator;
+    private CacheMetricsCollector metricsCollector;
+    
+    this(string cacheDir = ".builder-cache", EventPublisher publisher = null) {
+        if (publisher !is null) {
+            this.metricsCollector = new CacheMetricsCollector();
+            publisher.subscribe(this.metricsCollector);
         }
         
-        writefln("Cache analysis: %d/%d cached (%.1f%%)",
-            cachedTargets.length, allTargets.length, results.hitRate());
-        
-        return BuildPlan(buildTargets, cachedTargets);
+        this.coordinator = new CacheCoordinator(cacheDir, publisher);
+    }
+    
+    bool isCached(...) => coordinator.isCached(...);
+    void update(...) => coordinator.update(...);
+    void recordAction(...) => coordinator.recordAction(...);
+}
+```
+
+### ExecutionEngine
+
+Engine uses `ICacheService` interface:
+
+```d
+final class ExecutionEngine {
+    private ICacheService cache;
+    
+    void buildTarget(Target target) {
+        if (!cache.isCached(targetId, sources, deps)) {
+            // Build
+            cache.update(targetId, sources, deps, outputHash);
+        }
     }
 }
 ```
 
-### Implementation Details
+## Remote Cache
 
-- Uses `ParallelExecutor.mapWorkStealing()` for dynamic load balancing
-- Each target validation is independent (no shared state)
-- Results aggregated with zero-copy indexing
-- Event emission for telemetry (per-target)
-- Thread-safe via internal coordination
-
----
-
-## Benefits
-
-### Before (Fragmented)
+Remote cache is automatically checked if configured:
 
 ```d
-// Multiple independent caches
-BuildCache buildCache;
-ActionCache actionCache;
-RemoteCacheClient remoteCache;
-DistributedCache distributedCache;  // Duplicate logic!
+// Check local first, then remote
+if (targetCache.isCached(targetId, sources, deps))
+    return true;  // Local hit
 
-// No telemetry
-// No garbage collection
-// No deduplication
-// Inconsistent remote cache handling
+if (remoteCache !is null) {
+    auto contentHash = computeContentHash(targetId, sources, deps);
+    if (remoteCache.has(contentHash).match((ok) => ok, (_) => false))
+        return true;  // Remote hit
+}
+
+return false;
 ```
 
-### After (Unified)
+**Async Push:**
+Updates are pushed to remote cache asynchronously:
 
 ```d
-// Single coordinator
-CacheCoordinator coordinator(cacheDir, publisher);
-
-// Automatic telemetry via events
-// Built-in garbage collection
-// Content-addressable deduplication
-// Consistent multi-tier caching
+if (remoteCache !is null && config.enableRemotePush) {
+    (new Thread(() => pushToRemote(targetId, sources, deps, outputHash))).start();
+}
 ```
-
-### Performance Improvements
-
-1. **Batch Validation**: Speedup for multiple cache lookups
-2. **Deduplication**: ~30-50% storage savings for identical artifacts
-3. **GC**: Prevents unbounded growth, maintains performance
-4. **Metrics**: Zero-overhead event-driven collection
-5. **Remote Cache**: Async pushes don't block builds
-
----
 
 ## Configuration
 
-Environment variables (same as before, plus new ones):
+Environment variables:
 
 ```bash
-# Target cache (unchanged)
-BUILDER_CACHE_MAX_SIZE=1073741824
+# Target cache
+BUILDER_CACHE_MAX_SIZE=1073741824      # 1GB
 BUILDER_CACHE_MAX_ENTRIES=10000
 BUILDER_CACHE_MAX_AGE_DAYS=30
 
-# Action cache (unchanged)
+# Action cache
 BUILDER_ACTION_CACHE_MAX_SIZE=1073741824
 BUILDER_ACTION_CACHE_MAX_ENTRIES=50000
 
-# Remote cache (unchanged)
+# Remote cache
 BUILDER_REMOTE_CACHE_URL=http://cache.example.com:8080
 BUILDER_REMOTE_CACHE_TOKEN=...
-
-# New: Coordinator options
-BUILDER_CACHE_AUTO_GC=true          # Auto GC on flush
-BUILDER_CACHE_GC_INTERVAL=24h       # GC frequency
+BUILDER_REMOTE_CACHE_TIMEOUT=30
+BUILDER_REMOTE_CACHE_RETRY_COUNT=3
 ```
 
----
+## Usage Example
 
-## Migration Guide
+```d
+auto publisher = new EventPublisher();
+auto coordinator = new CacheCoordinator(".builder-cache", publisher);
 
-### For Core Contributors
+// Check cache
+if (!coordinator.isCached(targetId, sources, deps)) {
+    // Build target
+    auto outputHash = buildTarget(target);
+    
+    // Update cache
+    coordinator.update(targetId, sources, deps, outputHash);
+}
 
-1. **Use `CacheService`** instead of creating `BuildCache` directly
-2. **Pass `EventPublisher`** to enable telemetry
-3. **Call `runGC()`** periodically (or enable auto-GC)
+// Batch validation
+auto requests = targets.map!(t => TargetValidationRequest(t.id, t.sources, t.deps)).array;
+auto results = coordinator.batchValidate(requests);
 
-### For Language Handler Authors
+// Garbage collection
+coordinator.runGC();
 
-1. **Import helpers**: `import core.caching.helpers;`
-2. **Use `ActionCacheHelper`** for simplified API
-3. **Check before execute**: `if (actionHelper.isCached(...)) continue;`
-4. **Record after execute**: `actionHelper.record(...);`
-
-### Backwards Compatibility
-
-All existing code continues to work. The coordinator wraps existing caches transparently.
-
----
-
-## Testing
-
-### Unit Tests
-
-```bash
-# Run coordinator tests
-dub test -- tests.unit.core.caching.coordinator
-
-# Run storage tests
-dub test -- tests.unit.core.caching.storage
+// Cleanup
+coordinator.flush();
+coordinator.close();
 ```
 
-### Integration Tests
-
-The coordinator is integration tested via `CacheService` tests.
-
----
-
-## Future Enhancements
-
-1. **Distributed GC** - Coordinate GC across build cluster
-2. **Cache Warming** - Pre-populate from CI artifacts
-3. **Compression** - Compress large blobs automatically
-4. **Analytics** - ML-based cache prediction
-5. **Multi-Server CAS** - Shared content-addressable storage
-
----
-
-## References
+## See Also
 
 - [Action Caching](./caching.md)
-- [Remote Caching](./remote-caching.md)
-- [Telemetry System](../../source/infrastructure/telemetry/README.md)
-
+- [Remote Caching](./remotecache.md)
+- [Content-Addressed Sources](./content-addressed-sources.md)
+- [CAS Design](../architecture/cachedesign.md)

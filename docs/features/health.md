@@ -1,27 +1,26 @@
 # Health Checkpoints
 
-Health checkpoints provide real-time diagnostics for long-running builds, enabling monitoring of system resources, worker utilization, and build velocity.
+Health checkpoints provide diagnostics for long-running builds, tracking system resources, worker utilization, and build velocity.
 
-## Features
+## Overview
 
-- **Real-time Monitoring**: Track build health during execution
-- **Resource Metrics**: Memory, GC activity, worker utilization
-- **Velocity Tracking**: Tasks per second, completion rate
-- **Time Estimation**: Predict remaining build time
-- **Trend Analysis**: Detect improving/degrading performance
-- **Thread-Safe**: Concurrent checkpoint recording
+**Location**: `source/infrastructure/telemetry/monitoring/health.d`
 
----
+Features:
+- Real-time monitoring during build execution
+- Resource metrics: memory, GC activity, worker utilization
+- Velocity tracking: tasks per second, completion rate
+- Time estimation: predict remaining build time
+- Trend analysis: detect improving/degrading performance
+- Thread-safe: concurrent checkpoint recording
 
 ## Quick Start
 
-### Basic Usage
-
 ```d
-import core.telemetry.health;
+import infrastructure.telemetry.monitoring.health;
 
-// Create health monitor
-auto monitor = new HealthMonitor(5000); // Checkpoint every 5 seconds
+// Create health monitor (checkpoint every 5 seconds)
+auto monitor = new HealthMonitor(5000);
 monitor.start();
 
 // During build execution, take checkpoints
@@ -39,35 +38,18 @@ monitor.checkpoint(
 auto latestResult = monitor.getLatest();
 if (latestResult.isOk) {
     auto checkpoint = latestResult.unwrap();
-    writeln(checkpoint); // Display health info
+    writeln(checkpoint.toString());
 }
 
-// Stop monitoring and get final checkpoint
-auto final = monitor.stop();
+// Stop monitoring
+auto finalCheckpoint = monitor.stop();
 ```
-
-### Health Status
-
-```d
-// Health status is automatically computed
-enum HealthStatus {
-    Healthy,   // All systems operational
-    Warning,   // Performance degraded but functional
-    Degraded,  // Failures present or critical issues
-    Critical   // System failing
-}
-
-// Access status
-writeln("Build status: ", checkpoint.status);
-```
-
----
 
 ## Architecture
 
 ### HealthCheckpoint
 
-Immutable snapshot of build health at a specific point in time.
+Immutable snapshot of build health at a point in time.
 
 ```d
 struct HealthCheckpoint
@@ -82,74 +64,104 @@ struct HealthCheckpoint
     size_t pendingTasks;
     
     // Memory metrics
-    size_t memoryUsed;
-    size_t memoryTotal;
-    size_t gcCollections;
+    size_t memoryUsed;      // Heap bytes in use
+    size_t memoryTotal;     // Total heap size
+    size_t gcCollections;   // GC runs since start
     
     // Worker metrics
-    size_t workerCount;
-    size_t activeWorkers;
-    double utilization;      // Percentage (0-100)
+    size_t workerCount;     // Total workers
+    size_t activeWorkers;   // Currently busy workers
+    double utilization;     // Worker utilization (0-100%)
     
     // Velocity metrics
-    double tasksPerSecond;
-    double avgTaskTime;
+    double tasksPerSecond;  // Completion rate
+    double avgTaskTime;     // Average task duration (seconds)
     
     HealthStatus status;
+    
+    // Methods
+    double memoryUtilization() const;
+    Duration estimateTimeRemaining() const;
+    string toString() const;
 }
 ```
 
-#### Key Methods
+### HealthStatus
 
 ```d
-// Memory utilization percentage
-double memoryUtilization() const;
-
-// Estimate time remaining based on velocity
-Duration estimateTimeRemaining() const;
-
-// Human-readable output
-string toString() const;
+enum HealthStatus : ubyte
+{
+    Healthy,   // All systems operational
+    Warning,   // Performance degraded but functional
+    Degraded,  // Failures present or critical issues
+    Critical   // System failing
+}
 ```
+
+Status is computed based on:
+- Failures present → Degraded
+- Memory >90% → Warning
+- Worker utilization <20% with active tasks → Warning
+- Zero velocity with active tasks → Degraded (stalled)
 
 ### HealthMonitor
 
-Thread-safe monitor that tracks health over time.
+Thread-safe monitor tracking health over time.
 
 ```d
 final class HealthMonitor
 {
-    // Start monitoring
-    void start();
+    this(size_t checkpointIntervalMs = 5000) @system;
     
-    // Take checkpoint
-    void checkpoint(...);
+    void start() @system;
+    void checkpoint(...) @system;
+    HealthCheckpoint stop() @system;
     
-    // Stop and get final checkpoint
-    HealthCheckpoint stop();
-    
-    // Get all checkpoints
-    const(HealthCheckpoint)[] getCheckpoints() const;
-    
-    // Get latest checkpoint
-    Result!(HealthCheckpoint, TelemetryError) getLatest() const;
-    
-    // Analyze trend
-    HealthTrend getTrend() const;
-    
-    // Get summary
-    HealthSummary getSummary() const;
-    
-    // Generate report
-    string report() const;
+    const(HealthCheckpoint)[] getCheckpoints() const @system;
+    Result!(HealthCheckpoint, string) getLatest() const @system;
+    HealthTrend getTrend() const @system;
+    HealthSummary getSummary() const @system;
+    bool shouldCheckpoint() const @system;
+    string report() const @system;
 }
 ```
 
----
+### HealthTrend
 
-## Integration with Executor
+```d
+enum HealthTrend : ubyte
+{
+    Improving,  // Performance improving
+    Stable,     // Consistent performance
+    Degrading   // Performance declining
+}
+```
 
-### Automatic Checkpointing
+Trend is computed by comparing recent checkpoints:
+- More failures → Degrading
+- Velocity increasing >10% → Improving
+- Velocity decreasing >10% → Degrading
+- Memory utilization increasing >10% → Degrading
+
+### HealthSummary
+
+```d
+struct HealthSummary
+{
+    size_t totalCheckpoints;
+    Duration totalUptime;
+    size_t totalCompleted;
+    size_t totalFailed;
+    size_t peakMemory;
+    size_t peakGCRuns;
+    double avgVelocity;
+    double peakUtilization;
+    HealthStatus finalStatus;
+    HealthTrend trend;
+}
+```
+
+## Integration with Build Executor
 
 ```d
 // In BuildExecutor.execute()
@@ -160,7 +172,7 @@ healthMonitor.start();
 while (building) {
     // ... build logic ...
     
-    // Automatic checkpoint if interval elapsed
+    // Checkpoint if interval elapsed
     if (healthMonitor.shouldCheckpoint()) {
         healthMonitor.checkpoint(
             built + cached,
@@ -177,118 +189,35 @@ while (building) {
 auto finalHealth = healthMonitor.stop();
 ```
 
-### Event-Driven Checkpoints
-
-```d
-class HealthEventSubscriber : EventSubscriber {
-    private HealthMonitor monitor;
-    
-    void onEvent(BuildEvent event) {
-        final switch (event.type) {
-            case EventType.BuildStarted:
-                monitor.start();
-                break;
-                
-            case EventType.TargetCompleted:
-                // Checkpoint on significant events
-                if (monitor.shouldCheckpoint()) {
-                    monitor.checkpoint(...);
-                }
-                break;
-                
-            case EventType.BuildCompleted:
-                auto final = monitor.stop();
-                writeln(final);
-                break;
-        }
-    }
-}
-```
-
----
-
-## Advanced Features
-
-### Trend Analysis
-
-```d
-enum HealthTrend {
-    Improving,  // Performance improving
-    Stable,     // Consistent performance
-    Degrading   // Performance declining
-}
-
-auto trend = monitor.getTrend();
-
-if (trend == HealthTrend.Degrading) {
-    Logger.warning("Build performance degrading");
-    // Take action: increase parallelism, check system resources
-}
-```
-
-### Health Summary
-
-```d
-struct HealthSummary {
-    size_t totalCheckpoints;
-    Duration totalUptime;
-    size_t totalCompleted;
-    size_t totalFailed;
-    size_t peakMemory;
-    size_t peakGCRuns;
-    double avgVelocity;
-    double peakUtilization;
-    HealthStatus finalStatus;
-    HealthTrend trend;
-}
-
-auto summary = monitor.getSummary();
-writeln("Peak memory: ", formatSize(summary.peakMemory));
-writeln("Avg velocity: ", summary.avgVelocity, " tasks/sec");
-```
-
-### Custom Checkpoint Intervals
-
-```d
-// Adaptive intervals based on build size
-size_t interval = buildSize < 100 ? 10_000 : 5_000; // 10s or 5s
-auto monitor = new HealthMonitor(interval);
-```
-
----
-
 ## Use Cases
 
-### 1. CI/CD Monitoring
+### CI/CD Monitoring
 
 ```d
-// Expose health endpoint for CI monitoring
 auto healthMonitor = new HealthMonitor(3000);
 healthMonitor.start();
 
-// Periodically log health for CI systems
-import std.datetime : Clock;
+// Log health periodically for CI systems
 auto lastLog = Clock.currTime();
 
 while (building) {
     if (Clock.currTime() - lastLog > dur!"seconds"(30)) {
         auto latest = healthMonitor.getLatest();
-        if (latest.isOk) {
+        if (latest.isOk)
             Logger.info("Health: " ~ latest.unwrap().toString());
-        }
         lastLog = Clock.currTime();
     }
 }
 ```
 
-### 2. Resource Exhaustion Detection
+### Resource Exhaustion Detection
 
 ```d
 auto checkpoint = monitor.getLatest().unwrap();
 
 if (checkpoint.memoryUtilization() > 90.0) {
-    Logger.warning("High memory pressure detected");
-    GC.collect(); // Force collection
+    Logger.warning("High memory pressure");
+    GC.collect();
 }
 
 if (checkpoint.utilization < 20.0 && checkpoint.activeTasks > 0) {
@@ -296,16 +225,15 @@ if (checkpoint.utilization < 20.0 && checkpoint.activeTasks > 0) {
 }
 ```
 
-### 3. Time Estimation
+### Time Estimation
 
 ```d
 auto checkpoint = monitor.getLatest().unwrap();
 auto remaining = checkpoint.estimateTimeRemaining();
-
 Logger.info(format("Estimated time remaining: %s", remaining));
 ```
 
-### 4. Performance Regression Detection
+### Performance Regression Detection
 
 ```d
 auto trend = monitor.getTrend();
@@ -314,59 +242,35 @@ auto summary = monitor.getSummary();
 if (trend == HealthTrend.Degrading) {
     Logger.warning("Performance regression detected");
     Logger.info(format("Average velocity: %.2f tasks/sec", summary.avgVelocity));
-    
-    // Investigate: check latest checkpoint
-    auto latest = monitor.getLatest().unwrap();
-    Logger.info(format("Current velocity: %.2f tasks/sec", latest.tasksPerSecond));
-    Logger.info(format("Memory usage: %.1f%%", latest.memoryUtilization()));
 }
 ```
 
----
-
 ## Configuration
 
-### Environment Variables
+### Checkpoint Intervals
 
-```bash
-# Health checkpoint interval (milliseconds)
-export BUILDER_HEALTH_INTERVAL=5000
+Choose based on build size:
 
-# Enable health monitoring
-export BUILDER_HEALTH_ENABLED=1
-
-# Health checkpoint directory
-export BUILDER_HEALTH_DIR=.builder-cache/health
-```
-
-### Programmatic Configuration
+| Build Size | Recommended Interval |
+|------------|---------------------|
+| Small (<100 targets) | 10-15 seconds |
+| Medium (100-1000) | 5-10 seconds |
+| Large (>1000) | 3-5 seconds |
+| CI/CD | 5 seconds |
+| Interactive | 1 second |
 
 ```d
-// Create with custom interval
-auto monitor = new HealthMonitor(10_000); // 10 seconds
+// Adaptive intervals
+size_t interval = buildSize < 100 ? 10_000 : 5_000;
+auto monitor = new HealthMonitor(interval);
 
-// Disable monitoring
-auto monitor = new HealthMonitor(0); // No automatic checkpoints
+// Disable automatic checkpoints
+auto monitor = new HealthMonitor(0);
 ```
-
----
 
 ## Best Practices
 
-### 1. Choose Appropriate Intervals
-
-```d
-// Small builds (<100 targets): Less frequent
-auto smallBuildMonitor = new HealthMonitor(10_000); // 10s
-
-// Large builds (>1000 targets): More frequent
-auto largeBuildMonitor = new HealthMonitor(3_000); // 3s
-
-// Interactive builds: Very frequent
-auto interactiveMonitor = new HealthMonitor(1_000); // 1s
-```
-
-### 2. Handle Checkpoint Failures Gracefully
+### Handle Checkpoint Failures
 
 ```d
 auto latestResult = monitor.getLatest();
@@ -374,142 +278,48 @@ if (latestResult.isErr) {
     Logger.debugLog("No health checkpoints yet");
     return;
 }
-
 auto checkpoint = latestResult.unwrap();
-// Use checkpoint safely
 ```
 
-### 3. Export Health Data
+### Monitor Critical Thresholds
 
 ```d
-// Save checkpoints for analysis
+auto checkpoint = monitor.getLatest().unwrap();
+
+// Memory threshold
+if (checkpoint.memoryUtilization() > 85.0)
+    Logger.warning("Approaching memory limit");
+
+// Failure threshold
+if (checkpoint.failedTasks > checkpoint.completedTasks * 0.1)
+    Logger.error("High failure rate detected");
+
+// Stall detection
+if (checkpoint.tasksPerSecond == 0.0 && checkpoint.activeTasks > 0)
+    Logger.error("Build appears stalled");
+```
+
+### Generate Reports
+
+```d
+// Full health report
+writeln(monitor.report());
+
+// Export checkpoints for analysis
 auto checkpoints = monitor.getCheckpoints();
 foreach (cp; checkpoints) {
     // Export to JSON, CSV, or telemetry system
 }
 ```
 
-### 4. Monitor Critical Thresholds
-
-```d
-auto checkpoint = monitor.getLatest().unwrap();
-
-// Memory threshold
-if (checkpoint.memoryUtilization() > 85.0) {
-    Logger.warning("Approaching memory limit");
-}
-
-// Failure threshold
-if (checkpoint.failedTasks > checkpoint.completedTasks * 0.1) {
-    Logger.error("High failure rate detected");
-}
-
-// Stall detection
-if (checkpoint.tasksPerSecond == 0.0 && checkpoint.activeTasks > 0) {
-    Logger.error("Build appears stalled");
-}
-```
-
----
-
 ## Performance Impact
 
-- **Memory Overhead**: ~200 bytes per checkpoint
-- **CPU Overhead**: <0.1% (checkpoint creation)
-- **Thread Safety**: Lock-based (minimal contention)
+- Memory overhead: ~200 bytes per checkpoint
+- CPU overhead: <0.1% for checkpoint creation
+- Thread safety: Lock-based with minimal contention
 
-Recommended checkpoint intervals:
-- **Small builds**: 10-15 seconds
-- **Medium builds**: 5-10 seconds
-- **Large builds**: 3-5 seconds
-- **CI/CD**: 5 seconds
-
----
-
-## Testing
-
-```d
-import tests.unit.core.health;
-
-// Run test suite
-runHealthTests();
-```
-
-Test coverage includes:
-- Checkpoint creation and metrics
-- Health status computation
-- Trend analysis
-- Concurrent access
-- Time estimation
-- Memory tracking
-
----
-
-## Examples
-
-### Complete Example
-
-```d
-import core.telemetry.health;
-import std.stdio : writeln;
-
-void buildWithHealth()
-{
-    auto monitor = new HealthMonitor(5000);
-    monitor.start();
-    
-    // Simulate build
-    foreach (i; 0 .. 100)
-    {
-        // Build task...
-        
-        // Take checkpoint every 10 tasks
-        if (i % 10 == 0)
-        {
-            monitor.checkpoint(
-                i,                    // completed
-                0,                    // failed
-                4,                    // active
-                100 - i,              // pending
-                8,                    // workers
-                4,                    // active workers
-                0.1                   // avg time
-            );
-            
-            // Check health
-            auto latest = monitor.getLatest();
-            if (latest.isOk)
-            {
-                auto cp = latest.unwrap();
-                writeln("Status: ", cp.status);
-                writeln("Progress: ", i, "/100");
-                writeln("ETA: ", cp.estimateTimeRemaining());
-            }
-        }
-    }
-    
-    // Final report
-    writeln("\n", monitor.report());
-    monitor.stop();
-}
-```
-
----
-
-## See Also
+## Related Documentation
 
 - [Telemetry](./telemetry.md) - Build telemetry system
 - [Observability](./observability.md) - Complete observability guide
 - [Performance](./performance.md) - Performance optimization
-
----
-
-## Future Enhancements
-
-Potential improvements:
-1. **Persistent Checkpoints**: Save to disk for cross-session analysis
-2. **Anomaly Detection**: ML-based anomaly detection
-3. **Health Alerts**: Webhook notifications for critical issues
-4. **Dashboard Integration**: Real-time web dashboard
-5. **Historical Analysis**: Compare against previous builds
-

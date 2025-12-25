@@ -1,0 +1,171 @@
+topic: adaptive-stealing
+category: reference
+summary: "Adaptive Work-Stealing - Dynamic threshold tuning based on observed steal success rates and latency"
+definition: |
+  Adaptive work-stealing automatically tunes steal thresholds based on real-time performance metrics.
+  When steal success rate drops below 20%, the system increases minLocalQueue to reduce wasted attempts.
+  Latency-aware: timeout and backoff adjust based on observed network conditions.
+  Uses EWMA (Exponentially Weighted Moving Average) for smooth, oscillation-free adaptation.
+
+key_points:
+  - "EWMA-based metrics: Smooth adaptation without thrashing"
+  - "Success rate threshold: Increases minLocalQueue when success < 20%"
+  - "Latency-aware: Timeout scales with observed network latency"
+  - "Error tracking: Adjusts stealThreshold based on network errors and timeouts"
+  - "Cooldown period: Prevents rapid oscillation between states"
+  - "Bounded adjustments: All thresholds have configurable min/max limits"
+  - "History tracking: Records last 8 adjustments for debugging"
+  - "Callback support: Notify external systems of threshold changes"
+
+configuration:
+  adaptive_config:
+    alpha: "0.15 - EWMA learning rate (0-1, higher = faster adaptation)"
+    lowSuccessThreshold: "0.20 - Below this success rate, increase minLocalQueue"
+    highSuccessThreshold: "0.60 - Above this success rate, can decrease minLocalQueue"
+    evaluationWindow: "50 - Samples before evaluation"
+    adjustmentCooldown: "5s - Prevents oscillation"
+    highLatencyThresholdUs: "50000 - Above this (50ms), increase timeout"
+    lowLatencyThresholdUs: "10000 - Below this (10ms), can decrease timeout"
+  
+  bounds:
+    minLocalQueue: "[1, 16] - Range for queue threshold"
+    stealThreshold: "[0.2, 0.8] - Range for load threshold"
+    stealTimeout: "[25ms, 500ms] - Range for steal timeout"
+    retryBackoff: "[10ms, 200ms] - Range for retry backoff"
+
+usage_examples:
+  - description: "Enable adaptive thresholds in StealConfig"
+    code: |
+      StealConfig config;
+      config.enableAdaptive = true;
+      config.minLocalQueue = 3;       // Initial value
+      config.stealThreshold = 0.5;    // Initial value
+      
+      // Optional: customize adaptive behavior
+      config.adaptiveConfig.alpha = 0.20;
+      config.adaptiveConfig.lowSuccessThreshold = 0.15;
+      config.adaptiveConfig.evaluationWindow = 30;
+      
+      auto engine = new StealEngine(selfId, peers, config);
+
+  - description: "Monitor adaptive state at runtime"
+    code: |
+      // Get current dynamically adjusted thresholds
+      auto state = engine.getAdaptiveState();
+      writeln("minLocalQueue: ", state.minLocalQueue);
+      writeln("stealTimeout: ", state.stealTimeout.total!"msecs", "ms");
+      
+      // Get detailed performance statistics
+      auto stats = engine.getAdaptiveStats();
+      writeln("Success rate: ", stats.successRate * 100, "%");
+      writeln("Avg latency: ", stats.avgLatencyUs / 1000, "ms");
+      writeln("Network errors: ", stats.networkErrorRate * 100, "%");
+
+  - description: "Set callback for threshold adjustments"
+    code: |
+      auto adaptive = new AdaptiveThresholds(cfg, initial);
+      
+      adaptive.onAdjustment = (oldState, newState) {
+          Logger.info("Threshold adjusted: " ~ newState.toString());
+          if (newState.minLocalQueue > oldState.minLocalQueue)
+              Logger.warning("Steal success rate low - increasing queue threshold");
+      };
+
+  - description: "View adjustment history"
+    code: |
+      auto history = adaptive.getHistory();
+      foreach (record; history)
+          writeln(record.toString());
+      // Output: [LowSuccessRate] minLocalQueue=2... -> minLocalQueue=3... (success=18.5% latency=45.2ms)
+
+metrics_tracked:
+  - name: "successRate"
+    description: "EWMA of steal success (1.0 = success, 0.0 = failure)"
+    adjustment: "Low rate → increase minLocalQueue; High rate → decrease minLocalQueue"
+  
+  - name: "latencyUs"
+    description: "EWMA of steal attempt latency in microseconds"
+    adjustment: "High latency → increase timeout/backoff; Low latency → decrease timeout/backoff"
+  
+  - name: "networkErrorRate"
+    description: "EWMA of network errors (connection failures, send errors)"
+    adjustment: "High rate → increase stealThreshold (steal less often)"
+  
+  - name: "timeoutRate"
+    description: "EWMA of timeout occurrences"
+    adjustment: "High rate → increase stealThreshold (steal less often)"
+
+adjustment_reasons:
+  - "LowSuccessRate: Success rate < 20%, increased minLocalQueue"
+  - "HighSuccessRate: Success rate > 60%, decreased minLocalQueue"
+  - "HighLatency: Latency > 50ms, increased timeout and backoff"
+  - "LowLatency: Latency < 10ms, decreased timeout and backoff"
+  - "HighErrorRate: Network errors > 30% or timeouts > 20%, increased stealThreshold"
+  - "LowErrorRate: Errors < 5% and success > 50%, decreased stealThreshold"
+
+architecture: |
+  ┌─────────────────────────────────────────────────────────────┐
+  │                   ADAPTIVE THRESHOLDS                       │
+  │  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐   │
+  │  │ EWMA Metrics │──▶│  Evaluator   │──▶│  Adjustment  │   │
+  │  │  Collection  │   │  (Windowed)  │   │   Engine     │   │
+  │  └──────────────┘   └──────────────┘   └──────┬───────┘   │
+  │                                                │           │
+  │  ┌──────────────┐                              │           │
+  │  │   History    │◀─────────────────────────────┤           │
+  │  │   Buffer     │                              │           │
+  │  └──────────────┘                              ▼           │
+  │                                         ┌──────────────┐   │
+  │                                         │ Threshold    │   │
+  │                                         │ State        │   │
+  │                                         └──────────────┘   │
+  └───────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+  ┌─────────────────────────────────────────────────────────────┐
+  │                     STEAL ENGINE                            │
+  │  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐   │
+  │  │ getEffective │──▶│    Steal     │──▶│   Record     │   │
+  │  │ Thresholds() │   │   Attempt    │   │  Attempt()   │   │
+  │  └──────────────┘   └──────────────┘   └──────────────┘   │
+  └─────────────────────────────────────────────────────────────┘
+
+best_practices:
+  - "Start with defaults - tuned for typical distributed builds"
+  - "Monitor stats during initial deployment to understand baseline"
+  - "Adjust evaluationWindow based on steal frequency (more steals = smaller window)"
+  - "Use callback for alerting on sustained low success rates"
+  - "Reset stats after configuration changes to get fresh baseline"
+
+troubleshooting:
+  oscillation:
+    symptom: "Thresholds rapidly changing up and down"
+    cause: "Cooldown too short or alpha too high"
+    fix: "Increase adjustmentCooldown to 10s or reduce alpha to 0.10"
+  
+  slow_adaptation:
+    symptom: "System not responding to changed conditions"
+    cause: "Cooldown too long or evaluationWindow too large"
+    fix: "Reduce adjustmentCooldown or evaluationWindow"
+  
+  threshold_at_bound:
+    symptom: "minLocalQueue stuck at upper bound"
+    cause: "Sustained poor steal success - likely a systemic issue"
+    fix: "Check network, peer availability, or workload distribution"
+
+performance_impact:
+  overhead: "~1μs per steal attempt for metric recording"
+  memory: "~200 bytes for EWMA state + 8 * sizeof(AdjustmentRecord) for history"
+  evaluation: "O(1) - constant time threshold evaluation"
+
+related: [distributed, concurrency, remote-execution, performance, work-stealing]
+
+location: "source/engine/distributed/worker/adaptive.d"
+
+next_steps: |
+  - Enable adaptive thresholds in distributed builds
+  - Monitor success rate and latency via AdaptiveStats
+  - Tune evaluationWindow based on your workload
+  - bldr explain distributed
+  - bldr explain concurrency
+

@@ -1,98 +1,63 @@
 # Persistent Worker Protocol
 
+**Module:** `engine.workers`
+
 ## Overview
 
-Builder implements a Bazel-compatible persistent worker protocol that keeps compiler processes running **across builds** (not just actions). Workers progress through warmth levels as JIT optimizes, providing **10-50x speedup**. Includes automatic memory monitoring with OOM prevention and warmth-aware recycling.
+Persistent workers keep compiler processes running across builds to avoid startup overhead. Workers progress through warmth levels as JIT optimization takes effect.
 
-## The Problem
+## Problem
 
-Every compiler invocation has startup overhead:
+Compiler startup overhead dominates small compilation times:
 
-| Compiler | Startup Overhead | Cause |
-|----------|-----------------|-------|
-| javac | ~800ms-2s | JVM startup, class loading, JIT warmup |
-| kotlinc | ~2000ms | JVM + Kotlin compiler initialization |
-| scalac | ~1500ms | JVM + Scala compiler initialization |
-| tsc | ~400ms | Node.js startup, TypeScript program creation |
-| swc | ~50ms | Process startup, WASM initialization |
+| Compiler | Typical Startup |
+|----------|-----------------|
+| javac | ~800ms-2s |
+| kotlinc | ~2s |
+| scalac | ~1.5s |
+| tsc | ~400ms |
+| swc | ~50ms |
 
-For small source files that compile in milliseconds, this overhead dominates total build time.
+## Solution
 
-## The Solution
-
-Persistent workers keep compiler processes running and **warm**:
+Keep compiler processes warm:
 
 ```
-Traditional Compilation:
-┌────────────┐     ┌────────────┐     ┌────────────┐
-│ Start JVM  │────▶│  Compile   │────▶│   Exit     │
-│  (800ms)   │     │  (50ms)    │     │            │
-└────────────┘     └────────────┘     └────────────┘
-Total: 850ms per file
+Traditional:
+  Start JVM (800ms) → Compile (50ms) → Exit
+  Total: 850ms per invocation
 
 Persistent Worker:
-┌─────────────────────────────────────────────────────┐
-│              JVM (started once, reused)             │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────┐ │
-│  │Compile 1 │ │Compile 2 │ │Compile 3 │ │  ...   │ │
-│  │  (50ms)  │ │  (45ms)  │ │  (48ms)  │ │        │ │
-│  └──────────┘ └──────────┘ └──────────┘ └────────┘ │
-└─────────────────────────────────────────────────────┘
-Total: 50ms per file (16x faster!)
+  JVM running continuously
+  Compile 1 (50ms) → Compile 2 (45ms) → Compile 3 (48ms) → ...
 ```
 
 ## Warmth Levels
 
-Workers progress through warmth levels as JIT optimization kicks in:
+**Module:** `engine.workers.pool.recycler`
 
-| Level | Description | Speedup |
-|-------|-------------|---------|
-| **Cold** | Just started, no JIT optimization | 1x (baseline) |
-| **Warming** | Initial compilations done, JIT warming | 3x |
-| **Warm** | Steady state, good performance | 10-20x |
-| **Hot** | Fully optimized, peak performance | 20-50x |
+Workers progress through warmth levels:
 
-## Performance Comparison
+| Level | Threshold | Description |
+|-------|-----------|-------------|
+| Cold | 0 requests | Just started, no JIT |
+| Warming | 1+ requests | Initial JIT warmup |
+| Warm | 5+ requests | Steady state |
+| Hot | 50+ requests | Fully optimized |
 
-| Compiler | Cold Start | Warm Worker | Hot Worker | Speedup |
-|----------|------------|-------------|------------|---------|
-| javac    | ~800ms     | ~50ms       | ~15ms      | **16-50x** |
-| kotlinc  | ~2000ms    | ~100ms      | ~30ms      | **20-67x** |
-| scalac   | ~1500ms    | ~80ms       | ~25ms      | **19-60x** |
-| groovyc  | ~1200ms    | ~70ms       | ~20ms      | **17-60x** |
-| tsc      | ~400ms     | ~30ms       | ~10ms      | **13-40x** |
-| swc      | ~50ms      | ~5ms        | ~2ms       | **10-25x** |
-| esbuild  | ~30ms      | ~3ms        | ~1ms       | **10-30x** |
-
-## Architecture
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│                    Build System                               │
-│  ┌─────────────────────────────────────────────────────────┐ │
-│  │              PersistentWorkerService                     │ │
-│  │  ┌───────────────┐  ┌────────────────┐  ┌─────────────┐ │ │
-│  │  │  WorkerPool   │  │ HealthMonitor  │  │   Metrics   │ │ │
-│  │  └───────┬───────┘  └────────────────┘  └─────────────┘ │ │
-│  └──────────┼───────────────────────────────────────────────┘ │
-│             │                                                  │
-│  ┌──────────┴──────────────────────────────────────────────┐ │
-│  │                    Worker Factories                       │ │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐   │ │
-│  │  │ JVM Factory  │  │  TS Factory  │  │ Scala Factory│   │ │
-│  │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘   │ │
-│  └─────────┼─────────────────┼─────────────────┼───────────┘ │
-└────────────┼─────────────────┼─────────────────┼─────────────┘
-             │                 │                 │
-     ┌───────▼───────┐ ┌───────▼───────┐ ┌───────▼───────┐
-     │  javac/kotlinc│ │    tsc/swc    │ │    scalac     │
-     │   (warm JVM)  │ │  (warm Node)  │ │  (warm JVM)   │
-     └───────────────┘ └───────────────┘ └───────────────┘
+**Thresholds:**
+```d
+struct WarmthThresholds
+{
+    uint coldToWarming = 1;
+    uint warmingToWarm = 5;
+    uint warmToHot = 50;
+}
 ```
 
 ## Protocol
 
-The protocol is Bazel-compatible, using newline-delimited JSON over stdin/stdout.
+Bazel-compatible, newline-delimited JSON over stdin/stdout.
 
 ### WorkRequest (stdin)
 
@@ -101,8 +66,7 @@ The protocol is Bazel-compatible, using newline-delimited JSON over stdin/stdout
   "request_id": 1,
   "arguments": ["-d", "bin/", "-source", "17", "src/Main.java"],
   "inputs": [
-    {"path": "src/Main.java", "digest": "abc123..."},
-    {"path": "src/Util.java", "digest": "def456..."}
+    {"path": "src/Main.java", "digest": "abc123..."}
   ],
   "sandbox_dir": "/tmp/sandbox-12345",
   "verbosity": 1,
@@ -120,36 +84,182 @@ The protocol is Bazel-compatible, using newline-delimited JSON over stdin/stdout
   "was_cached": false,
   "execution_time_ms": 45,
   "outputs": [
-    {"path": "bin/Main.class", "digest": "789abc..."},
-    {"path": "bin/Util.class", "digest": "012def..."}
+    {"path": "bin/Main.class", "digest": "789abc..."}
   ]
 }
 ```
 
-## Usage
+## Supported Languages
 
-### Enabling Persistent Workers
+### JVM (`engine.workers.jvm`)
 
-Workers are enabled by default. Configure in `Builderspace`:
+| Compiler | Worker Type |
+|----------|-------------|
+| javac | `jvm-javac` |
+| kotlinc | `jvm-kotlinc` |
+| scalac | `jvm-scalac` |
+| groovyc | `jvm-groovyc` |
 
-```yaml
-build:
-  persistent_workers:
-    enabled: true
-    max_workers_per_type: 4
-    idle_timeout: 5m
+### TypeScript (`engine.workers.typescript`)
+
+| Tool | Worker Type |
+|------|-------------|
+| tsc | `typescript-tsc` |
+| swc | `typescript-swc` |
+| esbuild | `typescript-esbuild` |
+| bun | `typescript-bun` |
+
+### Go (`engine.workers.go`)
+
+| Command | Worker Type |
+|---------|-------------|
+| go build | `go-build` |
+| go test | `go-test` |
+| go vet | `go-vet` |
+| go fmt | `go-fmt` |
+
+### Rust (`engine.workers.rust`)
+
+| Tool | Worker Type |
+|------|-------------|
+| cargo | `rust-cargo` |
+| cargo check | `rust-check` |
+| rustc | `rust-rustc` |
+| clippy | `rust-clippy` |
+
+### Python (`engine.workers.python`)
+
+| Tool | Worker Type |
+|------|-------------|
+| mypy | `python-mypy` |
+| ruff | `python-ruff` |
+| pylint | `python-pylint` |
+| black | `python-black` |
+
+## Architecture
+
+### Components
+
+**WorkerPool** (`pool/manager.d`):
+- Manages active workers
+- Coordinates with recycler and memory monitor
+
+**WorkerRecycler** (`pool/recycler.d`):
+- Tracks warmth levels
+- Makes eviction decisions
+- Selects warmest available worker
+
+**WorkerMemoryMonitor** (`pool/memory.d`):
+- Monitors heap usage
+- Detects OOM risk
+- Triggers proactive restarts
+
+**WorkerHealthMonitor** (`health.d`):
+- Periodic health checks
+- Auto-restart on failure
+- Memory-aware recovery
+
+## Configuration
+
+### Pool Configuration
+
+```d
+struct WorkerPoolConfig
+{
+    size_t maxWorkersPerType = 4;
+    Duration idleTimeout = minutes(10);
+    Duration healthCheckInterval = seconds(30);
+    size_t maxRequestsPerWorker = 10_000;
+    size_t maxHeapMB = 2048;
+    bool enableMetrics = true;
+    bool enableRecycling = true;
+    bool enableMemoryMonitor = true;
+    bool persistAcrossBuilds = true;
+    RecyclingPolicy recyclingPolicy;
+    MemoryThresholds memoryThresholds;
+}
 ```
 
-### Programmatic Usage
+### Recycling Policy
+
+```d
+struct RecyclingPolicy
+{
+    Duration maxIdleTime = minutes(10);
+    Duration minKeepWarmTime = minutes(2);
+    Duration hotWorkerBonus = minutes(5);
+    uint maxRequestsBeforeRecycle = 10_000;
+    bool preferWarmWorkers = true;
+    bool keepHotAcrossBuilds = true;
+}
+```
+
+### Memory Thresholds
+
+```d
+struct MemoryThresholds
+{
+    float normalMax = 0.70f;    // < 70% normal
+    float elevatedMax = 0.85f;  // 70-85% elevated
+    float highMax = 0.95f;      // 85-95% high (restart)
+                                // > 95% critical
+}
+```
+
+### Worker Configuration
+
+```d
+struct PersistentWorkerConfig
+{
+    string executable;
+    string[] baseArgs;
+    Duration startupTimeout = seconds(30);
+    Duration requestTimeout = seconds(300);
+    Duration idleTimeout = seconds(60);
+    size_t maxRequests = 1000;
+    bool enableMultiplexing;
+    string workDir;
+    string[string] environment;
+}
+```
+
+## Memory Pressure
+
+| Level | Threshold | Action |
+|-------|-----------|--------|
+| Normal | < 70% | Continue |
+| Elevated | 70-85% | Log warning |
+| High | 85-95% | Trigger restart (warm deferred) |
+| Critical | > 95% | Immediate restart |
+
+## Warmth-Aware Recycling
+
+### Eviction Priority
+
+1. Cold workers evicted first
+2. Hot workers get extended idle time (`hotWorkerBonus`)
+3. Warm workers preserved for `minKeepWarmTime`
+
+### Worker Selection
+
+When selecting worker for new request:
+1. If `preferWarmWorkers` enabled, select warmest available
+2. Otherwise FIFO
+
+## Usage
+
+### Programmatic
 
 ```d
 import engine.workers;
 
-// Initialize at startup
-initializePersistentWorkers();
+// Create service
+auto config = WorkerPoolConfig.init;
+auto service = new PersistentWorkerService(config);
+service.start();
 
 // Compile Java
-auto result = JavaWorkerIntegration.compile(
+auto result = service.compileJava(
     ["src/Main.java"],
     "bin/",
     ["lib/deps.jar"],
@@ -159,311 +269,98 @@ auto result = JavaWorkerIntegration.compile(
 if (result.isOk) {
     auto r = result.unwrap();
     writeln("Compiled in ", r.executionTimeMs, "ms");
-    writeln("Speedup: ", r.estimatedSpeedup(), "x");
 }
 
-// Compile TypeScript
-auto tsResult = TypeScriptWorkerIntegration.compile(
-    ["src/app.ts"],
-    "dist/",
-    TSWorkerCompileOptions(target: "ES2022", sourceMap: true)
-);
-
-// Shutdown at exit
-shutdownPersistentWorkers();
+// Shutdown
+service.stop();
 ```
 
-### Metrics
-
-```d
-auto metrics = getWorkerPerformanceMetrics();
-writeln(metrics.toString());
-// Output: "Persistent Workers: 142 compilations, 98% success, 14.2x avg speedup, 87s total saved"
-```
-
-## Configuration
-
-### Pool Configuration
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `max_workers_per_type` | 4 | Max concurrent workers per compiler |
-| `idle_timeout` | 10m | Evict idle workers after duration |
-| `health_check_interval` | 30s | Health check frequency |
-| `max_requests_per_worker` | 10,000 | Recycle worker after N requests |
-| `enable_recycling` | true | Enable warmth-aware recycling |
-| `enable_memory_monitor` | true | Enable OOM detection |
-| `persist_across_builds` | true | Keep warm workers between builds |
-
-### Recycling Configuration
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `prefer_warm_workers` | true | Select warmest available worker |
-| `keep_hot_across_builds` | true | Preserve hot workers between builds |
-| `hot_worker_bonus` | 5m | Extra idle time for hot workers |
-| `min_keep_warm_time` | 2m | Minimum time before evicting warm worker |
-
-### Memory Configuration
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `normal_max` | 0.70 | Normal pressure threshold |
-| `elevated_max` | 0.85 | Elevated pressure threshold |
-| `high_max` | 0.95 | High pressure, triggers OOM restart |
-| `poll_interval` | 5s | Memory polling interval |
-
-### JVM Worker Configuration
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `max_heap_mb` | 2048 | JVM max heap size |
-| `jvm_args` | [] | Additional JVM arguments |
-| `java_home` | auto | Override JAVA_HOME |
-| `startup_timeout` | 30s | Worker startup timeout |
-| `request_timeout` | 5m | Request timeout |
-
-### TypeScript Worker Configuration
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `max_old_space_mb` | 4096 | Node.js max old space |
-| `incremental` | true | Enable incremental compilation |
-| `node_path` | auto | Override Node.js path |
-| `startup_timeout` | 15s | Worker startup timeout |
-| `request_timeout` | 5m | Request timeout |
-
-## Warmth-Aware Recycling
-
-Workers are managed with warmth-aware policies:
-
-### Recycling Policy
-
-- **Cold workers evicted first** when capacity needed
-- **Hot workers get extended idle time** (configurable bonus)
-- **Warm workers preserved** for minimum keep time
-- **Workers persist across builds** for true JIT optimization
+### Builderspace Configuration
 
 ```yaml
 build:
   persistent_workers:
-    recycling:
-      prefer_warm_workers: true
-      keep_hot_across_builds: true
-      hot_worker_bonus: 5m
-      min_keep_warm_time: 2m
-```
-
-### Warmth Statistics
-
-```d
-auto recycler = pool.getRecycler();
-auto stats = recycler.getStats();
-
-writeln("Cold workers: ", stats.byLevel[WarmthLevel.Cold]);
-writeln("Warm workers: ", stats.byLevel[WarmthLevel.Warm]);
-writeln("Hot workers: ", stats.byLevel[WarmthLevel.Hot]);
-writeln("Estimated speedup: ", recycler.estimatedSpeedup(), "x");
-```
-
-## Memory Monitoring & OOM Prevention
-
-Workers are monitored for memory pressure with automatic restart before OOM:
-
-### Memory Pressure Levels
-
-| Level | Threshold | Action |
-|-------|-----------|--------|
-| Normal | < 70% | Continue normally |
-| Elevated | 70-85% | Log warning |
-| High | 85-95% | Trigger restart (warm workers deferred) |
-| Critical | > 95% | Immediate restart |
-
-### Configuration
-
-```yaml
-build:
-  persistent_workers:
-    memory:
-      normal_max: 0.70
-      elevated_max: 0.85
-      high_max: 0.95
-      poll_interval: 5s
-```
-
-### Checking Memory Status
-
-```d
-auto memMonitor = pool.getMemoryMonitor();
-auto stats = memMonitor.getStats();
-
-writeln("Workers monitored: ", stats.monitored);
-writeln("At OOM risk: ", stats.atRisk);
-writeln("Critical: ", stats.critical);
-writeln("OOM restarts: ", stats.oomDetections);
+    enabled: true
+    max_workers_per_type: 4
+    idle_timeout: 10m
 ```
 
 ## Health Monitoring
 
-The health monitor ensures workers remain responsive with memory awareness:
+**Module:** `engine.workers.health`
 
-### Automatic Recovery
+### Health Status
 
-1. Health checks every 10 seconds (configurable)
-2. **Memory pressure monitoring** with OOM prevention
-3. Detects dead/unresponsive workers
-4. Auto-restart after 3 consecutive failures
-5. **Warmth-aware restart** preserves warm workers when possible
-6. Graceful fallback to cold compilation
+- `Healthy` - Responding normally
+- `Degraded` - Slow but functioning
+- `MemoryHigh` - Memory pressure detected
+- `Unresponsive` - Not responding to pings
+- `Dead` - Process died
+- `Recovered` - Restarted successfully
 
-### Alerts
+### Configuration
 
 ```d
-auto health = new WorkerHealthMonitor(pool);
-
-health.setAlertHandler((alert) {
-    final switch (alert.severity) {
-        case AlertSeverity.Info:
-            log.info(alert.message);
-            break;
-        case AlertSeverity.Warning:
-            log.warn(alert.message);
-            break;
-        case AlertSeverity.Critical:
-            log.error(alert.message);
-            alertOps(alert);
-            break;
-    }
-});
-
-health.start();
+struct HealthMonitorConfig
+{
+    Duration checkInterval = seconds(10);
+    Duration slowResponseThreshold = seconds(5);
+    uint maxConsecutiveFailures = 3;
+    bool autoRestartOnOOM = true;
+    bool preferWarmRestart = true;
+}
 ```
 
-### Health Summary
+### Statistics
 
 ```d
 auto summary = health.getSummary();
-writeln("Worker health: ", summary.healthPercentage(), "%");
-writeln("Avg response time: ", summary.avgResponseTimeMs, "ms");
-writeln("Total restarts: ", summary.totalRestarts);
+writeln("Health: ", summary.healthPercentage(), "%");
+writeln("Avg response: ", summary.avgResponseTimeMs, "ms");
+writeln("Restarts: ", summary.totalRestarts);
 ```
 
-## Supported Compilers
+## Metrics
 
-### JVM
+```d
+auto stats = pool.getStats();
+writeln("Active workers: ", stats.activeWorkers);
+writeln("Total requests: ", stats.totalRequests);
+writeln("Average latency: ", stats.avgLatencyMs, "ms");
 
-| Compiler | Status | Notes |
-|----------|--------|-------|
-| javac | ✅ Full | OpenJDK 11+ |
-| kotlinc | ✅ Full | Kotlin 1.5+ |
-| scalac | ✅ Full | Scala 2.12+ / Scala 3 |
-| groovyc | ✅ Full | Groovy 3.0+ |
-
-### TypeScript/JavaScript
-
-| Compiler | Status | Notes |
-|----------|--------|-------|
-| tsc | ✅ Full | TypeScript 4.0+ |
-| swc | ✅ Full | SWC 1.0+ |
-| esbuild | ✅ Full | esbuild 0.14+ |
-| bun | ✅ Full | Bun 1.0+ |
-
-## Best Practices
-
-### 1. Tune Worker Count
-
-```yaml
-# For CI with high parallelism
-persistent_workers:
-  max_workers_per_type: 8
-
-# For local development
-persistent_workers:
-  max_workers_per_type: 2
+auto recyclerStats = recycler.getStats();
+writeln("Hot workers: ", recyclerStats.byLevel[WarmthLevel.Hot]);
+writeln("Estimated speedup: ", recycler.estimatedSpeedup(), "x");
 ```
-
-### 2. Set Appropriate Timeouts
-
-```yaml
-# For large projects
-persistent_workers:
-  idle_timeout: 10m  # Keep workers longer
-  request_timeout: 10m  # Allow long compilations
-```
-
-### 3. Monitor Metrics
-
-Track speedup over time to verify benefits:
-
-```bash
-bldr build --verbose 2>&1 | grep "Worker speedup"
-```
-
-### 4. Handle Fallback Gracefully
-
-Workers automatically fall back to cold compilation if:
-- Worker process dies
-- Worker is unresponsive
-- Max workers reached
-
-This is transparent - builds still succeed.
 
 ## Troubleshooting
 
 ### Workers Not Starting
 
-1. Check compiler is available: `which javac` / `which tsc`
-2. Verify sufficient memory for workers
-3. Check logs for startup errors
+1. Verify compiler available: `which javac`, `which tsc`
+2. Check memory limits
+3. Review startup timeout
 
-### Poor Speedup
+### Poor Performance
 
-1. Workers may be cold - check warmth distribution
-2. Files may be too large (compilation dominates startup)
-3. Too few workers for parallelism
-4. Workers being evicted too quickly - increase `idle_timeout`
+1. Check warmth distribution
+2. Increase `idle_timeout` to preserve warm workers
+3. Ensure `persistAcrossBuilds = true`
 
 ### High Memory Usage
 
-1. Reduce `max_workers_per_type`
-2. Lower `max_heap_mb` / `max_old_space_mb`
-3. Enable memory monitoring: `enable_memory_monitor: true`
-4. Lower `high_max` threshold for earlier OOM restart
+1. Reduce `maxWorkersPerType`
+2. Lower `maxHeapMB`
+3. Reduce `maxRequestsPerWorker`
 
 ### Frequent OOM Restarts
 
-1. Workers may have memory leaks - reduce `max_requests_per_worker`
-2. Increase heap limits if sufficient RAM available
-3. Check for memory-intensive compilation patterns
-4. Review memory stats: `pool.getMemoryMonitor().getStats()`
+1. Lower `highMax` threshold
+2. Reduce `maxRequestsPerWorker` for leak detection
+3. Increase heap limits if RAM available
 
-### Workers Not Staying Warm
+## See Also
 
-1. Enable persistence: `persist_across_builds: true`
-2. Increase `idle_timeout` to 10+ minutes
-3. Enable hot worker bonus: `keep_hot_across_builds: true`
-4. Check recycler stats for warmth distribution
-
-## Comparison with Bazel
-
-| Feature | Builder | Bazel |
-|---------|---------|-------|
-| Protocol | ✅ Compatible | Original |
-| JVM workers | ✅ javac, kotlinc, scalac, groovyc | javac, kotlinc |
-| TypeScript workers | ✅ tsc, swc, esbuild, bun | Limited |
-| Persist across builds | ✅ Yes | Per-build only |
-| Warmth tracking | ✅ Cold/Warm/Hot levels | None |
-| OOM prevention | ✅ Automatic restart | None |
-| Memory monitoring | ✅ Built-in | None |
-| Auto health recovery | ✅ Yes | Manual |
-| Warmth-aware eviction | ✅ Cold first, hot preserved | FIFO |
-| Metrics | ✅ Built-in with warmth stats | External |
-| Configuration | ✅ Simple YAML | Starlark rules |
-
-## References
-
+- [Performance](performance.md)
+- [Concurrency](concurrency.md)
 - [Bazel Persistent Workers](https://bazel.build/remote/persistent)
-- [Worker Protocol Specification](https://github.com/bazelbuild/bazel/blob/master/src/main/protobuf/worker_protocol.proto)
-- [JVM Warmup](https://www.baeldung.com/java-jvm-warmup)
-- [TypeScript Incremental Compilation](https://www.typescriptlang.org/docs/handbook/project-references.html)
-

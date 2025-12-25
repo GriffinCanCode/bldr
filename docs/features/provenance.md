@@ -4,17 +4,17 @@ SLSA-compliant build provenance attestations for software supply chain security.
 
 ## Overview
 
-Build provenance provides cryptographically signed attestations documenting how software artifacts were built. This enables:
+Build provenance provides cryptographically signed attestations documenting how software artifacts were built:
 
 - **Verification**: Prove artifacts came from trusted builds
-- **Compliance**: Meet enterprise supply chain security requirements (EO 14028)
-- **Auditability**: Complete build lineage tracking
+- **Compliance**: Meet supply chain security requirements (EO 14028, SLSA)
+- **Auditability**: Track complete build lineage
 
 ## SLSA Levels
 
 | Level | Description | bldr Support |
 |-------|-------------|--------------|
-| L0 | No provenance | - |
+| L0 | No provenance | — |
 | L1 | Provenance exists | ✓ Automatic |
 | L2 | Hosted build platform | ✓ CI/CD |
 | L3 | Hardened builds | ✓ Hermetic mode |
@@ -22,22 +22,16 @@ Build provenance provides cryptographically signed attestations documenting how 
 ## Quick Start
 
 ```bash
-# Build with provenance
-bldr build --provenance
-
-# Build with provenance output to specific file
-bldr build --provenance -o build.provenance.json
-
-# Verify provenance
+# Verify provenance from a file
 bldr verify --provenance build.provenance.json
 
-# Build with hermetic mode for SLSA L3
-bldr build --hermetic --provenance
+# Verify with minimum SLSA level requirement
+bldr verify --provenance build.provenance.json --slsa-level L2
 ```
 
 ## Output Format
 
-### SLSA Provenance v1.0 (JSON)
+### SLSA Provenance v1.0 (in-toto Statement)
 
 ```json
 {
@@ -45,9 +39,7 @@ bldr build --hermetic --provenance
   "subject": [
     {
       "name": "bin/myapp",
-      "digest": {
-        "blake3": "abc123def456..."
-      }
+      "digest": { "blake3": "abc123def456..." }
     }
   ],
   "predicateType": "https://slsa.dev/provenance/v1",
@@ -100,7 +92,7 @@ bldr build --hermetic --provenance
 |----------|-------------|---------|
 | `BLDR_PROVENANCE_ENABLED` | Enable provenance generation | `true` |
 | `BLDR_PROVENANCE_SIGN` | Sign attestations | `true` |
-| `BLDR_SLSA_LEVEL` | Target SLSA level | `L1` |
+| `BLDR_SLSA_LEVEL` | Target SLSA level (L1/L2/L3) | `L1` |
 | `BLDR_SIGNING_KEY` | Path to signing key | workspace-derived |
 
 ### Builderfile Configuration
@@ -148,6 +140,10 @@ auto result = gen.finalize();
 if (result.isOk)
 {
     auto prov = result.unwrap();
+    
+    // Sign
+    auto signer = ProvenanceSigner.fromWorkspace(".");
+    auto envelope = signer.sign(prov).unwrap();
     
     // Export to file
     ProvenanceExporter.writeToFile(prov, "build.provenance.json");
@@ -199,17 +195,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Build with provenance
-        run: bldr build --provenance -o build.provenance.json
+      - name: Build
+        run: bldr build
         env:
-          BLDR_PROVENANCE_ENABLED: true
-          BLDR_SLSA_LEVEL: L2
+          BLDR_PROVENANCE_ENABLED: "true"
+          BLDR_SLSA_LEVEL: "L2"
       
       - name: Upload provenance
         uses: actions/upload-artifact@v4
         with:
           name: provenance
-          path: build.provenance.json
+          path: "*.provenance.json"
 ```
 
 ### GitLab CI
@@ -218,26 +214,26 @@ jobs:
 build:
   stage: build
   script:
-    - bldr build --provenance -o build.provenance.json
+    - bldr build
   variables:
     BLDR_PROVENANCE_ENABLED: "true"
     BLDR_SLSA_LEVEL: "L2"
   artifacts:
     paths:
-      - build.provenance.json
+      - "*.provenance.json"
 ```
 
-## Security Considerations
+## Security
 
 ### Signing Keys
 
-- **Workspace-derived**: Default, key derived from workspace path + machine ID
+- **Workspace-derived** (default): Key derived from workspace path + machine ID
 - **Custom key**: Set `BLDR_SIGNING_KEY` for consistent keys across machines
 - **Key rotation**: Re-sign provenance when rotating keys
 
 ### Verification Best Practices
 
-1. Always verify provenance in deployment pipelines
+1. Verify provenance in deployment pipelines
 2. Check SLSA level meets requirements
 3. Verify output hashes match subjects
 4. Validate builder identity
@@ -246,7 +242,7 @@ build:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Build Execution                           │
+│                    Build Execution                          │
 │  ┌─────────────────────────────────────────────────────────┐│
 │  │ ProvenanceCollector (thread-safe)                       ││
 │  │   • recordMaterial(path)                                ││
@@ -257,7 +253,7 @@ build:
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                  ProvenanceGenerator                         │
+│                  ProvenanceGenerator                        │
 │   • Materials (inputs with BLAKE3 hashes)                   │
 │   • Outputs (subjects with digests)                         │
 │   • Build metadata (timestamps, ID)                         │
@@ -266,7 +262,7 @@ build:
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   ProvenanceSigner                           │
+│                   ProvenanceSigner                          │
 │   • BLAKE3-HMAC signature                                   │
 │   • DSSE envelope format                                    │
 │   • Workspace-derived or custom key                         │
@@ -274,7 +270,7 @@ build:
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                 ProvenanceExporter                           │
+│                 ProvenanceExporter                          │
 │   • SLSA v1.0 JSON                                          │
 │   • Signed DSSE envelope                                    │
 │   • Human-readable summary                                  │
@@ -283,9 +279,7 @@ build:
 
 ## Related Features
 
-- [Determinism](determinism.md) - Reproducible builds
-- [Hermetic](hermetic.md) - Isolated build environments
-- [Verification](verification.md) - Build correctness proofs
-- [Remote Execution](remote-execution.md) - Distributed builds with provenance
-
-
+- [Determinism](determinism.md) — Reproducible builds
+- [Hermetic](hermetic.md) — Isolated build environments
+- [Verification](verification.md) — Build correctness proofs
+- [Remote Execution](remote-execution.md) — Distributed builds with provenance

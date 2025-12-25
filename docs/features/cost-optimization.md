@@ -1,31 +1,40 @@
 # Cost Optimization
 
+## Overview
+
+Builder provides cost-aware build planning through its economics module. While traditional build systems optimize exclusively for time, Builder computes Pareto-optimal build plans across the cost-time tradeoff space.
+
+### Key Capabilities
+
+- **Budget-constrained builds**: Find the fastest build within a specified budget
+- **Time-constrained builds**: Find the cheapest build within a time limit
+- **Multi-objective optimization**: Balance cost and time using Pareto frontier computation
+- **Historical learning**: Improve estimates over time using execution history
+
 ## Quick Start
 
-### Basic Usage
+### CLI Usage
 
 ```bash
-# Optimize within budget
-$ bldr build --budget=5.00
+# Build within a budget (USD)
+bldr build --budget=5.00
 
-# Optimize within time limit (seconds)
-$ bldr build --time-limit=120
+# Build within a time limit (seconds)
+bldr build --time-limit=120
 
-# Optimize for cost
-$ bldr build --optimize=cost
+# Optimize for cost (ignores time)
+bldr build --optimize=cost
 
-# Optimize for time
-$ bldr build --optimize=time
+# Optimize for time (ignores cost)
+bldr build --optimize=time
 
-# Balanced optimization
-$ bldr build --optimize=balanced
+# Balanced optimization (default)
+bldr build --optimize=balanced
 ```
 
 ### Example Output
 
-```bash
-$ bldr build --budget=5.00
-Starting build...
+```
 Computing optimal build plan...
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Economic Build Plan
@@ -34,263 +43,188 @@ Strategy: Distributed (4 workers, 16 cores)
 Est. Cost: $4.87
 Est. Time: 5m 20s
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Building 147 targets...
-[████████████████████████████████████████] 147/147 (100%)
-
-Build completed successfully!
-
-Build Cost Summary:
-  Total Cost:   $4.23
-  Total Time:   5m 42s
-  Executions:   147
-  Cache Hits:   96 (65.3%)
-  Avg Cost:     $0.029
 ```
 
-## Why Cost Optimization?
+## Architecture
 
-### The Problem
+The economics module is located in `source/engine/economics/`:
 
-Traditional build systems optimize for a single objective: **build time**. However, builds consume real resources with real costs:
-
-- **CPU**: Remote workers charge by core-hour ($0.04-$0.10/hour)
-- **Memory**: Larger instances cost more ($0.005-$0.01/GB-hour)
-- **Network**: Data transfer has measurable cost ($0.08-$0.12/GB)
-- **Storage**: Artifact storage and I/O operations
-
-At scale, these costs compound:
-
-| Scenario | Workers | Time | Cost |
-|----------|---------|------|------|
-| Aggressive | 32 | 2m | $12.30 |
-| Balanced | 8 | 6m | $4.50 |
-| Conservative | 2 | 18m | $1.20 |
-
-**All three are valid** depending on your constraints!
-
-### The Solution
-
-Builder introduces **multi-objective optimization** that finds **Pareto-optimal** solutions:
-
-> A build plan is Pareto-optimal if no other plan is strictly better in BOTH cost AND time
-
-This enables:
-- **Budget-Aware CI**: "Spend at most $5 per build"
-- **Time-Critical Releases**: "Build in under 2 minutes"
-- **Cost-Optimized Nightly**: "Minimize cost, time is flexible"
-
-## Optimization Modes
-
-### 1. Budget-Constrained
-
-Find the **fastest build** within a budget:
-
-```bash
-$ bldr build --budget=5.00
+```
+economics/
+├── pricing.d         # Resource pricing models (AWS, GCP, Azure, local)
+├── strategies.d      # Execution strategies and Pareto frontier computation
+├── optimizer.d       # Build plan optimization engine
+├── estimator.d       # Cost/time estimation from historical data
+├── tracking.d        # Historical execution tracking
+├── integration.d     # BuildServices integration
+└── README.md
 ```
 
-**Use Cases**:
-- CI/CD with cost quotas
-- Startup/small teams with tight budgets
-- Development builds (optimize for cost)
+### Core Types
 
-**Algorithm**:
-```
-1. Enumerate candidate strategies
-2. Compute Pareto frontier
-3. Filter plans where cost ≤ budget
-4. Select plan with minimum time
-```
+**OptimizationObjective** (`optimizer.d`):
+- `MinimizeCost` — Find cheapest build
+- `MinimizeTime` — Find fastest build
+- `Balanced` — Balance cost and time (α=0.5)
+- `Budget` — Fastest within budget constraint
+- `TimeLimit` — Cheapest within time constraint
 
-### 2. Time-Constrained
+**ExecutionStrategy** (`strategies.d`):
+- `Local` — Execute on local machine ($0 cost)
+- `Cached` — Cache hit (~$0.0001 cost)
+- `Distributed` — Remote workers (variable cost)
+- `Premium` — High-performance instances (2x cost, 1.5x speed)
 
-Find the **cheapest build** within a time limit:
+## Optimization Algorithm
 
-```bash
-$ bldr build --time-limit=120  # 2 minutes
-```
+### Pareto Frontier Computation
 
-**Use Cases**:
-- Release pipelines (must finish quickly)
-- Pre-commit checks (developer waiting)
-- Continuous deployment (fast feedback)
+A build plan P is **Pareto-optimal** if no other plan P' satisfies:
+- `cost(P') ≤ cost(P)` AND `time(P') ≤ time(P)`
+- with at least one strict inequality
 
-**Algorithm**:
-```
-1. Enumerate candidate strategies
-2. Compute Pareto frontier
-3. Filter plans where time ≤ limit
-4. Select plan with minimum cost
-```
+The `ParetoFrontier` struct in `strategies.d` computes this:
 
-### 3. Objective-Based
-
-Optimize for a specific objective:
-
-```bash
-# Minimize cost (no time constraint)
-$ bldr build --optimize=cost
-
-# Minimize time (no cost constraint)
-$ bldr build --optimize=time
-
-# Balance cost and time (α=0.5)
-$ bldr build --optimize=balanced
+```d
+static ParetoFrontier compute(BuildPlan[] candidates) {
+    BuildPlan[] frontier;
+    foreach (candidate; candidates) {
+        bool dominated = frontier.any!(p => p.dominates(candidate));
+        if (!dominated) {
+            frontier = frontier.filter!(p => !candidate.dominates(p)).array;
+            frontier ~= candidate;
+        }
+    }
+    return ParetoFrontier(frontier.sort!((a, b) => a.expectedCost() < b.expectedCost()).array);
+}
 ```
 
-**Use Cases**:
-- **Cost**: Nightly builds, batch jobs, non-urgent tasks
-- **Time**: Hot fixes, production incidents, developer feedback
-- **Balanced**: Regular CI/CD, default mode
+### Plan Selection
+
+From the Pareto frontier, the optimizer selects based on constraints:
+
+- **Budget constraint**: Filter to plans where `cost ≤ budget`, select minimum time
+- **Time constraint**: Filter to plans where `time ≤ limit`, select minimum cost
+- **Balanced**: Minimize weighted objective `α·cost + (1-α)·time`
+
+### Cost Model
+
+For each target and strategy:
+
+```
+cost(t, s) = cpuCost + memoryCost + networkCost
+
+cpuCost     = cores × duration × pricePerCoreHour
+memoryCost  = memory × duration × pricePerGBHour
+networkCost = transferSize × pricePerGB
+```
+
+Cache hits reduce expected cost:
+
+```
+expectedCost = (1 - cacheHitProbability) × computeCost + cacheHitProbability × ε
+```
+
+where `ε ≈ $0.0001` for cache lookup.
 
 ## Execution Strategies
 
-Builder evaluates 4 execution strategies:
+The `StrategyEnumerator` generates candidate plans:
 
-### 1. Local (Free)
+### Local Strategy
+- Workers: 1 (local machine)
+- Cost: $0.00
+- Parallelism: Limited to local cores
 
-Execute on developer machine using local cores.
+### Cached Strategy
+- Cost: ~$0.0001 (cache lookup only)
+- Time: 5% of baseline (when cache hits)
+- Requires: Prior successful build
 
-**Characteristics**:
-- **Cost**: $0.00
-- **Time**: Baseline (1x)
-- **Parallelism**: Limited to local cores
-- **Reliability**: 100% (always available)
+### Distributed Strategy
+- Workers: 4, 8, or 16 (enumerated)
+- Cost: Scales with worker count and duration
+- Speedup: Estimated via Amdahl's law approximation
 
-**When Used**:
-- `--optimize=cost` (always cheapest)
-- Offline development
-- No remote workers available
-
-### 2. Cached (Near-Free)
-
-Fetch results from cache (previous build).
-
-**Characteristics**:
-- **Cost**: ~$0.0001 (cache lookup)
-- **Time**: 100x faster (seconds vs minutes)
-- **Hit Rate**: Depends on code stability
-- **Reliability**: 100% if cache hit
-
-**When Used**:
-- Incremental builds (code hasn't changed)
-- CI on stable branches
-- High cache hit probability
-
-### 3. Distributed (Variable)
-
-Execute on remote worker pool with N workers.
-
-**Characteristics**:
-- **Cost**: Scales with worker count
-- **Time**: Scales with parallelism (Amdahl's Law)
-- **Workers**: 1-64 (configurable)
-- **Reliability**: 99% (with retry)
-
-**Scaling**:
-```
-Speedup = 1 / ((1-P) + P/N)
-
-where P = parallelizable fraction (typically 0.9)
-      N = worker count
+```d
+float estimateSpeedup(size_t workers) =>
+    1.0f / (0.2f + 0.8f / workers);  // 20% sequential, 80% parallelizable
 ```
 
-**When Used**:
-- Production builds
-- CI/CD pipelines
-- Balanced time/cost requirements
+### Premium Strategy
+- Workers: 4 or 8 premium instances
+- Cost: 2x standard pricing
+- Speedup: 1.5x faster hardware
 
-### 4. Premium (Expensive, Fast)
-
-Execute on high-performance dedicated instances.
-
-**Characteristics**:
-- **Cost**: 2x standard pricing
-- **Time**: 1.5x faster (better hardware)
-- **Workers**: 16 premium instances
-- **Reliability**: 99.9% (dedicated)
-
-**When Used**:
-- Time-critical releases
-- Production incidents
-- `--optimize=time` with tight deadlines
-
-## Pricing Models
+## Pricing Configuration
 
 ### Cloud Providers
 
-Builder uses realistic pricing from major cloud providers:
+Defined in `pricing.d`:
 
-#### AWS (Default)
+**AWS (default)**:
+- CPU: $0.0416/core-hour (t3.medium)
+- Memory: $0.0052/GB-hour
+- Network: $0.09/GB egress
 
-```d
-ResourcePricing(
-    costPerCoreHour: 0.0416,  // t3.medium
-    costPerGBHour: 0.0052,
-    costPerNetworkGB: 0.09,    // First 10TB
-    costPerDiskIOGB: 0.001
-)
-```
+**GCP**:
+- CPU: $0.0475/core-hour (e2-medium)
+- Memory: $0.0064/GB-hour
+- Network: $0.085/GB egress
 
-#### GCP
+**Azure**:
+- CPU: $0.042/core-hour (B2s)
+- Memory: $0.0055/GB-hour
+- Network: $0.087/GB bandwidth
 
-```d
-ResourcePricing(
-    costPerCoreHour: 0.0475,  // e2-medium
-    costPerGBHour: 0.0064,
-    costPerNetworkGB: 0.085,
-    costPerDiskIOGB: 0.001
-)
-```
+**Local**:
+- All costs: $0.00
 
-#### Azure
+### Pricing Profiles
 
-```d
-ResourcePricing(
-    costPerCoreHour: 0.042,   // B2s
-    costPerGBHour: 0.0055,
-    costPerNetworkGB: 0.087,
-    costPerDiskIOGB: 0.001
-)
-```
+- `standard` — Base pricing (1.0x multiplier)
+- `spot` — 0.3x cost, 85% reliability
+- `premium` — 2.0x cost, 99.9% reliability
 
-#### Local (Developer Machine)
+## Environment Variables
 
-```d
-ResourcePricing(
-    costPerCoreHour: 0.0,
-    costPerGBHour: 0.0,
-    costPerNetworkGB: 0.0,
-    costPerDiskIOGB: 0.0
-)
-```
-
-### Pricing Tiers
-
-Different instance types have different cost/performance tradeoffs:
-
-| Tier | Cost Multiplier | Reliability | Speedup | Use Case |
-|------|----------------|-------------|---------|----------|
-| **Spot** | 0.3x | 85% | 1.0x | Batch jobs, cost-sensitive |
-| **On-Demand** | 1.0x | 99% | 1.0x | Standard CI/CD |
-| **Reserved** | 0.6x | 99% | 1.0x | Long-term committed |
-| **Premium** | 2.0x | 99.9% | 1.5x | Time-critical, production |
-
-Set via environment:
 ```bash
-export BUILDER_PRICING_TIER=spot        # Cheapest
-export BUILDER_PRICING_TIER=ondemand    # Default
-export BUILDER_PRICING_TIER=premium     # Fastest
+# Enable cost optimization
+export BUILDER_COST_OPTIMIZATION=true
+
+# Cloud provider (aws, gcp, azure, local)
+export BUILDER_CLOUD_PROVIDER=aws
+
+# Pricing tier (spot, ondemand, reserved, premium)
+export BUILDER_PRICING_TIER=ondemand
+
+# Default budget (USD)
+export BUILDER_BUDGET=5.00
+
+# Default time limit (seconds)
+export BUILDER_TIME_LIMIT=120
+
+# Optimization mode (cost, time, balanced)
+export BUILDER_OPTIMIZE=balanced
+```
+
+## Builderspace Configuration
+
+```
+workspace {
+  economics {
+    enabled: true
+    provider: "aws"
+    tier: "ondemand"
+    budget: 5.00
+    optimize: "balanced"
+  }
+}
 ```
 
 ## Historical Tracking
 
-Builder learns from past executions to improve estimates.
-
-### Execution History
-
-Stored in `.builder-cache/execution-history.json`:
+Execution history is stored in `.builder-cache/execution-history.json`:
 
 ```json
 [
@@ -307,195 +241,89 @@ Stored in `.builder-cache/execution-history.json`:
 ]
 ```
 
-### Estimation Strategy
+### Estimation Accuracy
 
-**Cold Start** (no history):
-- Language-based heuristics (C++ = 30s, Python = 5s)
-- Source count scaling (10+ files = longer)
-- ±50% accuracy
+- **Cold start** (no history): ±50% accuracy, uses language-based heuristics
+- **Warm cache** (some history): ±20% accuracy, exponential moving average
+- **Stable workload** (5+ executions): ±10% accuracy
 
-**Warm Cache** (historical data):
-- Exponential moving average (α=0.3)
-- Actual vs estimated comparison
-- ±20% accuracy
-
-**Stable Workload** (5+ executions):
-- Converges to actual patterns
-- ±10% accuracy
-- Accounts for cache hit rate
-
-### Continuous Improvement
-
-After each build:
-```d
-tracker.trackExecution(
-    targetId: "//src:main",
-    duration: 14500.msecs,
-    usage: ResourceUsageEstimate(...),
-    cost: 0.043,
-    cacheHit: false
-);
-```
-
-Updates history with exponential moving average:
+Update formula:
 ```
 newEstimate = 0.7 × oldEstimate + 0.3 × actual
 ```
 
-## Configuration
+## Profile-Guided Scheduling
 
-### Environment Variables
+The economics module integrates with distributed scheduling through `ProfileGuidedScheduler`:
 
-```bash
-# Enable cost optimization
-export BUILDER_COST_OPTIMIZATION=true
+```d
+// Economics integration exposes execution history
+auto history = economics.getExecutionHistory();
 
-# Set cloud provider
-export BUILDER_CLOUD_PROVIDER=aws      # aws, gcp, azure, local
+// Profile scheduler uses history for cost estimates
+auto profileScheduler = createProfiledScheduler(graph, history);
 
-# Set pricing tier
-export BUILDER_PRICING_TIER=ondemand   # spot, ondemand, reserved, premium
-
-# Set default budget (USD)
-export BUILDER_BUDGET=5.00
-
-# Set default time limit (seconds)
-export BUILDER_TIME_LIMIT=120
-
-# Set optimization mode
-export BUILDER_OPTIMIZE=balanced       # cost, time, balanced
+// Distributed scheduler uses profile data for priority
+distScheduler.enableProfileGuidedScheduling(profileScheduler);
 ```
 
-### Builderspace Configuration
-
-Add economics config to `Builderspace`:
-
+Scheduling priority formula:
 ```
-workspace {
-  economics {
-    enabled: true
-    provider: "aws"
-    tier: "ondemand"
-    budget: 5.00
-    optimize: "balanced"
-  }
-}
+score = criticalPathCost × 100 + dependentCount × 10 - depth × 1
 ```
 
-## CLI Reference
+This schedules expensive actions on the critical path first.
 
-### Flags
-
-| Flag | Type | Description |
-|------|------|-------------|
-| `--budget` | float | Maximum budget in USD |
-| `--time-limit` | float | Maximum time in seconds |
-| `--optimize` | string | Optimization mode (cost, time, balanced) |
-
-### Examples
-
-```bash
-# Budget-constrained build
-bldr build --budget=5.00
-
-# Time-constrained build
-bldr build --time-limit=120
-
-# Cost-optimized build
-bldr build --optimize=cost
-
-# Time-optimized build
-bldr build --optimize=time
-
-# Balanced build (default)
-bldr build --optimize=balanced
-
-# Combine with remote execution
-bldr build --remote --budget=10.00
-
-# Environment-based configuration
-BUILDER_BUDGET=5.00 bldr build
-```
-
-## API Reference
-
-See [`source/engine/economics/README.md`](../../source/engine/economics/README.md) for detailed API documentation.
-
-## Performance Impact
-
-Cost optimization adds **negligible overhead**:
+## Performance Overhead
 
 | Operation | Time | Complexity |
 |-----------|------|------------|
 | Strategy enumeration | <1ms | O(10) |
-| Pareto computation | <1ms | O(100) |
-| Plan selection | <1ms | O(10) |
-| **Total overhead** | **<5ms** | **O(100)** |
+| Pareto computation | <1ms | O(n²) |
+| Plan selection | <1ms | O(n) |
+| **Total overhead** | **<5ms** | — |
 
-For a 5-minute build, this is **0.002%** overhead.
+## Current Limitations
 
-## Limitations
+1. **Informational only**: Economics computes optimal plans but does not yet automatically apply them to execution. Worker allocation is manual.
 
-### Current Limitations
+2. **Static optimization**: Plans are computed before build execution, not adjusted dynamically during the build.
 
-1. **Informational Only**: Economics currently computes optimal plans but doesn't automatically apply them to execution. Future work will integrate with RemoteExecutor to allocate workers based on selected plan.
+3. **Estimation accuracy**: Cold-start estimates rely on heuristics; accuracy improves with historical data.
 
-2. **Estimation Accuracy**: Cold-start estimates can be ±50% off. Accuracy improves with historical data.
+## Planned Enhancements
 
-3. **Static Optimization**: Plans are computed before build, not dynamically adjusted during execution.
+- **Automatic worker allocation**: Apply computed plans to RemoteExecutor
+- **Dynamic scaling**: Adjust workers mid-build based on progress
+- **ML-based estimation**: Neural network for predicting build times
+- **Real-time feedback**: Adjust strategy if exceeding budget
 
-### Future Enhancements
-
-1. **Dynamic Application**: Automatically allocate N workers based on selected plan
-2. **Real-Time Adjustment**: Update strategy mid-build based on actual progress
-3. **ML-Based Estimation**: Neural network for predicting build time
-4. **Portfolio Optimization**: Optimize across entire dependency graph
-5. **Spot Instance Support**: Use spot instances for cost savings
-
-## Speculation Integration
-
-Cost optimization integrates with [Speculative Execution](speculation.md) to make principled decisions about when to speculate:
-
-### Economics-Driven Speculation
+## Integration Example
 
 ```d
-// Only speculate when expected value > expected cost
-SpeculationPolicy policy;
-policy.minCostMs = 500;           // Only expensive targets worth speculation overhead
-policy.budgetFraction = 0.2;      // Max 20% of build budget for speculation
-policy.confidenceThreshold = 0.7; // Only speculate with >70% confidence
+import engine.economics.optimizer;
+import engine.economics.pricing;
+import engine.economics.estimator;
+
+auto history = new ExecutionHistory();
+auto estimator = new CostEstimator(history);
+
+PricingConfig pricingConfig;
+pricingConfig.provider = CloudProvider.aws();
+pricingConfig.profile = PricingProfile.onDemand;
+
+auto optimizer = new CostOptimizer(estimator, pricingConfig);
+
+auto constraints = OptimizationConstraints();
+constraints.objective = OptimizationObjective.Budget;
+constraints.budgetUSD = 5.00;
+
+auto planResult = optimizer.optimize(graph, constraints);
+if (planResult.isOk) {
+    auto plan = planResult.unwrap();
+    writeln(formatPlan(plan));
+}
 ```
-
-### Cost/Benefit Analysis
-
-Speculation uses the cost estimator to evaluate:
-
-1. **Expected savings**: criticalPathCost × confidence × (1 - cacheHitProbability)
-2. **Expected waste**: estimatedCostMs × (1 - confidence)
-3. **ROI threshold**: Only speculate when expectedSavings > expectedWaste × 2
-
-### Statistics Tracking
-
-```d
-// After build
-auto stats = speculation.getStats();
-writefln("Speculation ROI: %.1fx (timeSaved=$%.2f, timeWasted=$%.2f)",
-    stats.roi, stats.timeSaved.total!"seconds" * costPerSecond,
-    stats.timeWasted.total!"seconds" * costPerSecond);
-```
-
-## Comparison with Other Build Systems
-
-| Feature | Builder | Bazel | Buck2 | Pants |
-|---------|---------|-------|-------|-------|
-| Cost optimization | ✅ Yes | ❌ No | ❌ No | ❌ No |
-| Budget constraints | ✅ Yes | ❌ No | ❌ No | ❌ No |
-| Time constraints | ✅ Yes | ❌ No | ❌ No | ❌ No |
-| Multi-objective | ✅ Pareto | ❌ Time only | ❌ Time only | ❌ Time only |
-| Cost tracking | ✅ Yes | ❌ No | ❌ No | ❌ No |
-| Historical learning | ✅ EMA | ⚠️ Partial | ⚠️ Partial | ⚠️ Partial |
-
-**Builder is the only build system with economic awareness.**
 
 ## See Also
 
@@ -504,9 +332,3 @@ writefln("Speculation ROI: %.1fx (timeSaved=$%.2f, timeWasted=$%.2f)",
 - [Remote Execution](remote-execution.md)
 - [Distributed Builds](distributed.md)
 - [Caching](caching.md)
-- [Critical Path](../ai/concepts/reference/critical-path.yaml)
-
----
-
-*Innovation: Builder is the first build system to treat build resources as economic assets and optimize for cost, not just time.*
-

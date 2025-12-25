@@ -105,6 +105,12 @@ performance:
   cache_hit_overhead: "Minimal - same speed as local cache"
   cache_miss_fallback: "Build locally, upload for next time"
 
+delta_transfers:
+  description: "For large artifacts (>100MB), use CDC for delta transfers"
+  bandwidth_savings: "80-95% for typical incremental changes"
+  protocol: "Query missing chunks → Upload only new chunks"
+  see_also: "bldr explain cdc"
+
 security:
   optional_hmac: "BLAKE3-based HMAC signatures prevent tampering"
   workspace_isolation: "Different workspaces use different keys"
@@ -164,10 +170,11 @@ troubleshooting:
   - problem: "Authentication failures"
     solution: "Check API keys, HMAC configuration"
 
-related: [caching, action-cache, distributed, cdn, grpc-transport]
+related: [caching, action-cache, distributed, cdn, grpc-transport, cdc]
 
 next_steps: |
   - See 'bldr explain workflow setup-remote-cache' for step-by-step setup
   - See 'bldr explain caching' for overall architecture
+  - See 'bldr explain cdc' for large artifact delta transfers
   - See docs/features/remotecache.md for detailed documentation
 

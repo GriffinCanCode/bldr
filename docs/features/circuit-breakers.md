@@ -1,59 +1,79 @@
 # Circuit Breakers and Rate Limiting
 
-Production-grade resilience mechanisms for Builder's distributed system.
+**Status:** Implemented  
+**Module:** `infrastructure.resilience`
 
 ## Overview
 
-Builder includes sophisticated circuit breakers and rate limiting to prevent cascading failures and resource exhaustion in distributed builds. These mechanisms are transparently integrated at the highest levels of the system.
+Builder includes circuit breakers and rate limiting to prevent cascading failures and resource exhaustion in distributed builds. These mechanisms are integrated at the transport layer for remote cache and distributed execution.
 
-## Key Concepts
+## Circuit Breakers
 
-### Circuit Breakers
-
-Circuit breakers prevent cascading failures by detecting unhealthy services and temporarily blocking requests:
+Circuit breakers detect unhealthy services and temporarily block requests to allow recovery:
 
 ```
-        failure rate
-            high
-             ↓
     ┌────────────┐
-    │   CLOSED   │ ← normal operation
+    │   CLOSED   │ ← Normal operation
     │ (allowing) │
     └─────┬──────┘
           │ failures exceed threshold
           ↓
     ┌────────────┐
-    │    OPEN    │ ← failing, reject requests
+    │    OPEN    │ ← Failing, reject requests immediately
     │ (blocking) │
     └─────┬──────┘
           │ timeout elapsed
           ↓
     ┌────────────┐
-    │ HALF_OPEN  │ ← testing recovery
+    │ HALF_OPEN  │ ← Testing recovery
     │  (testing) │
     └─────┬──────┘
           │ recovery confirmed
           └───→ back to CLOSED
 ```
 
-**When circuit is OPEN**:
-- Requests fail immediately (no network call)
-- Service gets time to recover
-- Prevents request pile-up
+### Configuration
 
-**When circuit is HALF_OPEN**:
-- Limited test requests allowed
-- If successful: circuit closes
-- If failed: circuit reopens
+```d
+struct BreakerConfig {
+    float failureThreshold = 0.5;        // 50% failure rate opens circuit
+    size_t minRequests = 10;             // Min requests before considering rate
+    Duration windowSize = 30.seconds;    // Rolling window for tracking
+    Duration timeout = 60.seconds;       // Time before testing recovery
+    size_t halfOpenMaxRequests = 3;      // Test requests in HALF_OPEN
+    float successThreshold = 0.8;        // 80% success to close circuit
+    bool onlyCountNetworkErrors = true;  // Filter error types
+}
+```
 
-### Rate Limiting
+### Usage
 
-Rate limiters control request throughput using token bucket algorithm:
+```d
+import infrastructure.resilience.core.breaker;
+
+auto breaker = new CircuitBreaker("my-service", config);
+
+auto result = breaker.execute!Data(() {
+    return Ok!Data(fetchFromService());
+});
+
+// Check state
+auto state = breaker.getState();  // Closed, Open, or HalfOpen
+
+// Get statistics
+size_t total, failures;
+float rate;
+breaker.getStatistics(total, failures, rate);
+```
+
+## Rate Limiting
+
+Token bucket rate limiter with priority support and adaptive control:
 
 ```
 Token Bucket:
 ┌─────────────────┐
-│ ●●●●●●●○○○      │ ← tokens (● = available, ○ = used)
+│ ●●●●●●●○○○      │ ← tokens (● = available, ○ = consumed)
 │                 │
 │ refill rate:    │
 │ 100 tokens/sec  │
@@ -66,40 +86,160 @@ Request arrives → consume 1 token
 No tokens? → wait or reject
 ```
 
-**Adaptive Control**:
-- Rate adjusts based on service health
-- Healthy service: increase rate
-- Unhealthy service: decrease rate
-- Prevents overwhelming struggling services
+### Configuration
 
-## Architecture
-
+```d
+struct LimiterConfig {
+    size_t ratePerSecond = 100;      // Base rate limit
+    size_t burstCapacity = 200;      // Max tokens
+    bool adaptive = true;            // Enable adaptive adjustment
+    float minRate = 0.1;             // Min rate when throttled (fraction)
+    float maxRate = 1.5;             // Max rate when healthy (fraction)
+    float adjustmentSpeed = 0.05;    // Rate adjustment speed
+    ubyte priorityThreshold = 200;   // High priority bypass threshold
+}
 ```
-Application Layer
-    ↓ (uses)
-ResilientTransport/Executor (integration wrappers)
-    ↓ (coordinates)
-ResilienceService
-    ├── CircuitBreaker (per endpoint)
-    │   ├── RollingWindow (tracks failures)
-    │   └── StateMachine (CLOSED/OPEN/HALF_OPEN)
-    └── RateLimiter (per endpoint)
-        ├── TokenBucket (rate control)
-        └── AdaptiveController (health-based)
+
+### Priority Levels
+
+```d
+enum Priority : ubyte {
+    Low = 0,       // Best effort, queued last
+    Normal = 100,  // Standard operations
+    High = 200,    // Important operations, bypass queue
+    Critical = 255 // Emergency operations, highest preference
+}
+```
+
+### Usage
+
+```d
+import infrastructure.resilience.core.limiter;
+
+auto limiter = new RateLimiter("my-service", config);
+
+// Acquire with priority
+auto result = limiter.acquire(Priority.Normal, 10.seconds);
+
+// Non-blocking check
+bool acquired = limiter.tryAcquire(Priority.High);
+
+// Execute with rate limiting
+auto opResult = limiter.execute!Data(() => operation(), Priority.Normal, 10.seconds);
+
+// Adaptive rate adjustment
+limiter.adjustRate(0.8);  // 80% health → increase rate
+limiter.adjustRate(0.3);  // 30% health → decrease rate
+```
+
+## Policy Presets
+
+### Critical Services
+
+For authentication, configuration, critical infrastructure:
+
+```d
+auto policy = PolicyPresets.critical();
+```
+
+- Failure threshold: 30%
+- Min requests: 5
+- Window: 15 seconds
+- Timeout: 30 seconds
+- Rate: 50 rps (burst: 75)
+
+### Standard Services
+
+For general services, most use cases:
+
+```d
+auto policy = PolicyPresets.standard();
+```
+
+- Failure threshold: 50%
+- Min requests: 10
+- Window: 30 seconds
+- Timeout: 60 seconds
+- Rate: 100 rps (burst: 200)
+
+### Network Services
+
+For remote cache, artifact stores, external services:
+
+```d
+auto policy = PolicyPresets.network();
+```
+
+- Failure threshold: 40%
+- Only network errors counted
+- Window: 20 seconds
+- Timeout: 45 seconds
+- Rate: 150 rps (burst: 300)
+
+### High Throughput
+
+For worker coordination, internal high-traffic services:
+
+```d
+auto policy = PolicyPresets.highThroughput();
+```
+
+- Failure threshold: 60%
+- Min requests: 15
+- Window: 45 seconds
+- Timeout: 60 seconds
+- Rate: 500 rps (burst: 1000)
+
+### Relaxed
+
+For monitoring, telemetry, best-effort services:
+
+```d
+auto policy = PolicyPresets.relaxed();
+```
+
+- Failure threshold: 70%
+- Min requests: 20
+- Window: 60 seconds
+- Timeout: 120 seconds
+- Rate: 200 rps (burst: 500)
+
+## Resilience Service
+
+Coordinates circuit breakers and rate limiters per endpoint:
+
+```d
+import infrastructure.resilience.coordination.network;
+
+auto resilience = new NetworkResilience(PolicyPresets.network());
+
+// Register endpoint with custom policy
+resilience.registerEndpoint("cache-server", PolicyPresets.network());
+
+// Execute with full resilience
+auto result = resilience.execute!Data(
+    "cache-server",
+    () => fetchFromCache(),
+    Priority.Normal,
+    10.seconds
+);
+
+// Adjust rate based on health
+resilience.adjustRate("cache-server", 0.8);
 ```
 
 ### Per-Endpoint Isolation
 
-Each remote endpoint gets its own circuit breaker and rate limiter:
+Each endpoint gets its own circuit breaker and rate limiter:
 
 ```
 cache-server-1:
   Circuit: CLOSED
-  Rate: 100 rps
+  Rate: 150 rps
 
 cache-server-2:
   Circuit: OPEN  ← isolated failure
-  Rate: 20 rps (throttled)
+  Rate: 30 rps (throttled)
 
 coordinator:
   Circuit: CLOSED
@@ -108,174 +248,20 @@ coordinator:
 
 Failure in one service doesn't affect others.
 
-## Integration
-
-### Remote Cache
-
-Remote cache operations are automatically protected:
-
-```d
-// Before: direct transport
-auto transport = new HttpTransport(config);
-auto result = transport.get(key);
-
-// After: resilient transport
-auto resilience = new ResilienceService(PolicyPresets.network());
-auto transport = new ResilientCacheTransport(config, resilience);
-auto result = transport.get(key);  // Same API!
-```
-
-Benefits:
-- GET requests: normal priority
-- PUT requests: low priority (don't block reads)
-- HEAD requests: high priority (lightweight)
-- Automatic retry with backoff
-- Circuit breaking on sustained failures
-
-### Distributed Protocol
-
-Worker communication is protected:
-
-```d
-auto transportResult = ResilientTransportFactory.create(
-    workerUrl,
-    resilience
-);
-auto transport = transportResult.unwrap();
-
-// Protected operations
-transport.sendHeartBeat(workerId, heartbeat);      // High priority
-transport.sendStealRequest(victimId, request);      // Normal priority
-transport.sendStealResponse(thiefId, response);     // High priority
-```
-
-Benefits:
-- Prevents overwhelming busy workers
-- Fast failure detection (no timeout waiting)
-- Graceful degradation under load
-- Priority-based queuing
-
-### Remote Execution
-
-Action execution is protected:
-
-```d
-auto executor = new RemoteExecutor(config);
-auto resilientExecutor = new ResilientRemoteExecutor(
-    executor,
-    coordinatorUrl,
-    resilience
-);
-
-// Execute with protection
-auto result = resilientExecutor.execute(
-    actionId,
-    spec,
-    command,
-    workDir
-);
-```
-
-Benefits:
-- Prevents coordinator overload
-- Fast failure when coordinator down
-- Automatic rate adjustment
-- Per-action priority support
-
-## Policy Presets
-
-### Critical Services
-
-```d
-auto policy = PolicyPresets.critical();
-```
-
-For: Authentication, configuration, critical infrastructure
-
-Settings:
-- Failure threshold: 30%
-- Min requests: 5
-- Window: 15 seconds
-- Rate: 50 rps (burst: 75)
-
-Behavior: Fail fast, low tolerance, conservative limits
-
-### Standard Services
-
-```d
-auto policy = PolicyPresets.standard();
-```
-
-For: General services, most use cases
-
-Settings:
-- Failure threshold: 50%
-- Min requests: 10
-- Window: 30 seconds
-- Rate: 100 rps (burst: 200)
-
-Behavior: Balanced protection and throughput
-
-### Network Services
-
-```d
-auto policy = PolicyPresets.network();
-```
-
-For: Remote cache, artifact stores, external services
-
-Settings:
-- Failure threshold: 40%
-- Only network errors count
-- Window: 20 seconds
-- Rate: 150 rps (burst: 300)
-
-Behavior: Tolerant of transient network issues, burst-friendly
-
-### High Throughput
-
-```d
-auto policy = PolicyPresets.highThroughput();
-```
-
-For: Worker coordination, internal high-traffic services
-
-Settings:
-- Failure threshold: 60%
-- Min requests: 15
-- Window: 45 seconds
-- Rate: 500 rps (burst: 1000)
-
-Behavior: High capacity, tolerant of brief spikes
-
-### Relaxed
-
-```d
-auto policy = PolicyPresets.relaxed();
-```
-
-For: Monitoring, telemetry, best-effort services
-
-Settings:
-- Failure threshold: 70%
-- Min requests: 20
-- Window: 60 seconds
-- Rate: 200 rps (burst: 500)
-
-Behavior: Very tolerant, high limits
-
 ## Custom Policies
 
-Build policies from scratch:
+Build policies with the builder pattern:
 
 ```d
+import infrastructure.resilience.policies.policy;
+
 auto policy = PolicyBuilder.create()
-    .withBreakerThreshold(0.35)      // Open at 35% failures
-    .withBreakerWindow(25.seconds)   // Track last 25 seconds
-    .withBreakerTimeout(45.seconds)  // Retest after 45 seconds
-    .withRateLimit(175)              // 175 rps
-    .withBurstCapacity(350)          // Burst to 350
-    .adaptive(true)                  // Enable adaptive rate
+    .withBreakerThreshold(0.35)
+    .withBreakerWindow(25.seconds)
+    .withBreakerTimeout(45.seconds)
+    .withRateLimit(175)
+    .withBurstCapacity(350)
+    .adaptive(true)
     .build();
 
 resilience.registerEndpoint("my-service", policy);
@@ -286,165 +272,77 @@ resilience.registerEndpoint("my-service", policy);
 Rate automatically adjusts based on health:
 
 ```d
-// Health monitoring callback
-healthMonitor.onUpdate = (endpoint, health) {
-    // health: 0.0 (unhealthy) to 1.0 (healthy)
-    resilience.adjustRate(endpoint, health.score);
-};
+// Health score: 0.0 (unhealthy) to 1.0 (healthy)
+resilience.adjustRate(endpoint, healthScore);
 ```
 
-Effect:
-- Health 1.0 → 150% of nominal rate (150 rps → 225 rps)
-- Health 0.5 → 80% of nominal rate (150 rps → 120 rps)
-- Health 0.0 → 10% of nominal rate (150 rps → 15 rps)
+Effect (with default config):
+- Health 1.0 → 150% of nominal rate
+- Health 0.5 → ~80% of nominal rate
+- Health 0.0 → 10% of nominal rate
 
-**Automatic adjustment from circuit breaker state**:
+**Automatic adjustment from circuit breaker state:**
 - Circuit CLOSED → 100% rate
 - Circuit HALF_OPEN → 50% rate
 - Circuit OPEN → 20% rate
 
-## Priority Queuing
+## Metrics
 
-Requests can bypass rate limits based on priority:
-
-```d
-// Low priority - queued normally
-auto result1 = resilience.execute!Data(
-    endpoint,
-    () => operation(),
-    Priority.Low,
-    timeout
-);
-
-// High priority - bypasses queue when tokens available
-auto result2 = resilience.execute!Data(
-    endpoint,
-    () => criticalOperation(),
-    Priority.High,
-    timeout
-);
-
-// Critical priority - highest preference
-auto result3 = resilience.execute!Data(
-    endpoint,
-    () => emergencyOperation(),
-    Priority.Critical,
-    timeout
-);
-```
-
-Priority levels:
-- `Priority.Low` (0) - Best effort, queued last
-- `Priority.Normal` (100) - Standard operations
-- `Priority.High` (200) - Important operations, bypass queue
-- `Priority.Critical` (255) - Emergency operations, highest preference
-
-## Monitoring
-
-### Get Statistics
+### Rate Limiter Metrics
 
 ```d
-// Per-endpoint stats
-auto stats = resilience.getAllStats();
-
-foreach (stat; stats)
-{
-    writeln("Endpoint: ", stat.endpoint);
-    writeln("  Circuit: ", stat.breakerState);
-    writeln("  Requests: ", stat.totalRequests);
-    writeln("  Failures: ", stat.failures);
-    writeln("  Failure rate: ", stat.failureRate * 100, "%");
+struct LimiterMetrics {
+    size_t totalRequests;
+    size_t accepted;
+    size_t rejected;
+    size_t highPriorityAccepted;
+    Duration totalWaitTime;
+    float currentRate;
+    float avgWaitTimeMs;
     
-    auto limiter = stat.limiterMetrics;
-    writeln("  Rate limit:");
-    writeln("    Accepted: ", limiter.accepted);
-    writeln("    Rejected: ", limiter.rejected);
-    writeln("    Accept rate: ", limiter.acceptanceRate() * 100, "%");
-    writeln("    Current rate: ", limiter.currentRate, " rps");
+    float acceptanceRate();  // accepted / totalRequests
+    float rejectionRate();   // rejected / totalRequests
 }
+
+auto metrics = limiter.getMetrics();
 ```
 
-### Event Callbacks
+### Circuit Breaker Statistics
 
 ```d
-// Register callbacks
-resilience.onMetricsUpdate = (endpoint, state, metrics) {
-    if (state == BreakerState.Open)
-    {
-        Logger.error("Circuit opened: " ~ endpoint);
-        alerting.notify("Service failure: " ~ endpoint);
-    }
-    
-    if (metrics.rejectionRate() > 0.1)
-    {
-        Logger.warn("High rejection rate for " ~ endpoint);
-    }
-};
+size_t total, failures;
+float rate;
+breaker.getStatistics(total, failures, rate);
+
+writeln("Total requests: ", total);
+writeln("Failures: ", failures);
+writeln("Failure rate: ", rate * 100, "%");
 ```
 
-### Metrics Export
+## Error Handling
+
+Circuit breaker returns errors when open:
 
 ```d
-// Export to Prometheus/Grafana
-void exportMetrics(ResilienceService resilience)
-{
-    auto stats = resilience.getAllStats();
-    
-    foreach (stat; stats)
-    {
-        metrics.gauge("circuit_breaker_state",
-            stat.breakerState.to!int,
-            ["endpoint": stat.endpoint]
-        );
-        
-        metrics.gauge("failure_rate",
-            stat.failureRate,
-            ["endpoint": stat.endpoint]
-        );
-        
-        metrics.counter("rate_limit_rejections",
-            stat.limiterMetrics.rejected,
-            ["endpoint": stat.endpoint]
-        );
+auto result = breaker.execute!Data(() => operation());
+
+if (result.isErr) {
+    auto error = result.unwrapErr();
+    // Check if circuit breaker blocked the request
+    if (error.code() == ErrorCode.NetworkError) {
+        writeln("Circuit open, request blocked");
     }
 }
 ```
 
-## Configuration
+Rate limiter returns errors when limit exceeded:
 
-### Environment Variables
+```d
+auto result = limiter.acquire(Priority.Normal, Duration.zero);
 
-```bash
-# Enable strict resilience for production
-export BUILDER_STRICT_RESILIENCE=1
-
-# Relax resilience for development
-export BUILDER_RELAXED_RESILIENCE=1
-
-# Disable resilience for debugging
-export BUILDER_DISABLE_RESILIENCE=1
-```
-
-### Configuration File
-
-```yaml
-# .builderconfig
-resilience:
-  enabled: true
-  default_policy: standard
-  
-  endpoints:
-    cache-server:
-      policy: network
-      rate_limit: 200
-      burst: 400
-      
-    coordinator:
-      policy: high_throughput
-      circuit_breaker:
-        threshold: 0.4
-        window: 30s
-        timeout: 60s
+if (result.isErr) {
+    writeln("Rate limit exceeded");
+}
 ```
 
 ## Performance
@@ -457,160 +355,54 @@ Per-request overhead:
 - Rolling window update: ~200ns
 - **Total: ~350ns**
 
-For typical network calls (1-100ms), this is **0.035% - 0.0035% overhead**.
+For typical network calls (1-100ms), this is negligible overhead.
 
 ### Memory
 
 Per endpoint:
-- Circuit breaker: ~2KB (rolling window)
+- Circuit breaker: ~2KB (rolling window buckets)
 - Rate limiter: ~1KB (token bucket + metrics)
 - **Total: ~3KB per endpoint**
-
-For 100 endpoints: ~300KB
 
 ## Troubleshooting
 
 ### Circuit keeps opening
 
-**Symptoms**:
-- Circuit frequently transitions CLOSED → OPEN
-- Many failed requests
+**Cause:** Service is genuinely failing or threshold too sensitive.
 
-**Diagnosis**:
+**Diagnosis:**
 ```d
 size_t total, failures;
 float rate;
-resilience.getBreakerStatistics(endpoint, total, failures, rate);
-
-writeln("Total requests: ", total);
-writeln("Failures: ", failures);
+breaker.getStatistics(total, failures, rate);
 writeln("Failure rate: ", rate * 100, "%");
 ```
 
-**Solutions**:
-1. Check service health (is it actually failing?)
+**Solutions:**
+1. Check if service is actually failing
 2. Increase failure threshold if false positives
 3. Increase minimum requests to reduce noise
 4. Increase window size for smoother tracking
 
 ### Rate limiting too aggressive
 
-**Symptoms**:
-- High rejection rate
-- Slow builds due to queuing
+**Cause:** Rate limit too low or burst capacity insufficient.
 
-**Diagnosis**:
+**Diagnosis:**
 ```d
-auto metrics = resilience.getLimiterMetrics(endpoint);
-
-writeln("Accepted: ", metrics.accepted);
-writeln("Rejected: ", metrics.rejected);
-writeln("Current rate: ", metrics.currentRate);
+auto metrics = limiter.getMetrics();
+writeln("Rejection rate: ", metrics.rejectionRate() * 100, "%");
 writeln("Avg wait: ", metrics.avgWaitTimeMs, "ms");
 ```
 
-**Solutions**:
+**Solutions:**
 1. Increase rate per second
 2. Increase burst capacity
 3. Check health scores (may be throttled)
-4. Use priority for critical requests
-
-### Memory growing
-
-**Symptoms**:
-- Gradual memory increase over time
-
-**Diagnosis**:
-```d
-auto stats = resilience.getAllStats();
-writeln("Total endpoints: ", stats.length);
-```
-
-**Solutions**:
-1. Unregister unused endpoints
-2. Reduce rolling window size
-3. Periodically reset metrics:
-   ```d
-   resilience.resetStats(endpoint);
-   ```
-
-## Best Practices
-
-### 1. Use Shared ResilienceService
-
-Create one service instance, share across transports:
-
-```d
-// Good
-auto resilience = new ResilienceService();
-auto cache = new ResilientCacheTransport(cacheConfig, resilience);
-auto executor = new ResilientRemoteExecutor(exec, url, resilience);
-
-// Bad - creates duplicate circuit breakers
-auto cache = new ResilientCacheTransport(cacheConfig, null);
-auto executor = new ResilientRemoteExecutor(exec, url, null);
-```
-
-### 2. Choose Appropriate Policies
-
-Match policy to service characteristics:
-
-- External services → `network`
-- Critical path → `critical`
-- High traffic → `highThroughput`
-- Best effort → `relaxed`
-
-### 3. Monitor and Adjust
-
-Start conservative, relax based on observations:
-
-```d
-// Start strict
-resilience.registerEndpoint("new-service", PolicyPresets.critical());
-
-// Monitor for false positives
-// Adjust if needed
-resilience.registerEndpoint("new-service", PolicyPresets.standard());
-```
-
-### 4. Use Priority Wisely
-
-Reserve `Critical` for true emergencies:
-
-```d
-// Good
-auto heartbeat = resilience.execute!Data(
-    endpoint,
-    () => sendHeartbeat(),
-    Priority.High,      // Important but not critical
-    timeout
-);
-
-// Bad - everything critical defeats the purpose
-auto request = resilience.execute!Data(
-    endpoint,
-    () => normalRequest(),
-    Priority.Critical,  // Overuse
-    timeout
-);
-```
-
-### 5. Integrate with Health Monitoring
-
-Connect resilience to health system:
-
-```d
-// Update rate based on actual service health
-healthMonitor.subscribe((endpoint, health) {
-    resilience.adjustRate(endpoint, health.score);
-});
-```
+4. Use higher priority for critical requests
 
 ## See Also
 
-- [Distributed Builds](distributed.md)
-- [Remote Execution](remote-execution.md)
-- [Remote Cache](remotecache.md)
-- [Health Monitoring](health.md)
-- [Observability](observability.md)
-
+- [Distributed Builds](./distributed.md)
+- [Remote Execution](./remote-execution.md)
+- [Remote Cache](./remotecache.md)

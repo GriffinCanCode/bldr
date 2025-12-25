@@ -1,248 +1,170 @@
-# Builder Language Server Protocol (LSP) Guide
-
-This guide explains how to use the Builder Language Server for enhanced IDE support when working with Builderfiles.
+# Language Server Protocol (LSP)
 
 ## Overview
 
-The Builder LSP provides rich language features for Builderfile configuration files across multiple editors and IDEs:
+Builder provides an LSP server for IDE support when editing Builderfiles.
 
-- ✅ **Autocomplete** - Smart suggestions for fields, types, and dependencies
-- ✅ **Real-time Diagnostics** - Parse errors and validation warnings as you type
-- ✅ **Go to Definition** - Jump to target definitions instantly (F12)
-- ✅ **Hover Documentation** - Rich documentation on hover
-- ✅ **Find All References** - Find where targets are used across workspace (Shift+F12)
-- ✅ **Rename Refactoring** - Rename targets across all files in workspace (F2)
-- ✅ **Workspace Symbols** - Quick search for any target (Ctrl+T / Cmd+T)
-- ✅ **CodeLens** - Inline dependency counts and impact analysis above each target
-- ✅ **Impact Analysis** - Severity visualization with estimated rebuild times
-- ✅ **Document Formatting** - Auto-format Builderfiles with consistent style
+**Features:**
+- Autocomplete for fields, types, languages, and dependencies
+- Real-time diagnostics (parse errors, validation warnings)
+- Go to definition (F12)
+- Hover documentation
+- Find all references (Shift+F12)
+- Rename refactoring (F2)
+- Workspace symbols (Ctrl+T / Cmd+T)
+- CodeLens (inline dependency counts)
+- Document formatting
 
 ## Quick Start
 
-### 1. Install VS Code Extension
+### VS Code
 
-**Option 1: From VS Code Marketplace** (Recommended)
+**From Marketplace:**
 1. Open VS Code
 2. Go to Extensions (Cmd+Shift+X)
-3. Search for "Builder Language Support"
-4. Click Install
+3. Search "Builder Language Support"
+4. Install
 
-**No additional setup required!** The extension includes pre-built LSP binaries for all platforms:
-- ✅ macOS (Apple Silicon & Intel)
-- ✅ Linux (x86_64)
-- ✅ Windows (x64)
+The extension includes pre-built LSP binaries for macOS (Apple Silicon & Intel), Linux (x86_64), and Windows (x64).
 
-**Option 2: Manual Installation**
+**Manual Installation:**
 ```bash
-# Download from GitHub releases, then:
-code --install-extension builder-lang-2.0.0.vsix
+code --install-extension builder-lang-*.vsix
 ```
 
-**Option 3: Build from Source**
+**From Source:**
 ```bash
-# Clone and build Builder
 git clone https://github.com/GriffinCanCode/Builder.git
 cd Builder
 make build-all
-
-# Install both builder and the LSP server
 sudo make install-all
-
-# Build and install the extension
 make install-extension
 ```
 
-### 2. Start Coding!
+### Configuration
 
-Open any `Builderfile` and the extension automatically activates. You'll see:
-- Syntax highlighting
-- Autocomplete suggestions
-- Error diagnostics
-- And more!
-
-## VS Code Setup
-
-### Automatic Setup (Recommended)
-
-The extension automatically finds `builder-lsp` if it's installed at:
+The extension finds `builder-lsp` automatically at:
 - `/usr/local/bin/bldr-lsp`
 - `/opt/homebrew/bin/bldr-lsp`
 - `~/.local/bin/bldr-lsp`
-- Anywhere in your `$PATH`
+- Anywhere in `$PATH`
 
-### Manual Configuration
-
-If you installed `builder-lsp` to a custom location:
-
-1. Open VS Code Settings (Cmd+,)
-2. Search for "Builder"
-3. Set `builder.lsp.serverPath` to your custom path
-
-Example:
+Custom path:
 ```json
 {
   "builder.lsp.serverPath": "/custom/path/to/bldr-lsp"
 }
 ```
 
-### Troubleshooting
-
-**Extension not activating?**
-1. Check Output panel: View → Output → "Builder LSP"
-2. Verify file is recognized: Check language mode in status bar (should say "Builder")
-3. Reload window: Cmd+Shift+P → "Developer: Reload Window"
-
-**LSP server not found?**
-```bash
-# Verify installation
-which builder-lsp
-
-# Reinstall if needed
-cd /path/to/Builder
-make install-lsp
-```
-
-## Features in Detail
+## Features
 
 ### Autocomplete
 
-Type-aware suggestions based on context:
+Context-aware suggestions:
 
-**Field names:**
-```
+```d
 target("app") {
-    ty|  ← Suggests: type, sources, deps, flags, env, ...
+    ty|  // Suggests: type, sources, deps, flags, env, output, includes, config
+}
+
+target("app") {
+    type: e|  // Suggests: executable, library, test, custom
+}
+
+target("app") {
+    language: py|  // Suggests: python, php, perl, ...
+}
+
+target("app") {
+    deps: ["|"]  // Suggests all targets in workspace
 }
 ```
 
-**Type values:**
-```
-target("app") {
-    type: e|  ← Suggests: executable, library, test, custom
-}
-```
-
-**Languages:**
-```
-target("app") {
-    language: py|  ← Suggests: python, php, perl, ...
-}
-```
-
-**Dependencies:**
-```
-target("app") {
-    deps: ["|"]  ← Suggests all available targets in workspace
-}
-```
+**Suggested fields:**
+- `type` — Target type (executable, library, test, custom)
+- `language` — Programming language (optional, inferred from sources)
+- `sources` — Source files (glob patterns supported)
+- `deps` — Dependencies on other targets
+- `flags` — Compiler/build flags
+- `env` — Environment variables
+- `output` — Output file name
+- `includes` — Include directories
+- `config` — Additional configuration
 
 ### Diagnostics
 
 Real-time error detection:
 
-```
+```d
 target("app") {
-    // ❌ Missing required field 'type'
+    // Error: Missing required field 'type'
     sources: ["main.py"];
 }
 
-target("app") {  // ❌ Duplicate target name
+target("app") {  // Error: Duplicate target name
     type: executable;
 }
 
 target("test") {
-    deps: [":nonexistent"];  // ❌ Invalid reference
+    deps: [":nonexistent"];  // Error: Invalid reference
 }
 ```
 
 ### Hover Documentation
 
-Hover over any element to see documentation:
+Hover over elements for documentation:
 
-**Target hover:**
-```
-target("my-app") {  ← Hover shows:
-                      # Target: my-app
-                      Type: executable
-                      Language: python
-                      Sources: 5 file(s)
-                      Dependencies: 2 target(s)
+```d
+target("my-app") {  // Hover shows:
+                    //   Target: my-app
+                    //   Type: executable
+                    //   Language: python
+                    //   Sources: 5 file(s)
+                    //   Dependencies: 2 target(s)
 }
-```
-
-**Field hover:**
-```
-sources: [...]  ← Hover shows field documentation
 ```
 
 ### Go to Definition
 
 Navigate to target definitions:
 
-```
+```d
 target("lib") {
     type: library;
 }
 
 target("app") {
-    deps: [":lib"];  ← Ctrl/Cmd+Click jumps to lib definition
+    deps: [":lib"];  // Ctrl/Cmd+Click jumps to lib definition
 }
 ```
 
 ### Find All References
 
-Find where a target is used:
-
 1. Place cursor on target name
-2. Press Shift+F12 (or right-click → Find All References)
-3. See all uses in the sidebar
+2. Press Shift+F12
+3. View all uses in sidebar
 
 ### Rename Refactoring
 
-Rename targets across all Builderfiles:
-
 1. Place cursor on target name
-2. Press F2 (or right-click → Rename Symbol)
+2. Press F2
 3. Enter new name
-4. All references across the entire workspace are updated automatically
+4. All references across workspace are updated
 
-### Document Formatting
+### Workspace Symbols (Ctrl+T)
 
-Auto-format your Builderfiles with consistent style:
-
-1. Open a Builderfile
-2. Press Shift+Alt+F (or right-click → Format Document)
-3. The file is formatted with:
-   - Consistent indentation (4 spaces by default)
-   - Proper spacing around colons (`field: value;`)
-   - Blank lines between target declarations
-   - Trailing whitespace removed
-   - Final newline ensured
-
-Formatting respects your editor's tab size and spaces/tabs preference.
-
-### Workspace Symbol Search (Ctrl+T)
-
-Quickly find any target in your workspace:
-
-1. Press Ctrl+T (or Cmd+T on macOS)
-2. Type part of the target name
-3. Select from fuzzy-matched results
-4. Jump directly to the target definition
+Search for any target:
 
 ```
 Type: "app" → Finds: my-app, webapp, app-server, ...
 Type: "lib" → Finds: mylib, core-lib, utils-lib, ...
 ```
 
-Results are sorted by relevance:
-- Exact prefix matches appear first
-- Shorter names ranked higher for same match quality
-- Container shows the relative path to the Builderfile
+Results are sorted by relevance (prefix matches first, shorter names ranked higher).
 
-### CodeLens (Inline Dependency Visualization)
+### CodeLens
 
-Each target displays inline CodeLens showing:
+Inline dependency visualization above each target:
 
 ```
 ⬇ 3 dependencies (8 transitive)  🟢 2 dependents  🟢 Impact: Low (~1s rebuild)
@@ -252,42 +174,32 @@ target("my-lib") {
 }
 ```
 
-**Dependency count** - Click to visualize the dependency graph  
-**Dependent count** - Color-coded: 🟢 Low / 🟡 Medium / 🔴 High impact  
-**Impact analysis** - Shows severity and estimated rebuild time
+**Impact severity levels:**
+- 🟢 Low — Affects < 5 targets
+- 🟡 Medium — Affects 5-20 targets
+- 🟠 High — Affects 20-50 targets
+- 🔴 Critical — Affects 50+ targets
 
-Impact severity levels:
-- 🟢 **Low** - Affects < 5 targets
-- 🟡 **Medium** - Affects 5-20 targets
-- 🟠 **High** - Affects 20-50 targets
-- 🔴 **Critical** - Affects 50+ targets
+### Document Formatting
 
-### Impact Analysis Command
+Format Builderfiles:
 
-Execute `builder.showImpactAnalysis` to see detailed impact:
-- Direct vs transitive dependency counts
-- Critical path through dependency graph
-- Estimated rebuild time based on historical data
+1. Press Shift+Alt+F (or right-click → Format Document)
+2. Applies:
+   - Consistent indentation (4 spaces)
+   - Proper spacing around colons
+   - Blank lines between targets
+   - Trailing whitespace removed
+   - Final newline ensured
 
 ## Other Editors
 
-### IntelliJ IDEA / CLion
-
-1. Install [LSP4IJ plugin](https://plugins.jetbrains.com/plugin/lsp4ij)
-2. Configure language server:
-   - Go to: Settings → Languages & Frameworks → Language Servers
-   - Add new server: `builder-lsp`
-   - File patterns: `**/Builderfile`, `**/Builderspace`
-
 ### Neovim
-
-Add to your LSP config:
 
 ```lua
 local lspconfig = require('lspconfig')
 local configs = require('lspconfig.configs')
 
--- Define builder-lsp
 if not configs.builder then
   configs.builder = {
     default_config = {
@@ -296,19 +208,17 @@ if not configs.builder then
       root_dir = function(fname)
         return lspconfig.util.find_git_ancestor(fname) or vim.fn.getcwd()
       end,
-      settings = {},
     },
   }
 end
 
--- Setup builder-lsp
 lspconfig.builder.setup{
-  on_attach = on_attach,  -- Your on_attach function
+  on_attach = on_attach,
   capabilities = capabilities,
 }
 ```
 
-Set filetype detection in `~/.config/nvim/ftdetect/builder.vim`:
+Set filetype in `~/.config/nvim/ftdetect/builder.vim`:
 ```vim
 au BufRead,BufNewFile Builderfile,Builderspace set filetype=builder
 ```
@@ -329,8 +239,6 @@ au BufRead,BufNewFile Builderfile,Builderspace set filetype=builder
 
 ### Emacs (with lsp-mode)
 
-Add to your config:
-
 ```elisp
 (with-eval-after-load 'lsp-mode
   (add-to-list 'lsp-language-id-configuration '(builder-mode . "builder"))
@@ -341,7 +249,6 @@ Add to your config:
     :activation-fn (lsp-activate-on "builder")
     :server-id 'builder-lsp)))
 
-;; Define builder-mode
 (define-derived-mode builder-mode prog-mode "Builder"
   "Major mode for editing Builderfiles.")
 
@@ -350,8 +257,6 @@ Add to your config:
 ```
 
 ### Sublime Text (with LSP package)
-
-Install the [LSP package](https://packagecontrol.io/packages/LSP), then add to LSP settings:
 
 ```json
 {
@@ -365,127 +270,103 @@ Install the [LSP package](https://packagecontrol.io/packages/LSP), then add to L
 }
 ```
 
-## Advanced Configuration
+### IntelliJ IDEA / CLion
 
-### VS Code Settings
+1. Install [LSP4IJ plugin](https://plugins.jetbrains.com/plugin/lsp4ij)
+2. Settings → Languages & Frameworks → Language Servers
+3. Add server: `builder-lsp`
+4. File patterns: `**/Builderfile`, `**/Builderspace`
+
+## VS Code Settings
 
 ```json
 {
-  // Enable/disable LSP
   "builder.lsp.enabled": true,
-  
-  // Custom server path
   "builder.lsp.serverPath": "",
-  
-  // Debug trace (off, messages, verbose)
-  "builder.lsp.trace.server": "off"
+  "builder.lsp.trace.server": "off"  // off, messages, verbose
 }
 ```
 
-### Logging
-
-The LSP server logs to stderr. To debug:
+## Logging
 
 ```bash
-# Run manually and check output
+# Run manually
 builder-lsp 2> lsp-debug.log
 ```
 
-In VS Code:
-- View → Output → Select "Builder LSP" or "Builder LSP Trace"
-
-## Performance
-
-The Builder LSP is optimized for speed:
-
-- **Autocomplete**: < 5ms
-- **Diagnostics**: < 10ms  
-- **Hover**: < 2ms
-- **Definition**: < 3ms
-
-Typical memory usage: 5-15 MB per workspace
-
-## Known Limitations
-
-Current version limitations:
-
-1. **Dynamic workspace updates**: Files created externally require LSP restart to be indexed
-2. **Complex expressions**: Some advanced Builderfile expressions may not be fully analyzed
-
-✅ **Recently addressed:**
-- Workspace symbol search (Ctrl+T) - now implemented
-- Cross-file references and navigation - now works workspace-wide
-- Workspace rename refactoring - now renames across all Builderfiles
+In VS Code: View → Output → "Builder LSP"
 
 ## Building from Source
 
-### LSP Server Only
-
+**LSP Server:**
 ```bash
-cd /path/to/Builder
 make build-lsp
 sudo make install-lsp
 ```
 
-### VS Code Extension
-
+**VS Code Extension:**
 ```bash
-# Build extension with bundled LSP server
 make extension
-
-# Install
 code --install-extension tools/vscode/builder-lang/builder-lang-*.vsix
 ```
 
-### Manual Extension Build
-
+**Manual Extension Build:**
 ```bash
 cd tools/vscode/builder-lang
 npm install
-npm install -g vsce  # If not already installed
+npm install -g vsce
 vsce package
 ```
 
-## Contributing
+## Troubleshooting
 
-Want to improve the LSP? See:
-- [LSP Architecture](../../source/lsp/README.md)
-- [Contributing Guide](../../CONTRIBUTING.md)
+**Extension not activating:**
+1. Check Output panel: View → Output → "Builder LSP"
+2. Verify language mode in status bar (should say "Builder")
+3. Reload window: Cmd+Shift+P → "Developer: Reload Window"
 
-Areas for contribution:
-- Additional language features (workspace symbols, code actions)
-- Editor integrations (IntelliJ plugin, etc.)
-- Performance optimizations
-- Test coverage
+**LSP server not found:**
+```bash
+which builder-lsp
 
-## Support
+# Reinstall if needed
+cd /path/to/Builder
+make install-lsp
+```
 
-- **Issues**: [GitHub Issues](https://github.com/GriffinCanCode/Builder/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/GriffinCanCode/Builder/discussions)
-- **Documentation**: [Full Documentation](../README.md)
+**Autocomplete not working:**
+1. Extension is activated (check status bar)
+2. No parse errors in file
+3. Cursor is in valid position for completion
+4. LSP server is running (check Output panel)
 
-## FAQ
+## Architecture
 
-**Q: Do I need to restart VS Code after installing?**  
-A: Yes, reload the window: Cmd+Shift+P → "Developer: Reload Window"
+```
+frontend/lsp/
+├── core/
+│   ├── transport.d    - Async message queue, StdioReader/Writer
+│   ├── dispatch.d     - Message routing and handler registration
+│   ├── server.d       - LSP server orchestration (JSON-RPC 2.0)
+│   ├── protocol.d     - LSP protocol types
+│   └── main.d         - Entry point
+├── workspace/
+│   ├── workspace.d    - Document and workspace state
+│   ├── index.d        - Symbol indexing
+│   └── analysis.d     - Semantic analysis
+└── providers/
+    ├── completion.d   - Code completion
+    ├── hover.d        - Hover information
+    ├── definition.d   - Go-to-definition
+    ├── references.d   - Find all references
+    ├── rename.d       - Rename refactoring
+    ├── symbols.d      - Document/workspace symbols
+    ├── codelens.d     - Inline dependency visualization
+    ├── graph.d        - Build dependency navigation
+    └── formatting.d   - Document formatting
+```
 
-**Q: Can I use the LSP with other languages?**  
-A: The LSP only provides features for Builderfile configuration files.
+## Known Limitations
 
-**Q: Does it work with remote development (SSH/Containers)?**  
-A: Yes! Install `builder-lsp` on the remote machine and the extension will find it.
-
-**Q: How do I report a bug?**  
-A: Open an issue on GitHub with:
-  - VS Code version
-  - Extension version
-  - LSP server version (`builder-lsp --version`)
-  - Steps to reproduce
-
-**Q: Why isn't autocomplete working?**  
-A: Check that:
-  1. Extension is activated (check status bar)
-  2. No parse errors in file (check diagnostics)
-  3. Cursor is in valid position for completion
-  4. LSP server is running (check Output panel)
-
+- **Dynamic workspace updates**: Externally created files require LSP restart to be indexed
+- **Complex expressions**: Some advanced Builderfile expressions may not be fully analyzed

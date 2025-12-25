@@ -1,55 +1,66 @@
 # Speculative Execution
 
-Speculative execution pre-executes build targets on the critical path before their dependencies fully complete. This reduces build latency by 10-30% for builds with long critical paths.
-
 ## Overview
 
-Traditional build systems wait for all dependencies to complete before starting a target. Builder's speculative execution breaks this constraint by:
+Speculative execution pre-executes build targets on the critical path before their dependencies fully complete. This can reduce build latency for builds with long critical paths by overlapping execution.
 
-1. **Identifying the critical path** - The longest weighted path through the build graph
-2. **Speculatively starting targets** - Begin execution before all inputs are ready
-3. **Tracking input hashes** - Detect if inputs change during speculation
-4. **Aborting invalid work** - Cancel speculation if inputs change
+**Module**: `engine.runtime.services.speculation`
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│               SpeculationService                         │
-│                                                          │
-│  ┌──────────────────┐    ┌───────────────────────┐      │
-│  │ ProfileGuided    │    │ SpeculativeTask      │      │
-│  │ Scheduler        │───▶│ - inputHashes        │      │
-│  │ - criticalPath   │    │ - status (atomic)    │      │
-│  │ - economics      │    │ - resultHash         │      │
-│  └──────────────────┘    └───────────────────────┘      │
-│           │                        │                    │
-│           ▼                        ▼                    │
-│  ┌──────────────────┐    ┌───────────────────────┐      │
-│  │ SpeculationPolicy│    │ InputValidator       │      │
-│  │ - maxConcurrent  │    │ - hashTracking       │      │
-│  │ - minCostMs      │    │ - abortOnChange      │      │
-│  │ - confidence     │    └───────────────────────┘      │
-│  └──────────────────┘                                   │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│               SpeculationService                            │
+│                                                             │
+│  ┌──────────────────┐    ┌───────────────────────┐         │
+│  │ ProfileGuided    │    │ SpeculativeTask       │         │
+│  │ Scheduler        │───▶│ - inputHashes         │         │
+│  │ - criticalPath   │    │ - status (atomic)     │         │
+│  │ - economics      │    │ - resultHash          │         │
+│  └──────────────────┘    └───────────────────────┘         │
+│           │                        │                        │
+│           ▼                        ▼                        │
+│  ┌──────────────────┐    ┌───────────────────────┐         │
+│  │ SpeculationPolicy│    │ InputValidator        │         │
+│  │ - maxConcurrent  │    │ - hashTracking        │         │
+│  │ - minCostMs      │    │ - abortOnChange       │         │
+│  │ - confidence     │    └───────────────────────┘         │
+│  └──────────────────┘                                      │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ## Policy Presets
 
-| Policy | Max Concurrent | Min Cost | Confidence | Use Case |
-|--------|---------------|----------|------------|----------|
-| Conservative | 2 | 2000ms | 0.9 | Low risk, stable environments |
-| Balanced | 4 | 500ms | 0.7 | General use (default) |
-| Aggressive | 8 | 200ms | 0.5 | Fast iteration, high compute |
+| Policy | maxConcurrent | minCostMs | confidenceThreshold | budgetFraction |
+|--------|---------------|-----------|---------------------|----------------|
+| `conservative()` | 2 | 2000ms | 0.9 | 0.1 |
+| `balanced()` | 4 | 500ms | 0.7 | 0.2 |
+| `aggressive()` | 8 | 200ms | 0.5 | 0.4 |
+
+### Policy Configuration
+
+```d
+struct SpeculationPolicy
+{
+    size_t maxConcurrent = 4;         // Max concurrent speculative tasks
+    size_t minCostMs = 500;           // Min estimated cost to speculate (ms)
+    float confidenceThreshold = 0.7f; // Min probability to speculate
+    float budgetFraction = 0.2f;      // Fraction of build budget for speculation
+    bool enableCriticalPath = true;   // Speculate on critical path
+    bool enableFanOut = true;         // Speculate on high-fanout nodes
+    bool abortOnInputChange = true;   // Abort speculation if inputs change
+}
+```
 
 ## Usage
 
-### Basic Usage
+### Basic Setup
 
 ```d
 import engine.runtime.services.speculation;
+import engine.economics.estimator : ExecutionHistory;
 
-// Create speculation service
+// Create speculation service from build graph and history
 auto speculation = createSpeculationService(graph, history);
 speculation.setPolicy(SpeculationPolicy.balanced());
 speculation.analyzeGraph(graph);
@@ -61,7 +72,7 @@ speculation.analyzeGraph(graph);
 // Check for valid speculative result before executing
 if (auto result = speculation.getValidResult(targetId))
 {
-    applyResult(result);
+    applyResult(result.get());
     speculation.promote(targetId);
 }
 else
@@ -75,21 +86,38 @@ else
 ```d
 // When file changes detected (watch mode, etc.)
 speculation.notifyInputChanged(filePath, newHash);
-// This automatically aborts affected speculations
+// Automatically aborts affected speculations
+```
+
+### Predictive Mode
+
+```d
+// Enable change prediction for smarter speculation
+speculation.initializePredictive(".builder-cache/speculation");
+
+// Record changes for learning
+speculation.recordChange(targetId);
+speculation.recordNoChange(targetId);
 ```
 
 ## Statistics
 
-The speculation service tracks:
+The speculation service tracks effectiveness:
 
 | Metric | Description |
 |--------|-------------|
-| totalSpeculated | Total speculation attempts |
-| successful | Speculations validated and used |
-| aborted | Speculations cancelled (input changed) |
-| wasted | Speculations completed but not used |
-| effectiveness | successful / totalSpeculated |
-| roi | timeSaved / timeWasted |
+| `totalSpeculated` | Total speculation attempts |
+| `successful` | Speculations validated and used |
+| `aborted` | Speculations cancelled (input changed) |
+| `wasted` | Speculations completed but not used |
+| `effectiveness` | `successful / totalSpeculated` |
+| `roi` | `timeSaved / timeWasted` |
+
+```d
+auto stats = speculation.getStats();
+writefln("Effectiveness: %.1f%%, ROI: %.2fx", 
+    stats.effectiveness * 100, stats.roi);
+```
 
 ## When to Use
 
@@ -107,33 +135,22 @@ The speculation service tracks:
 - Cheap targets (<100ms each)
 - Resource-constrained environments
 
-## Performance
-
-| Scenario | Without Speculation | With Speculation | Savings |
-|----------|---------------------|------------------|---------|
-| 5-min critical path | 5m | 3.5-4.5m | 10-30% |
-| High fan-out library | Serial dependents | Parallel start | Variable |
-
-## Configuration
-
-Environment variables:
-
-- `BUILDER_SPECULATION_ENABLED=0|1` - Enable/disable speculation
-- `BUILDER_SPECULATION_POLICY=conservative|balanced|aggressive` - Policy preset
-
-## Related Features
-
-- [Critical Path](critical-path.md) - Understand build bottlenecks
-- [Cost Optimization](cost-optimization.md) - Economics-driven decisions
-- [Watch Mode](watch.md) - Input change detection
-- [Performance](performance.md) - Build optimization guide
-
-## Implementation Details
+## Implementation
 
 Located in `source/engine/runtime/services/speculation/`:
 
-- `service.d` - Core SpeculationService
-- `executor.d` - Build loop integration
-- `package.d` - Module exports
-- `README.md` - Technical documentation
+| File | Purpose |
+|------|---------|
+| `service.d` | Core `SpeculationService` and `ISpeculationService` interface |
+| `executor.d` | `SpeculationExecutor` for build loop integration |
+| `engine.d` | `SpeculativeEngine` for background async execution |
+| `predictor.d` | `ChangePredictor` for probability-based candidate selection |
+| `history.d` | `HistoryTracker` for learning from past patterns |
+| `package.d` | Module exports |
 
+## See Also
+
+- [Critical Path](critical-path.md) - Build bottleneck analysis
+- [Cost Optimization](cost-optimization.md) - Economics-driven decisions
+- [Watch Mode](../user-guides/WATCH.md) - Input change detection
+- [Performance](performance.md) - Build optimization guide

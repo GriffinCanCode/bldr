@@ -1,119 +1,117 @@
-# Deterministic Builds Beyond Hermeticity
+# Deterministic Builds
 
 ## Overview
 
-Deterministic builds ensure that the same source code always produces bit-for-bit identical outputs, regardless of when or where the build is performed. While hermetic builds provide isolation, they don't guarantee determinism. Builder goes beyond hermeticity with active determinism enforcement.
+Deterministic builds ensure that the same source code produces bit-for-bit identical outputs, regardless of when or where the build runs. Builder provides determinism enforcement on top of hermetic isolation.
 
 ### Hermetic vs Deterministic
 
 | Aspect | Hermetic | Deterministic |
 |--------|----------|---------------|
-| **Isolation** | ✅ Complete | ✅ Complete |
-| **Same Inputs** | ✅ Controlled | ✅ Controlled |
-| **Same Outputs** | ❌ Not guaranteed | ✅ Bit-for-bit identical |
+| **Isolation** | Complete | Complete |
+| **Same Inputs** | Controlled | Controlled |
+| **Same Outputs** | Not guaranteed | Bit-for-bit identical |
 | **Time handling** | System time | Fixed timestamp |
 | **Random values** | System random | Seeded PRNG |
-| **Thread scheduling** | Non-deterministic | Controlled/single-threaded |
+| **Thread scheduling** | Non-deterministic | Controlled |
 
-## The Problem
+## Common Non-Determinism Sources
 
-Even with perfect hermetic isolation, builds can be non-deterministic due to:
+Even with hermetic isolation, builds can produce different outputs due to:
 
-1. **Timestamp Embedding**: Compilers embedding build timestamps in binaries
+1. **Timestamp embedding**: Compilers embedding build timestamps in binaries
 2. **Random UUIDs**: Code generators creating random identifiers
-3. **Compiler Non-determinism**: Random register allocation, symbol ordering
-4. **Thread Scheduling**: Parallel builds producing different file ordering
-5. **Build Path Leakage**: Absolute paths embedded in debug information
-6. **Pointer Addresses**: ASLR causing different memory layouts
+3. **Compiler non-determinism**: Random register allocation, symbol ordering
+4. **Thread scheduling**: Parallel builds producing different file ordering
+5. **Build path leakage**: Absolute paths embedded in debug information
+6. **Pointer addresses**: ASLR causing different memory layouts
 
 ## Architecture
 
-Builder's determinism system consists of four components:
+The determinism module is located in `source/engine/runtime/hermetic/determinism/`:
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                  DeterminismEnforcer                    │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │         Syscall Interception Shim               │   │
-│  │  • time() → fixed timestamp                     │   │
-│  │  • random() → seeded PRNG                       │   │
-│  │  • getpid() → fixed PID                        │   │
-│  └─────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
-         │                                    │
-         ▼                                    ▼
-  ┌──────────────┐                    ┌───────────────┐
-  │   Detector   │                    │   Verifier    │
-  │ (Automatic)  │                    │ (Hash-based)  │
-  └──────────────┘                    └───────────────┘
-         │                                    │
-         └────────────┬───────────────────────┘
-                      ▼
-              ┌───────────────┐
-              │ RepairEngine  │
-              │ (Suggestions) │
-              └───────────────┘
+determinism/
+├── enforcer.d    # Main enforcement engine
+├── detector.d    # Non-determinism source detection
+├── verifier.d    # Output comparison and verification
+├── repair.d      # Repair suggestion generation
+├── integration.d # Build system integration
+├── shim.c        # Syscall interception library
+└── Makefile      # Shim library build
 ```
 
-### Components
+### Core Components
 
-1. **DeterminismEnforcer** (`source/engine/runtime/hermetic/determinism/enforcer.d`)
-   - Main enforcement engine
-   - Integrates with HermeticExecutor
-   - Configures syscall interception
-   - Manages verification runs
+**DeterminismEnforcer** (`enforcer.d`):
+- Wraps HermeticExecutor with determinism environment
+- Sets fixed timestamps via SOURCE_DATE_EPOCH
+- Configures single-threaded execution when needed
+- Loads syscall interception shim via LD_PRELOAD
 
-2. **NonDeterminismDetector** (`source/engine/runtime/hermetic/determinism/detector.d`)
-   - Automatic detection of non-determinism sources
-   - Compiler-specific flag analysis
-   - Build output analysis
-   - Pattern matching for timestamps, UUIDs, etc.
+**NonDeterminismDetector** (`detector.d`):
+- Analyzes compiler commands for missing determinism flags
+- Detects timestamp and UUID patterns in output
+- Supports GCC, Clang, Rust, Go, D, Java, Scala compilers
 
-3. **DeterminismVerifier** (`source/engine/runtime/hermetic/determinism/verifier.d`)
-   - Build output comparison
-   - Hash-based verification (fast)
-   - Bit-for-bit comparison (thorough)
-   - Per-file diff analysis
+**Syscall Interception Shim** (`shim.c`):
+- LD_PRELOAD library (Linux) / DYLD_INSERT_LIBRARIES (macOS)
+- Intercepts `time()`, `random()`, `getpid()` syscalls
+- Returns deterministic values based on environment variables
 
-4. **RepairEngine** (`source/engine/runtime/hermetic/determinism/repair.d`)
-   - Generates actionable repair suggestions
-   - Compiler-specific flags
-   - Environment variable recommendations
-   - Priority-based suggestions
+## Configuration
 
-5. **Syscall Interception Shim** (`source/engine/runtime/hermetic/determinism/shim.c`)
-   - LD_PRELOAD library for Linux
-   - DYLD_INSERT_LIBRARIES for macOS
-   - Intercepts time(), random(), etc.
-   - Provides deterministic replacements
+### DeterminismConfig
+
+```d
+struct DeterminismConfig {
+    ulong fixedTimestamp = 1640995200;  // 2022-01-01 00:00:00 UTC
+    uint prngSeed = 42;                 // Fixed PRNG seed
+    bool normalizeTimestamps = true;    // Normalize output file timestamps
+    bool deterministicThreading = true; // Force single-threaded execution
+    string sourceEpoch;                 // SOURCE_DATE_EPOCH override
+    bool strictMode = false;            // Fail on detected non-determinism
+}
+```
+
+**Mode presets**:
+- `DeterminismConfig.defaults()` — Warnings only
+- `DeterminismConfig.strict()` — Fails on violations
+
+### Environment Variables Set by Enforcer
+
+```bash
+SOURCE_DATE_EPOCH=1640995200   # Fixed timestamp
+BUILD_TIMESTAMP=1640995200    # Alternative timestamp var
+RANDOM_SEED=42                # PRNG seed
+
+# Single-threaded execution (when deterministicThreading=true)
+MAKEFLAGS=-j1
+CARGO_BUILD_JOBS=1
+GOMAXPROCS=1
+```
 
 ## Usage
 
-### Basic Determinism Enforcement
+### Basic Enforcement
 
 ```d
-import engine.runtime.hermetic;
-import engine.runtime.hermetic.determinism;
+import engine.runtime.hermetic.determinism.enforcer;
+import engine.runtime.hermetic.core.executor;
 
 // Create hermetic executor
-auto spec = HermeticSpecBuilder.forBuild(
-    workspaceRoot: "/workspace",
-    sources: ["main.c"],
-    outputDir: "/workspace/bin",
-    tempDir: "/tmp/build"
-);
-
+auto spec = SandboxSpecBuilder.create()
+    .input("/workspace/src")
+    .output("/workspace/bin")
+    .build();
 auto executor = HermeticExecutor.create(spec.unwrap());
 
 // Add determinism enforcement
 auto config = DeterminismConfig.defaults();
-auto enforcer = DeterminismEnforcer.create(
-    executor.unwrap(),
-    config
-);
+auto enforcerResult = DeterminismEnforcer.create(executor.unwrap(), config);
 
 // Execute with determinism
-auto result = enforcer.unwrap().execute(
+auto result = enforcerResult.unwrap().execute(
     ["gcc", "main.c", "-o", "main"],
     "/workspace"
 );
@@ -125,83 +123,38 @@ if (result.isOk) {
 }
 ```
 
-### Verification Across Multiple Runs
+### Multi-Run Verification
 
 ```d
-// Execute and verify determinism across 3 runs
-auto result = enforcer.unwrap().executeAndVerify(
+// Execute and verify across multiple runs
+auto result = enforcer.executeAndVerify(
     ["gcc", "main.c", "-o", "main"],
     "/workspace",
     iterations: 3
 );
 
 if (!result.unwrap().deterministic) {
-    writeln("Build is non-deterministic!");
-    foreach (violation; result.unwrap().violations) {
-        writeln("  - ", violation.description);
-        writeln("    Suggestion: ", violation.suggestion);
-    }
+    writeln("Build is non-deterministic");
+    foreach (v; result.unwrap().violations)
+        writeln("  - ", v.description);
 }
 ```
 
-### Automatic Detection and Repair
+### Compiler Command Analysis
 
 ```d
-import engine.runtime.hermetic.determinism;
+import engine.runtime.hermetic.determinism.detector;
 
-// Analyze compiler command
 auto command = ["gcc", "main.c", "-o", "main"];
 auto detections = NonDeterminismDetector.analyzeCompilerCommand(
     command,
     CompilerType.GCC
 );
 
-// Generate repair suggestions
-auto suggestions = RepairEngine.generateSuggestions(detections);
-
-foreach (suggestion; suggestions) {
-    writeln(suggestion.format());
+foreach (d; detections) {
+    writeln("Issue: ", d.description);
+    writeln("  Flags: ", d.compilerFlags);
 }
-
-// Or generate complete repair plan
-auto plan = RepairEngine.generateRepairPlan(detections, []);
-writeln(plan);
-```
-
-## Configuration
-
-### DeterminismConfig
-
-```d
-struct DeterminismConfig {
-    ulong fixedTimestamp = 1640995200;  // 2022-01-01 00:00:00 UTC
-    uint prngSeed = 42;                 // Fixed PRNG seed
-    bool normalizeTimestamps = true;    // Normalize file timestamps
-    bool deterministicThreading = true; // Single-threaded execution
-    string sourceEpoch;                 // SOURCE_DATE_EPOCH override
-    bool strictMode = false;            // Fail on non-determinism
-}
-
-// Default configuration (warnings only)
-auto config = DeterminismConfig.defaults();
-
-// Strict mode (fails on violations)
-auto config = DeterminismConfig.strict();
-```
-
-### Environment Variables
-
-The determinism shim reads configuration from environment variables:
-
-```bash
-# Fixed build timestamp (Unix epoch)
-export BUILD_TIMESTAMP=1640995200
-
-# PRNG seed for deterministic random numbers
-export RANDOM_SEED=42
-
-# SOURCE_DATE_EPOCH (standard)
-export SOURCE_DATE_EPOCH=1640995200
 ```
 
 ## Compiler-Specific Flags
@@ -215,9 +168,6 @@ export SOURCE_DATE_EPOCH=1640995200
 # Strip build paths from debug info
 -ffile-prefix-map=/workspace/=./
 -fdebug-prefix-map=/workspace/=./
-
-# Reproducible compilation
--frandom-seed=<hash-of-input>
 ```
 
 ### Clang / Clang++
@@ -226,7 +176,7 @@ export SOURCE_DATE_EPOCH=1640995200
 # Strip build paths
 -fdebug-prefix-map=/workspace/=./
 
-# Reproducible build
+# Override timestamp macros
 -Wno-builtin-macro-redefined
 -D__DATE__="Jan 01 2022"
 -D__TIME__="00:00:00"
@@ -236,16 +186,18 @@ export SOURCE_DATE_EPOCH=1640995200
 ### Rust (rustc / cargo)
 
 ```bash
-# Strip build paths
-cargo build --release --config env.RUSTFLAGS="-Cembed-bitcode=yes"
-
 # Disable incremental compilation
 -Cincremental=false
 
-# Or via Cargo.toml:
+# Enable bitcode embedding
+-Cembed-bitcode=yes
+```
+
+Or via `Cargo.toml`:
+```toml
 [profile.release]
 codegen-units = 1
-strip = "symbols"
+incremental = false
 ```
 
 ### Go
@@ -253,231 +205,121 @@ strip = "symbols"
 ```bash
 # Strip build paths
 go build -trimpath
-
-# Disable race detector (non-deterministic)
-go build -race=false
-
-# Reproducible builds
-go build -buildmode=default -trimpath
 ```
 
 ### D (DMD / LDC / GDC)
 
 ```bash
-# Use SOURCE_DATE_EPOCH
+# Set SOURCE_DATE_EPOCH
 export SOURCE_DATE_EPOCH=1640995200
-
-# LDC specific
-ldc2 -d-version=Deterministic
 
 # GDC follows GCC flags
 gdc -frandom-seed=42 -ffile-prefix-map=/workspace/=./
 ```
 
-## Integration with Action Cache
-
-Determinism verification integrates with Builder's action-level cache:
-
-```d
-// Action cache tracks determinism
-ActionEntry entry;
-entry.actionId = actionId;
-entry.executionHash = deterministicHash;  // Hash includes determinism config
-
-// Cache hit requires:
-// 1. Input hash match
-// 2. Metadata match (flags, env)
-// 3. Determinism config match
-```
-
 ## Verification Strategies
 
-### 1. Content Hash (Default)
+The verifier supports multiple comparison methods:
 
-Fastest verification using BLAKE3 hashing:
+| Strategy | Description | Use Case |
+|----------|-------------|----------|
+| `ContentHash` | BLAKE3 hash comparison (default) | Fast verification |
+| `BitwiseCompare` | Byte-by-byte comparison | Thorough analysis |
+| `Fuzzy` | Ignores timestamps/metadata | Known-variable outputs |
+| `Structural` | Compares structure (ELF, archives) | Binary format analysis |
 
-```d
-auto verifier = DeterminismVerifier.create(
-    VerificationStrategy.ContentHash
-);
-```
+## Detection Capabilities
 
-### 2. Bit-for-Bit Comparison
+The `NonDeterminismDetector` identifies:
 
-Thorough byte-by-byte comparison:
-
-```d
-auto verifier = DeterminismVerifier.create(
-    VerificationStrategy.BitwiseCompare
-);
-```
-
-### 3. Fuzzy Comparison
-
-Ignores timestamps and metadata:
-
-```d
-auto verifier = DeterminismVerifier.create(
-    VerificationStrategy.Fuzzy
-);
-```
-
-### 4. Structural Comparison
-
-Compares structure, not exact bytes (for archives, ELF, etc.):
-
-```d
-auto verifier = DeterminismVerifier.create(
-    VerificationStrategy.Structural
-);
-```
+| Source | Description | Compilers |
+|--------|-------------|-----------|
+| `Timestamp` | Embedded timestamps | All |
+| `RandomValue` | Random values/UUIDs | All |
+| `CompilerNonDet` | Compiler-specific issues | GCC, Clang, Rust |
+| `BuildPath` | Embedded build paths | GCC, Clang, Go |
+| `ThreadScheduling` | Thread order dependency | All parallel builds |
+| `OutputMismatch` | Hash mismatch across runs | N/A (detected by verifier) |
 
 ## Performance
 
-### Overhead
+| Operation | Overhead |
+|-----------|----------|
+| Syscall interception (shim) | ~1-2% |
+| Hash verification | <100ms typical |
+| Multi-run verification | Linear with iteration count |
 
-- **Syscall Interception**: ~1-2% overhead via LD_PRELOAD
-- **Hash Verification**: <100ms for typical build outputs
-- **Multiple Runs**: Linear with iteration count
-
-### Optimization Strategies
-
-1. **Single-Pass Verification**: Verify during normal build
-2. **Sampling**: Verify subset of outputs for large projects
-3. **Cached Hashes**: Reuse hashes from action cache
-4. **Parallel Verification**: Verify multiple files concurrently
-
-## Examples
-
-### Example 1: Simple C Project
+## CLI Commands
 
 ```bash
 # Build with determinism enforcement
 bldr build --determinism=strict //main:app
 
-# Verify manually
+# Verify determinism across runs
 bldr verify-determinism //main:app --iterations=5
 ```
 
-### Example 2: Rust Project with Cargo
+## Shim Library Installation
 
-```d
-// In Builderfile
-target("myapp") {
-    type: executable;
-    language: rust;
-    sources: ["src/**/*.rs"];
-    
-    // Enable determinism
-    determinism: {
-        enabled: true;
-        strict: true;
-        verify_iterations: 3;
-    };
-    
-    // Rust-specific flags
-    rustflags: [
-        "-Cembed-bitcode=yes",
-        "-Cincremental=false"
-    ];
-}
+The syscall interception shim must be built:
+
+```bash
+cd source/engine/runtime/hermetic/determinism/
+make
+make install  # Installs to bin/
+
+# Verify
+ls bin/libdetshim.so   # Linux
+ls bin/libdetshim.dylib  # macOS
 ```
 
-### Example 3: Distributed Verification
-
-```d
-// Build locally
-auto localHash = buildAndHash("//app:main");
-
-// Build remotely
-auto remoteHash = buildAndHashRemote("//app:main");
-
-// Verify they match
-assert(localHash == remoteHash, "Builds are not deterministic!");
-```
+If the shim is unavailable, enforcement continues with limited capability (environment variables only).
 
 ## Troubleshooting
 
-### Build Produces Different Outputs
+### Outputs differ across runs
 
-1. **Run Detector**:
+1. Run detector analysis:
    ```bash
-   builder detect-non-determinism //target:name
+   bldr detect-non-determinism //target:name
    ```
 
-2. **Check Common Issues**:
-   - Timestamps embedded (add SOURCE_DATE_EPOCH)
-   - Random values (check for UUID generation)
-   - Parallel builds (force single-threaded)
-   - Build paths (add -ffile-prefix-map)
+2. Check common issues:
+   - Missing `-frandom-seed` (GCC)
+   - Missing `-trimpath` (Go)
+   - Incremental compilation enabled (Rust)
+   - Parallel build ordering (`MAKEFLAGS=-j1`)
 
-3. **Generate Repair Plan**:
+3. Set SOURCE_DATE_EPOCH for timestamp issues:
    ```bash
-   builder repair-plan //target:name
+   export SOURCE_DATE_EPOCH=1640995200
    ```
 
-### Shim Library Not Found
+### Shim library not found
 
-```bash
-# Build shim library
-cd source/engine/runtime/hermetic/determinism/
-make
-make install
-
-# Verify installation
-ls -la bin/libdetshim.so  # Linux
-ls -la bin/libdetshim.dylib  # macOS
+The enforcer logs a warning but continues:
+```
+Determinism shim library not available: Shim library not found in search paths
+Determinism enforcement will be limited
 ```
 
-### False Positives
+Build the shim per instructions above, or rely on environment variables.
 
-If builds are deterministic but verification fails:
+## Limitations
 
-1. Check for metadata differences (timestamps on files)
-2. Use `VerificationStrategy.Fuzzy`
-3. Normalize timestamps: `touch -t 202201010000 output/*`
-
-## Future Enhancements
-
-### Planned Features
-
-1. **Distributed Verification Network**: Cross-verify builds across multiple machines
-2. **Cryptographic Signing**: Sign deterministic builds for supply chain security
-3. **Build Forensics**: Detailed diff analysis for non-deterministic outputs
-4. **Compiler Patch Generation**: Auto-generate patches for non-deterministic compilers
-5. **Hardware Determinism**: SGX/TrustZone for provable determinism
-
-### Research Areas
-
-- **Formal Verification**: Prove determinism properties using SMT solvers
-- **Side-Channel Resistance**: Timing-independent execution
-- **Quantum-Safe Hashing**: Future-proof output verification
-- **ML-Based Detection**: Learn non-determinism patterns automatically
-
-## References
-
-### Standards
-
-- [Reproducible Builds](https://reproducible-builds.org/)
-- [SOURCE_DATE_EPOCH](https://reproducible-builds.org/specs/source-date-epoch/)
-- [DWARF Standardization](https://dwarfstd.org/)
-
-### Tools
-
-- [diffoscope](https://diffoscope.org/) - In-depth binary comparison
-- [reprotest](https://salsa.debian.org/reproducible-builds/reprotest) - Test reproducibility
-- [strip-nondeterminism](https://reproducible-builds.org/tools/) - Strip non-deterministic info
-
-### Academic Papers
-
-- [Reproducible Builds: Increasing the Integrity of Software Supply Chains](https://arxiv.org/abs/2104.06020)
-- [Detecting and Localizing Non-Determinism in Concurrent Programs](https://dl.acm.org/doi/10.1145/3293882.3330574)
+1. **Shim platform support**: Currently Linux (LD_PRELOAD) and macOS (DYLD_INSERT_LIBRARIES) only
+2. **Static builds**: Statically-linked binaries don't load the shim
+3. **Compiler coverage**: Not all compiler non-determinism sources are detected
 
 ## See Also
 
 - [Hermetic Builds](hermetic.md)
 - [Action-Level Caching](caching.md)
 - [Remote Execution](remote-execution.md)
-- [Security](../security/security.md)
-- [Build Provenance](provenance.md) - SLSA attestations capture determinism verification
+- [Build Provenance](provenance.md)
 
+## References
+
+- [Reproducible Builds](https://reproducible-builds.org/)
+- [SOURCE_DATE_EPOCH Spec](https://reproducible-builds.org/specs/source-date-epoch/)
+- [diffoscope](https://diffoscope.org/) — Binary comparison tool

@@ -1,320 +1,279 @@
-# Builder Performance Guide
+# Performance Optimizations
+
+**Modules:**
+- `infrastructure.utils.files.hash`
+- `infrastructure.utils.files.glob`
+- `infrastructure.utils.files.chunking`
+- `infrastructure.utils.files.cdc`
 
 ## Overview
 
-Builder v3.0 introduces advanced performance optimizations that make it 50-500x faster for large files and 4-8x faster for directory scanning. This guide explains the optimizations and how to leverage them.
+Builder implements several performance optimizations for file operations: size-tiered hashing, parallel file scanning, and content-defined chunking.
 
-## Key Innovations
+---
 
-### 1. Persistent Worker Protocol (10-50x Faster Compilation)
+## Size-Tiered Hashing
 
-**Problem**: JVM and Node.js startup overhead dominates small compilation times.
+**Module:** `infrastructure.utils.files.hash`
 
-**Solution**: Keep compiler processes running between build actions.
+### Strategy
 
-| Compiler | Cold Start | Warm Worker | Speedup |
-|----------|------------|-------------|---------|
-| javac    | ~800ms     | ~50ms       | **16x** |
-| kotlinc  | ~2000ms    | ~100ms      | **20x** |
-| tsc      | ~400ms     | ~30ms       | **13x** |
-| swc      | ~50ms      | ~5ms        | **10x** |
+`FastHash.hashFile()` selects strategy based on file size:
 
-**Usage**:
+| File Size | Strategy | Implementation |
+|-----------|----------|----------------|
+| ≤ 4 KB | Direct read | Single read, hash entire content |
+| ≤ 1 MB | Chunked | Read in 4KB chunks, streaming hash |
+| ≤ 100 MB | Sampled | Head + tail + middle samples |
+| > 100 MB | Large sampled | Memory-mapped with aggressive sampling |
+
+### Sampling Parameters
+
+**Medium files (1-100 MB):**
 ```d
-import engine.workers;
-
-// Enable at startup
-initializePersistentWorkers();
-
-// Compilation uses warm workers automatically
-auto result = JavaWorkerIntegration.compile(sources, outputDir);
-writeln("Speedup: ", result.unwrap().estimatedSpeedup(), "x");
+SAMPLE_HEAD = 262_144;   // 256 KB from start
+SAMPLE_TAIL = 262_144;   // 256 KB from end
+SAMPLE_COUNT = 8;        // Middle samples
+SAMPLE_SIZE = 16_384;    // 16 KB per sample
 ```
 
-See [Persistent Workers](persistent-workers.md) for full documentation.
-
-### 2. Intelligent Size-Tiered Hashing
-
-**Problem**: Hashing large files (100MB+) takes seconds, blocking builds.
-
-**Solution**: Different strategies based on file size:
-
-```
-├─ Tiny (<4KB)     → Direct hash              (1 read)
-├─ Small (<1MB)    → Chunked hash             (original approach)
-├─ Medium (<100MB) → Sampled hash             (50-100x faster)
-└─ Large (>100MB)  → Aggressive sampling      (200-500x faster)
+**Large files (> 100 MB):**
+```d
+LARGE_HEAD_SIZE = 524_288;    // 512 KB from start
+LARGE_TAIL_SIZE = 524_288;    // 512 KB from end
+LARGE_SAMPLE_COUNT = 16;      // Middle samples
+LARGE_SAMPLE_SIZE = 32_768;   // 32 KB per sample
 ```
 
-**Implementation** (`utils/hash.d`):
-- Samples head (256KB) + tail (256KB) + 8 middle samples
-- Uses memory-mapped I/O for files >100MB
-- Includes file size in hash to prevent collisions
-- Probabilistic uniqueness: >99.999% accuracy
-
-**Performance**:
-```
-File Size    | Full Hash | Sampled Hash | Speedup
--------------|-----------|--------------|--------
-10 MB        | 25 ms     | 25 ms        | 1x
-100 MB       | 250 ms    | 5 ms         | 50x
-1 GB         | 2.5 s     | 8 ms         | 312x
-10 GB        | 25 s      | 12 ms        | 2083x
-```
-
-### 2. Parallel File Scanning
-
-**Problem**: Sequential directory traversal is slow for large trees.
-
-**Solution**: Work-stealing parallel directory scanning.
-
-**Implementation** (`utils/glob.d`):
-1. Collect all directories first (BFS)
-2. Process directories in parallel using `std.parallelism`
-3. Thread-safe result merging with mutexes
-
-**Performance**:
-```
-Files    | Sequential | Parallel (8 cores) | Speedup
----------|------------|-------------------|--------
-1,000    | 50 ms      | 12 ms             | 4.2x
-10,000   | 500 ms     | 65 ms             | 7.7x
-100,000  | 5 s        | 650 ms            | 7.7x
-```
-
-### 3. Content-Defined Chunking
-
-**Problem**: A single byte change forces rehashing the entire file.
-
-**Solution**: Split files into chunks at content-defined boundaries (similar to rsync/git).
-
-**Implementation** (`utils/chunking.d`):
-- Uses Rabin fingerprinting to find chunk boundaries
-- Average chunk size: 16KB (configurable via mask)
-- Stores chunk hashes for incremental updates
-- Only rehash changed chunks on file modification
-
-**Performance**:
-```
-Scenario                    | Full Hash | Chunked Hash | Speedup
-----------------------------|-----------|--------------|--------
-100 MB file, no changes     | 250 ms    | 1 μs         | 250,000x
-100 MB file, 1 KB changed   | 250 ms    | 1 ms         | 250x
-100 MB file, 50% changed    | 250 ms    | 125 ms       | 2x
-```
-
-**Use Case**: Ideal for:
-- Large generated files
-- Log files that grow incrementally  
-- Large assets that rarely change completely
-
-### 4. Three-Tier Metadata Checking
-
-**Problem**: Even metadata checks (size + mtime) are too slow at scale.
-
-**Solution**: Progressive metadata checking strategy.
-
-**Implementation** (`utils/metadata.d`):
-```
-Tier 1: Quick Check (size only)           → 1 nanosecond
-Tier 2: Fast Check (size + mtime)         → 10 nanoseconds
-Tier 3: Full Check (+ inode + device)     → 100 nanoseconds
-Tier 4: Content Hash (SHA-256)            → 1 millisecond
-```
-
-**Decision Tree**:
-```
-1. Size different?           → File changed (99% of changes)
-2. Size same, mtime same?    → File unchanged (99% of non-changes)
-3. Inode same, path same?    → Definitely unchanged
-4. Inode same, path diff?    → File was moved
-5. Otherwise?                → Need content hash
-```
-
-**Performance**:
-```
-10,000 files, all unchanged:
-- Old approach: 10,000 × 1ms = 10 seconds
-- New approach: 10,000 × 1ns = 10 microseconds
-- Speedup: 1,000,000x
-```
-
-### 5. Memory-Mapped I/O
-
-**Problem**: Standard file I/O has syscall overhead.
-
-**Solution**: Use mmap for large files to let the OS handle I/O.
-
-**Benefits**:
-- Eliminates buffer copying
-- Enables efficient random access
-- Leverages OS page cache
-- Reduces syscall overhead
-
-**Performance**: 2-3x faster for large files with random access patterns.
-
-## Usage Examples
-
-### Benchmarking
-
-Run comprehensive benchmarks:
+### Usage
 
 ```d
-import utils.bench;
+import infrastructure.utils.files.hash;
 
-// Run full benchmark suite
-FileOpBenchmark.runAll("./source");
-
-// Benchmark specific operations
-FileOpBenchmark.benchmarkHashing(["large_file.bin"]);
-FileOpBenchmark.benchmarkMetadata(["file1.d", "file2.d"]);
-FileOpBenchmark.benchmarkGlob(".", ["**/*.d"]);
-FileOpBenchmark.benchmarkChunking(["large_file.bin"]);
-```
-
-### Using Intelligent Hashing
-
-```d
-import utils.hash;
-
-// Automatically selects optimal strategy
+// Automatic strategy selection
 auto hash = FastHash.hashFile("large_file.bin");
 
-// Two-tier checking (metadata + content)
+// Full hash (no sampling) for security-critical use
+auto fullHash = FastHash.hashFileComplete("file.bin");
+
+// Two-tier checking (metadata first, content if needed)
 auto result = FastHash.hashFileTwoTier("file.d", oldMetadataHash);
 if (!result.contentHashed) {
-    // Fast path: metadata unchanged, no content hash needed
+    // Fast path: metadata unchanged
 }
+
+// Metadata-only hash
+auto metaHash = FastHash.hashMetadata("file.d");  // mtime + size
 ```
 
-### Using Content-Defined Chunking
+### When to Use Full Hashing
+
+Use `hashFileComplete()` for:
+- Cryptographic verification
+- Signature validation
+- Tamper detection
+
+Use `hashFile()` (sampled) for:
+- Build cache invalidation
+- Change detection
+- Development workflows
+
+---
+
+## Parallel File Scanning
+
+**Module:** `infrastructure.utils.files.glob`
+
+### Implementation
+
+`GlobMatcher` uses `std.parallelism` for directory traversal when matching `**` patterns:
+
+1. Collect directories via BFS
+2. Process directories in parallel
+3. Thread-safe result merging via mutex
+
+### Usage
 
 ```d
-import utils.chunking;
+import infrastructure.utils.files.glob;
 
-// Chunk a file
+// Automatic parallel scanning for ** patterns
+auto files = GlobMatcher.match(["**/*.d"], "./source");
+
+// With exclusion tracking
+auto result = GlobMatcher.matchWithExclusions(
+    ["**/*.d", "!**/test/**"],
+    "./source"
+);
+writeln("Matched: ", result.matches.length);
+writeln("Excluded: ", result.excluded.length);
+```
+
+### Pattern Support
+
+- `*` - Match any characters except `/`
+- `**` - Match any path segments (triggers parallel scan)
+- `?` - Match single character
+- `!pattern` - Negation (exclusion)
+
+---
+
+## Content-Defined Chunking
+
+**Modules:**
+- `infrastructure.utils.files.chunking` - Rabin fingerprinting
+- `infrastructure.utils.files.cdc` - FastCDC (Gear hash)
+
+### Purpose
+
+Split files at content-defined boundaries for:
+- Incremental hashing (only rehash changed chunks)
+- Deduplication
+- Delta transfers
+
+### Rabin Fingerprinting
+
+**Module:** `infrastructure.utils.files.chunking`
+
+```d
+import infrastructure.utils.files.chunking;
+
+// Chunk file
 auto result = ContentChunker.chunkFile("large_file.bin");
 writeln("Chunks: ", result.chunks.length);
 writeln("Combined hash: ", result.combinedHash);
 
-// Compare with previous version
+// Each chunk has offset, length, and hash
+foreach (chunk; result.chunks)
+    writefln("  %d-%d: %s", chunk.offset, chunk.length, chunk.hash);
+```
+
+**Parameters:**
+```d
+MIN_CHUNK = 2_048;   // 2 KB minimum
+AVG_CHUNK = 16_384;  // 16 KB average  
+MAX_CHUNK = 65_536;  // 64 KB maximum
+```
+
+### FastCDC (Gear Hash)
+
+**Module:** `infrastructure.utils.files.cdc`
+
+2-3x faster than Rabin fingerprinting:
+
+```d
+import infrastructure.utils.files.cdc;
+
+// Configure for workload
+auto chunker = FastCDC(FastCDC.Config.artifact());  // Build artifacts
+// Or:
+// FastCDC.Config.large()  - For 100MB+ files
+// FastCDC.Config.small()  - Finer granularity
+
+// Chunk file
+auto result = chunker.chunkFile("large_file.bin");
+writeln("Chunks: ", result.chunks.length);
+```
+
+**Configurations:**
+```d
+artifact() => Config(2048, 16384, 65536);   // 2KB-16KB-64KB
+large()    => Config(8192, 65536, 262144);  // 8KB-64KB-256KB
+small()    => Config(1024, 4096, 16384);    // 1KB-4KB-16KB
+```
+
+### Finding Changed Chunks
+
+```d
 auto oldResult = /* load from cache */;
-auto changed = ContentChunker.findChangedChunks(oldResult, result);
+auto newResult = chunker.chunkFile("file.bin");
+auto changed = ContentChunker.findChangedChunks(oldResult, newResult);
 writeln("Changed chunks: ", changed.length);
 ```
 
-### Using Advanced Metadata
+---
+
+## Metadata Checking
+
+### Three-Tier Strategy
 
 ```d
-import utils.metadata;
+// Tier 1: Size check (~1 ns)
+if (newSize != oldSize) return Changed;
 
-// Get metadata with inode tracking
-auto meta = FileMetadata.from("file.d");
-
-// Three-tier checking
-auto oldMeta = /* load from cache */;
-auto level = MetadataChecker.check(oldMeta, meta);
-
-final switch (level) {
-    case CheckLevel.Identical:
-        // Definitely unchanged
-        break;
-    case CheckLevel.ProbablySame:
-        // Likely unchanged, can skip content hash
-        break;
-    case CheckLevel.Different:
-        // Definitely changed
-        break;
-    case CheckLevel.Unknown:
-        // Need content hash to determine
-        break;
+// Tier 2: Metadata hash (size + mtime, ~10 ns)
+if (FastHash.hashMetadata(path) != oldMetadataHash) {
+    // Tier 3: Content hash (varies by size)
+    return FastHash.hashFile(path) != oldContentHash;
 }
 
-// Detect file moves
-if (meta.wasMoved(oldMeta)) {
-    writeln("File was moved, no rehashing needed!");
-}
+return Unchanged;
 ```
 
-### Using Parallel File Scanning
+### Usage
 
 ```d
-import utils.glob;
-
-// Automatically uses parallel scanning for ** patterns
-auto files = glob("**/*.d", "./source");
-
-// Parallel scanning is transparent - no API changes needed
-```
-
-## Performance Best Practices
-
-### 1. Choose the Right Strategy
-
-**When to use full hashing**:
-- Small files (<1MB)
-- Cryptographic security required
-- Legal/compliance requirements
-
-**When to use sampled hashing**:
-- Large files (>10MB)
-- Cache invalidation
-- Build systems
-- Development workflows
-
-**When to use chunking**:
-- Very large files (>100MB)
-- Incremental modifications
-- Generated files
-- Continuous integration
-
-### 2. Leverage Metadata Checking
-
-```d
-// ✅ GOOD: Use metadata first, content hash only if needed
-auto newMeta = FileMetadata.from(path);
-if (!oldMeta.fastEquals(newMeta)) {
-    // Only hash if metadata changed
-    auto hash = FastHash.hashFile(path);
-}
-
-// ❌ BAD: Always hash content
-auto hash = FastHash.hashFile(path);
-```
-
-### 3. Batch Operations
-
-```d
-// ✅ GOOD: Batch check in parallel
-auto results = MetadataChecker.checkBatch(oldMetadata, paths);
-
-// ❌ BAD: Check one by one
-foreach (path; paths) {
-    auto result = check(path);
+// Two-tier check with FastHash
+auto result = FastHash.hashFileTwoTier(path, oldMetadataHash);
+if (result.metadataHash == oldMetadataHash) {
+    // Fast path - no content hash needed
+} else if (result.contentHash == oldContentHash) {
+    // Metadata changed but content unchanged (e.g., touch)
+} else {
+    // Content actually changed
 }
 ```
 
-### 4. Cache Chunking Results
+---
+
+## Memory-Mapped I/O
+
+Large files (> 100 MB) use memory mapping:
 
 ```d
-// ✅ GOOD: Store chunks for incremental updates
-auto chunks = ContentChunker.chunkFile(path);
-cache.store(path, ContentChunker.serialize(chunks));
+auto mmfile = new MmFile(path, MmFile.Mode.read, 0, null);
+scope(exit) destroy(mmfile);
 
-// On next build, only rehash changed chunks
-auto oldChunks = ContentChunker.deserialize(cache.get(path));
-auto newChunks = ContentChunker.chunkFile(path);
-auto changed = ContentChunker.findChangedChunks(oldChunks, newChunks);
+auto data = cast(ubyte[])mmfile[];
+// Direct access to file content via virtual memory
 ```
+
+Benefits:
+- Eliminates buffer copying
+- Efficient random access
+- Leverages OS page cache
+
+Falls back to chunked reading if mmap fails.
+
+---
+
+## BLAKE3 Hashing
+
+All hashing uses SIMD-accelerated BLAKE3:
+
+```d
+import infrastructure.utils.crypto.blake3;
+
+auto hash = Blake3.hashHex(data);
+
+// Streaming
+auto hasher = Blake3(0);
+hasher.put(chunk1);
+hasher.put(chunk2);
+auto result = hasher.finishHex();
+```
+
+BLAKE3 auto-selects optimal SIMD path: AVX-512, AVX2, NEON, or SSE.
+
+---
 
 ## Configuration
 
 ### Hash Thresholds
 
-Customize size thresholds in `utils/hash.d`:
+In `infrastructure.utils.files.hash`:
 
 ```d
-// Default values (optimal for most cases)
 private enum size_t TINY_THRESHOLD = 4_096;           // 4 KB
 private enum size_t SMALL_THRESHOLD = 1_048_576;      // 1 MB
 private enum size_t MEDIUM_THRESHOLD = 104_857_600;   // 100 MB
@@ -322,170 +281,92 @@ private enum size_t MEDIUM_THRESHOLD = 104_857_600;   // 100 MB
 
 ### Chunking Parameters
 
-Customize chunking in `utils/chunking.d`:
+In `infrastructure.utils.files.chunking`:
 
 ```d
-// Default values
-private enum size_t MIN_CHUNK = 2_048;      // 2 KB minimum
-private enum size_t AVG_CHUNK = 16_384;     // 16 KB average
-private enum size_t MAX_CHUNK = 65_536;     // 64 KB maximum
+private enum size_t MIN_CHUNK = 2_048;    // 2 KB
+private enum size_t AVG_CHUNK = 16_384;   // 16 KB
+private enum size_t MAX_CHUNK = 65_536;   // 64 KB
 ```
 
-**Tuning**:
-- Smaller chunks: Better deduplication, more overhead
-- Larger chunks: Less overhead, worse deduplication
-- Recommendation: Keep defaults unless profiling shows otherwise
+---
 
-## Benchmarking Results
+## Best Practices
 
-### Real-World Project (Builder itself)
+### 1. Use Metadata First
 
-```
-Test: Building Builder from scratch
+```d
+// Good: Check metadata before content
+auto newMeta = FastHash.hashMetadata(path);
+if (newMeta != oldMeta) {
+    auto hash = FastHash.hashFile(path);
+}
 
-Files:
-- 25 D source files
-- Total size: 450 KB
-- Largest file: 42 KB
-
-Results:
-                    v2.0      v3.0      Improvement
----------------------------------------------------
-Metadata checks     2.5 ms    0.003 ms  833x faster
-File hashing        45 ms     44 ms     1.02x faster*
-Directory scan      12 ms     3 ms      4x faster
-Total build time    850 ms    620 ms    27% faster
-
-* Small improvement because files are already small (<1MB)
+// Avoid: Always hashing content
+auto hash = FastHash.hashFile(path);  // Slower
 ```
 
-### Synthetic Large File Test
+### 2. Batch Operations
 
-```
-Test: 100 files, 50MB each (5GB total)
+```d
+// Good: Hash multiple files with shared context
+auto hashes = FastHash.hashFiles(paths, capabilities);
 
-Results:
-                    v2.0      v3.0      Improvement
----------------------------------------------------
-Full hash           250 s     1.2 s     208x faster
-Metadata checks     100 ms    0.1 ms    1000x faster
-Directory scan      50 ms     8 ms      6x faster
-Incremental (1%)    250 s     12 s      21x faster
+// Avoid: Sequential individual hashes
+foreach (path; paths) {
+    auto hash = FastHash.hashFile(path);
+}
 ```
 
-## Theory: Why This Works
+### 3. Cache Chunk Results
 
-### Sampling vs Full Hashing
+```d
+// Store chunks for incremental updates
+auto chunks = ContentChunker.chunkFile(path);
+cache.store(path, serialize(chunks));
 
-**Key Insight**: For cache invalidation, we need uniqueness, not cryptographic security.
-
-**Math**:
-- Collision probability for sampled hash: 2^-256 × (samples/total)
-- For 1MB sampled from 1GB file: 2^-256 × 0.001 ≈ 10^-77
-- Compare: Probability of hardware error: ~10^-15
-
-**Conclusion**: Sampled hashing is safe for build systems.
-
-### Content-Defined Chunking
-
-**Key Insight**: Use file content itself to determine chunk boundaries.
-
-**Rabin Fingerprinting**:
-- Rolling hash over sliding window
-- Boundary when hash matches pattern (e.g., last 14 bits are 0)
-- Average chunk size = 2^14 = 16KB
-
-**Advantage**: Byte insertions shift boundaries, but chunks stabilize.
-
-**Example**:
-```
-File: ABCDEFGHIJKLMNOPQRSTUVWXYZ
-Chunks: ABC|DEFGH|IJKLM|NOPQR|STUVWXYZ
-
-After inserting "123" at position 5:
-File: ABCDE123FGHIJKLMNOPQRSTUVWXYZ
-Chunks: ABC|DE123FGH|IJKLM|NOPQR|STUVWXYZ
-
-Only one chunk changed! (DE123FGH)
+// Later: Only rehash changed chunks
+auto oldChunks = deserialize(cache.get(path));
+auto newChunks = ContentChunker.chunkFile(path);
+auto changed = ContentChunker.findChangedChunks(oldChunks, newChunks);
 ```
 
-### Three-Tier Metadata
+### 4. Choose Right Chunking Config
 
-**Key Insight**: Progressive validation - start with cheapest checks.
+```d
+// Build artifacts (default)
+FastCDC.Config.artifact()
 
-**Performance Model**:
-- 99% of changes detected by size (1ns)
-- 0.9% of changes detected by mtime (10ns)  
-- 0.09% of changes detected by inode (100ns)
-- 0.01% need content hash (1ms)
+// Large binaries, videos
+FastCDC.Config.large()
 
-**Expected time** = 0.99×1ns + 0.009×10ns + 0.0009×100ns + 0.0001×1ms
-                  ≈ 1.2 nanoseconds (average)
+// Source files, configs
+FastCDC.Config.small()
+```
+
+---
 
 ## Limitations
 
 ### Sampled Hashing
 
-**Not suitable for**:
+Not suitable for:
 - Cryptographic verification
 - Security-critical checksums
 - Malware detection
-- Digital signatures
 
-**Edge cases**:
-- Changes only in unsampled regions (very rare)
-- Mitigation: Use more samples or lower thresholds
+Changes in unsampled regions won't be detected (statistically rare).
 
 ### Content-Defined Chunking
 
-**Overhead**:
-- Initial chunking takes time (similar to full hash)
-- Only beneficial for files that change frequently
+- Initial chunking has overhead similar to full hash
 - Storage overhead for chunk metadata
+- Only beneficial for files that change frequently
 
-**When to skip**:
-- Files <10MB
-- Files that rarely change
-- Write-once, read-many scenarios
+---
 
-## Future Enhancements
+## See Also
 
-### Planned
-
-- [ ] BLAKE3 hash (faster than SHA-256)
-- [ ] Adaptive sampling (learn from file types)
-- [ ] Chunk deduplication across files
-- [ ] Distributed caching of chunks
-- [ ] GPU-accelerated hashing for huge files
-
-### Research
-
-- [ ] Machine learning to predict changed regions
-- [ ] Simhashing for similarity detection
-- [ ] Delta compression for cache storage
-- [ ] Bloom filters for quick negative lookups
-
-## References
-
-- [Rabin Fingerprinting](https://en.wikipedia.org/wiki/Rabin_fingerprint)
-- [Content-Defined Chunking](https://moinakg.wordpress.com/2013/06/22/high-performance-content-defined-chunking/)
-- [rsync Algorithm](https://rsync.samba.org/tech_report/)
-- [git Packfiles](https://git-scm.com/book/en/v2/Git-Internals-Packfiles)
-- [Fast Content-Defined Chunking (FastCDC)](https://www.usenix.org/system/files/conference/atc16/atc16-paper-xia.pdf)
-
-## Conclusion
-
-Builder v3.0's performance optimizations provide:
-- **50-500x faster** large file hashing
-- **4-8x faster** directory scanning
-- **1000x faster** metadata checking
-- **Incremental updates** via content-defined chunking
-
-These improvements make Builder suitable for:
-- Monorepos with 100,000+ files
-- Projects with large binary assets
-- Continuous integration pipelines
-- Development workflows requiring fast iteration
-
-The optimizations are **transparent** - existing code works without changes, but automatically benefits from the performance improvements.
-
+- [Incremental Analysis](incremental.md)
+- [Caching Architecture](../architecture/cachedesign.md)
+- [Persistent Workers](persistent-workers.md)

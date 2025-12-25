@@ -1,141 +1,33 @@
-# Hermetic Builds - User Guide
+# Hermetic Builds
+
+## Overview
+
+Hermetic builds ensure reproducibility by isolating builds from the host environment. Builder provides platform-specific sandboxing:
+
+- **Linux**: Namespace isolation (mount, PID, network, IPC, UTS, user) + cgroups v2
+- **macOS**: sandbox-exec with SBPL profiles
+- **Windows**: Fallback mode (validation only, sandboxing planned)
 
 ## Quick Start
 
-### Enable Hermetic Builds
-
-Hermetic builds are enabled by default on Linux and macOS. To verify:
+Hermetic builds are enabled by default on Linux and macOS.
 
 ```bash
 bldr build --verbose
-```
-
-Look for output like:
-```
-[INFO] Hermetic builds: enabled (linux-namespaces)
+# Look for: [INFO] Hermetic builds: enabled (linux-namespaces)
 ```
 
 ### Disable Hermetic Builds
-
-If you need to disable hermetic builds:
 
 ```bash
 # One-time
 BUILDER_HERMETIC=false bldr build
 
-# Permanently (add to .builderrc)
+# Permanently
 echo 'BUILDER_HERMETIC=false' >> .builderrc
 ```
 
-## Common Scenarios
-
-### Building with External Dependencies
-
-If your build needs to download dependencies, temporarily allow network:
-
-```bash
-# Not recommended for production
-BUILDER_HERMETIC_NETWORK=true bldr build
-```
-
-Better approach: Pre-download dependencies and add to inputs:
-
-```d
-target("myapp") {
-    type: executable;
-    sources: ["src/**/*.d"];
-    deps: ["//third_party:libs"];
-}
-```
-
-### Custom Build Scripts
-
-For custom build scripts that need specific paths:
-
-```d
-target("custom") {
-    type: custom;
-    sources: ["build.sh"];
-    
-    hermetic: {
-        inputs: ["/usr/local/bin", "/opt/mytools"];
-        outputs: ["dist/"];
-    }
-}
-```
-
-### Debugging Build Failures
-
-If hermetic builds fail:
-
-1. **Check available paths:**
-   ```bash
-   bldr build --hermetic-debug
-   ```
-
-2. **Run without sandbox:**
-   ```bash
-   BUILDER_HERMETIC=false bldr build
-   ```
-
-3. **Compare outputs:**
-   - If it works without hermetic, you're accessing unspecified paths
-   - Check error messages for "Permission denied" or "No such file"
-
-4. **Add missing paths:**
-   ```d
-   hermetic: {
-       inputs: ["/missing/path"];
-   }
-   ```
-
-## Platform-Specific Notes
-
-### Linux
-
-**Requirements:**
-- Kernel 3.8+ (for user namespaces)
-- Kernel 3.5+ (for seccomp-BPF)
-- `/proc/self/ns/user` must exist
-
-**Security layers:**
-- Namespace isolation (mount, PID, network, IPC, UTS, user)
-- Cgroups v2 resource limits
-- Seccomp-BPF syscall filtering (blocks ptrace, mount, personality, etc.)
-
-**Enable unprivileged user namespaces:**
-```bash
-sudo sysctl kernel.unprivileged_userns_clone=1
-
-# Make permanent
-echo 'kernel.unprivileged_userns_clone = 1' | sudo tee -a /etc/sysctl.conf
-```
-
-**Common issues:**
-- **"Operation not permitted"**: User namespaces disabled
-- **"No space left on device"**: Too many mount points (increase `fs.mount-max`)
-- **"seccomp filter installation failed"**: Kernel doesn't support seccomp (rare)
-
-### macOS
-
-**Requirements:**
-- Xcode Command Line Tools
-- `sandbox-exec` in PATH
-
-**Install requirements:**
-```bash
-xcode-select --install
-```
-
-**Common issues:**
-- **"sandbox-exec not found"**: Install Command Line Tools
-- **"Operation not permitted"**: Check System Integrity Protection (SIP)
-
-### Windows
-
-Windows support is planned but not yet implemented. Builds will use fallback mode (validation only).
-
-## Configuration Options
+## Configuration
 
 ### Builderfile
 
@@ -145,20 +37,20 @@ target("myapp") {
         // Enable/disable (default: true)
         enabled: true;
         
-        // Additional input paths (read-only)
+        // Input paths (read-only)
         inputs: ["/opt/tools", "/usr/local/lib"];
         
         // Output paths (write-only)
         outputs: ["dist/", "artifacts/"];
         
-        // Temp paths (read-write)
+        // Temp paths (read-write, cleaned on completion)
         temps: ["/tmp/build-cache"];
         
         // Network policy
         network: {
-            enabled: false;  // hermetic
-            // OR
-            allowHosts: ["github.com", "api.npmjs.org"];
+            enabled: false;  // hermetic (default)
+            // OR for non-hermetic:
+            // allowHosts: ["github.com", "api.npmjs.org"];
         };
         
         // Resource limits
@@ -166,6 +58,7 @@ target("myapp") {
             memory: "4G";
             cpuTime: "1h";
             processes: 128;
+            openFiles: 512;
         };
         
         // Process policy
@@ -181,24 +74,125 @@ target("myapp") {
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BUILDER_HERMETIC` | `true` | Enable/disable hermetic builds |
-| `BUILDER_HERMETIC_NETWORK` | `false` | Allow network access |
-| `BUILDER_HERMETIC_MEMORY` | `4G` | Memory limit |
-| `BUILDER_HERMETIC_CPU_TIME` | `1h` | CPU time limit |
-| `BUILDER_HERMETIC_PROCESSES` | `128` | Process limit |
+| `BUILDER_HERMETIC` | `true` | Enable hermetic builds |
 | `BUILDER_HERMETIC_DEBUG` | `false` | Enable debug output |
+
+## Platform Details
+
+### Linux
+
+**Requirements:**
+- Kernel 3.8+ (user namespaces)
+- Kernel 3.5+ (seccomp-BPF)
+
+**Isolation layers:**
+- Namespace isolation (mount, PID, network, IPC, UTS, user)
+- Cgroups v2 resource limits
+- Seccomp-BPF syscall filtering
+
+**Enable unprivileged user namespaces:**
+```bash
+sudo sysctl kernel.unprivileged_userns_clone=1
+
+# Permanent
+echo 'kernel.unprivileged_userns_clone = 1' | sudo tee -a /etc/sysctl.conf
+```
+
+**Common issues:**
+- "Operation not permitted" — User namespaces disabled
+- "No space left on device" — Too many mount points (increase `fs.mount-max`)
+
+### macOS
+
+**Requirements:**
+- Xcode Command Line Tools
+- `sandbox-exec` available
+
+**Install requirements:**
+```bash
+xcode-select --install
+```
+
+**Common issues:**
+- "sandbox-exec not found" — Install Command Line Tools
+- "Operation not permitted" — Check System Integrity Protection (SIP)
+
+### Windows
+
+Windows sandboxing is planned. Currently uses fallback mode with validation only.
+
+## Programmatic Usage
+
+```d
+import engine.runtime.hermetic;
+
+// Build spec using fluent API
+auto spec = SandboxSpecBuilder.create()
+    .input(workspaceRoot)
+    .output(outputDir)
+    .temp(tempDir)
+    .withNetwork(NetworkPolicy.hermetic())
+    .env("PATH", "/usr/bin:/bin")
+    .build();
+
+// Create executor
+auto executor = HermeticExecutor.create(spec.unwrap());
+if (executor.isErr)
+{
+    writeln("Error: ", executor.unwrapErr());
+    return;
+}
+
+// Execute command
+auto result = executor.unwrap().execute(["gcc", "main.c", "-o", "main"]);
+if (result.isOk)
+{
+    auto output = result.unwrap();
+    writeln("Exit code: ", output.exitCode);
+    writeln("Hermetic: ", output.hermetic);
+}
+```
+
+### Sandbox Specification Types
+
+**PathSet** — Read/write path sets with prefix matching:
+- `inputs` — Read-only paths
+- `outputs` — Write-only paths  
+- `temps` — Read-write paths
+
+**NetworkPolicy**:
+```d
+NetworkPolicy.hermetic()              // No network access
+NetworkPolicy.allowHosts(["host"])    // Whitelist specific hosts
+```
+
+**ResourceLimits**:
+```d
+ResourceLimits limits;
+limits.maxMemoryBytes = 4UL * 1024 * 1024 * 1024;  // 4GB
+limits.maxCpuTimeMs = 60 * 60 * 1000;              // 1 hour
+limits.maxProcesses = 128;
+limits.maxOpenFiles = 512;
+```
+
+**ProcessPolicy**:
+```d
+ProcessPolicy policy;
+policy.maxChildren = 32;
+policy.killOnParentExit = true;
+```
 
 ## Best Practices
 
 ### 1. Minimize Inputs
 
-Only add paths that are actually needed:
+Only add necessary paths:
 
 ```d
-// BAD: Too broad
+// Avoid
 inputs: ["/usr"];
 
-// GOOD: Specific
+// Prefer
 inputs: ["/usr/lib/gcc", "/usr/include"];
 ```
 
@@ -207,21 +201,21 @@ inputs: ["/usr/lib/gcc", "/usr/include"];
 Never overlap input and output paths:
 
 ```d
-// BAD: Overlapping paths
+// Invalid (paths overlap)
 inputs: ["/workspace"];
-outputs: ["/workspace/bin"];  // INVALID
+outputs: ["/workspace/bin"];
 
-// GOOD: Disjoint paths
+// Valid (disjoint paths)
 inputs: ["/workspace/src"];
 outputs: ["/workspace/bin"];
 ```
 
 ### 3. Use Temp Directories
 
-For intermediate files, use temp paths:
+For intermediate files:
 
 ```d
-temps: ["/tmp/build"];  // Cleaned up automatically
+temps: ["/tmp/build"];  // Cleaned automatically
 ```
 
 ### 4. Pre-fetch Dependencies
@@ -229,124 +223,37 @@ temps: ["/tmp/build"];  // Cleaned up automatically
 Don't rely on network during builds:
 
 ```bash
-# Fetch dependencies first
-builder deps fetch
-
-# Then build hermetically
-bldr build
+bldr deps fetch    # Fetch first
+bldr build         # Then build hermetically
 ```
 
 ### 5. Verify Reproducibility
 
-Test that builds are truly reproducible:
+```bash
+bldr clean && bldr build
+mv bin bin-1
+
+bldr clean && bldr build
+mv bin bin-2
+
+diff -r bin-1 bin-2
+```
+
+## Debugging
+
+### Check Available Paths
 
 ```bash
-# Build twice
-bldr clean && bldr build
-bldr clean && bldr build
-
-# Compare outputs
-diff -r bin-1/ bin-2/
+bldr build --hermetic-debug
 ```
 
-## Advanced Usage
+### Run Without Sandbox
 
-### Custom Sandbox Specs
-
-For programmatic control:
-
-```d
-import core.execution.hermetic;
-
-auto spec = SandboxSpecBuilder.create()
-    .input(workspaceRoot)
-    .output(outputDir)
-    .temp(tempDir)
-    .withNetwork(NetworkPolicy.hermetic())
-    .withResources(ResourceLimits.hermetic())
-    .build();
-
-auto executor = HermeticExecutor.create(spec.unwrap());
-auto result = executor.unwrap().execute(command);
-```
-
-### Multiple Build Stages
-
-For multi-stage builds:
-
-```d
-target("stage1") {
-    hermetic: {
-        outputs: ["stage1/"];
-    }
-}
-
-target("stage2") {
-    deps: ["//stage1"];
-    hermetic: {
-        inputs: ["stage1/"];  // Output from stage1
-        outputs: ["stage2/"];
-    }
-}
-```
-
-### Testing Hermetic Isolation
-
-Verify that builds are truly isolated:
-
-```d
-import core.execution.hermetic;
-
-unittest
-{
-    auto spec = /* ... */;
-    auto executor = HermeticExecutor.create(spec.unwrap());
-    
-    // This should fail (no network)
-    auto result = executor.unwrap().execute(["curl", "https://example.com"]);
-    assert(result.isErr || !result.unwrap().success());
-}
-```
-
-## Troubleshooting
-
-### Build works locally but fails in CI
-
-**Cause**: CI environment has stricter sandboxing
-
-**Solution**: Test locally with same sandbox settings:
 ```bash
-BUILDER_HERMETIC=true bldr build --verbose
+BUILDER_HERMETIC=false bldr build
 ```
 
-### "Permission denied" errors
-
-**Cause**: Missing input paths
-
-**Solution**: Add required paths to `hermetic.inputs`:
-```d
-hermetic: {
-    inputs: ["/usr/lib/missing-lib"];
-}
-```
-
-### Slow builds with hermetic enabled
-
-**Cause**: Namespace creation overhead
-
-**Solutions:**
-- Use caching (enabled by default)
-- Pre-build dependencies
-- Consider shared namespaces (future feature)
-
-### Network errors during build
-
-**Cause**: Hermetic builds block network by default
-
-**Solutions:**
-1. Pre-fetch dependencies: `bldr deps fetch`
-2. Add dependencies to inputs
-3. For testing only: `BUILDER_HERMETIC_NETWORK=true`
+If it works without hermetic mode, you're accessing unspecified paths. Check error messages for "Permission denied" or "No such file".
 
 ## FAQ
 
@@ -354,7 +261,7 @@ hermetic: {
 A: No, Builder uses user namespaces which don't require root.
 
 **Q: Will hermetic builds slow down my builds?**  
-A: Overhead is typically 5-30ms per build. Caching more than compensates for this.
+A: Overhead is typically 5-30ms per build. Caching compensates for this.
 
 **Q: Can I mix hermetic and non-hermetic targets?**  
 A: Yes, configure per-target in Builderfile.
@@ -362,22 +269,13 @@ A: Yes, configure per-target in Builderfile.
 **Q: How does this compare to Docker?**  
 A: Lighter weight (no image layers), faster startup (~10ms vs ~100ms), but less isolation.
 
-**Q: Can I debug inside the sandbox?**  
-A: Use `--hermetic-shell` to spawn an interactive shell inside the sandbox:
-```bash
-builder shell --hermetic
-```
-
 **Q: Are hermetic builds deterministic?**  
-A: Yes, given the same inputs, you'll get the same outputs. But note:
+A: Yes, given the same inputs. Note:
 - Timestamps may vary (use `SOURCE_DATE_EPOCH`)
 - Random number generation needs seeding
 - Concurrent execution may affect ordering
 
 ## See Also
 
-- [Hermetic Builds Technical Documentation](../features/hermetic.md)
-- [Security Best Practices](../security/security.md)
-- [Distributed Builds](../features/distributed.md)
-- [Caching System](../features/caching.md)
-
+- [Hermetic Architecture](../architecture/hermetic.md)
+- [Reproducibility Verification](../features/reproducibility-verification.md)

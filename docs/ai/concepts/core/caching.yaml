@@ -34,6 +34,12 @@ architecture:
       granularity: "Content-addressed blobs"
       use_case: "Identical outputs from different actions stored once"
       storage_savings: "30-70% on large monorepos"
+      
+    - name: "Chunked CAS (CDC)"
+      location: ".builder-cache/chunks/"
+      granularity: "Variable-size chunks (8KB-256KB)"
+      use_case: "Large artifacts (>100MB) with delta transfers"
+      bandwidth_savings: "80-95% for incremental changes"
 
 how_it_works:
   target_cache: |
@@ -133,7 +139,7 @@ cache_hierarchy:
             ├─ SOME HITS → Partial rebuild (medium)
             └─ ALL MISSES → Full rebuild (slow)
 
-related: [blake3, determinism, action-cache, remote-cache, incremental, content-addressable-sources, graph-persistence, deduplication]
+related: [blake3, determinism, action-cache, remote-cache, incremental, content-addressable-sources, graph-persistence, deduplication, cdc]
 
 common_issues:
   - problem: "Cache always misses"
@@ -151,6 +157,7 @@ common_issues:
 next_steps: |
   - See 'bldr explain action-cache' for fine-grained caching
   - See 'bldr explain remote-cache' for team collaboration setup
+  - See 'bldr explain cdc' for large artifact delta transfers
   - See 'bldr explain determinism' to ensure cache reliability
   - See 'bldr explain workflow setup-cache' for configuration guide
 

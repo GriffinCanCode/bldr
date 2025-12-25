@@ -1,98 +1,49 @@
-# Dynamic Language Support - Universal Language Abstraction
+# Dynamic Language Support
 
-**Status:** ✅ Implemented  
-**Version:** 1.0  
-**Innovation Level:** 🚀 Industry-Leading
+## Overview
 
----
+Builder supports adding language support through declarative JSON specifications. Instead of writing D code for each language handler, define language support in a JSON file.
 
-## Executive Summary
+### Comparison
 
-Builder introduces **zero-code language addition** through declarative JSON specifications. Instead of writing 150+ lines of D code for each language handler, define language support in a simple JSON file.
-
-### Before (Traditional Approach):
-```d
-// 150+ lines of D code per language
-class CrystalHandler : BaseLanguageHandler {
-    override LanguageBuildResult buildImplWithContext(...) {
-        // Compiler detection
-        // Command construction
-        // Error handling
-        // Output management
-        // ... 100+ more lines
-    }
-}
-```
-
-### After (Declarative Specification):
-```json
-{
-  "language": {"name": "crystal", "display": "Crystal"},
-  "build": {
-    "compiler": "crystal",
-    "compile_cmd": "crystal build {{sources}} -o {{output}} {{flags}}"
-  }
-}
-```
-
-**Result:** Language support in 20 lines of JSON vs 150 lines of D code.
-
----
-
-## Why This Is Innovative
-
-### Industry Comparison
-
-| Build System | Language Addition Method | Lines of Code | Recompilation? |
-|--------------|-------------------------|---------------|----------------|
-| **Bazel** | Starlark rules (embedded DSL) | ~200 | No |
-| **Buck2** | Starlark rules | ~150 | No |
-| **CMake** | Module files | ~100 | No |
-| **Meson** | Python modules | ~120 | No |
-| **Builder** | **JSON spec** | **~20** | **No** |
-
-### Key Advantages
-
-1. **Zero Programming Knowledge**: Non-developers can add languages
-2. **Language Agnostic**: No need to learn D, Starlark, or Python
-3. **Instant Availability**: Drop JSON file, use immediately
-4. **Community Driven**: Accept PRs with just JSON files
-5. **Type Safe**: Validated at runtime with clear errors
-6. **Portable**: Share specs across projects
-
----
+| Approach | Lines | Programming Required |
+|----------|-------|---------------------|
+| D Handler | ~150+ | D knowledge |
+| JSON Spec | ~20-30 | None |
 
 ## Architecture
 
+The dynamic language system is in `source/languages/`:
+
+```
+languages/
+├── dynamic/
+│   ├── spec.d      # LanguageSpec parser
+│   ├── handler.d   # SpecBasedHandler
+│   └── package.d   # Public API
+├── specs/          # JSON specifications
+│   ├── crystal.json
+│   ├── dart.json
+│   ├── v.json
+│   └── README.md
+└── registry.d      # Handler registry
+```
+
 ### Components
 
-```
-source/languages/
-├── dynamic/             # Dynamic language system
-│   ├── spec.d           # Specification parser and loader
-│   ├── handler.d        # Generic spec-based handler
-│   └── package.d        # Public API
-├── specs/               # Language specifications
-│   ├── crystal.json     # Crystal language
-│   ├── dart.json        # Dart language
-│   ├── v.json           # V language
-│   └── README.md        # Documentation
-└── registry.d           # Extended to support dynamic languages
-```
+**LanguageSpec** (`spec.d`):
+- Parses JSON specification files
+- Template variable expansion
+- Compiler availability checking
 
-### Integration
+**SpecBasedHandler** (`handler.d`):
+- Generic handler driven by specification
+- Routes to compile/test/format commands
+- Supports import analysis via regex
 
-Dynamic languages integrate seamlessly with existing infrastructure:
-
-```d
-// In HandlerRegistry
-auto handler = registry.getByName("crystal");
-// Returns SpecBasedHandler if spec exists
-// Returns built-in handler for Python, Rust, etc.
-// Returns null if neither exists
-```
-
----
+**SpecRegistry** (`spec.d`):
+- Discovers and loads spec files
+- Provides lookup by language name
 
 ## Specification Format
 
@@ -136,46 +87,56 @@ auto handler = registry.getByName("crystal");
 
 ### Field Reference
 
-#### Language Metadata
-- `name` (required): Unique identifier for command-line use
-- `display`: User-facing name for UI
-- `category`: `compiled`, `scripting`, `jvm`, `dotnet`, or `web`
-- `extensions`: File extensions (e.g., `[".cr"]`)
-- `aliases`: Alternative names (e.g., `["cr", "crystal"]`)
+#### language (required)
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Unique identifier (e.g., "crystal") |
+| `display` | string | UI display name |
+| `category` | string | One of: compiled, scripting, jvm, dotnet, web |
+| `extensions` | string[] | File extensions (e.g., [".cr"]) |
+| `aliases` | string[] | Alternative names |
 
-#### Detection Patterns
-- `shebang`: Shebang patterns to match
-- `files`: Project manifest files for auto-detection
-- `version_cmd`: Command to check compiler version
+#### detection (optional)
+| Field | Type | Description |
+|-------|------|-------------|
+| `shebang` | string[] | Shebang patterns |
+| `files` | string[] | Project manifest files |
+| `version_cmd` | string | Command to check compiler version |
 
-#### Build Configuration
-- `compiler`: Compiler executable name
-- `compile_cmd`: Template for compilation
-- `test_cmd`: Template for running tests
-- `format_cmd`: Template for code formatting
-- `lint_cmd`: Template for linting
-- `check_cmd`: Template for type checking
-- `env`: Environment variables
-- `incremental`: Boolean, supports incremental builds
-- `caching`: Boolean, supports build caching
+#### build (required for compilation)
+| Field | Type | Description |
+|-------|------|-------------|
+| `compiler` | string | Compiler executable name |
+| `compile_cmd` | string | Compile command template |
+| `test_cmd` | string | Test command template |
+| `format_cmd` | string | Format command template |
+| `lint_cmd` | string | Lint command template |
+| `check_cmd` | string | Type-check command template |
+| `env` | object | Environment variables |
+| `incremental` | boolean | Supports incremental compilation |
+| `caching` | boolean | Supports build caching (default: true) |
 
-#### Dependencies
-- `pattern`: Regex to extract import statements
-- `resolver`: Resolution strategy (`module_path`, `package`, `shard`, etc.)
-- `manifest`: Dependency manifest file name
-- `install_cmd`: Command to install dependencies
+#### dependencies (optional)
+| Field | Type | Description |
+|-------|------|-------------|
+| `pattern` | string | Regex for import extraction |
+| `resolver` | string | Resolution strategy |
+| `manifest` | string | Dependency manifest file |
+| `install_cmd` | string | Dependency install command |
 
 ### Template Variables
 
-Command templates support variable substitution:
+Commands support variable substitution:
 
-- `{{sources}}` - Space-separated source files
-- `{{output}}` - Output file path
-- `{{flags}}` - User-provided flags
-- `{{workspace}}` - Workspace root directory
-- `{{manifest}}` - Dependency manifest path
+| Variable | Description |
+|----------|-------------|
+| `{{sources}}` | Space-separated source files |
+| `{{output}}` | Output file path |
+| `{{flags}}` | User-provided flags |
+| `{{workspace}}` | Workspace root directory |
+| `{{manifest}}` | Dependency manifest path |
 
-**Example:**
+Example:
 ```json
 "compile_cmd": "crystal build {{sources}} -o {{output}} {{flags}}"
 ```
@@ -185,27 +146,23 @@ Expands to:
 crystal build src/main.cr -o bin/app --release
 ```
 
----
-
 ## Usage
 
 ### For Users
 
-#### 1. Using a Spec-Based Language
+Use spec-based languages like built-in languages:
 
-Just use it like any built-in language:
-
-```builderfile
+```
 target("myapp") {
     type: executable;
-    language: crystal;  # Automatically uses crystal.json spec
+    language: crystal;
     sources: ["src/main.cr"];
 }
 ```
 
-No configuration needed! Builder auto-discovers specs.
+No configuration required—Builder auto-discovers specs.
 
-#### 2. Adding a Custom Language
+### Adding a Custom Language
 
 Create `~/.builder/specs/mylang.json`:
 
@@ -223,21 +180,20 @@ Create `~/.builder/specs/mylang.json`:
 }
 ```
 
-Then use immediately:
+Use immediately:
 
-```builderfile
+```
 target("app") {
-    language: mylang;  # Works instantly!
+    language: mylang;
     sources: ["main.ml"];
 }
 ```
 
-### For Developers
-
-#### Programmatic Access
+### Programmatic API
 
 ```d
-import languages.dynamic;
+import languages.dynamic.spec;
+import languages.dynamic.handler;
 
 // Load all specs
 auto registry = new SpecRegistry();
@@ -246,191 +202,111 @@ registry.loadAll();
 // Get specific spec
 if (auto spec = registry.get("crystal")) {
     auto handler = new SpecBasedHandler(*spec);
-    
-    // Use like any LanguageHandler
     auto result = handler.buildWithContext(context);
+}
+
+// Check availability
+if (spec.isAvailable()) {
+    // Compiler found on system
 }
 ```
 
-#### Integration with HandlerRegistry
+### HandlerRegistry Integration
+
+The handler registry automatically loads dynamic specs:
 
 ```d
-// Built into HandlerRegistry automatically
 auto registry = new HandlerRegistry();
-registry.initialize();  // Loads dynamic specs
+registry.initialize();
 
-// Get handler (tries built-in, then spec-based)
+// Returns SpecBasedHandler for crystal
 auto handler = registry.getByName("crystal");
 ```
 
----
+Built-in handlers take precedence over specs.
 
-## Supported Languages
+## Included Specifications
 
-### Built-in (D Handlers)
-**28 languages** with full integration:
-- Compiled: C, C++, D, Rust, Go, Zig, Nim, OCaml, Haskell, Swift
-- Scripting: Python, Ruby, Perl, PHP, Lua, R, Elixir, Gleam
-- JVM: Java, Kotlin, Scala
-- .NET: C#, F#
-- Web: JavaScript, TypeScript, CSS, Elm
-- Other: Protobuf
+| Language | File | Compiler | Category |
+|----------|------|----------|----------|
+| Crystal | crystal.json | crystal | compiled |
+| Dart | dart.json | dart | compiled |
+| V | v.json | v | compiled |
 
-### Spec-Based (JSON Definitions)
-- **Crystal** - Ruby-like syntax, compiled to native
-- **Dart** - Google's language for Flutter
-- **V** - Fast, safe, compiled language
+## When to Use Specs vs D Handlers
 
-### Community Contributions Welcome!
+### Use JSON Specs For
 
-Add your favorite language by submitting a JSON spec. No D knowledge required.
+- Straightforward compilers (single command)
+- Standard toolchains (compiler + linter + formatter)
+- Simple dependency management (one manifest file)
+- Regex-extractable imports
 
----
+### Use D Handlers For
 
-## Design Principles
+- Multi-stage compilation pipelines
+- Complex dependency resolution
+- Custom caching strategies
+- Deep IDE integration (LSP, debugging)
+- Conditional logic based on target configuration
 
-### 1. Progressive Complexity
+**Example**: Rust uses a D handler because:
+- Cargo has complex workspace semantics
+- Multiple build modes (dev/release/test)
+- Toolchain management (rustup)
+- Incremental compilation tracking
 
-```
-Simple Case (90%) → JSON Spec (20 lines)
-         ↓
-Complex Case (9%) → D Handler (150 lines)
-         ↓
-Expert Case (1%) → Full Integration (500+ lines)
-```
+## Spec Loading
 
-### 2. Zero Recompilation
+### Search Paths
 
-Specs are read at runtime. Add/modify languages without rebuilding Builder.
+1. `source/languages/specs/` (built-in)
+2. `~/.builder/specs/` (user-defined)
 
-### 3. Fail-Safe Defaults
+### Performance
 
-Missing fields use sensible defaults:
-- `category`: defaults to `"scripting"`
-- `caching`: defaults to `true`
-- `incremental`: defaults to `false`
-- Commands: optional, gracefully skipped if missing
+- **Cold start**: ~5ms for 10 specs
+- **Cached**: ~1ms (in-memory after load)
+- **Per-build overhead**: Negligible
 
-### 4. Validation & Error Messages
+## Validation
 
-```json
-// Invalid spec
-{"language": {"name": ""}}
-```
+Specs are validated on load. Errors include:
 
 ```
 Error: Invalid language spec 'mylang.json'
   - Field 'language.name' cannot be empty
-  
-Suggestion: Provide a unique identifier like "mylang"
-See: docs/features/dynamic-languages.md#specification-format
 ```
 
-### 5. Backward Compatibility
+Required fields:
+- `language.name`
+- `build.compiler` (for compilation)
 
-Built-in handlers take precedence. Specs never override Python, Rust, etc.
+## Contributing Specs
 
----
+To add a new language spec:
 
-## Performance
+1. Create JSON file in `source/languages/specs/`
+2. Test locally: `bldr build //test/mylang:simple`
+3. Submit PR with the JSON file
+4. Include example Builderfile in PR description
 
-### Spec Loading
-- **Cold start**: ~5ms for 10 specs
-- **Cached**: ~1ms (in-memory after first load)
-- **Parallel**: Specs load independently
-
-### Runtime Overhead
-- **Handler creation**: Same as built-in (~0.1ms)
-- **Command execution**: Identical to built-in handlers
-- **Template expansion**: ~0.01ms per command
-
-**Verdict:** No measurable performance impact.
-
----
-
-## Limitations & When NOT to Use
-
-### Use JSON Specs For:
-✅ Straightforward compilers (single command)  
-✅ Standard toolchains (compiler + linter + formatter)  
-✅ Simple dependency management (one manifest file)  
-✅ Regex-extractable imports
-
-### Use D Handlers For:
-❌ Multi-stage compilation pipelines  
-❌ Complex dependency resolution (e.g., transitive closure)  
-❌ Custom caching strategies (beyond file-level)  
-❌ Deep IDE integration (LSP, debugging)  
-❌ Conditional logic based on target config
-
-### Example: Rust Uses D Handler Because...
-
-- Cargo has complex workspace semantics
-- Multiple build modes (dev/release/test)
-- Toolchain management (rustup integration)
-- Incremental compilation tracking
-- Cross-compilation complexities
-
-These require programmatic logic beyond template expansion.
-
----
-
-## Contributing
-
-### Adding a Language Spec
-
-1. **Create JSON file** in `source/languages/specs/`
-2. **Test locally**:
-   ```bash
-   bldr build //test/mylang:simple
-   ```
-3. **Submit PR** with just the JSON file
-4. **Include example** Builderfile in PR description
-
-### Spec Checklist
+### Checklist
 
 - [ ] `language.name` is unique
-- [ ] `language.extensions` includes at least one
+- [ ] `language.extensions` has at least one entry
 - [ ] `build.compiler` is widely available
 - [ ] `compile_cmd` template is correct
 - [ ] Tested on real project
-- [ ] Documentation in PR description
 
----
+## Limitations
 
-## Future Enhancements
-
-### Potential Additions (Not Yet Implemented)
-
-1. **TOML Support**: Alternative to JSON for specs
-2. **Embedded Scripts**: Lua snippets for custom logic
-3. **Spec Validation Tool**: `bldr validate-spec mylang.json`
-4. **Spec Generator**: `bldr generate-spec --lang=mylang`
-5. **Registry Website**: Browse community specs
-
----
-
-## Conclusion
-
-Dynamic language support represents a **paradigm shift** in build system extensibility:
-
-- **Before**: 150 lines of D → Hours of work → Requires D expertise
-- **After**: 20 lines of JSON → Minutes of work → No programming needed
-
-This makes Builder the **most user-extensible build system** in the industry, enabling community-driven language support at unprecedented scale.
-
-**The innovation isn't just technical—it's democratizing language support.**
-
----
+1. **No programmatic logic**: Specs are declarative; complex conditions require D handlers
+2. **Single command templates**: Multi-step builds need D handlers
+3. **Limited import analysis**: Only regex-based extraction
 
 ## See Also
 
 - [Language Specifications README](../../source/languages/specs/README.md)
-- [Plugin Architecture](../architecture/plugins.md) - For even more complex integrations
-- [Programmability Architecture](../architecture/programmability.md) - Three-tier extensibility
-- [Language Registry](../architecture/overview.md#language-support) - Core language system
-
----
-
-**Questions or feedback?** Open an issue or submit a spec!
-
+- [Plugin Architecture](../architecture/PLUGINS.md)
+- [Language Registry](../architecture/overview.md#language-support)

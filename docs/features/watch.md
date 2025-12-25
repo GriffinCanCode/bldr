@@ -1,131 +1,189 @@
-# Watch Mode Implementation
+# Watch Mode
 
-This document describes the technical implementation of Builder's watch mode feature.
+## Overview
 
-## Architecture Overview
+Watch mode monitors the filesystem for changes and automatically triggers incremental builds. Key features:
 
-Watch mode consists of three main layers:
+- **Platform-Native Watchers**: FSEvents (macOS), inotify (Linux), kqueue (BSD), polling fallback
+- **Debouncing**: Configurable delay to batch rapid changes
+- **Incremental Topological Ordering**: Reuses cached build order when graph structure unchanged
+- **Memory-Mapped Persistence**: Instant startup from cached graph state
 
-1. **File Watcher Layer**: Platform-specific file system monitoring
-2. **Orchestration Layer**: Build coordination and state management
-3. **CLI Layer**: User interface and command handling
+## Architecture
 
-## Module Structure
+### Module Structure
 
 ```
 source/
-├── utils/files/watch.d           # File watcher abstraction
-├── core/execution/watch.d        # Watch mode service
-└── cli/commands/watch.d          # CLI command
+├── infrastructure/utils/files/watch.d     # File watcher abstraction
+├── engine/runtime/watchmode/watch.d       # Watch mode service
+└── frontend/cli/commands/extensions/watch.d  # CLI command
 ```
 
-## File Watcher Layer
+### Layers
 
-### Design Pattern: Strategy + Factory
+1. **File Watcher Layer**: Platform-specific filesystem monitoring
+2. **Orchestration Layer**: Build coordination and state management
+3. **CLI Layer**: User interface and command handling
 
-The file watcher uses a strategy pattern with a factory for platform selection:
+## Usage
+
+```bash
+# Start watch mode
+bldr watch
+
+# Watch specific target
+bldr watch my-target
+
+# Options
+bldr watch --debounce 500       # 500ms debounce delay
+bldr watch --no-clear           # Don't clear screen between builds
+bldr watch --graph              # Show dependency graph
+bldr watch -v                   # Verbose output
+```
+
+## Configuration
+
+### WatchModeConfig
 
 ```d
-interface IFileWatcher {
-    WatchResult watch(string path, WatchConfig config, WatchBatchCallback callback);
-    void stop();
-    bool isActive() const;
-    string name() const;
+// Implementation: source/engine/runtime/watchmode/watch.d
+struct WatchModeConfig
+{
+    Duration debounceDelay = 300.msecs;  // Delay before rebuild
+    bool clearScreen = true;              // Clear between builds
+    bool showGraph = false;               // Show dependency graph
+    string renderMode = "auto";           // CLI render mode
+    bool failFast = false;                // Stop on first error
+    bool verbose = false;                 // Verbose output
+    bool useMmapPersistence = true;       // Memory-mapped graph cache
+    string cacheDir = ".builder-cache";   // Cache directory
 }
 ```
 
-### Platform Implementations
-
-#### FSEventsWatcher (macOS)
-
-Uses Apple's FSEvents API via `fswatch` command-line tool:
+### WatchConfig (File Watcher)
 
 ```d
-class FSEventsWatcher : IFileWatcher {
-    // Spawns fswatch process
-    // Reads events from stdout
-    // Batches events with debouncing
-    // Thread-safe event queue
+// Implementation: source/infrastructure/utils/files/watch.d
+struct WatchConfig
+{
+    Duration debounceDelay = 100.msecs;   // Watcher-level debounce
+    Duration pollInterval = 500.msecs;     // Fallback poll interval
+    bool recursive = true;                 // Watch subdirectories
+    bool useNativeWatcher = true;          // Prefer native over polling
+    size_t maxBatchSize = 1000;            // Max events per batch
 }
 ```
 
-**Advantages**:
-- Zero CPU overhead
-- Instant notifications
+## File Watchers
+
+### Platform Selection
+
+```d
+// Implementation: FileWatcherFactory.create()
+static IFileWatcher create()
+{
+    version(OSX)
+    {
+        auto fsevents = new FSEventsWatcher();
+        if (fsevents.isAvailable())
+            return fsevents;
+    }
+    
+    version(linux)
+    {
+        auto inotify = new INotifyWatcher();
+        if (inotify.isAvailable())
+            return inotify;
+    }
+    
+    version(BSD)
+    {
+        auto kqueue = new KQueueWatcher();
+        if (kqueue.isAvailable())
+            return kqueue;
+    }
+    
+    return new PollingWatcher();  // Fallback
+}
+```
+
+### FSEventsWatcher (macOS)
+
+Uses `fswatch` command-line tool:
+
+```d
+string[] args = [
+    "fswatch",
+    "-r",           // Recursive
+    "-l", "0.3",    // 300ms latency
+    watchPath
+];
+```
+
+**Availability**: Requires `fswatch` to be installed
+
+**Characteristics**:
+- Low CPU overhead
+- Fast notifications
 - Recursive by default
-- Handles renames correctly
+- Handles renames
 
-**Trade-offs**:
-- Requires external dependency (`fswatch`)
-- Process management overhead
-- No filtering at OS level
+### INotifyWatcher (Linux)
 
-#### INotifyWatcher (Linux)
-
-Uses Linux's inotify API via `inotifywait`:
+Uses `inotifywait` command-line tool:
 
 ```d
-class INotifyWatcher : IFileWatcher {
-    // Spawns inotifywait process
-    // Parses event stream
-    // Maps inotify events to FileEvent types
-    // Batches with debouncing
-}
+string[] args = [
+    "inotifywait",
+    "-m",           // Monitor continuously
+    "-r",           // Recursive
+    "-e", "modify,create,delete,move",
+    "--format", "%w%f|%e",
+    path
+];
 ```
 
-**Advantages**:
+**Characteristics**:
 - Near-zero CPU overhead
-- Instant notifications
 - Granular event types
 - Efficient for large directories
+- Subject to inotify descriptor limits
 
-**Trade-offs**:
-- Requires inotify-tools
-- inotify descriptor limits (can be increased)
-- Process management overhead
+### PollingWatcher (Fallback)
 
-#### PollingWatcher (Universal Fallback)
+Periodically scans filesystem for changes:
 
-File system polling using snapshots:
-
-```d
-class PollingWatcher : IFileWatcher {
-    // Takes periodic snapshots of directory tree
-    // Compares file states (size + mtime)
-    // Detects creates, modifies, deletes
-    // Configurable poll interval (default: 500ms)
-}
-```
-
-**Advantages**:
+**Characteristics**:
 - No external dependencies
 - Works on all platforms
-- Simple implementation
-- No descriptor limits
-
-**Trade-offs**:
-- Higher CPU usage (scanning filesystem)
+- Higher CPU usage (filesystem scanning)
 - Delayed notifications (poll interval)
-- Not suitable for very large projects
+- Not recommended for large projects
 
-### Debouncing Strategy
+## Debouncing
 
-Watch mode implements exponential backoff debouncing:
+Two-level debouncing prevents excessive rebuilds:
+
+### FileWatcher Debounce
 
 ```d
-class FileWatcher {
-    private FileEvent[] _eventQueue;
-    private SysTime _lastTrigger;
-    
-    // Debounce loop runs in separate thread
-    private void debounceLoop(void delegate() onChange) {
-        while (_active) {
-            Thread.sleep(50.msecs);
-            
-            if (eventQueue.length > 0) {
-                if (timeSinceLastEvent >= debounceDelay) {
-                    onChange();  // Trigger rebuild
-                    eventQueue.clear();
+// Implementation: FileWatcher.debounceLoop()
+private void debounceLoop(void delegate() onChange)
+{
+    while (_active)
+    {
+        Thread.sleep(50.msecs);  // Check interval
+        
+        synchronized (_queueMutex)
+        {
+            if (_eventQueue.length > 0)
+            {
+                auto timeSinceLastEvent = Clock.currTime() - _lastEventTime;
+                if (timeSinceLastEvent >= _config.debounceDelay)
+                {
+                    onChange();
+                    _eventQueue.length = 0;
                 }
             }
         }
@@ -133,466 +191,316 @@ class FileWatcher {
 }
 ```
 
-**Algorithm**:
-1. Collect file events in queue
-2. Check every 50ms if debounce delay has passed
-3. If delay passed and queue not empty, trigger callback
-4. Clear queue and reset timer
+### Event Batching
 
-**Benefits**:
-- Groups rapid changes (save spamming)
-- Prevents redundant builds
-- Configurable delay per project
-- Low overhead (50ms check interval)
+Events are batched until either:
+- Batch size reaches `maxBatchSize` (default: 1000)
+- Time since last event exceeds `debounceDelay`
 
-## Orchestration Layer
-
-### Watch Mode Service
-
-The `WatchModeService` coordinates the entire watch mode workflow:
-
-```d
-class WatchModeService {
-    // Dependencies
-    private WorkspaceConfig _config;
-    private BuildServices _services;
-    private FileWatcher _watcher;
-    
-    // State
-    private size_t _buildNumber;
-    private SysTime _lastBuildTime;
-    private bool _lastBuildSuccess;
-    
-    // Main loop
-    Result!(void, BuildError) start(string target);
-}
-```
-
-### Build Workflow
+## Build Workflow
 
 ```
-File Change Event
+File Change
     ↓
-Debounce (300ms)
+Debounce (300ms default)
     ↓
-┌────────────────────────────┐
-│ Re-parse Configuration     │  ← Picks up Builderfile changes
-└────────────┬───────────────┘
-             ↓
-┌────────────────────────────┐
-│ Analyze Dependencies       │  ← Builds dependency graph
-└────────────┬───────────────┘
-             ↓
-┌────────────────────────────┐
-│ Create Execution Engine    │  ← Prepares parallel executor
-└────────────┬───────────────┘
-             ↓
-┌────────────────────────────┐
-│ Execute Build              │  ← Incremental build with cache
-└────────────┬───────────────┘
-             ↓
-┌────────────────────────────┐
-│ Report Results             │  ← Success/failure + timing
-└────────────────────────────┘
-```
-
-### Key Design Decisions
-
-#### Configuration Re-parsing
-
-**Decision**: Re-parse `Builderfile` on every rebuild.
-
-**Rationale**:
-- Allows editing build configuration without restarting watch mode
-- Low overhead (parsing is fast)
-- Eliminates need for "reload" command
-
-**Trade-off**: Slight overhead (~10ms) per rebuild.
-
-#### Service Recreation
-
-**Decision**: Recreate `BuildServices` on each rebuild.
-
-**Rationale**:
-- Ensures fresh state (no stale caches)
-- Picks up environment changes
-- Simpler than selective invalidation
-
-**Trade-off**: Higher memory churn (GC pressure).
-
-#### Screen Clearing
-
-**Decision**: Optional screen clearing between builds (default: enabled).
-
-**Rationale**:
-- Clean output improves focus
-- Reduces visual clutter
-- Can be disabled for debugging
-
-**Implementation**:
-```d
-version(Windows) {
-    execute(["cmd", "/c", "cls"]);
-} else {
-    write("\033[2J\033[H");  // ANSI escape codes
-}
-```
-
-## CLI Layer
-
-### Command Structure
-
-Follows Builder's command pattern:
-
-```d
-struct WatchCommand {
-    static void execute(
-        string target,
-        bool clearScreen,
-        bool showGraph,
-        string renderMode,
-        bool verbose,
-        long debounceMs
-    );
-    
-    static void showHelp();
-}
-```
-
-### Signal Handling
-
-Watch mode installs custom signal handlers for graceful shutdown:
-
-```d
-extern(C) void handleWatchSignal(int sig) nothrow @nogc {
-    globalWatchService.stop();  // Cleanup
-    exit(0);
-}
-
-// Install handlers
-signal(SIGINT, &handleWatchSignal);
-signal(SIGTERM, &handleWatchSignal);
-```
-
-**Behavior**:
-- Ctrl+C triggers graceful shutdown
-- Flushes caches
-- Displays statistics
-- Cleans up watcher resources
-
-## Integration with Existing Systems
-
-### Cache System Integration
-
-Watch mode leverages Builder's existing cache infrastructure:
-
-```d
-// Two-tier caching
-BuildCache.isCached(targetId, sources, deps)
+Re-parse Configuration (picks up Builderfile changes)
     ↓
-Metadata check (size + mtime) → 1μs
-    ├─ Hit → Return cached
-    └─ Miss → Content hash → 1ms
-        ├─ Match → Return cached
-        └─ Mismatch → Rebuild
+Recreate BuildServices
+    ↓
+Analyze Dependencies (build graph)
+    ↓
+Check Incremental Topo Order (reuse if structure unchanged)
+    ↓
+Execute Build (with caching)
+    ↓
+Persist Graph (for instant startup)
+    ↓
+Report Results
 ```
 
-**Key Point**: Watch mode doesn't need special caching logic. It simply triggers builds and the cache system automatically handles incremental compilation.
+### Configuration Re-parsing
 
-### Event System Integration
-
-Watch mode publishes build events for UI rendering:
+Each rebuild re-parses the workspace configuration:
 
 ```d
-// Events published by watch mode
-BuildStartedEvent
-TargetStartedEvent
-TargetCompletedEvent / TargetFailedEvent
-BuildCompletedEvent / BuildFailedEvent
-StatisticsEvent
+// Allows editing Builderfile without restarting watch mode
+auto configResult = ConfigParser.parseWorkspace(_workspaceRoot);
+_config = configResult.unwrap();
+_services = new BuildServices(_config, _config.options);
 ```
 
-These events are consumed by the rendering system to provide progress indication, status updates, and statistics.
+## Incremental Optimization
 
-### Telemetry Integration
+### Topological Order Caching
 
-Watch mode automatically integrates with telemetry:
-
-```d
-// Each build is tracked
-TelemetryCollector.recordBuild(
-    success: bool,
-    duration: Duration,
-    targets: size_t,
-    cached: size_t
-);
-
-// Statistics available via telemetry command
-bldr telemetry
-```
-
-## Performance Optimizations
-
-### 1. Lazy Service Creation
-
-Services are created only when needed:
+When graph structure is unchanged, the cached topological order is reused:
 
 ```d
-// Don't create services until first build
-if (_services is null) {
-    _services = new BuildServices(_config, _config.options);
+if (_cachedGraph !is null && graph.hasValidTopoCache)
+{
+    if (currentVersion == _lastTopoVersion && 
+        graph.nodes.length == _cachedGraph.nodes.length)
+    {
+        usedIncrementalOrder = true;
+        _incrementalHits++;
+    }
 }
 ```
 
-### 2. Batched Event Processing
+### Memory-Mapped Persistence
 
-File events are batched to reduce build frequency:
+For instant startup on watch restart:
 
 ```d
-// Batch size: 1000 events
-// Debounce: 300ms after last event
-
-if (batch.length >= config.maxBatchSize) {
-    callback(batch);  // Trigger immediately
-} else if (timeSinceLastEvent > debounceDelay) {
-    callback(batch);  // Trigger after delay
+// Try instant startup from mmap
+if (tryMmapStartup(target))
+{
+    Logger.success("Instant startup from memory-mapped graph cache");
+    _usedMmapStartup = true;
+}
+else
+{
+    performBuild(target);
 }
 ```
 
-### 3. Ignore Pattern Filtering
-
-Events are filtered early to avoid processing irrelevant files:
+### MappedGraphStorage
 
 ```d
-// Check ignore patterns before queueing
-if (IgnoreRegistry.shouldIgnoreDirectoryAny(filePath)) {
+// Validates config hash before loading
+auto graphResult = _mmapStorage.tryLoadForWatchMode(_lastConfigHash);
+if (graphResult.isOk)
+{
+    _cachedGraph = graphResult.unwrap();
+    // Instant startup: ~microseconds vs milliseconds
+}
+```
+
+## Change Detection
+
+### ChangeDetector
+
+Maps file changes to affected targets:
+
+```d
+final class ChangeDetector
+{
+    string[] getAffectedTargets(const string[] changedFiles)
+    {
+        // Find directly affected targets
+        foreach (changedFile; changedFiles)
+        {
+            foreach (target; _config.targets)
+            {
+                foreach (source; target.sources)
+                {
+                    if (matches(changedFile, source))
+                        directlyAffected[target.name] = true;
+                }
+            }
+        }
+        
+        // Get transitive closure in topological order
+        foreach (targetName; directlyAffected.keys)
+        {
+            auto affectedNodes = _graph.getAffectedNodes(TargetId(targetName));
+            // Returns nodes in build order (leaves first)
+        }
+        
+        return allAffected;
+    }
+}
+```
+
+## Ignore Patterns
+
+Paths are filtered early to avoid processing:
+
+```d
+if (IgnoreRegistry.shouldIgnorePathAny(filePath))
     continue;  // Skip event
-}
 ```
 
-### 4. Parallel Directory Scanning
-
-Polling watcher uses parallel scanning:
-
-```d
-// Scan directories in parallel
-foreach (dir; parallel(directories)) {
-    // Find files in directory
-    // Check against state map
-    // Emit events
-}
-```
+Common ignored patterns:
+- `.builder-cache/`
+- `.git/`
+- `node_modules/`
+- Build output directories
 
 ## Error Handling
 
 ### Watcher Failures
 
-If the watcher fails, watch mode falls back gracefully:
-
 ```d
-try {
-    runFSWatch(config, callback);
-} catch (Exception e) {
+catch (Exception e)
+{
     Logger.error("FSEvents watcher failed: " ~ e.msg);
     _active = false;  // Stop watching
 }
 ```
-
-User is notified and watch mode exits cleanly.
 
 ### Build Failures
 
 Build failures don't stop watch mode:
 
 ```d
-try {
-    performBuild(target);
-} catch (Exception e) {
-    Logger.error("Build failed: " ~ e.msg);
+catch (Exception e)
+{
+    Logger.error("Build failed with exception: " ~ e.msg);
     _lastBuildSuccess = false;
     // Continue watching
 }
 ```
 
-Watch mode continues and the next file change will trigger another build attempt.
-
 ### Configuration Errors
-
-If configuration parsing fails, watch mode reports the error but continues watching:
 
 ```d
 auto configResult = ConfigParser.parseWorkspace(_workspaceRoot);
-if (configResult.isErr) {
-    Logger.error("Failed to parse configuration");
+if (configResult.isErr)
+{
+    Logger.error("Failed to parse workspace configuration");
     return;  // Skip this build, wait for next change
 }
 ```
 
-## Testing Strategy
+## Statistics
 
-### Unit Tests
-
-Each component is independently testable:
+### WatchStats
 
 ```d
-// Test debouncing
-unittest {
-    auto events = [event1, event2, event3];
-    auto debouncer = new Debouncer(100.msecs);
+struct WatchStats
+{
+    size_t totalBuilds;
+    size_t successfulBuilds;
+    size_t failedBuilds;
+    Duration totalBuildTime;
+    Duration averageBuildTime;
+    SysTime startTime;
     
-    size_t callCount = 0;
-    debouncer.onTrigger(() => callCount++);
+    // Incremental optimization
+    size_t incrementalHits;
+    size_t fullRecomputations;
     
-    foreach (event; events) {
-        debouncer.addEvent(event);
-        Thread.sleep(50.msecs);  // Within debounce window
+    // Memory-mapped graph
+    bool usedMmapStartup;
+    size_t mmapPersists;
+    
+    float incrementalEffectiveness()
+    {
+        auto total = incrementalHits + fullRecomputations;
+        return total == 0 ? 1.0 : incrementalHits / total;
     }
-    
-    Thread.sleep(150.msecs);  // Exceed debounce window
-    assert(callCount == 1);  // Single trigger
 }
 ```
 
-### Integration Tests
-
-End-to-end watch mode tests:
+## Screen Clearing
 
 ```d
-// Test watch mode workflow
-unittest {
-    auto service = new WatchModeService("test-workspace", config);
-    
-    // Start watch mode in background
-    auto watchThread = new Thread(() => service.start());
-    watchThread.start();
-    
-    // Modify a file
-    write("test.d", "void main() {}");
-    
-    // Wait for rebuild
-    Thread.sleep(500.msecs);
-    
-    // Verify build completed
-    assert(exists("bin/test"));
-    
-    // Cleanup
-    service.stop();
-    watchThread.join();
+private void clearScreen()
+{
+    version(Windows)
+    {
+        execute(["cmd", "/c", "cls"]);
+    }
+    else
+    {
+        write("\033[2J\033[H");  // ANSI escape codes
+        stdout.flush();
+    }
 }
 ```
 
-### Manual Testing
+## Signal Handling
 
-Watch mode includes extensive manual testing scenarios in `tests/integration/watch.d`.
+Watch mode handles interrupts gracefully:
 
-## Future Enhancements
+```bash
+# Ctrl+C triggers:
+1. Stop file watcher
+2. Stop analysis watcher  
+3. Persist graph for instant startup
+4. Shutdown services
+5. Print statistics
+```
 
-### 1. Selective Target Watching
+## API Reference
 
-Watch only files relevant to a specific target:
+### WatchModeService
 
 ```d
-// Implementation idea
-class TargetWatcher {
-    // Map files to targets
-    // Watch only relevant files
-    // Rebuild only affected targets
+final class WatchModeService
+{
+    this(string workspaceRoot, WatchModeConfig config);
+    VoidBuildResult start(string target = "");
+    void stop();
 }
 ```
 
-**Benefits**:
-- Reduced watcher overhead
-- Faster rebuilds
-- Better for large monorepos
-
-### 2. Build Queue
-
-Queue builds instead of canceling in-progress builds:
+### FileWatcher
 
 ```d
-// Implementation idea
-class BuildQueue {
-    private Build[] _queue;
-    private Build _current;
-    
-    void enqueue(Build build);
-    void processQueue();
+final class FileWatcher
+{
+    this(WatchConfig config = WatchConfig.init);
+    WatchResult watch(string path, void delegate() onChange);
+    void stop();
+    bool isActive() const;
+    string implName() const;  // "FSEvents", "inotify", "polling"
 }
 ```
 
-**Benefits**:
-- No dropped changes
-- Better for rapid changes
-- More predictable behavior
-
-### 3. Hot Reload Integration
-
-Integrate with language-specific hot reload mechanisms:
+### IFileWatcher Interface
 
 ```d
-// Implementation idea
-interface HotReloader {
-    void hotReload(string[] changedFiles);
-}
-
-class WatchModeService {
-    void useHotReloader(HotReloader reloader);
+interface IFileWatcher
+{
+    WatchResult watch(string path, WatchConfig config, WatchBatchCallback callback);
+    void stop();
+    bool isActive() const;
+    string name() const;
 }
 ```
 
-**Benefits**:
-- Instant updates without full restart
-- Better developer experience
-- Language-specific optimizations
+## Performance Tuning
 
-### 4. Remote Watch
+### Debounce Delay
 
-Support watching remote file systems (SSH, network drives):
+| Project Size | Recommended Delay |
+|-------------|-------------------|
+| Small (<100 files) | 100-200ms |
+| Medium | 200-300ms |
+| Large (>1000 files) | 300-500ms |
+
+### Native vs Polling
+
+Always prefer native watchers when available:
 
 ```d
-// Implementation idea
-class RemoteWatcher : IFileWatcher {
-    // Poll remote filesystem
-    // Or use rsync for change detection
-}
+WatchConfig config;
+config.useNativeWatcher = true;  // Default
 ```
 
-**Benefits**:
-- Remote development support
-- Container development
-- Cloud IDE integration
+Polling should only be used as fallback when native watchers are unavailable.
 
-## Comparison with Other Implementations
+### Graph Persistence
 
-### vs. Webpack Watch
+Enable mmap persistence for instant restarts:
 
-| Feature | Builder Watch | Webpack Watch |
-|---------|--------------|---------------|
-| Implementation | D (native) | JavaScript |
-| Platform Support | macOS, Linux, fallback | Node.js platforms |
-| Debouncing | Built-in | Via watchOptions |
-| Incremental | Cache-based | Module graph |
-| Multi-language | ✅ | ❌ (JS only) |
+```d
+WatchModeConfig config;
+config.useMmapPersistence = true;  // Default
+```
 
-### vs. Cargo Watch
+## Limitations
 
-| Feature | Builder Watch | Cargo Watch |
-|---------|--------------|---------------|
-| Implementation | D (native) | Rust |
-| Platform Support | Cross-platform | Cross-platform |
-| Debouncing | Configurable | Fixed |
-| Incremental | Cache-based | Compiler-based |
-| Multi-language | ✅ | ❌ (Rust only) |
+- **Polling**: Higher CPU usage, delayed notifications
+- **inotify**: Subject to system descriptor limits
+- **FSEvents**: Requires external `fswatch` tool
+- **Configuration changes**: Some changes require watch restart
 
-## Conclusion
+## See Also
 
-Watch mode is implemented as a clean, layered architecture that integrates seamlessly with Builder's existing systems. The use of platform-specific native watchers ensures high performance, while the fallback polling watcher ensures universal compatibility.
-
-Key architectural decisions:
-- **Strategy pattern** for platform-specific watchers
-- **Factory pattern** for watcher selection
-- **Service recreation** for clean state
-- **Integration over invention** for caching and telemetry
-
-The result is a robust, performant watch mode that saves developers 10-30 minutes per day by eliminating manual build invocations.
-
+- [Incremental Compilation](incremental-compilation.md)
+- [Performance](performance.md)
+- [CLI Reference](../user-guides/CLI.md)

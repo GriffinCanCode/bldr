@@ -1,6 +1,6 @@
 # AST-Level Incremental Compilation
 
-Advanced incremental compilation system that tracks changes at the symbol level (classes, functions, methods) rather than file level, providing fine-grained rebuild optimization.
+Incremental compilation system that tracks changes at the symbol level (classes, functions, methods) rather than file level, providing fine-grained rebuild optimization.
 
 ## Overview
 
@@ -11,31 +11,46 @@ Traditional incremental compilation tracks file-to-file dependencies: when `head
 ### Components
 
 1. **AST Parser Interface** (`infrastructure/analysis/ast/parser.d`)
-   - Language-agnostic interface for AST extraction
-   - Parser registry for multiple languages
-   - Extensible to any language with symbol structure
+   - Language-agnostic interface (`IASTParser`) for AST extraction
+   - Parser registry (`ASTParserRegistry`) for multiple languages
+   - Base class with common functionality (`BaseASTParser`)
 
-2. **C++ AST Parser** (`languages/compiled/cpp/analysis/ast_parser.d`)
-   - Regex-based pattern matching for C++ constructs
-   - Extracts classes, structs, functions, methods, namespaces
-   - Tracks symbol signatures and content hashes
+2. **Tree-sitter Integration** (`infrastructure/parsing/treesitter/`)
+   - `registry.d` - Grammar registry and parser instantiation
+   - `parser.d` - Tree-sitter parser wrapper implementing `IASTParser`
+   - `config.d` - Language-specific symbol extraction configurations
+   - `grammars/` - Per-language grammar configurations (C++, Rust, Go, Python, etc.)
 
 3. **AST Dependency Cache** (`engine/caching/incremental/ast_dependency.d`)
-   - Stores parsed AST representations
-   - Symbol-to-symbol dependency tracking
-   - Persistent binary storage for fast load/save
+   - Stores parsed AST representations (`FileAST`, `ASTSymbol`)
+   - Symbol-to-symbol dependency tracking (`ASTDependency`)
+   - Thread-safe operations via `Mutex`
+   - Persistent storage via `ASTStorage`
 
 4. **AST Incremental Engine** (`engine/compilation/incremental/ast_engine.d`)
-   - Orchestrates AST-level change analysis
+   - `ASTIncrementalEngine` - Orchestrates AST-level change analysis
    - Determines minimal symbol rebuild set
-   - Falls back to file-level when not beneficial
+   - `HybridIncrementalEngine` - Automatically chooses between AST-level and file-level
 
-5. **Hybrid Engine** 
-   - Automatically chooses between AST-level and file-level
-   - Considers project size and parser availability
-   - Seamless integration with existing incremental compilation
+### Symbol Types
 
-### How It Works
+```d
+enum SymbolType
+{
+    Class,
+    Struct,
+    Function,
+    Method,
+    Field,
+    Enum,
+    Typedef,
+    Namespace,
+    Template,
+    Variable
+}
+```
+
+### Flow
 
 ```
 ┌─────────────────┐
@@ -45,13 +60,14 @@ Traditional incremental compilation tracks file-to-file dependencies: when `head
          ▼
 ┌──────────────────────┐
 │   Parse Changed      │
-│   Files to AST       │
-│   Extract Symbols    │
+│   Files via          │
+│   Tree-sitter        │
 └────────┬─────────────┘
          │
          ▼
 ┌──────────────────────┐
 │   Compare ASTs       │
+│   (contentHash)      │
 │   Detect Changed     │
 │   Symbols            │
 └────────┬─────────────┘
@@ -59,73 +75,84 @@ Traditional incremental compilation tracks file-to-file dependencies: when `head
          ▼
 ┌──────────────────────┐
 │   Find Dependent     │
-│   Symbols Across     │
-│   All Files          │
+│   Symbols via        │
+│   ASTDependencyCache │
 └────────┬─────────────┘
          │
          ▼
 ┌──────────────────────┐
 │   Rebuild Only       │
-│   Affected Symbols   │
+│   Affected Files     │
 └──────────────────────┘
 ```
 
-## Benefits
+## Symbol Tracking
 
-### Granularity
-- **File-level**: Change 1 line in header → recompile 50 files
-- **AST-level**: Change 1 class in header → recompile only files using that class
+Each symbol tracks:
 
-### Statistics Example
-
+```d
+struct ASTSymbol
+{
+    string name;              // Symbol name
+    SymbolType type;          // Class, Function, Method, etc.
+    size_t startLine;         // Start line in source
+    size_t endLine;           // End line in source
+    string signature;         // Full declaration
+    string contentHash;       // BLAKE3 hash of symbol content
+    string[] dependencies;    // Symbols this depends on
+    string[] usedTypes;       // Types referenced
+    bool isPublic;            // Export visibility
+}
 ```
-Project: 100 C++ files, 500 classes
-Change: Modified 1 method in 1 class
 
-File-level incremental:
-  - Files rebuilt: 15 (files including the header)
-  - Time: 45 seconds
+### Change Detection
 
-AST-level incremental:
-  - Files rebuilt: 3 (only files using that specific class)
-  - Symbols changed: 1/500 (0.2% granularity)
-  - Time: 9 seconds
-  - 80% faster than file-level
+```d
+// Original
+class MyClass {
+    int getValue() { return value; }  // contentHash: ABC123
+    int value;
+};
+
+// Modified  
+class MyClass {
+    int getValue() { return value * 2; }  // contentHash: DEF456 (CHANGED)
+    int value;
+};
+
+// Result: Only files using MyClass::getValue need recompilation
 ```
 
 ## Usage
 
-### C++ Projects
+### Automatic Detection
 
-AST-level incremental compilation is automatically enabled for C++ projects:
+AST-level incremental compilation is automatically enabled when:
+- Tree-sitter is available
+- Project has ≥5 source files
+- ≥50% of files have parsers available
 
 ```d
-// In your Builderfile
-target("my_app") {
-    language = "cpp"
-    sources = glob("src/**/*.cpp")
-    // AST-level tracking enabled by default
-}
+// HybridIncrementalEngine decides automatically
+auto engine = new HybridIncrementalEngine(astEngine, enableAST: true);
+auto result = engine.analyzeChanges(sourceFiles, changedFiles);
 ```
 
 ### Manual Control
 
-Disable AST-level if needed:
-
 ```d
-import languages.compiled.cpp.builders.incremental;
+import engine.compilation.incremental.ast_engine;
+import engine.caching.incremental.ast_dependency;
 
-auto builder = new IncrementalCppBuilder(config, null, null, false); // false = disable AST
+// Disable AST-level analysis
+auto hybrid = new HybridIncrementalEngine(astEngine, enableAST: false);
 ```
 
 ### Command Line
 
 ```bash
-# Build with AST-level incremental compilation
+# Build (AST-level used automatically when beneficial)
 bldr build //my_app
-
-# Check AST cache statistics
-bldr query //my_app --ast-stats
 
 # Clear AST cache
 bldr clean --ast-cache
@@ -133,150 +160,104 @@ bldr clean --ast-cache
 
 ## Supported Languages
 
-Currently implemented:
-- **C++** (classes, structs, functions, methods, namespaces, templates)
+The following languages have tree-sitter grammar configurations:
 
-Planned:
-- **Java** (classes, interfaces, methods, fields)
-- **C#** (classes, structs, methods, properties)
-- **TypeScript** (classes, interfaces, functions)
-- **Go** (structs, functions, methods)
-- **Rust** (structs, impl blocks, functions)
+- C, C++
+- Rust
+- Go
+- Python
+- JavaScript, TypeScript
+- Java, Kotlin, Scala
+- C#, F#
+- Ruby
+- PHP
+- Lua
+- Perl
+- Swift
+- Haskell
+- OCaml
+- Nim
+- Zig
+- R
+- Elixir
+- Elm
+- CSS
+- Protocol Buffers
 
-## Performance Characteristics
+**Note**: Grammar availability depends on tree-sitter library installation. Run `source/infrastructure/parsing/treesitter/setup.sh` to install.
 
-### Overhead
-- **First build**: +5-10% (AST parsing overhead)
-- **Incremental builds**: 2-10x faster than file-level
-- **Cache size**: ~50-100 bytes per symbol
-- **Parse time**: ~1-2ms per 1000 lines of code
+## Performance
 
-### When It Helps Most
-1. Large headers with multiple classes
+### When It Helps
+
+1. Large files with multiple classes/functions
 2. Frequently modified utility classes
-3. Template-heavy codebases
-4. Projects with >20 source files
+3. Projects with >20 source files
+4. Header-heavy codebases
 
 ### When It Doesn't Help
-1. Tiny projects (<5 files)
-2. Changes to base classes used everywhere
+
+1. Small projects (<5 files)
+2. Changes to widely-used base classes
 3. Header-only libraries
 4. Projects without clear symbol boundaries
 
-## Implementation Details
+### Overhead
 
-### Symbol Tracking
+- **First build**: Additional AST parsing time
+- **Incremental builds**: Faster when symbol changes are localized
+- **Cache size**: ~50-100 bytes per symbol
 
-Each symbol tracks:
-- **Name**: Fully qualified name (e.g., `MyNamespace::MyClass::method`)
-- **Type**: Class, Function, Method, Struct, etc.
-- **Location**: Start/end line numbers
-- **Signature**: Full declaration
-- **Content Hash**: Hash of symbol implementation
-- **Dependencies**: Other symbols referenced
-- **Used Types**: Types used in the symbol
-
-### Change Detection
+## Analysis Result
 
 ```d
-// Original
-class MyClass {
-    int getValue() { return value; }  // Symbol hash: ABC123
-    int value;
-};
-
-// Modified  
-class MyClass {
-    int getValue() { return value * 2; }  // Symbol hash: DEF456 (CHANGED)
-    int value;
-};
-
-// Result: Only MyClass::getValue marked as changed
-// Files using MyClass but not calling getValue don't need recompilation
+struct ASTChangeAnalysis
+{
+    string[] filesToRebuild;              // Files needing recompilation
+    string[string] symbolsToRecompile;    // File -> symbols list
+    string[string] changeReasons;         // File -> reason for rebuild
+    size_t changedSymbolCount;            // Total symbols changed
+    size_t totalSymbolCount;              // Total symbols analyzed
+    float granularity;                    // % of symbols needing recompilation
+}
 ```
 
-### Cache Format
+## Cache Storage
 
-Binary format for efficient storage:
-```
-[MAGIC: "ASTC"] [VERSION: 1]
-[Entry Count: uint32]
-For each entry:
-  [File Path: string]
-  [File Hash: string]
-  [Symbol Count: uint32]
-  For each symbol:
-    [Name: string]
-    [Type: uint8]
-    [Lines: uint64, uint64]
-    [Signature: string]
-    [Hash: string]
-    [Dependencies: string[]]
-    [Used Types: string[]]
+Binary format stored in `.builder-cache/ast-incremental/`:
+
+```d
+struct FileAST
+{
+    string filePath;          // Source file path
+    string fileHash;          // BLAKE3 hash of file
+    ASTSymbol[] symbols;      // Extracted symbols
+    string[] includes;        // Header dependencies
+    SysTime timestamp;        // Parse timestamp
+}
 ```
 
 ## Limitations
 
-1. **C++ Parsing**: Uses regex patterns, not full compiler-grade parsing
-   - May miss complex template instantiations
-   - Doesn't handle all edge cases of C++ syntax
-   
-2. **Incremental Linking**: Still requires full link step when any object changes
-   - Future: Implement incremental linking for further speedup
-   
-3. **Header-only Classes**: No benefit (no separate compilation units)
-
-4. **Build System Integration**: Works best with Builder's native compilation
-   - Limited support when wrapping external build systems (Make, CMake)
-
-## Future Enhancements
-
-1. **Function-level compilation**: Compile individual functions, not just files
-2. **Incremental linking**: Link only changed object files
-3. **Cross-file optimization aware**: Track inlining and optimization boundaries
-4. **LSP Integration**: Use Language Server Protocol for better parsing
-5. **Parallel AST parsing**: Parse multiple files concurrently
-6. **Smart rebuilds**: Consider actual usage, not just dependencies
+1. **Tree-sitter Availability**: Requires tree-sitter library and grammars
+2. **Language Coverage**: Not all language constructs are extracted
+3. **Incremental Linking**: Still requires full link step
+4. **External Build Systems**: Limited support when wrapping Make/CMake
 
 ## Configuration
 
 Environment variables:
 
 ```bash
-# Enable/disable AST-level tracking
-export BUILDER_AST_INCREMENTAL=1
-
 # Set AST cache directory
-export BUILDER_AST_CACHE_DIR=".builder-cache/ast"
+export BUILDER_AST_CACHE_DIR=".builder-cache/ast-incremental"
 
-# Set granularity threshold (min % symbols changed to use AST-level)
-export BUILDER_AST_GRANULARITY_THRESHOLD=50
-
-# Enable AST parsing debug logs
+# Enable debug logging
 export BUILDER_AST_DEBUG=1
-```
-
-## Debugging
-
-View AST cache contents:
-
-```bash
-# Show parsed symbols for a file
-builder ast parse src/my_file.cpp
-
-# Show symbol dependencies
-builder ast deps src/my_file.cpp
-
-# Show what would be rebuilt
-builder ast analyze --dry-run
-
-# Compare two AST snapshots
-builder ast diff @before @after
 ```
 
 ## See Also
 
 - [Incremental Compilation](incremental-compilation.md) - File-level incremental compilation
 - [Caching](caching.md) - Action-level caching
-- [Performance](performance.md) - Overall performance optimization strategies
-
+- [Tree-sitter Integration](../architecture/treesitter-integration.md) - Parser implementation details

@@ -1,408 +1,228 @@
-# CLI Architecture
+# CLI Reference
 
 ## Overview
 
-The Builder CLI system is an event-driven rendering architecture that provides a modern, interactive terminal experience for build operations. Unlike traditional logging approaches, it decouples build events from rendering decisions, enabling sophisticated output control and testability.
+The Builder CLI uses an event-driven rendering architecture for build output. Build events are decoupled from rendering, enabling configurable output modes and clean testability.
 
 ## Architecture
-
-### Design Principles
-
-1. **Event-Driven**: Build events are published to subscribers, not directly rendered
-2. **Lock-Free Performance**: Atomic operations for progress tracking with zero contention
-3. **Adaptive Output**: Automatically detects terminal capabilities and adjusts
-4. **Testable Isolation**: Each component is independently testable
-5. **Zero-Allocation Hot Path**: Pre-allocated buffers and efficient ANSI sequences
 
 ### Components
 
 ```
-cli/
-├── events.d      - Strongly-typed build events (immutable)
-├── terminal.d    - Terminal control & capabilities detection
-├── progress.d    - Lock-free progress tracking
-├── stream.d      - Multi-stream output management
-├── format.d      - Message formatting & styling
-└── render.d      - Main rendering coordinator
+frontend/cli/
+├── events/events.d      - Build event types (immutable, timestamped)
+├── control/terminal.d   - Terminal capabilities & ANSI control
+├── output/progress.d    - Lock-free progress tracking (atomics)
+├── output/stream.d      - Multi-stream output management
+├── display/format.d     - Message formatting & styling
+├── display/render.d     - Rendering coordinator
+└── input/               - Interactive prompts
 ```
 
-## Core Concepts
+### Design Principles
 
-### Events (`events.d`)
+1. **Event-Driven** - Build events published to subscribers, not directly rendered
+2. **Lock-Free Progress** - Atomic operations for concurrent progress tracking
+3. **Adaptive Output** - Detects terminal capabilities and adjusts
+4. **Testable** - Each component independently testable via interfaces
 
-All build activity is communicated through immutable, strongly-typed events:
+## Events
+
+All build activity communicates through immutable event types:
 
 ```d
-// Lifecycle events
-BuildStartedEvent
-BuildCompletedEvent
-BuildFailedEvent
+// Lifecycle
+BuildStartedEvent     // totalTargets, maxParallelism, timestamp
+BuildCompletedEvent   // built, cached, failed, duration, timestamp
+BuildFailedEvent      // reason, failedCount, duration, timestamp
 
-// Target events
-TargetStartedEvent
-TargetCompletedEvent
-TargetFailedEvent
-TargetCachedEvent
-TargetProgressEvent
+// Targets
+TargetStartedEvent    // targetId, index, total, timestamp
+TargetCompletedEvent  // targetId, duration, outputSize, timestamp
+TargetFailedEvent     // targetId, error, duration, timestamp
+TargetCachedEvent     // targetId, timestamp
+TargetProgressEvent   // targetId, phase, progress (0.0-1.0), timestamp
 
-// Message events
-MessageEvent
-StatisticsEvent
+// Messages
+MessageEvent          // message, severity, targetId, timestamp
+StatisticsEvent       // cacheStats, buildStats, timestamp
 ```
 
-**Key Features:**
-- Immutable for thread-safety
-- Timestamps for ordering
-- Type-safe with enums
-- Zero-copy where possible
+Events implement the `BuildEvent` interface with `type` and `timestamp` properties.
 
-### Terminal Control (`terminal.d`)
+## Terminal Control
 
-Low-level terminal manipulation with capability detection:
+The `terminal.d` module handles capability detection and ANSI output.
 
-**Capabilities Detected:**
-- Color support (8, 256, true color)
-- Unicode support
-- Terminal size (width/height)
-- Interactive vs. non-interactive
+**Detected Capabilities:**
+- Color support (8-color, 256-color, true color)
+- Unicode support (via `LANG` environment)
+- Terminal dimensions (width/height via ioctl or env vars)
+- Interactive mode (TTY detection)
 - Progress bar support
 
-**ANSI Control:**
-- Pre-computed color codes (no allocation)
-- Cursor control (hide/show/move)
-- Line clearing
-- Screen control
-
 **Symbols:**
-- Unicode: ✓ ✗ → • ⚡ ⚙
+- Unicode mode: ✓ ✗ → • ⚡ ⚙
 - ASCII fallback: [OK] [FAIL] -> * [cache] [build]
 
-### Progress Tracking (`progress.d`)
+## Progress Tracking
 
-Lock-free progress tracking using atomic operations:
+Lock-free progress via atomic operations in `progress.d`:
 
 ```d
 auto tracker = ProgressTracker(totalTargets);
 
-// Thread-safe increments (from any build thread)
+// Thread-safe updates (any thread)
 tracker.incrementCompleted();
 tracker.incrementFailed();
 tracker.incrementCached();
+tracker.setActive(count);
 
 // Lock-free snapshot
 auto snap = tracker.snapshot();
-writeln(snap.percentage);  // 0.0 to 1.0
-writeln(snap.estimatedRemaining());
+snap.percentage;           // 0.0 to 1.0
+snap.estimatedRemaining(); // Duration
+snap.targetsPerSecond;     // throughput
 ```
 
-**Performance:**
-- Atomic operations (no locks)
-- Lock-free reads
-- Concurrent updates from multiple threads
-- ~10ns per operation
-
-**Progress Bar:**
+**Progress Bar Format:**
 ```
-[=====                ] 25% [25/100] 4 active (15 cached) ETA 30s
+[25/100] 4 active (15 cached) ETA 30s [=====                ]  25%
 ```
 
-### Stream Management (`stream.d`)
+## Stream Management
 
-Multi-stream output for parallel builds:
+`stream.d` provides multi-stream output with filtering:
+
+**Stream Levels:**
+- `Debug` - Detailed debugging info
+- `Info` - Standard messages
+- `Warning` - Non-fatal issues
+- `Error` - Failures
 
 **Features:**
-- Multiple concurrent output streams
 - Per-stream buffering
-- Level-based filtering (Debug/Info/Warning/Error)
-- Thread-safe writes
-- Status line management
+- Level-based filtering
+- Thread-safe writes (mutex-protected)
+- Status line with in-place updates
 
-**Status Line:**
-- In-place updates (cursor manipulation)
-- Auto-clear for other output
-- Terminal width aware
+## Formatting
 
-### Formatting (`format.d`)
+The `format.d` module provides styled output:
 
-Beautiful, styled message formatting:
-
-**Message Types:**
 ```d
-formatter.formatBuildStarted(...)
-formatter.formatBuildCompleted(...)
-formatter.formatTargetCompleted(...)
-formatter.formatTargetCached(...)
-formatter.formatError(...)
-formatter.formatCacheStats(...)
+auto formatter = Formatter(caps);
+
+formatter.formatBuildStarted(totalTargets, parallelism);
+formatter.formatBuildCompleted(built, cached, duration);
+formatter.formatTargetCompleted(targetId, duration);
+formatter.formatTargetCached(targetId);
+formatter.formatError(message);
+formatter.formatCacheStats(stats);
 ```
 
 **Utilities:**
 ```d
-formatDuration(dur!"seconds"(125))  // "2m5s"
-formatSize(5 * 1024 * 1024)         // "5.0 MB"
-formatPercent(0.75)                 // "75%"
-truncate(text, maxWidth)            // Smart truncation
+formatDuration(dur!"seconds"(125));  // "2m5s"
+formatSize(5 * 1024 * 1024);         // "5.0 MB"
+formatPercent(0.75);                 // " 75%"
+truncate(text, maxWidth);            // Smart truncation with "..."
 ```
 
-### Rendering (`render.d`)
+## Rendering
 
-Main rendering coordinator that subscribes to events:
-
-```d
-// Create renderer
-auto renderer = RendererFactory.create(RenderMode.Interactive);
-
-// Connect to event publisher
-publisher.subscribe(renderer);
-
-// Renderer handles all events automatically
-publisher.publish(new BuildStartedEvent(...));
-```
-
-**Render Modes:**
-- `Auto`: Detect based on terminal
-- `Interactive`: Full progress bars and status lines
-- `Plain`: Simple text output
-- `Verbose`: Detailed output with all events
-- `Quiet`: Minimal output
-
-## Usage
-
-### Basic Setup
+The `Renderer` class coordinates output by subscribing to events:
 
 ```d
-import cli;
-
-// Create event publisher
 auto publisher = new SimpleEventPublisher();
-
-// Create and register renderer
-auto renderer = RendererFactory.create();
+auto renderer = RendererFactory.create(RenderMode.Interactive);
 publisher.subscribe(renderer);
 
-// Publish events from build process
-publisher.publish(new BuildStartedEvent(totalTargets, maxParallelism, timestamp));
-
-// ... during build ...
-publisher.publish(new TargetCompletedEvent(targetId, duration, outputSize, timestamp));
-
-// ... at end ...
+// Events automatically rendered
+publisher.publish(new BuildStartedEvent(totalTargets, parallelism, timestamp));
+publisher.publish(new TargetCompletedEvent(targetId, duration, size, timestamp));
 publisher.publish(new BuildCompletedEvent(built, cached, failed, duration, timestamp));
 ```
 
-### With Progress Tracking
+**Render Modes:**
 
-```d
-// Create progress tracker
-auto tracker = ProgressTracker(totalTargets);
-renderer.setProgressTracker(&tracker);
+| Mode | Description |
+|------|-------------|
+| `Auto` | Detect based on terminal (default) |
+| `Interactive` | Progress bars and status lines |
+| `Plain` | Simple text output |
+| `Verbose` | All events including starts/caches |
+| `Quiet` | Errors only |
 
-// Build threads update progress
-tracker.incrementCompleted();  // Thread-safe
+## Usage
 
-// Renderer automatically shows progress
+### CLI Flags
+
+```bash
+bldr build --mode=interactive  # Full progress display
+bldr build --mode=plain        # Simple output
+bldr build --mode=verbose      # Show all events
+bldr build --mode=quiet        # Minimal output
 ```
 
-### Custom Subscribers
+### Environment Variables
 
-Implement `EventSubscriber` interface:
+```bash
+NO_COLOR=1 bldr build          # Disable color
+COLUMNS=120 bldr build         # Override terminal width
+```
+
+### Pipe Detection
+
+When output is piped, Builder automatically switches to plain mode:
+
+```bash
+bldr build | tee output.log    # Uses plain mode
+```
+
+## Testing
+
+```bash
+# Run CLI unit tests
+dub test -- tests.unit.cli
+
+# Specific component tests
+dub test -- tests.unit.cli.terminal
+dub test -- tests.unit.cli.progress
+dub test -- tests.unit.cli.format
+dub test -- tests.unit.cli.events
+```
+
+## Custom Subscribers
+
+Implement `EventSubscriber` to handle events:
 
 ```d
-class MySubscriber : EventSubscriber
+class JsonLogger : EventSubscriber
 {
     void onEvent(BuildEvent event)
     {
-        // Handle event
         if (event.type == EventType.TargetCompleted)
         {
             auto e = cast(TargetCompletedEvent)event;
-            // Custom handling
+            writeln(`{"target":"`, e.targetId, `","duration":`, e.duration.total!"msecs", `}`);
         }
     }
 }
 
-publisher.subscribe(new MySubscriber());
+publisher.subscribe(new JsonLogger());
 ```
-
-## Performance
-
-### Benchmarks
-
-**Progress Tracking:**
-- Increment: ~10ns (atomic operation)
-- Snapshot: ~50ns (5 atomic loads)
-- Concurrent updates: Linear scaling to CPU count
-
-**Terminal Output:**
-- Buffered writes: ~1μs per line
-- ANSI codes: Pre-computed (zero allocation)
-- Status line update: ~10μs
-
-**Event Publishing:**
-- Event creation: ~50ns
-- Subscriber notification: ~100ns per subscriber
-- Total overhead: <1% of build time
-
-### Memory
-
-- Terminal buffer: 4-8KB
-- Progress tracker: 64 bytes
-- Event: 32-128 bytes (immutable)
-- Total overhead: <1MB
 
 ## Terminal Compatibility
 
-**Tested Terminals:**
-- ✓ iTerm2 (macOS)
-- ✓ Terminal.app (macOS)
-- ✓ Alacritty
-- ✓ Kitty
-- ✓ Windows Terminal
-- ✓ xterm
-- ✓ tmux/screen
+Tested on:
+- iTerm2, Terminal.app (macOS)
+- Alacritty, Kitty
+- Windows Terminal
+- xterm, tmux, screen
 
-**Fallback Behavior:**
-- No color → Plain text output
+**Fallback behavior:**
+- No color → Plain text
 - No unicode → ASCII symbols
 - Non-interactive → Plain mode
 - Small terminal → Truncated output
-
-## Testing
-
-### Unit Tests
-
-All components have comprehensive unit tests:
-
-```bash
-dub test -- tests.unit.cli
-```
-
-**Test Coverage:**
-- Terminal capability detection
-- ANSI code generation
-- Progress tracking (including concurrent)
-- Message formatting
-- Event creation and publishing
-- Renderer behavior
-
-### Integration Tests
-
-```bash
-dub test -- tests.integration.cli
-```
-
-Tests full rendering pipeline with mock builds.
-
-### Manual Testing
-
-```bash
-# Test different modes
-bldr build --mode=interactive
-bldr build --mode=plain
-bldr build --mode=verbose
-bldr build --mode=quiet
-
-# Test color disable
-NO_COLOR=1 bldr build
-
-# Test in pipe (non-interactive)
-bldr build | tee output.log
-```
-
-## Extending
-
-### Adding New Events
-
-1. Define event class in `events.d`:
-```d
-final class MyNewEvent : BuildEvent
-{
-    private EventType _type = EventType.MyNew;
-    private Duration _timestamp;
-    
-    string customData;
-    
-    this(string data, Duration timestamp)
-    {
-        this.customData = data;
-        this._timestamp = timestamp;
-    }
-    
-    @property EventType type() const pure nothrow { return _type; }
-    @property Duration timestamp() const pure nothrow { return _timestamp; }
-}
-```
-
-2. Add to `EventType` enum
-3. Handle in `Renderer.onEvent()`
-4. Add formatter method
-
-### Adding New Formatters
-
-```d
-string formatMyThing(MyData data)
-{
-    auto msg = format("Custom: %s", data.value);
-    return styled(msg, Color.Blue, Style.Bold);
-}
-```
-
-### Custom Render Mode
-
-Extend `Renderer` class:
-
-```d
-class MyCustomRenderer : Renderer
-{
-    this()
-    {
-        super(RenderMode.Plain);
-    }
-    
-    override void onEvent(BuildEvent event)
-    {
-        // Custom rendering logic
-        super.onEvent(event);  // Call parent if needed
-    }
-}
-```
-
-## Best Practices
-
-1. **Event Granularity**: Emit events at appropriate level (not too fine, not too coarse)
-2. **Immutability**: Keep events immutable for thread-safety
-3. **Timestamps**: Always include timestamps for ordering
-4. **Error Context**: Include context in error events
-5. **Progressive Disclosure**: Show details based on mode (quiet → verbose)
-6. **Terminal Width**: Always respect terminal width
-7. **Performance**: Keep event creation fast (<100ns)
-
-## Comparison to Traditional Logging
-
-| Aspect | Traditional Logging | Event-Driven CLI |
-|--------|-------------------|------------------|
-| **Coupling** | Tight (Logger.info()) | Loose (publish event) |
-| **Testing** | Difficult (mock stdout) | Easy (mock subscriber) |
-| **Flexibility** | Limited | High (multiple subscribers) |
-| **Performance** | String formatting hot path | Deferred formatting |
-| **Threading** | Needs locks | Lock-free |
-| **Output Control** | Hard-coded | Runtime configurable |
-
-## Future Enhancements
-
-- [ ] Web dashboard subscriber
-- [ ] JSON output subscriber
-- [ ] Build replay from events
-- [ ] Remote build monitoring
-- [ ] Per-target progress bars
-- [ ] Build visualization
-- [ ] Performance profiling subscriber
-- [ ] Distributed build coordination
-
-## References
-
-- [Command Line Interface Guidelines](https://clig.dev/)
-- [Buck2 Console Architecture](https://buck2.build/)
-- [Cargo Output Design](https://doc.rust-lang.org/cargo/)
-- [ANSI Escape Codes](https://en.wikipedia.org/wiki/ANSI_escape_code)
-

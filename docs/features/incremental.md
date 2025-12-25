@@ -1,24 +1,39 @@
 # Incremental Dependency Analysis
 
-**Status:** ✅ Implemented  
-**Performance Impact:** 5-10 seconds saved on 10,000-file monorepos
+**Module:** `infrastructure.analysis.incremental`
 
 ## Overview
 
-Incremental dependency analysis dramatically reduces build analysis time by reusing cached analysis results for unchanged files. Only files that have been modified since the last build are reanalyzed, with cached results used for everything else.
+Incremental dependency analysis reduces build analysis time by reusing cached results for unchanged files. Only modified files are reanalyzed; cached results serve unchanged files.
 
 ## Architecture
 
-### Design Principles
-
-1. **Content-Addressable Storage**: Analysis results stored by content hash, enabling automatic deduplication
-2. **Two-Tier Validation**: Fast metadata check (mtime + size) → slow content hash only when needed
-3. **Zero Configuration**: Works automatically without user intervention
-4. **Watch Mode Integration**: Proactively invalidates cache as files change
-
 ### Components
 
-#### 1. Analysis Cache (`analysis/caching/store.d`)
+#### 1. IncrementalAnalyzer (`analysis/incremental/analyzer.d`)
+
+Coordinates change tracking and selective reanalysis via dependency injection:
+
+```d
+// Create dependencies
+auto analysisCache = new AnalysisCache(".builder-cache/analysis");
+auto changeTracker = new FileChangeTracker();
+
+// Inject into analyzer
+auto analyzer = new IncrementalAnalyzer(config, analysisCache, changeTracker);
+analyzer.initialize(config);
+
+// Analyze target (uses cache automatically)
+auto result = analyzer.analyzeTarget(target);
+```
+
+**Algorithm:**
+1. Check which files have changed via `FileChangeTracker`
+2. Load cached analysis for unchanged files from `AnalysisCache`
+3. Classify files as changed or unchanged
+4. Return cached analyses; caller handles changed files
+
+#### 2. AnalysisCache (`analysis/caching/store.d`)
 
 Content-addressable storage for `FileAnalysis` results:
 
@@ -27,18 +42,18 @@ Content-addressable storage for `FileAnalysis` results:
 cache.put(contentHash, fileAnalysis);
 
 // Retrieve cached analysis
-auto analysis = cache.get(contentHash);
+auto result = cache.get(contentHash);
 ```
 
-**Features:**
-- Uses shared CAS infrastructure for storage efficiency
-- Automatic deduplication of identical file content
-- Thread-safe concurrent access
+**Implementation:**
+- Uses shared `ContentAddressableStorage` for deduplication
 - Binary serialization for compact storage
+- Thread-safe via internal mutex
+- Statistics: hits, misses, stores, hit rate
 
-#### 2. File Change Tracker (`analysis/tracking/tracker.d`)
+#### 3. FileChangeTracker (`analysis/tracking/tracker.d`)
 
-Detects which files have changed using two-tier validation:
+Detects file changes using two-tier validation:
 
 ```d
 // Initialize tracking
@@ -47,235 +62,110 @@ tracker.track(filePath);
 // Check for changes
 auto result = tracker.checkChange(filePath);
 if (result.hasChanged) {
-    // File changed - need to reanalyze
+    // File modified - reanalyze
 } else {
-    // File unchanged - use cached analysis
+    // Unchanged - use cached analysis
 }
 ```
 
-**Performance:**
-- Fast path: Metadata hash check (mtime + size) - ~100x faster than content hash
-- Slow path: Full content hash only when metadata changed
-- Typical: 95%+ fast path rate for unchanged files
+**Two-Tier Validation:**
+- **Fast path:** Metadata hash (mtime + size via `FastHash.hashMetadata`)
+- **Slow path:** Content hash (full file via `FastHash.hashFile`) only when metadata differs
 
-#### 3. Incremental Analyzer (`analysis/incremental/analyzer.d`)
+Change detection results include:
+- `ChangeKind.Unchanged` - No change detected
+- `ChangeKind.Modified` - Content changed
+- `ChangeKind.New` - File newly tracked
+- `ChangeKind.Deleted` - File removed
 
-Coordinates caching and selective reanalysis with dependency injection:
-
-```d
-// Create dependencies
-auto analysisCache = new AnalysisCache(".builder-cache/analysis");
-auto changeTracker = new FileChangeTracker();
-
-// Inject dependencies
-auto analyzer = new IncrementalAnalyzer(config, analysisCache, changeTracker);
-analyzer.initialize(config);  // Initialize tracking
-
-// Analyze target incrementally
-auto result = analyzer.analyzeTarget(target);
-```
-
-**Algorithm:**
-1. Check which files have changed
-2. Load cached analysis for unchanged files
-3. Analyze only changed files
-4. Store new analyses in cache
-5. Combine cached + new analyses
-
-#### 4. Analysis Watcher (`analysis/incremental/watcher.d`)
+#### 4. AnalysisWatcher (`analysis/incremental/watcher.d`)
 
 Proactively invalidates cache when files change:
 
 ```d
 auto watcher = new AnalysisWatcher(analyzer, config);
-watcher.start();  // Start watching for file changes
-
-// Automatically invalidates cache as files change
-// No manual cache management needed
+watcher.start();  // Start watching with 200ms debounce
 ```
+
+**Features:**
+- Uses native file watcher with recursive monitoring
+- Integrates with `IncrementalParseAdapter` for efficient re-parsing
+- Filters events to source files only
+- Automatic cache invalidation
 
 ## Usage
 
-### Basic Usage (Automatic)
+### Basic (Automatic)
 
-Incremental analysis is automatically enabled:
+Incremental analysis is enabled by default:
 
 ```bash
 # First build: Full analysis
 bldr build //my:target
 
-# Subsequent builds: Incremental analysis
-# Only changed files are reanalyzed
+# Subsequent builds: Incremental
 bldr build //my:target
 ```
 
 ### With Watch Mode
 
-Combine with watch mode for optimal development experience:
-
 ```bash
 bldr build --watch //my:target
 ```
 
-**Benefits:**
-- File changes detected immediately
-- Cache invalidated proactively
-- Minimal rebuild latency
+Combines file watching with incremental analysis for minimal rebuild latency.
 
-### Programmatic Usage (Dependency Injection)
+### Programmatic Usage
 
 ```d
 import infrastructure.analysis.incremental;
 import infrastructure.analysis.caching.store;
 import infrastructure.analysis.tracking.tracker;
 
-// Create dependencies
-auto analysisCache = new AnalysisCache(".builder-cache/analysis");
-auto changeTracker = new FileChangeTracker();
+// Create and inject dependencies
+auto cache = new AnalysisCache(".builder-cache/analysis");
+auto tracker = new FileChangeTracker();
+auto analyzer = new IncrementalAnalyzer(config, cache, tracker);
 
-// Inject into analyzer
-auto analyzer = new IncrementalAnalyzer(config, analysisCache, changeTracker);
-
-// Initialize tracking
+// Initialize
 auto result = analyzer.initialize(config);
 if (result.isErr)
-    writeln("Failed to initialize incremental analysis");
+    writeln("Initialization failed");
 
-// Analyze target (automatically uses cache)
+// Analyze
 auto analysisResult = analyzer.analyzeTarget(target);
 
-// Optional: Start watcher for proactive invalidation
+// Optional: Start watcher
 auto watcher = new AnalysisWatcher(analyzer, config);
 watcher.start();
 ```
 
-## Performance
+## Cache Invalidation
 
-### Benchmark: 1,000 File Python Project
+Cache entries are invalidated when:
 
-| Scenario | Full Analysis | Incremental | Speedup |
-|----------|--------------|-------------|---------|
-| All files unchanged | 2,450ms | 120ms | **20.4x** |
-| 1 file changed | 2,450ms | 180ms | **13.6x** |
-| 10 files changed | 2,450ms | 320ms | **7.7x** |
-| 100 files changed | 2,450ms | 1,200ms | **2.0x** |
+1. **Content changes** - Content hash differs
+2. **File deleted** - Tracked via `ChangeKind.Deleted`
+3. **File created** - New file returns `ChangeKind.New`
+4. **Manual clear** - `analyzer.clear()` or `cache.clear()`
 
-### Benchmark: 10,000 File Monorepo
+Cache is **not** invalidated for:
+- Metadata-only changes (e.g., `touch` without content change)
+- Unrelated file modifications
 
-| Scenario | Full Analysis | Incremental | Time Saved |
-|----------|--------------|-------------|------------|
-| No changes | 28.3s | 1.2s | **27.1s** |
-| 10 files changed | 28.3s | 2.8s | **25.5s** |
-| 100 files changed | 28.3s | 8.4s | **19.9s** |
-
-**Key Insight:** Even with 100 changed files (1% of codebase), incremental analysis still saves ~20 seconds.
-
-### Cache Hit Rates
-
-Typical cache hit rates in real-world scenarios:
-
-- **Clean rebuild after checkout:** 0% (expected)
-- **Iterative development (single file edits):** 99.9%
-- **Branch switches:** 70-90%
-- **Large refactors:** 40-60%
-
-### Memory Overhead
-
-- **Cache storage:** ~200-500 bytes per file analysis
-- **Tracker state:** ~150 bytes per tracked file
-- **Total overhead:** ~100KB per 1,000 files
-
-## Implementation Details
-
-### Content Hash Strategy
-
-Uses BLAKE3 (SIMD-accelerated) for content hashing:
+## Statistics
 
 ```d
-// Fast metadata hash (mtime + size)
-auto metadataHash = FastHash.hashMetadata(path);
-
-// Slow content hash (full file)
-auto contentHash = FastHash.hashFile(path);
-```
-
-**Performance:**
-- Metadata hash: ~1μs per file
-- Content hash (4KB file): ~50μs per file
-- Content hash (1MB file): ~800μs per file (sampled)
-
-### Cache Invalidation
-
-Cache is automatically invalidated when:
-
-1. **File content changes** (detected by content hash)
-2. **File deleted** (tracked by file existence)
-3. **File created** (new file not in tracker)
-4. **Manual invalidation** (`analyzer.clear()`)
-
-Cache is **NOT** invalidated when:
-- File metadata changed but content unchanged (e.g., `touch`)
-- Unrelated files changed
-- Build configuration changed (handled separately by graph cache)
-
-### Serialization Format
-
-Analysis cache uses custom binary format:
-
-```
-Version (1 byte)
-Path (length-prefixed string)
-Content Hash (length-prefixed string)
-Has Errors (1 byte)
-Errors Count (4 bytes)
-Errors (array of length-prefixed strings)
-Imports Count (4 bytes)
-Imports (array of Import structs)
-```
-
-**Design Goals:**
-- Compact representation (~200-500 bytes per analysis)
-- Fast deserialization (no parsing required)
-- Forward compatibility (version byte)
-
-## Integration with Existing Caches
-
-Builder has multiple caching layers:
-
-1. **Graph Cache** (`core/graph/cache.d`): Caches entire dependency graph
-2. **Analysis Cache** (this feature): Caches per-file analysis results
-3. **Action Cache** (`core/caching/actions/`): Caches build action outputs
-4. **Target Cache** (`core/caching/targets/`): Caches target execution results
-
-**Hierarchy:**
-```
-Graph Cache (entire topology)
-  └─ Analysis Cache (per-file imports/deps)
-      └─ Action Cache (build outputs)
-          └─ Target Cache (execution results)
-```
-
-**Invalidation Flow:**
-- File changes → invalidate Analysis Cache entry
-- Builderfile changes → invalidate Graph Cache
-- Source changes → invalidate dependent Action Caches
-- Dependency changes → invalidate Target Cache
-
-## Statistics and Monitoring
-
-Get detailed statistics:
-
-```d
-// Incremental analyzer stats
 auto stats = analyzer.getStats();
 writefln("Cache hit rate: %.1f%%", stats.cacheHitRate);
 writefln("Work reduction: %.1f%%", stats.reductionRate);
+writefln("Fast path rate: %.1f%%", stats.trackerStats.fastPathRate);
 
-// Print detailed statistics
+// Print formatted statistics
 analyzer.printStats();
 ```
 
-**Example Output:**
+**Output:**
 ```
 ╔════════════════════════════════════════════════════════════╗
 ║       Incremental Dependency Analysis Statistics          ║
@@ -293,136 +183,90 @@ analyzer.printStats();
 ╚════════════════════════════════════════════════════════════╝
 ```
 
-## Comparison with Industry Standards
+## Integration with Build Caches
 
-### Bazel
+Builder uses multiple caching layers:
 
-Bazel uses action cache + content-addressable storage:
-- Similar approach: hash-based caching
-- Difference: Bazel caches at action level, we cache at analysis level
-- Advantage: We reduce analysis overhead before actions even run
+| Layer | Location | Purpose |
+|-------|----------|---------|
+| Graph Cache | `core/graph/cache.d` | Dependency graph topology |
+| Analysis Cache | `analysis/caching/store.d` | Per-file analysis results |
+| Action Cache | `core/caching/actions/` | Build action outputs |
+| Target Cache | `core/caching/targets/` | Target execution results |
 
-### Buck2
+**Invalidation Flow:**
+- File changes → invalidate Analysis Cache
+- Builderfile changes → invalidate Graph Cache
+- Source changes → invalidate dependent Action Caches
 
-Buck2 uses DICE (incremental computation engine):
-- Similar: Dependency tracking with invalidation
-- Difference: DICE is more general-purpose computation framework
-- Advantage: Our approach is simpler and analysis-specific
+## Serialization Format
 
-### Comparison Table
+Analysis cache uses binary serialization:
 
-| Feature | Builder | Bazel | Buck2 |
-|---------|---------|-------|-------|
-| Incremental Analysis | ✅ | ❌ (reanalyzes all) | ✅ (via DICE) |
-| Content-Addressable | ✅ | ✅ | ✅ |
-| Two-Tier Validation | ✅ | ❌ | ✅ |
-| Watch Mode Integration | ✅ | ❌ | ✅ |
-| Zero Configuration | ✅ | ✅ | ✅ |
+```
+Version (1 byte)
+Path (length-prefixed string)
+Content Hash (length-prefixed string)
+Has Errors (1 byte)
+Errors Count (4 bytes, big-endian)
+Errors (array of length-prefixed strings)
+Imports Count (4 bytes, big-endian)
+Imports (array):
+  - Module Name (length-prefixed string)
+  - Import Kind (1 byte)
+  - Location File (length-prefixed string)
+  - Line (8 bytes, big-endian)
+  - Column (8 bytes, big-endian)
+```
 
-## Best Practices
+## Interface Definitions
 
-### 1. Enable Incremental Early
-
-Enable incremental analysis at the start of your build:
+### IIncrementalAnalyzer
 
 ```d
-auto analyzer = new DependencyAnalyzer(config);
-analyzer.enableIncremental();  // Initialize tracking
+interface IIncrementalAnalyzer
+{
+    BuildResult!TargetAnalysis analyzeTarget(ref Target target);
+    VoidBuildResult initialize(WorkspaceConfig config);
+    void invalidate(string[] paths);
+    void clear();
+    Stats getStats();
+    void printStats();
+}
 ```
 
-### 2. Use Watch Mode for Development
-
-For iterative development, use watch mode:
-
-```bash
-bldr build --watch //my:target
-```
-
-This combines:
-- File watching (instant change detection)
-- Incremental analysis (minimal reanalysis)
-- Incremental builds (minimal recompilation)
-
-### 3. Clear Cache on Major Changes
-
-Clear cache after major refactors:
-
-```bash
-bldr clean --analysis-cache
-```
-
-Or programmatically:
+### IAnalysisCache
 
 ```d
-analyzer.clear();
+interface IAnalysisCache
+{
+    BuildResult!(FileAnalysis*) get(string contentHash);
+    VoidBuildResult put(string contentHash, const ref FileAnalysis analysis);
+    bool has(string contentHash);
+    BuildResult!(FileAnalysis*[string]) getBatch(string[] contentHashes);
+    VoidBuildResult putBatch(FileAnalysis[string] analyses);
+    void clear();
+    Stats getStats() const;
+}
 ```
 
-### 4. Monitor Cache Hit Rates
+### IFileChangeTracker
 
-Check cache effectiveness:
-
-```bash
-bldr build --stats
+```d
+interface IFileChangeTracker
+{
+    VoidBuildResult track(string path);
+    VoidBuildResult trackBatch(string[] paths);
+    BuildResult!ChangeResult checkChange(string path);
+    BuildResult!(ChangeResult[string]) checkChanges(string[] paths);
+    void untrack(string path);
+    void clear();
+    Stats getStats() const;
+}
 ```
-
-Low hit rates (<80%) may indicate:
-- Frequent file changes
-- Large refactors
-- Clock skew issues
-
-### 5. Combine with Distributed Caching
-
-Use with remote cache for team-wide benefits:
-
-```bash
-bldr build --remote-cache=https://cache.example.com
-```
-
-Analysis results shared across team members.
-
-## Troubleshooting
-
-### Cache Not Being Used
-
-**Symptom:** Every build reanalyzes all files
-
-**Solutions:**
-1. Check if incremental enabled: `analyzer.hasIncremental()`
-2. Verify tracking initialized: `analyzer.enableIncremental()`
-3. Check for errors: `analyzer.getStats()`
-
-### Low Cache Hit Rate
-
-**Symptom:** Cache hit rate <50%
-
-**Solutions:**
-1. Check file modification patterns (are files changing frequently?)
-2. Verify clock synchronization (clock skew can cause false changes)
-3. Check for build-time code generation (may modify sources)
-
-### High Memory Usage
-
-**Symptom:** Large cache directory
-
-**Solutions:**
-1. Clear cache: `bldr clean --analysis-cache`
-2. Configure cache size limits (future feature)
-3. Use distributed cache to offload storage
-
-## Future Enhancements
-
-Planned improvements:
-
-1. **Distributed Analysis Cache**: Share analysis results across team
-2. **Cache Size Management**: LRU eviction for large projects
-3. **Compression**: Compress cached analysis results
-4. **Parallel Change Detection**: Check multiple files concurrently
-5. **Fine-Grained Invalidation**: Invalidate only affected imports
 
 ## See Also
 
 - [Caching Architecture](../architecture/cachedesign.md)
 - [Watch Mode](watch.md)
-- [Performance Optimization](performance.md)
-- [Distributed Caching](distributed.md)
-
+- [Parse Cache](parsecache.md)

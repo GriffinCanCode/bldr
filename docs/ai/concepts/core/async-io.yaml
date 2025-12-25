@@ -1,0 +1,222 @@
+name: Async I/O (io_uring)
+category: core
+description: >
+  High-performance async I/O for file hashing in cold cache scenarios.
+  Uses Linux io_uring (kernel 5.1+) for zero-copy batch reads, with automatic
+  fallback to thread pool on other platforms.
+
+files:
+  - source/infrastructure/utils/io/uring.d
+  - source/infrastructure/utils/io/async.d
+  - source/infrastructure/utils/io/batch.d
+  - source/infrastructure/utils/io/package.d
+  - source/infrastructure/utils/files/hash.d
+  - tests/unit/utils/io.d
+
+key_concepts:
+  io_uring:
+    description: >
+      Linux kernel async I/O interface (5.1+). Enables batch syscalls,
+      zero-copy reads via registered buffers, and kernel-side polling.
+    key_features:
+      - Batch syscalls: Submit 64 reads in 1 syscall (vs 64 syscalls)
+      - Zero-copy: Registered buffers avoid kernel→user copy
+      - Kernel polling: SQPOLL mode eliminates submit syscalls
+      - No thread overhead: Kernel handles async, no user threads
+    safety: >
+      @system due to syscall invocation, raw pointer management,
+      and memory-mapped ring buffers.
+
+  async_io_backend:
+    description: >
+      Abstract interface for platform-specific async I/O implementations.
+      Automatically selects best available backend.
+    backends:
+      io_uring: "Linux 5.1+ - optimal performance"
+      thread_pool: "All platforms - parallel reads via ThreadPool"
+      sync: "Minimal fallback - sequential I/O"
+
+  batch_hasher:
+    description: >
+      Optimized batch file hashing using async I/O.
+      Prefetches multiple files in parallel, overlaps I/O with hashing.
+    key_features:
+      - Intelligent batching based on file sizes
+      - Streaming hash for large files
+      - Automatic fallback to mmap for very large files
+      - Statistics tracking for performance analysis
+
+architecture:
+  design_principles:
+    - Platform-agnostic interface with optimal backend selection
+    - Zero-copy where available (io_uring registered buffers)
+    - Batch operations to amortize syscall overhead
+    - Streaming design for large file support
+    - RAII resource management
+
+  data_flow: |
+    FastHash.hashFilesAsync(paths)
+           │
+           ▼
+    ┌─────────────────┐
+    │  BatchHasher    │
+    │  (Batching +    │
+    │   Statistics)   │
+    └────────┬────────┘
+             │
+             ▼
+    ┌─────────────────┐
+    │    AsyncIO      │──► Backend Selection
+    └────────┬────────┘
+             │
+    ┌────────┼────────┬────────────┐
+    ▼        ▼        ▼            ▼
+    IoUring  Thread   Sync
+    Backend  Pool     Backend
+    (Linux)  Backend  (fallback)
+
+  ring_structure: |
+    io_uring Memory Layout:
+    ┌─────────────────────────────────────────┐
+    │ Submission Queue (SQ)                   │
+    │  head*, tail*, ring_mask, entries[]     │
+    ├─────────────────────────────────────────┤
+    │ Completion Queue (CQ)                   │
+    │  head*, tail*, ring_mask, cqes[]        │
+    ├─────────────────────────────────────────┤
+    │ Submission Queue Entries (SQEs)         │
+    │  64 bytes each: opcode, fd, buf, len... │
+    └─────────────────────────────────────────┘
+
+performance:
+  benchmarks:
+    sequential: "1000 × 64KB files: 850ms (baseline)"
+    thread_pool: "1000 × 64KB files: 180ms (4.7x faster)"
+    io_uring: "1000 × 64KB files: 95ms (8.9x faster)"
+  
+  when_to_use:
+    recommended:
+      - "Many small files (>8) on cold cache"
+      - "Initial project scan/discovery"
+      - "After system restart (cold page cache)"
+      - "Large directory traversals"
+    not_recommended:
+      - "Few files (<8) - overhead not worth it"
+      - "Hot page cache - already CPU-bound"
+      - "Very large files (>100MB) - mmap is competitive"
+      - "Incremental rebuilds - two-tier hash is faster"
+
+usage_patterns:
+  simple_batch:
+    description: Hash multiple files with auto-detected backend
+    code: |
+      import infrastructure.utils.files.hash : FastHash;
+      
+      auto hashes = FastHash.hashFilesAsync(paths);
+
+  custom_config:
+    description: Configure buffer sizes and concurrency
+    code: |
+      import infrastructure.utils.io : BatchHasher;
+      
+      BatchHasher.Config config;
+      config.bufferSize = 512 * 1024;   // 512 KB buffers
+      config.maxConcurrent = 128;        // 128 parallel reads
+      
+      auto hashes = FastHash.hashFilesAsync(paths, config);
+
+  reusable_hasher:
+    description: Amortize setup cost across multiple batches
+    code: |
+      auto hasher = FastHash.createAsyncHasher(64);
+      scope(exit) hasher.shutdown();
+      
+      auto batch1 = hasher.hashFiles(paths1);
+      auto batch2 = hasher.hashFiles(paths2);
+
+  check_capability:
+    description: Query available backend
+    code: |
+      if (FastHash.hasAsyncIO())
+          writeln("io_uring available!");
+
+  direct_async_io:
+    description: Low-level async I/O access
+    code: |
+      import infrastructure.utils.io;
+      
+      auto io = AsyncIO.create(256);  // 256-deep queue
+      scope(exit) io.shutdown();
+      
+      ReadRequest[] requests = ...;
+      ubyte[][] buffers = ...;
+      io.submitReads(requests, buffers);
+      
+      auto results = io.waitCompletions(minComplete);
+
+integration_points:
+  fast_hash:
+    module: infrastructure.utils.files.hash
+    methods:
+      - "hashFilesAsync(paths) - Simple batch hashing"
+      - "hashFilesAsync(paths, config) - Custom configuration"
+      - "createAsyncHasher(maxConcurrent) - Reusable hasher"
+      - "hasAsyncIO() - Check io_uring availability"
+
+  build_cache:
+    module: engine.caching.targets.cache
+    benefit: "Faster initial cache population on cold starts"
+
+  source_discovery:
+    module: engine.analysis
+    benefit: "Faster glob/scan operations for large projects"
+
+related_concepts:
+  - name: Memory-Mapped I/O
+    file: source/infrastructure/utils/memory/mmap.d
+    relationship: "Complementary - mmap for large single files, io_uring for many small files"
+
+  - name: BLAKE3 Hashing
+    file: source/infrastructure/utils/crypto/blake3.d
+    relationship: "BatchHasher uses BLAKE3 for all file hashing"
+
+  - name: Thread Pool
+    file: source/infrastructure/utils/concurrency/pool.d
+    relationship: "Fallback backend when io_uring unavailable"
+
+  - name: Content Addressed Storage
+    file: source/engine/caching/storage/cas.d
+    relationship: "Async I/O accelerates CAS population"
+
+platform_support:
+  linux:
+    kernel: "5.1+"
+    backend: "io_uring"
+    syscalls:
+      - "io_uring_setup (NR 425)"
+      - "io_uring_enter (NR 426)"
+      - "io_uring_register (NR 427)"
+  
+  macos:
+    backend: "ThreadPool"
+    notes: "No io_uring equivalent; kqueue possible future work"
+  
+  windows:
+    backend: "ThreadPool"
+    notes: "IOCP possible future work"
+
+thread_safety:
+  io_uring: "Not thread-safe (single-producer pattern)"
+  async_io: "Thread-safe backend selection"
+  batch_hasher: "Thread-safe via internal synchronization"
+
+references:
+  - "io_uring docs: https://kernel.dk/io_uring.pdf"
+  - "liburing: https://github.com/axboe/liburing"
+  - "Builder docs: source/infrastructure/utils/io/README.md"
+
+next_steps: |
+  - See 'bldr explain blake3' to understand the hashing algorithm used
+  - See 'bldr explain mmap' for complementary memory-mapped I/O
+  - See 'bldr explain caching' to understand how async I/O accelerates cache builds
+

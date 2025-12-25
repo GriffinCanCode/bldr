@@ -1,57 +1,62 @@
-# Deterministic Lockfile Generation
+# Lockfile Generation
+
+**Module:** `infrastructure.analysis.lockfile`
 
 ## Overview
 
-Lockfile generation provides reproducible builds through deterministic dependency resolution across all supported package managers. Inspired by pnpm's content-addressable approach, the system:
+Lockfile generation provides deterministic dependency resolution for supported package managers. The system caches resolution results by manifest content hash and produces canonical, sorted output.
 
-- **Caches Resolutions**: Resolution results cached by manifest content hash
-- **Ensures Determinism**: Sorted, canonical output regardless of platform
-- **Supports Incremental Updates**: Only re-resolve changed dependencies
-- **Enables CI Mode**: Fail builds if lockfile would change
+## Supported Package Managers
+
+| Manager | Manifest | Lockfile | Format |
+|---------|----------|----------|--------|
+| npm | `package.json` | `package-lock.json` | JSON v3 |
+| yarn | `package.json` | `yarn.lock` | YAML-like |
+| pnpm | `package.json` | `pnpm-lock.yaml` | YAML |
+| cargo | `Cargo.toml` | `Cargo.lock` | TOML |
+| go | `go.mod` | `go.sum` | Checksum |
+| maven | `pom.xml` | `dependency-lock.json` | JSON |
 
 ## Architecture
 
 ### Components
 
-1. **Types** (`source/infrastructure/analysis/lockfile/types.d`)
-   - `ResolvedDependency`: Package with exact version and integrity hash
-   - `Lockfile`: Complete lockfile with metadata and dependencies
-   - `LockfileDiff`: Diff between two lockfiles (added/removed/updated)
-   - `ILockfileGenerator`: Interface for all package manager generators
+**Types** (`lockfile/types.d`):
+- `ResolvedDependency` - Package with version and integrity hash
+- `Lockfile` - Complete lockfile with metadata
+- `LockfileDiff` - Diff between lockfiles
+- `ILockfileGenerator` - Interface for generators
 
-2. **Cache** (`source/infrastructure/analysis/lockfile/cache.d`)
-   - Content-addressable lockfile cache
-   - LRU eviction for size management
-   - Binary serialization with schema versioning
+**Cache** (`lockfile/cache.d`):
+- Content-addressable lockfile cache
+- LRU eviction
+- Binary serialization with versioning
 
-3. **Generators** (`source/infrastructure/analysis/lockfile/generators/`)
-   - `npm.d`: npm/yarn/pnpm (package-lock.json, yarn.lock, pnpm-lock.yaml)
-   - `cargo.d`: Rust (Cargo.lock)
-   - `go.d`: Go modules (go.sum)
-   - `maven.d`: Java/Kotlin (dependency-lock.json)
+**Generators** (`lockfile/generators/`):
+- `npm.d` - npm/yarn/pnpm support
+- `cargo.d` - Rust Cargo.lock
+- `go.d` - Go modules go.sum
+- `maven.d` - Maven/Gradle
 
-### Supported Package Managers
+### Factory
 
-| Manager | Manifest        | Lockfile            | Format    |
-|---------|-----------------|---------------------|-----------|
-| npm     | package.json    | package-lock.json   | JSON v3   |
-| yarn    | package.json    | yarn.lock           | YAML-like |
-| pnpm    | package.json    | pnpm-lock.yaml      | YAML      |
-| cargo   | Cargo.toml      | Cargo.lock          | TOML      |
-| go      | go.mod          | go.sum              | Checksum  |
-| maven   | pom.xml         | dependency-lock.json| JSON      |
+```d
+auto generator = LockfileFactory.create("package.json", cache);
+```
+
+The factory detects package manager from manifest filename and auto-detects npm flavor (npm/yarn/pnpm) from existing lockfiles.
 
 ## Usage
 
-### Basic Lockfile Generation
+### Basic Generation
 
 ```d
 import infrastructure.analysis.lockfile;
 
-// Create cache (optional but recommended)
+// Create cache (optional)
 auto cache = new LockfileCache(".builder-cache/lockfiles");
 
-// Create generator for manifest type
+// Create generator
 auto generator = LockfileFactory.create("package.json", cache);
 
 // Generate lockfile
@@ -59,31 +64,27 @@ auto result = generator.generate("package.json");
 if (result.isOk) {
     auto lockfile = result.unwrap();
     
-    // Access resolved dependencies
     foreach (dep; lockfile.dependencies) {
         writefln("%s@%s", dep.name, dep.version_);
     }
     
-    // Write to disk
     generator.write(lockfile, "package-lock.json");
 }
 ```
 
-### CI Mode (Frozen Lockfile)
+### CI Mode (Frozen)
 
 ```d
-// Fail if lockfile would change
-auto options = GenerateOptions.ci();
+auto options = GenerateOptions.ci();  // Sets frozen = true
 auto result = generator.generate("package.json", options);
 
 if (result.isErr) {
-    // Lockfile out of sync with manifest
-    stderr.writeln("Error: Lockfile is out of date!");
+    stderr.writeln("Lockfile out of sync with manifest");
     return 1;
 }
 ```
 
-### Check If Up-to-Date
+### Check Freshness
 
 ```d
 if (!generator.isUpToDate("package.json", "package-lock.json")) {
@@ -97,11 +98,11 @@ if (!generator.isUpToDate("package.json", "package-lock.json")) {
 auto lockResult = generator.parse("package-lock.json");
 if (lockResult.isOk) {
     auto lockfile = lockResult.unwrap();
-    writefln("Lockfile has %d dependencies", lockfile.count());
+    writefln("Dependencies: %d", lockfile.dependencies.length);
 }
 ```
 
-### Compute Diff Between Lockfiles
+### Compute Diff
 
 ```d
 auto oldLock = generator.parse("package-lock.json.old").unwrap();
@@ -112,119 +113,73 @@ auto diff = LockfileDiff.compute(oldLock, newLock);
 if (diff.hasChanges()) {
     writefln("Added: %d, Removed: %d, Updated: %d",
         diff.added.length, diff.removed.length, diff.updated.length);
-    
-    foreach (dep; diff.added)
-        writefln("  + %s@%s", dep.name, dep.version_);
-    
-    foreach (dep; diff.removed)
-        writefln("  - %s@%s", dep.name, dep.version_);
-    
-    foreach (dep; diff.updated)
-        writefln("  ~ %s@%s", dep.name, dep.version_);
 }
 ```
 
-## Caching Strategy
+## Generator Interface
 
-### Content-Addressable Cache
+```d
+interface ILockfileGenerator
+{
+    /// Generate lockfile from manifest
+    BuildResult!Lockfile generate(string manifestPath, GenerateOptions options = GenerateOptions.init);
+    
+    /// Parse existing lockfile
+    BuildResult!Lockfile parse(string lockfilePath);
+    
+    /// Write lockfile to disk
+    BuildResult!void write(const ref Lockfile lockfile, string outputPath);
+    
+    /// Check if lockfile matches manifest
+    bool isUpToDate(string manifestPath, string lockfilePath);
+    
+    /// Get expected lockfile name
+    string lockfileName() const pure @safe;
+    
+    /// Package manager type
+    PackageManagerType type() const pure @safe;
+}
+```
+
+## Generation Options
+
+```d
+struct GenerateOptions
+{
+    bool frozen;           // Fail if lockfile would change
+    bool update;           // Update all dependencies to latest
+    bool production;       // Only production dependencies
+    bool includeOptional;  // Include optional dependencies
+    string[] exclude;      // Packages to exclude
+    
+    static GenerateOptions ci() pure @safe
+    {
+        GenerateOptions opts;
+        opts.frozen = true;
+        return opts;
+    }
+}
+```
+
+## Caching
 
 Lockfiles are cached by manifest content hash:
 
 ```
 .builder-cache/lockfiles/
-├── index.bin              # Cache index (binary)
-├── abc123def456.lock      # Cached lockfile
-└── 789xyz000111.lock
+├── index.bin              # Cache index
+└── abc123def456.lock      # Cached lockfile
 ```
 
-### Cache Flow
+Cache key: `BLAKE3(manifest content)`
 
-```
-┌─────────────────┐
-│ Read Manifest   │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Compute Hash    │ ◀─── BLAKE3 content hash
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐     ┌───────────────┐
-│ Cache Lookup    │────▶│ Cache Hit     │ ◀─── <1ms
-└────────┬────────┘     └───────────────┘
-         │ miss
-         ▼
-┌─────────────────┐
-│ Resolve Deps    │ ◀─── Parse manifest + resolve
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Store in Cache  │
-└─────────────────┘
-```
+## Determinism
 
-### Performance
-
-| Operation              | Time       | Notes                    |
-|------------------------|------------|--------------------------|
-| Cache hit              | <1ms       | Hash lookup only         |
-| Parse lockfile         | 5-50ms     | Depends on dep count     |
-| Generate (cached deps) | 50-200ms   | No network calls         |
-| Full resolution        | 1-30s      | Network-dependent        |
-
-## Determinism Guarantees
-
-### Sorted Output
-
-Dependencies are always sorted alphabetically by name:
-
-```json
-{
-  "packages": {
-    "node_modules/lodash": { ... },
-    "node_modules/react": { ... },
-    "node_modules/vue": { ... }
-  }
-}
-```
-
-### Canonical Formatting
-
+Output is deterministic:
+- Dependencies sorted alphabetically
 - Consistent whitespace (2-space indent for JSON)
-- No trailing whitespace
 - Unix line endings (LF)
-
-### Platform Independence
-
-Same lockfile generated regardless of:
-- Operating system (Windows, macOS, Linux)
-- File system (case-sensitive or not)
-- Locale settings
-
-## Integration with Build System
-
-### In Builderfile
-
-```d
-target("app") {
-    language: typescript;
-    sources: ["src/**/*.ts"];
-    
-    // Lockfile automatically checked/generated
-    lockfile: "package-lock.json";
-}
-```
-
-### Pre-build Hook
-
-```d
-// Check lockfile before build
-pre_build: [
-    "builder lockfile check --frozen"
-];
-```
+- Platform-independent
 
 ## CLI Commands
 
@@ -232,19 +187,37 @@ pre_build: [
 # Generate lockfile
 builder lockfile generate
 
-# Check if lockfile is up-to-date
+# Check if up-to-date
 builder lockfile check
 
-# Check in CI mode (fails if out of sync)
+# Frozen check (fails if out of sync)
 builder lockfile check --frozen
 
-# Show diff from previous lockfile
+# Show diff
 builder lockfile diff
 ```
 
-## Error Handling
+## Integration
 
-### Common Errors
+### In Builderfile
+
+```d
+target("app") {
+    language: typescript;
+    sources: ["src/**/*.ts"];
+    lockfile: "package-lock.json";
+}
+```
+
+### Pre-build Hook
+
+```d
+pre_build: [
+    "builder lockfile check --frozen"
+];
+```
+
+## Error Handling
 
 | Error | Cause | Solution |
 |-------|-------|----------|
@@ -252,81 +225,39 @@ builder lockfile diff
 | `Lockfile out of date` | Manifest changed | Run `builder lockfile generate` |
 | `Unknown package manager` | Unsupported manifest | Use supported format |
 
-### Error Example
+## Extending
 
-```d
-auto result = generator.generate("package.json");
-if (result.isErr) {
-    auto error = result.unwrapErr();
-    stderr.writeln("Lockfile generation failed: ", error.message());
-}
-```
-
-## Configuration
-
-### Cache Location
-
-Default: `.builder-cache/lockfiles/`
-
-Override via environment:
-```bash
-export BUILDER_LOCKFILE_CACHE=/path/to/cache
-```
-
-### Cache Size
-
-Default: 1000 entries (LRU eviction)
-
-```d
-auto cache = new LockfileCache("/path/to/cache");
-cache.prune(500);  // Reduce to 500 entries
-```
-
-## Extending for New Package Managers
-
-Implement `ILockfileGenerator`:
+Implement `ILockfileGenerator` for new package managers:
 
 ```d
 final class MyLockfileGenerator : ILockfileGenerator
 {
-    override BuildResult!Lockfile generate(string manifestPath, GenerateOptions options) @system
+    override BuildResult!Lockfile generate(string manifestPath, GenerateOptions options)
     {
-        // Parse manifest
-        // Resolve dependencies
-        // Build Lockfile struct
-        // Return result
+        // Parse manifest, resolve dependencies, build Lockfile
     }
     
-    override BuildResult!Lockfile parse(string lockfilePath) @system
+    override BuildResult!Lockfile parse(string lockfilePath)
     {
-        // Parse existing lockfile
+        // Parse existing lockfile format
     }
     
-    override BuildResult!void write(const ref Lockfile lockfile, string outputPath) @system
+    override BuildResult!void write(const ref Lockfile lockfile, string outputPath)
     {
-        // Write lockfile to disk
+        // Write in appropriate format
     }
     
-    override bool isUpToDate(string manifestPath, string lockfilePath) @system
+    override bool isUpToDate(string manifestPath, string lockfilePath)
     {
-        // Check if lockfile matches manifest
+        // Compare manifest hash with stored hash
     }
     
-    override string lockfileName() const pure @safe
-    {
-        return "my-lock.json";
-    }
-    
-    override PackageManagerType type() const pure @safe
-    {
-        return PackageManagerType.Unknown;
-    }
+    override string lockfileName() const pure @safe => "my-lock.json";
+    override PackageManagerType type() const pure @safe => PackageManagerType.Unknown;
 }
 ```
 
-## Related Features
+## See Also
 
-- [Caching](caching.md) - Action-level caching
-- [Determinism](determinism.md) - Reproducible builds
-- [Remote Execution](remote-execution.md) - Distributed builds
-
+- [Caching](caching.md)
+- [Determinism](../architecture/determinism.md)

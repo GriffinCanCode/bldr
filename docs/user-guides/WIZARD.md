@@ -1,70 +1,43 @@
 # Build Configuration Wizard
 
-The Builder Wizard provides an interactive, guided experience for setting up new Builder projects. It combines intelligent auto-detection with user-friendly prompts to generate optimal build configurations.
-
-## Overview
-
-```bash
-bldr wizard
-```
-
-The wizard guides you through:
-1. **Language Selection** - Choose your primary language (with auto-detection)
-2. **Project Structure** - Define whether it's an app, library, or monorepo
-3. **Package Manager** - Select or auto-detect package management tools
-4. **Caching** - Enable build result caching for faster rebuilds
-5. **Remote Execution** - Configure distributed builds (optional)
-
-## Features
-
-### Intelligent Auto-Detection
-
-The wizard scans your project directory before prompting, detecting:
-- Programming languages and frameworks
-- Existing manifest files (package.json, Cargo.toml, etc.)
-- Project structure patterns
-- Confidence scores for each detection
-
-Detected languages are presented first with their confidence levels, making it easy to select the correct configuration.
-
-### Interactive UI
-
-- **Arrow Key Navigation**: Use ↑/↓ or j/k to navigate options
-- **Visual Feedback**: Selected options are highlighted
-- **Smart Defaults**: Most common choices are pre-selected
-- **Confirmation**: Prompts before overwriting existing files
-
-### Generated Files
-
-The wizard creates three essential files:
-
-1. **Builderfile** - Build target definitions
-2. **Builderspace** - Workspace-level configuration
-3. **.builderignore** - Files/directories to exclude from scanning
+The wizard provides an interactive setup for new Builder projects, combining auto-detection with user prompts to generate build configuration.
 
 ## Usage
 
-### Basic Setup
-
 ```bash
-cd my-project
 bldr wizard
 ```
 
-### Example Session
+## Steps
+
+The wizard guides you through:
+
+1. **Language Selection** - Choose primary language (auto-detected options shown first with confidence scores)
+2. **Project Structure** - Single application, library, or monorepo
+3. **Package Manager** - Language-specific package manager selection
+4. **Caching** - Enable build result caching
+5. **Remote Execution** - Enable distributed builds (optional)
+
+## Generated Files
+
+The wizard creates three files:
+
+| File | Purpose |
+|------|---------|
+| `Builderfile` | Build target definitions |
+| `Builderspace` | Workspace configuration |
+| `.builderignore` | Files to exclude from scanning |
+
+## Example Session
 
 ```
 ╔════════════════════════════════════════════════════════╗
 ║      Builder Configuration Wizard                      ║
-╠════════════════════════════════════════════════════════╣
-║ Interactive setup wizard for configuring your Builder  ║
-║ project. Answer a few questions to create optimized   ║
-║ build configuration.                                    ║
 ╚════════════════════════════════════════════════════════╝
 
 ℹ Scanning project directory...
 
-? What language is your project? (arrow keys)
+? What language is your project?
   > Python (95% confidence)
     JavaScript/TypeScript (80% confidence)
     Other
@@ -97,53 +70,44 @@ bldr wizard
 Run 'bldr build' to start building!
 ```
 
+## Navigation
+
+- Arrow keys (↑/↓) or j/k to navigate options
+- Enter to select
+- Y/N for confirmations
+
 ## Language Support
 
-The wizard supports all Builder languages:
+When languages are detected, they appear with confidence scores. Otherwise, common languages are listed:
 
-### Compiled Languages
-- **C/C++** - Auto-detects CMake, Makefile, or direct compilation
-- **Rust** - Uses Cargo
-- **Go** - Uses Go modules
-- **D** - Uses DUB or direct compilation
-- **Zig** - Direct compilation
-- **Nim** - Uses nimble or direct compilation
+- Python
+- JavaScript
+- TypeScript
+- Go
+- Rust
+- C++
+- Java
+- C#
+- Ruby
+- Other (generic)
 
-### JVM Languages
-- **Java** - Maven or Gradle
-- **Kotlin** - Gradle or Maven
-- **Scala** - SBT, Mill, or Gradle
+## Package Managers
 
-### .NET Languages
-- **C#** - MSBuild or dotnet CLI
-- **F#** - dotnet CLI
+Language-specific options:
 
-### Scripting Languages
-- **Python** - pip, poetry, pipenv, or conda
-- **JavaScript/TypeScript** - npm, yarn, pnpm, or bun
-- **Ruby** - bundler or gem
-- **PHP** - composer
-- **Perl** - cpan or cpanm
-- **Lua** - luarocks
-- **R** - CRAN packages
+| Language | Options |
+|----------|---------|
+| Python | Auto-detect, pip, poetry, pipenv, conda |
+| JavaScript/TypeScript | Auto-detect, npm, yarn, pnpm, bun |
+| Ruby | Auto-detect, bundler, gem |
+| PHP | Auto-detect, composer |
+| Rust | cargo (automatic) |
+| Go | go (automatic) |
 
-### Functional Languages
-- **Haskell** - Stack or Cabal
-- **OCaml** - Opam or Dune
-- **Elixir** - Mix
-- **Elm** - elm-package
+## Project Structures
 
-### Other
-- **Swift** - SPM (Swift Package Manager)
-- **Protobuf** - protoc
-
-## Project Structure Types
-
-### Single Application
-
-For projects that build one executable or deployable artifact:
-
-```d
+**Single Application:**
+```
 target("app") {
     type: executable;
     language: python;
@@ -151,11 +115,8 @@ target("app") {
 }
 ```
 
-### Library
-
-For reusable libraries:
-
-```d
+**Library:**
+```
 target("mylib") {
     type: library;
     language: rust;
@@ -163,11 +124,8 @@ target("mylib") {
 }
 ```
 
-### Monorepo
-
-For projects with multiple independent services:
-
-```d
+**Monorepo:**
+```
 target("frontend") {
     type: executable;
     language: typescript;
@@ -179,22 +137,17 @@ target("backend") {
     language: go;
     sources: ["backend/**/*.go"];
 }
-
-target("shared") {
-    type: library;
-    language: typescript;
-    sources: ["shared/**/*.ts"];
-}
 ```
 
-## Configuration Options
+## Configuration Output
 
-### Caching
+### Builderspace
 
-When enabled, Builder caches build results based on content hashes:
-
-```d
+```
 workspace {
+    name: "my-project";
+    version: "1.0.0";
+
     cache {
         enabled: true;
         directory: ".builder-cache";
@@ -202,115 +155,76 @@ workspace {
 }
 ```
 
-Benefits:
-- Instant rebuilds when nothing changes
-- Per-file granularity
-- Content-addressed (BLAKE3 hashing)
-- Shared across branches
+With remote execution enabled:
 
-### Remote Execution
-
-For distributed builds (requires setup):
-
-```d
+```
 workspace {
+    name: "my-project";
+    version: "1.0.0";
+
+    cache {
+        enabled: true;
+        directory: ".builder-cache";
+    }
+
     remote {
         enabled: true;
-        endpoint: "grpc://build-cluster:8080";
+        // Configure endpoint
+        // endpoint: "grpc://localhost:8080";
     }
 }
 ```
 
-## Advanced Usage
+### .builderignore
 
-### Non-Interactive Mode
+Generated based on selected language:
 
-In CI/CD or automated environments where stdin is not available, the wizard automatically uses defaults based on detection results.
+```gitignore
+# Version control
+.git/
+.svn/
 
-### Overwriting Existing Files
+# Builder cache
+.builder-cache/
 
-If Builderfile and Builderspace already exist:
+# Python (example)
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# IDE
+.idea/
+.vscode/
+```
+
+## Existing Files
+
+If Builderfile and Builderspace already exist, the wizard prompts before overwriting:
 
 ```
 ? Build files already exist. Overwrite? (y/N)
 ```
 
-Selecting "No" cancels the wizard without changes.
-
-### Custom Templates
-
-After generation, you can manually edit the files:
-
-1. **Builderfile** - Add dependencies, custom commands, environment variables
-2. **Builderspace** - Configure parallelism, timeouts, telemetry
-3. **.builderignore** - Add project-specific exclusions
-
 ## Comparison with `bldr init`
 
 | Feature | `bldr wizard` | `bldr init` |
-|---------|-----------------|----------------|
-| Interactive | ✓ Yes | ✗ No |
-| Arrow key navigation | ✓ Yes | ✗ No |
-| Package manager selection | ✓ Yes | ✗ Auto only |
-| Project structure choice | ✓ Yes | ✗ Auto only |
-| Visual feedback | ✓ Rich | ○ Basic |
-| Best for | New users, complex setups | Scripts, simple projects |
+|---------|---------------|-------------|
+| Interactive | Yes | No |
+| Package manager selection | Yes | Auto only |
+| Project structure choice | Yes | Auto only |
+| Use case | New users, complex setups | Scripts, simple projects |
 
-## Tips
+## After Setup
 
-1. **Run in project root** - The wizard scans from the current directory
-2. **Review before building** - Check generated files match your needs
-3. **Iterative refinement** - You can re-run the wizard to update config
-4. **Start simple** - Begin with basic settings, add complexity later
-
-## Examples
-
-### Python Web App
-
-```bash
-cd my-flask-app
-bldr wizard
-# Select: Python → Single application → poetry → Enable caching
-bldr build
-```
-
-### Rust + TypeScript Monorepo
-
-```bash
-cd my-fullstack-app
-bldr wizard
-# Select: Rust → Monorepo → Enable caching
-# Then manually edit Builderfile to add TypeScript frontend
-bldr build
-```
-
-### Go Microservice
-
-```bash
-cd my-service
-bldr wizard
-# Select: Go → Single application → Enable caching + remote
-bldr build
-```
-
-## Troubleshooting
-
-### "No supported languages detected"
-
-The wizard couldn't find language-specific files. You can still proceed and manually configure the Builderfile.
-
-### Arrow keys not working
-
-Ensure your terminal supports ANSI escape sequences. Most modern terminals do, but some minimal environments may not.
-
-### Terminal garbled after wizard
-
-Run `reset` to restore terminal state. This shouldn't happen normally - please report if it does.
+1. Review generated files
+2. Run `bldr build` to test
+3. Edit configuration as needed
+4. Add to version control
 
 ## See Also
 
 - `bldr init` - Non-interactive initialization
 - `bldr infer` - Preview auto-detection results
-- `bldr build` - Build your project
-- `bldr help` - Full command reference
-
+- `bldr migrate` - Migrate from other build systems

@@ -109,10 +109,11 @@ performance:
   manifest_lookup: "0.1ms"
   materialize_10_files: "5ms"
 
-related: [caching, action-cache, blake3, content-addressed-sources, remote-cache]
+related: [caching, action-cache, blake3, content-addressed-sources, remote-cache, cdc]
 
 next_steps: |
   - See 'bldr explain caching' for overall cache architecture
   - See 'bldr explain action-cache' for action-level caching
   - See 'bldr explain remote-cache' for distributed dedup benefits
+  - See 'bldr explain cdc' for large artifact chunking (>100MB)
 

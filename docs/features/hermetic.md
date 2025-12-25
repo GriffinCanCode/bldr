@@ -1,20 +1,44 @@
 # Hermetic Builds
 
-**Status:** ✅ **PRODUCTION READY** - All platforms supported with resource monitoring
+Hermetic builds ensure reproducibility and security by isolating build processes from the host system. Builder implements platform-specific sandboxing:
 
-## Overview
-
-Hermetic builds ensure reproducibility and security by isolating build processes from the host system. Builder implements platform-specific sandboxing to achieve true hermetic execution:
-
-- **Linux**: Namespace-based isolation (mount, PID, network, IPC, UTS, user) + cgroup v2 resource monitoring
-- **macOS**: `sandbox-exec` with Sandbox Profile Language (SBPL) + rusage resource monitoring
-- **Windows**: Job objects with resource limits + I/O accounting
+- **Linux**: Namespace isolation (mount, PID, network, IPC, UTS, user) + cgroup v2 resource control
+- **macOS**: `sandbox-exec` with Sandbox Profile Language (SBPL)
+- **Windows**: Job objects with resource limits and I/O accounting
 
 ## Architecture
 
+**Location**: `source/engine/runtime/hermetic/`
+
+```
+hermetic/
+├── core/
+│   ├── executor.d      # HermeticExecutor - unified execution interface
+│   └── spec.d          # SandboxSpec - set-theoretic specification
+├── platforms/
+│   ├── linux.d         # Linux namespace implementation
+│   ├── macos.d         # macOS sandbox-exec implementation
+│   ├── windows.d       # Windows job object implementation
+│   └── capabilities.d  # Platform capability detection
+├── monitoring/
+│   ├── linux.d         # Linux cgroup v2 resource monitor
+│   ├── macos.d         # macOS rusage monitor
+│   └── windows.d       # Windows job object monitor
+├── security/
+│   ├── audit.d         # Violation logging
+│   ├── seccomp.d       # Syscall filtering (Linux)
+│   └── timeout.d       # Timeout enforcement
+├── sandbox/
+│   ├── namespaces.d    # Linux namespace sandbox
+│   ├── cgroups.d       # Linux cgroup v2 integration
+│   ├── darwin.d        # macOS Darwin sandbox
+│   └── profiles.d      # SBPL profile generator
+└── determinism/        # Determinism verification
+```
+
 ### Set-Theoretic Specification
 
-Hermetic builds are modeled using set theory for provable correctness:
+Hermetic builds are modeled using set theory:
 
 - **Input Set (I)**: Paths that can be read
 - **Output Set (O)**: Paths that can be written
@@ -22,51 +46,37 @@ Hermetic builds are modeled using set theory for provable correctness:
 - **Network Set (N)**: Allowed network operations
 - **Environment Set (E)**: Allowed environment variables
 
-**Hermeticity Invariants:**
+**Hermeticity Invariants**:
 1. `I ∩ O = ∅` (inputs and outputs are disjoint)
-2. `N = ∅` (no network access for hermetic builds)
-3. `Same I → Same O` (deterministic builds)
-
-### Components
-
-```
-hermetic/
-├── spec.d          # Sandbox specification (set theory model)
-├── executor.d      # Platform-agnostic execution interface
-├── monitor.d       # Unified resource monitoring interface
-├── timeout.d       # Timeout enforcement
-├── audit.d         # Violation logging and tracking
-├── linux.d         # Linux namespace implementation
-├── macos.d         # macOS sandbox-exec implementation
-├── windows.d       # Windows job object implementation
-├── monitor/
-│   ├── linux.d     # Linux cgroup v2 resource monitor
-│   ├── macos.d     # macOS rusage resource monitor
-│   └── windows.d   # Windows job object resource monitor
-└── package.d       # Public API
-```
+2. `N = ∅` for hermetic builds (no network access)
+3. Same I → Same O (deterministic)
 
 ## Usage
 
 ### Basic Example
 
 ```d
-import core.execution.hermetic;
+import engine.runtime.hermetic;
 
 // Create hermetic specification
-auto spec = SandboxSpecBuilder.create()
-    .input("/workspace/src")        // Read source files
-    .output("/workspace/bin")       // Write output files
-    .temp("/tmp/build")             // Temp directory
-    .withNetwork(NetworkPolicy.hermetic())  // No network
-    .env("PATH", "/usr/bin:/bin")   // Minimal environment
+auto specResult = SandboxSpecBuilder.create()
+    .input("/workspace/src")
+    .output("/workspace/bin")
+    .temp("/tmp/build")
+    .withNetwork(NetworkPolicy.hermetic())
+    .env("PATH", "/usr/bin:/bin")
     .build();
 
+if (specResult.isErr)
+    return specResult.unwrapErr();
+
 // Create executor
-auto executor = HermeticExecutor.create(spec.unwrap());
+auto executorResult = HermeticExecutor.create(specResult.unwrap());
+if (executorResult.isErr)
+    return executorResult.unwrapErr();
 
 // Execute hermetically
-auto result = executor.unwrap().execute(
+auto result = executorResult.unwrap().execute(
     ["gcc", "main.c", "-o", "main"],
     "/workspace/src"
 );
@@ -81,11 +91,9 @@ if (result.isOk)
 
 ### Builder Helpers
 
-For common scenarios, use pre-configured builders:
-
 ```d
 // For builds
-auto buildSpec = HermeticSpecBuilder.forBuild(
+auto specResult = HermeticSpecBuilder.forBuild(
     workspaceRoot: "/workspace",
     sources: ["/workspace/src/main.d"],
     outputDir: "/workspace/bin",
@@ -93,65 +101,58 @@ auto buildSpec = HermeticSpecBuilder.forBuild(
 );
 
 // For tests
-auto testSpec = HermeticSpecBuilder.forTest(
+auto specResult = HermeticSpecBuilder.forTest(
     workspaceRoot: "/workspace",
     testDir: "/workspace/tests",
     tempDir: "/tmp/test"
 );
 ```
 
-### Advanced Configuration
-
-#### Network Access
+### Network Policy
 
 ```d
-// Completely hermetic (no network)
+// Hermetic (no network)
 .withNetwork(NetworkPolicy.hermetic())
 
 // Allow specific hosts
 .withNetwork(NetworkPolicy.allowHosts(["github.com", "api.example.com"]))
 ```
 
-#### Resource Limits
+### Resource Limits
 
 ```d
-// Hermetic defaults (4GB memory, 1 hour CPU, 128 processes)
+// Default hermetic limits (4GB memory, 1 hour CPU, 128 processes)
 .withResources(ResourceLimits.hermetic())
 
 // Custom limits
 auto limits = ResourceLimits();
-limits.maxMemoryBytes = 2 * 1024 * 1024 * 1024;  // 2GB
-limits.maxCpuTimeMs = 30 * 60 * 1000;  // 30 minutes
+limits.maxMemoryBytes = 2UL * 1024 * 1024 * 1024;  // 2GB
+limits.maxCpuTimeMs = 30 * 60 * 1000;              // 30 minutes
 limits.maxProcesses = 64;
-
 .withResources(limits)
 ```
 
-#### Process Policy
+### Process Policy
 
 ```d
 auto policy = ProcessPolicy.hermetic();
 policy.maxChildren = 16;
 policy.killOnParentExit = true;
-
 .withProcess(policy)
 ```
 
-### Resource Monitoring
-
-Builder provides comprehensive resource monitoring across all platforms:
+## Resource Monitoring
 
 ```d
-import core.execution.hermetic;
+import engine.runtime.hermetic.monitoring;
 
 // Create monitor
 auto limits = ResourceLimits.hermetic();
 auto monitor = createMonitor(limits);
 
-// Start monitoring
 monitor.start();
 
-// Execute your build...
+// Execute build...
 
 // Get resource usage snapshot
 auto usage = monitor.snapshot();
@@ -160,7 +161,7 @@ writeln("Peak memory: ", usage.peakMemory);
 writeln("Disk read: ", usage.diskRead);
 writeln("Disk write: ", usage.diskWrite);
 
-// Stop monitoring and check violations
+// Check violations
 monitor.stop();
 if (monitor.isViolated())
 {
@@ -175,22 +176,16 @@ if (monitor.isViolated())
 
 ### Timeout Enforcement
 
-Prevent builds from hanging indefinitely:
-
 ```d
-import core.execution.hermetic.timeout;
+import engine.runtime.hermetic.security.timeout;
 
-// Create timeout enforcer with PID
 auto enforcer = createTimeoutEnforcer(processId);
 enforcer.start(5.minutes);
 
 // Execute build...
 
-// Check if timeout occurred
 if (enforcer.isTimedOut())
-{
     writeln("Build timed out!");
-}
 
 enforcer.stop();
 ```
@@ -199,37 +194,33 @@ enforcer.stop();
 
 ### Namespace Isolation
 
-Builder uses Linux namespaces for strong isolation:
+Uses Linux namespaces via `clone()`:
 
-1. **Mount Namespace**: Controls filesystem visibility
+1. **Mount Namespace** (CLONE_NEWNS): Filesystem isolation
    - Creates minimal tmpfs root
    - Bind-mounts input paths (read-only)
    - Bind-mounts output paths (read-write)
    - Mounts essential directories (proc, dev, sys)
 
-2. **PID Namespace**: Isolates process tree
-   - Process sees only its own descendants
+2. **PID Namespace** (CLONE_NEWPID): Process isolation
+   - Process sees only its descendants
    - PID 1 is the build process
 
-3. **Network Namespace**: Disables network access
-   - No network interfaces (hermetic)
-   - Complete network isolation
+3. **Network Namespace** (CLONE_NEWNET): Network isolation
+   - No network interfaces for hermetic builds
 
-4. **IPC Namespace**: Isolates inter-process communication
+4. **IPC Namespace** (CLONE_NEWIPC): IPC isolation
    - No shared memory with host
-   - No message queues accessible
 
-5. **UTS Namespace**: Isolates hostname
-   - Build sees custom hostname
-   - Cannot query host identity
+5. **UTS Namespace** (CLONE_NEWUTS): Hostname isolation
 
-6. **User Namespace**: Maps root inside to non-root outside
+6. **User Namespace** (CLONE_NEWUSER): Privilege isolation
+   - Maps root inside to non-root outside
    - No elevated privileges required
-   - Safe execution as "root" inside namespace
 
-### Cgroups Integration
+### Cgroups v2
 
-Resource limits enforced via cgroups v2:
+Resource limits via cgroups:
 
 ```
 /sys/fs/cgroup/builder/<uuid>/
@@ -238,27 +229,15 @@ Resource limits enforced via cgroups v2:
 └── pids.max            # Process limit
 ```
 
-### Example
-
-```d
-version(linux)
-{
-    import core.execution.hermetic.linux;
-    
-    auto sandbox = LinuxSandbox.create(spec, workDir);
-    auto output = sandbox.unwrap().execute(command, workingDir);
-}
-```
-
 ## macOS Implementation
 
 ### Sandbox Profile Language (SBPL)
 
-Builder generates SBPL profiles for `sandbox-exec`:
+Generates SBPL profiles for `sandbox-exec`:
 
 ```scheme
 (version 1)
-(deny default)  ; Deny by default
+(deny default)
 
 ; Allow reading inputs
 (allow file-read*
@@ -268,112 +247,58 @@ Builder generates SBPL profiles for `sandbox-exec`:
 (allow file-write*
   (subpath "/workspace/bin"))
 
-; Deny network (hermetic)
+; Deny network
 (deny network*)
 
-; Allow essential operations
+; Allow process operations
 (allow process-fork)
 (allow process-exec
   (literal "/usr/bin/gcc"))
 ```
 
-### Features
+Features:
+- Deny-by-default
+- Path matching: literal, subpath, regex
+- Fine-grained network control
+- Mach operation control
 
-- **Deny-by-default**: All operations denied unless explicitly allowed
-- **Path matching**: Supports literal, subpath, and regex patterns
-- **Network control**: Fine-grained network access control
-- **Mach operations**: Controls IPC and system services
+## Windows Implementation
 
-### Example
+Uses Windows Job Objects:
 
-```d
-version(OSX)
-{
-    import core.execution.hermetic.macos;
-    
-    auto sandbox = MacOSSandbox.create(spec);
-    auto output = sandbox.unwrap().execute(command, workingDir);
-}
-```
+- `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`: Guaranteed cleanup
+- `BREAKAWAY_OK` disabled: No process escape
+- Memory/CPU/process limits
+- UI restrictions (clipboard, desktop isolation)
+- CPU rate limiting (Windows 8+)
+
+Note: Does not provide filesystem/network isolation like Linux namespaces.
 
 ## Security Guarantees
 
 ### Filesystem Isolation
-
-- **Input Protection**: Source files are read-only, preventing accidental modification
-- **Output Containment**: Build outputs confined to specified directories
-- **No Temp Leaks**: Temporary files cleaned up automatically
-- **Path Traversal Prevention**: Set membership checks prevent escaping
+- Input files read-only
+- Output containment to specified directories
+- Temp files cleaned up
+- Path traversal prevention via set membership
 
 ### Network Isolation
-
-- **Hermetic Builds**: Complete network isolation (no outbound connections)
-- **Dependency Poisoning Prevention**: Cannot fetch unexpected dependencies
-- **Reproducibility**: Same inputs always produce same outputs
+- Complete network isolation for hermetic builds
+- Prevents dependency poisoning
+- Ensures reproducibility
 
 ### Process Isolation
-
-- **Resource Limits**: Prevents resource exhaustion (DoS)
-- **Process Tree Containment**: Child processes cannot escape sandbox
-- **Clean Termination**: All processes killed on parent exit
-
-### Threat Model
-
-**Mitigated Threats:**
-- Supply chain attacks (network isolation)
-- Resource exhaustion (cgroups limits)
-- Privilege escalation (user namespace mapping)
-- Filesystem tampering (mount namespace isolation)
-
-**Residual Risks:**
-- Kernel vulnerabilities (relies on kernel sandbox)
-- Side-channel attacks (timing, speculation)
-- Resource-based side channels
+- Resource limits prevent DoS
+- Child processes cannot escape sandbox
+- Clean termination on parent exit
 
 ## Performance
 
-### Overhead
-
-- **Linux Namespaces**: ~5-10ms overhead per build
-- **macOS sandbox-exec**: ~20-30ms overhead per build
-- **Fallback (no sandbox)**: 0ms overhead
-
-### Optimization Strategies
-
-1. **Lazy Mounting**: Only mount required paths
-2. **Shared Namespaces**: Reuse namespaces across builds (future)
-3. **Cached Profiles**: Cache SBPL profiles for macOS (future)
-4. **Minimal Environment**: Reduce environment variable copying
-
-## Integration
-
-### Execution Engine
-
-Hermetic execution integrates with the build graph:
-
-```d
-// In ExecutionEngine
-auto sandbox = createSandbox(hermetic: true);
-auto env = sandbox.prepare(request, inputs);
-auto result = env.unwrap().execute(command, envVars, timeout);
-```
-
-### Language Handlers
-
-Language handlers can opt into hermetic builds:
-
-```d
-// In language handler
-auto spec = HermeticSpecBuilder.forBuild(
-    config.root,
-    target.sources,
-    outputDir,
-    tempDir
-);
-
-auto executor = HermeticExecutor.create(spec.unwrap());
-auto result = executor.unwrap().execute(buildCommand);
-```
+| Platform | Overhead |
+|----------|----------|
+| Linux Namespaces | ~5-10ms |
+| macOS sandbox-exec | ~20-30ms |
+| Fallback (validation only) | 0ms |
 
 ## Configuration
 
@@ -383,10 +308,10 @@ auto result = executor.unwrap().execute(buildCommand);
 # Enable hermetic builds (default: true on Linux/macOS)
 BUILDER_HERMETIC=true
 
-# Force disable hermetic builds
+# Force disable
 BUILDER_HERMETIC=false
 
-# Set resource limits
+# Resource limits
 BUILDER_HERMETIC_MEMORY=2G
 BUILDER_HERMETIC_CPU_TIME=1800s
 BUILDER_HERMETIC_PROCESSES=64
@@ -399,7 +324,6 @@ target("myapp") {
     type: executable;
     sources: ["src/**/*.d"];
     
-    // Hermetic configuration
     hermetic: {
         enabled: true;
         network: false;
@@ -409,72 +333,35 @@ target("myapp") {
 }
 ```
 
-## Debugging
-
-### Check Platform Support
+## Platform Detection
 
 ```d
 writeln("Platform: ", HermeticExecutor.platform());
 writeln("Supported: ", HermeticExecutor.isSupported());
 ```
 
-### Verify Isolation
+Returns:
+- `"linux-namespaces"` on Linux
+- `"macos-sandbox"` on macOS
+- `"windows-job"` on Windows
+- `"fallback"` otherwise
 
-```bash
-# Linux: Check namespaces
-ls /proc/self/ns/
+## Troubleshooting
 
-# macOS: Check sandbox-exec availability
-which sandbox-exec
-
-# Test network isolation
-bldr build --hermetic --verbose
-```
-
-### Troubleshooting
-
-**Build fails with "Permission denied":**
+**Permission denied**:
 - Ensure input paths are readable
-- Check that output directory exists and is writable
+- Check output directory exists and is writable
 
-**Build fails with "Namespace not supported":**
-- Verify `/proc/self/ns/user` exists (Linux)
-- Check kernel supports user namespaces
-- Try `sudo sysctl kernel.unprivileged_userns_clone=1`
+**Namespace not supported (Linux)**:
+- Verify `/proc/self/ns/user` exists
+- Enable user namespaces: `sudo sysctl kernel.unprivileged_userns_clone=1`
 
-**macOS builds fail with "sandbox-exec not found":**
+**sandbox-exec not found (macOS)**:
 - Install Xcode Command Line Tools
-- Verify `sandbox-exec` is in PATH
 
-## Future Enhancements
+## Related Documentation
 
-### Planned Features
-
-1. **Windows Support**: Job objects + AppContainer
-2. **Shared Namespaces**: Reuse namespaces for faster builds
-3. **Network Whitelisting**: Allow specific hosts/ports
-4. **Capability-based Security**: Fine-grained permission model
-5. **Audit Logging**: Track all sandbox violations
-
-### Research Areas
-
-- **Formal Verification**: Prove hermeticity guarantees
-- **Zero-Trust Builds**: Cryptographic verification of inputs
-- **Hardware Isolation**: SGX/TrustZone support
-- **Content-Addressable Storage**: Deduplicate inputs/outputs
-
-## References
-
-- [Linux Namespaces](https://man7.org/linux/man-pages/man7/namespaces.7.html)
-- [Cgroups v2](https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html)
-- [macOS Sandbox](https://developer.apple.com/library/archive/documentation/Security/Conceptual/AppSandboxDesignGuide/)
-- [Bazel Remote Execution](https://docs.bazel.build/versions/main/remote-execution.html)
-- [Nix Store Model](https://nixos.org/manual/nix/stable/#sec-nix-store)
-
-## See Also
-
-- [Security Documentation](../security/security.md)
+- [Security](../security/security.md)
 - [Distributed Builds](distributed.md)
-- [Caching System](caching.md)
-- [Build Provenance](provenance.md) - Hermetic builds enable SLSA Level 3 attestations
-
+- [Caching](caching.md)
+- [Build Provenance](provenance.md)

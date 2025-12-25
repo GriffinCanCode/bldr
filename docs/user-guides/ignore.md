@@ -1,18 +1,25 @@
-# .builderignore Documentation
+# .builderignore
 
 ## Overview
 
-The `.builderignore` file allows you to specify patterns for files and directories that Builder should ignore during source scanning, target detection, and dependency analysis. This is especially important for performance when dealing with large dependency directories like `node_modules`, `venv`, or `target`.
+The `.builderignore` file specifies patterns for files and directories that Builder should skip during source scanning and dependency analysis. This significantly improves performance for projects with large dependency directories like `node_modules` or `venv`.
 
 ## Format
 
-The `.builderignore` file uses a syntax similar to `.gitignore`:
+Uses `.gitignore` syntax:
 
-- **Comments**: Lines starting with `#` are treated as comments
-- **Directory patterns**: Patterns ending with `/` match directories
-- **File patterns**: Other patterns match files
-- **Glob patterns**: Support for `*`, `?`, and `**` wildcards
-- **Negation**: Lines starting with `!` (future support)
+```gitignore
+# Comments start with #
+node_modules/     # Directory pattern (trailing /)
+*.pyc             # Glob pattern
+!important.log    # Negation (include despite other rules)
+```
+
+**Supported syntax:**
+- Comments: Lines starting with `#`
+- Directory patterns: Ending with `/`
+- Glob patterns: `*`, `?`, `**` wildcards
+- Negation: Lines starting with `!`
 
 ## Example
 
@@ -23,164 +30,180 @@ The `.builderignore` file uses a syntax similar to `.gitignore`:
 .git/
 .svn/
 
-# Builder's own cache
+# Builder cache
 .builder-cache/
 
-# JavaScript dependencies (CRITICAL - can have millions of files)
+# JavaScript (critical - can have millions of files)
 node_modules/
 bower_components/
 
-# Python virtual environments (HIGH impact)
+# Python
 venv/
 .venv/
 __pycache__/
 *.pyc
 
-# Rust build artifacts
+# Rust
 target/
-Cargo.lock
 
-# JVM dependencies and build
+# JVM
 .gradle/
 .m2/
 build/
 *.class
 
-# Custom patterns
-my-custom-dir/
+# Custom
+my-cache-dir/
 *.tmp
 ```
 
-## Built-in Ignore Patterns
+## Built-in Patterns
 
-Builder automatically ignores common directories even without a `.builderignore` file:
+Builder automatically ignores common directories without requiring a `.builderignore` file.
 
 ### Always Ignored (VCS)
+
 - `.git/`, `.svn/`, `.hg/`, `.bzr/`
 
 ### Common Patterns
+
 - `.builder-cache/`
 - `.cache/`
-- `tmp/`, `temp/`
+- `tmp/`, `temp/`, `.tmp/`
 - `.DS_Store`, `Thumbs.db`
 
-### Language-Specific (Automatic)
+### Language-Specific Patterns
 
-The ignore system is language-aware and will automatically skip problematic directories:
+**Critical (can cause hangs):**
 
-#### **CRITICAL** Severity (can cause system hangs):
-- **JavaScript/TypeScript**: `node_modules/`, `bower_components/`, `.npm/`, `.yarn/`, `.pnp/`
+| Language | Directories |
+|----------|-------------|
+| JavaScript/TypeScript | `node_modules/`, `bower_components/`, `.npm/`, `.yarn/`, `.pnp/`, `dist/`, `build/`, `.next/`, `.nuxt/` |
 
-#### **HIGH** Severity (major performance issues):
-- **Python**: `venv/`, `.venv/`, `__pycache__/`, `.pytest_cache/`, `*.pyc`
-- **Rust**: `target/`
-- **Java/Kotlin/Scala**: `target/`, `build/`, `.gradle/`, `.m2/`
-- **C#/F#**: `bin/`, `obj/`, `packages/`
+**High impact:**
 
-#### **MODERATE** Severity (noticeable impact):
-- **Ruby**: `vendor/bundle/`, `.bundle/`
-- **PHP**: `vendor/`
-- **Go**: `vendor/`
-- **Elixir**: `deps/`, `_build/`
-- **R**: `renv/`, `packrat/`
-- **C/C++**: `build/`, `cmake-build-*/`, `*.o`
-- **Nim**: `nimcache/`
-- **D**: `.dub/`
-- **Swift**: `.build/`, `.swiftpm/`
+| Language | Directories |
+|----------|-------------|
+| Python | `venv/`, `.venv/`, `__pycache__/`, `.pytest_cache/`, `*.pyc` |
+| Rust | `target/` |
+| Java/Kotlin/Scala | `target/`, `build/`, `.gradle/`, `.m2/`, `bin/`, `out/` |
+| C#/F# | `bin/`, `obj/`, `packages/`, `.vs/` |
 
-#### **LOW** Severity (minimal impact):
-- **Lua**: `lua_modules/`, `luarocks/`
-- **Zig**: `zig-cache/`, `zig-out/`
+**Moderate impact:**
 
-## Integration with .gitignore
+| Language | Directories |
+|----------|-------------|
+| Ruby | `vendor/bundle/`, `.bundle/` |
+| PHP | `vendor/` |
+| Go | `vendor/`, `bin/`, `pkg/` |
+| Elixir | `deps/`, `_build/` |
+| C/C++ | `build/`, `CMakeFiles/`, `cmake-build-*` |
+| D | `.dub/` |
+| Swift | `.build/`, `.swiftpm/` |
+| R | `renv/`, `packrat/` |
+| Nim | `nimcache/` |
 
-Builder will also read patterns from `.gitignore` files in your project root. This provides convenience for projects that already have ignore patterns defined. The `.builderignore` file takes precedence if both exist.
+**Low impact:**
 
-## Usage
+| Language | Directories |
+|----------|-------------|
+| Lua | `lua_modules/`, `luarocks/` |
+| Zig | `zig-cache/`, `zig-out/` |
 
-### Creation
+## .gitignore Integration
 
-The `.builderignore` file is automatically created when you run:
+Builder also reads patterns from `.gitignore` files in your project root. The `.builderignore` file takes precedence if both exist.
+
+## Creation
+
+### Automatic
 
 ```bash
 bldr init
 ```
 
-The generated file will include patterns specific to the languages detected in your project.
+Generates a `.builderignore` with patterns for detected languages.
 
-### Manual Creation
-
-You can also create a `.builderignore` file manually:
+### Manual
 
 ```bash
 touch .builderignore
-# Edit with your preferred editor
 ```
 
-### Location
+Place in project root (same directory as `Builderfile` or `Builderspace`).
 
-The `.builderignore` file should be placed in your project root (same directory as your `Builderfile` or `Builderspace`).
-
-## API Usage
-
-The ignore system can be used programmatically:
+## Programmatic API
 
 ```d
-import utils.files.ignore;
+import infrastructure.utils.files.ignore;
 
-// Check if a directory should be ignored
-bool shouldIgnore = IgnoreRegistry.shouldIgnoreDirectoryAny("node_modules");
+// Check if directory should be ignored (any language)
+bool ignore = IgnoreRegistry.shouldIgnoreDirectoryAny("node_modules");
 
-// Language-specific check
+// Check for specific language
 bool ignore = IgnoreRegistry.shouldIgnoreDirectory("target", TargetLanguage.Rust);
+
+// Check file patterns
+bool ignore = IgnoreRegistry.shouldIgnoreFile("test.pyc", TargetLanguage.Python);
+
+// Get severity
+auto severity = getIgnoreSeverity(TargetLanguage.JavaScript);
+// Returns: IgnoreSeverity.Critical
 
 // Combined checker (built-in + user patterns)
 auto checker = new CombinedIgnoreChecker(".", TargetLanguage.Python);
-if (checker.shouldIgnoreDirectory("my_dir")) {
-    // Skip scanning this directory
+if (checker.shouldIgnoreDirectory("my_dir"))
+{
+    // Skip scanning
 }
+```
 
-// Get severity level for a language
-auto severity = getIgnoreSeverity(TargetLanguage.JavaScript);
-// Returns: IgnoreSeverity.Critical
+### Severity Levels
+
+```d
+enum IgnoreSeverity
+{
+    None,      // No dependency directories
+    Low,       // Small directories, minimal impact
+    Moderate,  // Can cause slowdowns
+    High,      // Major performance issues
+    Critical   // Can cause system hangs
+}
 ```
 
 ## Performance Impact
 
-Properly configured ignore patterns can dramatically improve Builder's performance:
+Properly configured ignore patterns dramatically improve Builder's performance:
 
 | Language | Without Ignores | With Ignores | Improvement |
 |----------|----------------|--------------|-------------|
-| JavaScript (large project) | 45s | 2s | **22.5x** |
-| Python (with venv) | 12s | 1.5s | **8x** |
-| Rust (with target/) | 8s | 1s | **8x** |
-| Java (with .gradle) | 15s | 2s | **7.5x** |
+| JavaScript (large project) | 45s | 2s | 22x |
+| Python (with venv) | 12s | 1.5s | 8x |
+| Rust (with target/) | 8s | 1s | 8x |
+| Java (with .gradle) | 15s | 2s | 7.5x |
 
 ## Best Practices
 
-1. **Always ignore dependency directories** - These can contain millions of files
-2. **Ignore build artifacts** - They're regenerated anyway
-3. **Keep patterns simple** - Complex glob patterns can slow down matching
-4. **Use language-specific patterns** - Builder provides good defaults but customize as needed
-5. **Update after adding dependencies** - New package managers might create new directories
+1. **Always ignore dependency directories** — These can contain millions of files
+2. **Ignore build artifacts** — They're regenerated anyway
+3. **Keep patterns simple** — Complex globs can slow down matching
+4. **Update after adding dependencies** — New package managers create new directories
 
 ## Troubleshooting
 
 ### Builder is scanning too many files
 
-Add more patterns to `.builderignore`, especially dependency directories for your language.
+Add more patterns to `.builderignore`, especially dependency directories.
 
 ### Builder is skipping files it shouldn't
 
-Check if your patterns are too broad. Use more specific patterns or remove overly-aggressive ignores.
+Check if patterns are too broad. Use more specific patterns.
 
-### Changes to .builderignore aren't taking effect
+### Changes aren't taking effect
 
-Builder loads ignore patterns at startup. Restart the build or re-run the command.
+Builder loads patterns at startup. Restart or re-run the command.
 
-## Related
+## See Also
 
-- [CLI Documentation](./CLI.md) - Command-line interface
-- [Configuration](../architecture/DSL.md) - Builderfile syntax
-- [Performance](../features/performance.md) - Performance optimization guide
-
+- [CLI Reference](./CLI.md)
+- [Configuration](../architecture/DSL.md)

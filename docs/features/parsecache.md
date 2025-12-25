@@ -1,256 +1,151 @@
-# Incremental DSL Parse Caching
+# Parse Cache
+
+**Module:** `infrastructure.config.caching`
 
 ## Overview
 
-The parse cache provides high-performance incremental parsing of Builderfiles by caching parsed Abstract Syntax Trees (ASTs). This eliminates the need to relex and reparse unchanged files on every build, dramatically improving build startup time.
+The parse cache stores parsed ASTs (Abstract Syntax Trees) from Builderfiles, eliminating redundant lexing and parsing for unchanged files. This reduces build startup time for incremental builds.
 
-## Design Philosophy
+## Design
 
-### Why Cache AST Instead of Targets?
+### Why Cache AST?
 
-Traditional build systems cache final build artifacts. We innovate by caching at the **parsing level**:
+Traditional systems cache build artifacts. Parse caching operates earlier:
 
-1. **Finer Granularity** - Detect changes at syntax level before expensive semantic analysis
-2. **Context Independence** - AST is workspace-agnostic; semantic analysis may vary by context
-3. **Incremental Analysis** - Future: only re-analyze changed targets within a file
-4. **Clear Separation** - Parsing (syntax) and analysis (semantics) cached independently
+1. **Finer Granularity** - Detect changes at syntax level before semantic analysis
+2. **Context Independence** - AST is workspace-agnostic
+3. **Clear Separation** - Parsing (syntax) and analysis (semantics) cached independently
 
-### Cache Key Strategy
+### Cache Key
 
-**Content-Addressable Storage**: `Key = FilePath + BLAKE3(FileContent)`
+Content-addressable storage: `Key = FilePath + BLAKE3(FileContent)`
 
-This ensures:
+Benefits:
 - Automatic invalidation on content changes
-- No manual cache invalidation needed
+- No manual cache management
 - Cross-machine reproducibility
-- Strong collision resistance
 
 ## Architecture
 
 ### Components
 
-```
-┌─────────────────────────────────────────────────────┐
-│                   ParseCache                         │
-│  ┌──────────────────────────────────────────┐      │
-│  │  In-Memory Cache (LRU)                   │      │
-│  │  ┌────────────────────────────────────┐  │      │
-│  │  │ FilePath → Entry                   │  │      │
-│  │  │   - BuildFile AST                  │  │      │
-│  │  │   - ContentHash (BLAKE3)           │  │      │
-│  │  │   - MetadataHash (size+mtime)      │  │      │
-│  │  │   - Timestamps (created, accessed) │  │      │
-│  │  └────────────────────────────────────┘  │      │
-│  └──────────────────────────────────────────┘      │
-│                      ↕                              │
-│  ┌──────────────────────────────────────────┐      │
-│  │  Disk Cache (Optional)                   │      │
-│  │  - Binary serialization                  │      │
-│  │  - Persistent across builds              │      │
-│  │  - .builder-cache/parse/                 │      │
-│  └──────────────────────────────────────────┘      │
-└─────────────────────────────────────────────────────┘
-```
+**ParseCache** (`config/caching/parse.d`):
+- In-memory LRU cache
+- Optional disk persistence
+- Two-tier validation
+- Thread-safe via mutex
 
-### Data Flow
+**ASTStorage** (`config/caching/storage.d`):
+- Binary AST serialization
+- SIMD-accelerated codec
+- Version-aware format
 
-```
-parseDSL() called
-    ↓
-Is ParseCache available?
-    ↓ Yes
-Check cache: get(filePath)
-    ↓
-Cache hit?
-    ↓ Yes                           ↓ No
-Return cached AST          Lex → Parse → Cache AST
-    ↓                                   ↓
-Semantic Analysis ←──────────────────────
-    ↓
-Return Target[]
+### Cache Entry
+
+```d
+struct Entry
+{
+    BuildFile ast;           // Parsed AST
+    string contentHash;      // BLAKE3 content hash
+    string metadataHash;     // Fast hash (size + mtime)
+    SysTime timestamp;       // Creation time
+    SysTime lastAccess;      // LRU tracking
+}
 ```
 
 ## Two-Tier Validation
 
-The cache uses a sophisticated two-tier validation strategy:
-
 ### Tier 1: Metadata Hash (Fast Path)
 
 ```d
-metadataHash = BLAKE3(fileSize || lastModifiedTime)
+metadataHash = FastHash.hashMetadata(path);  // mtime + size
 ```
 
-- **O(1) constant time** - no file I/O
-- **99%+ accuracy** - catches most changes
-- Checked first on every cache access
+- Constant time (no file I/O for content)
+- Catches most changes
+- Checked first on every access
 
 ### Tier 2: Content Hash (Slow Path)
 
 ```d
-contentHash = BLAKE3(fileContent)
+contentHash = FastHash.hashFile(path);
 ```
 
-- **O(n) linear in file size** - reads entire file
-- **100% accuracy** - detects all content changes
-- Only computed when metadata changes
+- Reads entire file
+- Computed only when metadata differs
+- Guarantees correctness
 
-### Performance Impact
+### Validation Flow
 
-| Scenario | Metadata Check | Content Hash | Speed |
-|----------|---------------|--------------|-------|
-| Unchanged file | ✓ | ✗ | **~100x faster** |
-| Touch (mtime change) | ✓ | ✓ | Same as no cache |
-| Content changed | ✓ | ✓ | Same as no cache |
+1. Check metadata hash against cached value
+2. If unchanged → return cached AST (fast path)
+3. If changed → compute content hash
+4. If content unchanged → update metadata, return cached AST
+5. If content changed → cache miss, reparse
 
-**Result**: Fast path optimization benefits the common case (unchanged files) without sacrificing correctness.
+## Usage
 
-## Binary Serialization
-
-### Format
-
-Custom binary format optimized for speed and compactness:
-
-```
-┌────────────────────────────────────────┐
-│ Version (1 byte)                       │
-├────────────────────────────────────────┤
-│ FilePath (length-prefixed string)      │
-├────────────────────────────────────────┤
-│ Targets Count (4 bytes)                │
-├────────────────────────────────────────┤
-│ Target 1:                              │
-│   - Name (length-prefixed)             │
-│   - Line, Column (8 bytes each)        │
-│   - Fields Count (4 bytes)             │
-│   - Field 1:                           │
-│       - Name (length-prefixed)         │
-│       - Line, Column (8 bytes each)    │
-│       - ExpressionValue (recursive):   │
-│           - Kind discriminator (1 byte)│
-│           - Value (variant)            │
-│   - Field 2...                         │
-│ Target 2...                            │
-└────────────────────────────────────────┘
-```
-
-### Advantages Over JSON
-
-| Metric | Binary | JSON | Improvement |
-|--------|--------|------|-------------|
-| Serialize Speed | 1.2ms | 5.8ms | **4.8x faster** |
-| Deserialize Speed | 0.9ms | 4.2ms | **4.7x faster** |
-| File Size | 842 bytes | 1,847 bytes | **54% smaller** |
-| Zero-copy | Partial | No | String reuse |
-
-## Memory Management
-
-### In-Memory Cache
-
-- **LRU Eviction**: Least Recently Used entries removed first
-- **Max Entries**: Configurable (default: 1000 files)
-- **Memory Estimate**: ~5-20 KB per cached AST (varies by complexity)
-- **Total Memory**: ~5-20 MB for 1000 files (negligible)
-
-### Disk Cache
-
-- **Location**: `.builder-cache/parse/parse-cache.bin`
-- **Persistence**: Survives across builds and reboots
-- **Size**: Typically 1-10 MB for medium projects
-- **Expiration**: No automatic expiration (content-addressed)
-
-## Thread Safety
-
-All operations are **thread-safe**:
-
-- Internal `Mutex` protects all mutable state
-- Concurrent `get()` and `put()` operations safe
-- Lock contention minimal (fast critical sections)
-
-## Configuration
-
-### Environment Variables
-
-```bash
-# Enable/disable parse cache (default: enabled)
-export BUILDER_PARSE_CACHE=true
-
-# Disable for debugging
-export BUILDER_PARSE_CACHE=false
-```
-
-### Programmatic Configuration
+### Basic Usage
 
 ```d
-// Create cache with custom settings
+import infrastructure.config.caching.parse;
+
 auto cache = new ParseCache(
     enableDiskCache: true,
     cacheDir: ".builder-cache/parse",
     maxEntries: 1000
 );
 
-// Use in parsing
-auto result = parseDSL(source, filePath, workspaceRoot, cache);
+// Get cached AST
+auto cached = cache.get("path/to/Builderfile");
+if (cached !is null) {
+    // Cache hit - use cached AST
+    return analyzeAST(*cached, workspaceRoot);
+}
 
-// Get statistics
-auto stats = cache.getStats();
-writeln("Hit rate: ", stats.hitRate, "%");
-writeln("Fast path: ", stats.metadataHitRate, "%");
-
-// Cleanup
-cache.close();
+// Cache miss - parse and store
+auto ast = parseToAST(source, filePath);
+cache.put(filePath, ast);
 ```
 
-## Performance Benchmarks
+### With parseDSL
 
-### Micro-Benchmarks
+```d
+import infrastructure.config.parsing.unified;
 
-Tested on MacBook Pro M1, single Builderfile (5 targets):
+auto result = parse(source, filePath, workspaceRoot, cache);
+```
 
-| Operation | Time | Cache Hit Speedup |
-|-----------|------|-------------------|
-| Lex only | 45 µs | - |
-| Parse only | 120 µs | - |
-| Semantic analysis | 80 µs | (always runs) |
-| **Full parse (no cache)** | **245 µs** | **1x baseline** |
-| **Cache hit (metadata)** | **2.3 µs** | **~106x faster** |
-| Cache hit (content hash) | 48 µs | ~5x faster |
+The `parse` function automatically checks cache before parsing.
 
-### Real-World Benchmarks
+### Configuration
 
-Large monorepo (120 Builderfiles):
+```d
+auto cache = new ParseCache(
+    enableDiskCache: true,           // Persist across builds
+    cacheDir: ".builder-cache/parse",
+    maxEntries: 1000                 // LRU limit
+);
+```
 
-| Scenario | Cold Cache | Warm Cache | Speedup |
-|----------|-----------|------------|---------|
-| Initial parse | 29.4 ms | - | - |
-| No changes | 29.4 ms | **0.3 ms** | **~98x** |
-| 1 file changed | 29.4 ms | 0.5 ms | ~59x |
-| 10 files changed | 29.4 ms | 2.8 ms | ~10x |
+### Environment Variable
 
-**Result**: Parse time reduced from ~30ms to <1ms for typical incremental builds.
+```bash
+export BUILDER_PARSE_CACHE=true   # Enable (default)
+export BUILDER_PARSE_CACHE=false  # Disable for debugging
+```
 
-## Statistics and Monitoring
-
-### Cache Statistics
+## Statistics
 
 ```d
 auto stats = cache.getStats();
+writefln("Hit rate: %.1f%%", stats.hitRate);
+writefln("Fast path rate: %.1f%%", stats.metadataHitRate);
 
-writeln("Total Entries: ", stats.totalEntries);
-writeln("Cache Hits: ", stats.hits);
-writeln("Cache Misses: ", stats.misses);
-writeln("Hit Rate: ", stats.hitRate, "%");
-writeln("Metadata Hits: ", stats.metadataHits);
-writeln("Content Hashes: ", stats.contentHashes);
-writeln("Fast Path Rate: ", stats.metadataHitRate, "%");
-```
-
-### Pretty Print
-
-```d
 cache.printStats();
 ```
 
-Output:
+**Output:**
 ```
 ╔════════════════════════════════════════════════════════════╗
 ║           Parse Cache Statistics                           ║
@@ -266,7 +161,63 @@ Output:
 ╚════════════════════════════════════════════════════════════╝
 ```
 
-## Integration Points
+## Binary Serialization
+
+### Format
+
+```
+Version (1 byte)
+FilePath (length-prefixed string)
+Targets Count (4 bytes)
+Target[]:
+  - Name (length-prefixed string)
+  - Line, Column (8 bytes each)
+  - Fields Count (4 bytes)
+  - Field[]:
+    - Name (length-prefixed string)
+    - Line, Column (8 bytes each)
+    - Expression (recursive, tagged union)
+```
+
+### Implementation
+
+**ASTStorage** provides:
+- SIMD-accelerated serialization via `Codec`
+- Compile-time code generation
+- Varint encoding for efficiency
+- Forward/backward compatibility via versioning
+
+```d
+// Serialize
+ubyte[] data = ASTStorage.serialize(ast);
+
+// Deserialize
+BuildFile ast = ASTStorage.deserialize(data);
+```
+
+## Thread Safety
+
+All operations are protected by internal mutex:
+- Concurrent `get()` and `put()` operations are safe
+- Lock contention minimal (fast critical sections)
+- Suitable for parallel builds
+
+## Memory Management
+
+### In-Memory Cache
+
+- LRU eviction when `maxEntries` exceeded
+- Typical memory: ~5-20 KB per cached AST
+- Automatic cleanup on scope exit
+
+### Disk Cache
+
+- Location: `.builder-cache/parse/`
+- Persists across builds
+- Loaded on initialization
+- Flushed on `close()`
+
+## Integration
 
 ### ConfigParser
 
@@ -275,27 +226,20 @@ class ConfigParser
 {
     private static ParseCache sharedParseCache;
     
-    static Result!(WorkspaceConfig, BuildError) parseWorkspace(
-        in string root,
-        in AggregationPolicy policy = AggregationPolicy.CollectAll)
+    static Result!(WorkspaceConfig, BuildError) parseWorkspace(string root)
     {
-        // Initialize shared cache
         if (sharedParseCache is null)
-        {
             sharedParseCache = new ParseCache();
-        }
         
-        // Parse Builderfiles with caching
         foreach (buildFile; findBuildFiles(root))
         {
             auto result = parseBuildFile(buildFile, root);
-            // ... handle result
+            // ...
         }
         
         return Ok(config);
     }
     
-    // Cleanup at end of build
     static void closeParseCache()
     {
         if (sharedParseCache !is null)
@@ -310,99 +254,61 @@ class ConfigParser
 ### parseDSL Function
 
 ```d
-Result!(Target[], BuildError) parseDSL(
+BuildResult!BuildFile parse(
     string source,
     string filePath,
     string workspaceRoot,
-    ParseCache parseCache = null)
+    ParseCache cache = null)
 {
     // Try cache first
-    if (parseCache !is null)
+    if (cache !is null)
     {
-        auto cached = parseCache.get(filePath);
+        auto cached = cache.get(filePath);
         if (cached !is null)
-        {
-            // Cache hit - skip lex and parse
-            return analyzeAST(*cached, workspaceRoot);
-        }
+            return Ok!(BuildFile, BuildError)(*cached);
     }
     
-    // Cache miss - parse normally
-    auto ast = parseToAST(source, filePath);
+    // Lex and parse
+    auto lexResult = lex(source, filePath);
+    if (lexResult.isErr) return lexResult.mapErr();
+    
+    auto parser = new UnifiedParser(lexResult.unwrap(), filePath, workspaceRoot);
+    auto parseResult = parser.parse();
     
     // Cache result
-    if (parseCache !is null && ast.targets.length > 0)
-    {
-        parseCache.put(filePath, ast);
-    }
+    if (cache !is null && parseResult.isOk)
+        cache.put(filePath, parseResult.unwrap());
     
-    // Semantic analysis
-    return analyzeAST(ast, workspaceRoot);
+    return parseResult;
 }
 ```
 
-## Testing
+## Cleanup
 
-Comprehensive test suite in `tests/unit/config/parse_cache.d`:
+Always close the cache to ensure disk persistence:
 
-- ✓ Basic caching (hit/miss behavior)
-- ✓ Cache invalidation (file changes)
-- ✓ Two-tier validation (metadata vs content)
-- ✓ LRU eviction
-- ✓ AST serialization roundtrip
-- ✓ Concurrent access (thread safety)
+```d
+cache.close();
 
-Run tests:
-```bash
-./bin/test-runner tests/unit/config/parse_cache.d
+// Or via ConfigParser
+ConfigParser.closeParseCache();
 ```
 
-## Limitations and Future Work
+## Limitations
 
-### Current Limitations
+1. **In-memory only during build** - Disk cache loaded at start, flushed at end
+2. **No compression** - Binary format uncompressed (speed over size)
+3. **Single-machine** - Not distributed
 
-1. **No cross-machine sharing** - Content-addressed but not distributed
-2. **No compression** - Binary format not compressed (trade speed for size)
-3. **No incremental semantic analysis** - Always re-analyzes entire file
+## See Also
 
-### Future Enhancements
-
-1. **Distributed cache** - Share cache across CI/developer machines
-2. **Compression** - LZ4/Zstd for disk cache (keep memory uncompressed)
-3. **Incremental semantic analysis** - Only re-analyze changed targets
-4. **Watch mode** - File system watcher for automatic invalidation
-5. **Cache warming** - Pre-populate cache in background
-6. **Statistics export** - Prometheus metrics for monitoring
-
-## Best Practices
-
-### For Users
-
-1. **Enable by default** - Performance benefit with no downsides
-2. **Monitor statistics** - Use `--verbose` to see cache hits
-3. **Clean periodically** - `bldr clean` removes old cache
-
-### For Developers
-
-1. **Always close cache** - Call `ConfigParser.closeParseCache()` at end
-2. **Pass cache through** - Don't create multiple cache instances
-3. **Handle null cache** - Make caching optional in APIs
-4. **Test without cache** - Ensure correctness doesn't depend on caching
-
-## Related Documentation
-
-- [DSL.md](../architecture/DSL.md) - DSL syntax and parsing architecture
-- [Cache Design](../architecture/cachedesign.md) - Build action caching
-- [Performance](./performance.md) - Overall performance optimizations
+- [DSL Syntax](../architecture/DSL.md)
+- [Cache Architecture](../architecture/cachedesign.md)
+- [Incremental Analysis](incremental.md)
 
 ## Implementation Files
 
-- `source/infrastructure/config/caching/parse.d` - Main ParseCache class
-- `source/infrastructure/config/caching/storage.d` - Binary AST serialization
+- `source/infrastructure/config/caching/parse.d` - ParseCache class
+- `source/infrastructure/config/caching/storage.d` - ASTStorage serialization
 - `source/infrastructure/config/caching/package.d` - Module exports
-- `source/infrastructure/config/parsing/unified.d` - Integration with parseDSL()
-- `source/infrastructure/config/parsing/parser.d` - Integration with ConfigParser
-- `tests/unit/config/parse_cache.d` - Comprehensive test suite
-
-**Total**: ~1,200 lines of sophisticated, production-ready code.
-
+- `source/infrastructure/config/parsing/unified.d` - Integration with parse()

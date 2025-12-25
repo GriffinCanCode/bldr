@@ -1,0 +1,175 @@
+topic: cdc
+category: concepts/core
+summary: "Content-Defined Chunking with FastCDC for 80-95% bandwidth savings on large artifacts"
+keywords: ["fastcdc", "chunking", "delta", "transfer", "bandwidth", "gear", "rolling-hash", "large-artifact"]
+
+definition: |
+  Content-Defined Chunking (CDC) breaks large files into variable-size chunks based on content
+  fingerprints rather than fixed boundaries. Builder uses FastCDC with gear-based rolling hash
+  for 2-3x faster chunking than traditional Rabin fingerprinting.
+  
+  For artifacts >100MB, only changed chunks are transferred between local/remote caches,
+  achieving 80-95% bandwidth savings for typical incremental changes.
+
+architecture:
+  components:
+    - name: "FastCDC"
+      purpose: "Gear-based content-defined chunking algorithm"
+      location: "infrastructure/utils/files/cdc.d"
+      features:
+        - "Normalized chunking for consistent boundaries"
+        - "Configurable chunk sizes (artifact/large/small)"
+        - "BLAKE3 chunk hashing for integrity"
+        
+    - name: "ChunkedCAS"
+      purpose: "Chunk-aware content-addressable storage"
+      location: "engine/caching/storage/chunked.d"
+      features:
+        - "Automatic chunking for blobs >100MB"
+        - "Separate storage for chunks/manifests"
+        - "Chunk deduplication across artifacts"
+        
+    - name: "DeltaTransfer"
+      purpose: "Delta transfer protocol for remote cache"
+      location: "engine/caching/distributed/remote/delta.d"
+      features:
+        - "Query missing chunks from server"
+        - "Upload only new chunks"
+        - "Manifest-based blob reconstruction"
+
+  chunk_configs:
+    artifact:
+      min: "2KB"
+      avg: "16KB"
+      max: "64KB"
+      use_case: "Standard build artifacts"
+      
+    large:
+      min: "8KB"
+      avg: "64KB"
+      max: "256KB"
+      use_case: "Large binaries >100MB"
+      
+    small:
+      min: "1KB"
+      avg: "4KB"
+      max: "16KB"
+      use_case: "Fine-grained deduplication"
+
+how_it_works:
+  fastcdc_algorithm: |
+    1. Initialize gear hash table (256 pseudo-random 64-bit values)
+    2. Slide window over data, updating fingerprint: fp = (fp << 1) + gear[byte]
+    3. Phase 1 (minSize to avgSize): Use strict mask - fewer boundaries
+    4. Phase 2 (avgSize to maxSize): Use relaxed mask - more boundaries
+    5. Force boundary at maxSize if not found
+    
+  chunking_flow: |
+    1. Check if data size >= 100MB threshold
+    2. If yes: chunk using FastCDC with large config
+    3. Hash each chunk with BLAKE3
+    4. Create manifest with chunk hashes, offsets, lengths
+    5. Store chunks individually in CAS
+    6. Store manifest linking blob hash to chunks
+    
+  delta_transfer_flow: |
+    1. Client computes local manifest (or retrieves cached)
+    2. Client sends chunk hashes to server
+    3. Server responds with missing chunk hashes
+    4. Client uploads only missing chunks (~5-20% typically)
+    5. Server stores manifest for reassembly
+    6. Bandwidth savings: 80-95%
+
+key_benefits:
+  - "80-95% bandwidth savings for incremental changes"
+  - "2-3x faster than Rabin fingerprinting (gear hash)"
+  - "Chunk deduplication across similar artifacts"
+  - "Automatic for large files (>100MB threshold)"
+  - "Transparent API - drop-in replacement"
+  - "BLAKE3 integrity verification per chunk"
+
+performance:
+  chunking_speed: "~500MB/s (gear hash + BLAKE3)"
+  chunk_100mb: "~200ms"
+  delta_query: "O(n) where n = chunk count"
+  reassembly: "Linear with file size"
+  
+bandwidth_savings:
+  typical_code_change:
+    scenario: "5% of 150MB binary modified"
+    without_cdc: "150MB transfer"
+    with_cdc: "~10MB transfer"
+    savings: "93%"
+    
+  library_update:
+    scenario: "20% of shared library changed"
+    without_cdc: "100MB transfer"
+    with_cdc: "~25MB transfer"
+    savings: "75%"
+    
+  ci_pipeline:
+    scenario: "10 stages, 500MB artifacts, 10% change/stage"
+    without_cdc: "~10GB total transfer"
+    with_cdc: "~1.5GB total transfer"
+    savings: "85%"
+
+usage_examples:
+  - description: "Store large artifact with automatic chunking"
+    code: |
+      import engine.caching.storage.chunked;
+      
+      auto store = new ChunkedCAS(".builder-cache");
+      auto hash = store.put(largeBinaryData).unwrap();  // Auto-chunks if >100MB
+      
+  - description: "Delta upload to remote cache"
+    code: |
+      import engine.caching.distributed.remote.delta;
+      
+      auto delta = new DeltaTransfer(transport, localStore);
+      auto result = delta.upload(hash, data);
+      writeln("Saved: ", result.unwrap().savingsPercent(), "%");
+      
+  - description: "Check chunk statistics"
+    code: |
+      auto stats = store.getStats();
+      writeln("Chunks stored: ", stats.chunksStored);
+      writeln("Dedup ratio: ", stats.dedupRatio(), "%");
+
+storage_layout: |
+  .builder-cache/
+  ├── blobs/          # Small blobs (whole-file CAS)
+  │   └── ab/cd...
+  ├── chunks/         # Individual chunks (sharded)
+  │   ├── 12/
+  │   │   └── 12abc...
+  │   └── 34/
+  │       └── 34def...
+  └── manifests/      # Chunk manifests for large blobs
+      ├── ab/
+      │   └── abcd...manifest
+      └── cd/
+          └── cdef...manifest
+
+threshold: "100MB - artifacts larger than this use chunked storage"
+
+related: [deduplication, remote-cache, blake3, caching, grpc-transport]
+
+comparison:
+  vs_rabin:
+    speed: "FastCDC 2-3x faster (gear hash is simpler)"
+    quality: "Comparable chunk boundaries"
+    memory: "Similar (both use rolling window)"
+    
+  vs_fixed_chunks:
+    problem: "Insertions shift all boundaries"
+    solution: "Content-defined boundaries adapt"
+    
+  vs_rsync:
+    similarity: "Both use rolling hash for dedup"
+    difference: "FastCDC optimized for storage, rsync for sync"
+
+next_steps: |
+  - See 'bldr explain deduplication' for CAS dedup architecture
+  - See 'bldr explain remote-cache' for distributed caching
+  - See 'bldr explain grpc-transport' for high-throughput transfers
+
