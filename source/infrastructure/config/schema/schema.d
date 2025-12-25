@@ -226,6 +226,7 @@ enum TargetLanguage
     PHP,
     Scala,
     Elixir,
+    Gleam,
     Nim,
     Lua,
     R,

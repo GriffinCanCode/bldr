@@ -543,211 +543,168 @@ struct ExplainCommand
     }
     
     /// Simple YAML parser for our specific format
-    /// This is a minimal parser for the specific YAML structure we use
+    /// Handles nested sections, arrays, multiline strings, and key-value pairs
     private static JSONValue parseSimpleYAML(string content) @system
     {
         JSONValue result;
         result.object = null;
         
         string[] lines = content.split("\n");
-        JSONValue* currentSection = &result;
-        string[] sectionStack;
-        int[] indentStack = [0];
+        
+        // Track section navigation with (section_ptr, indent_level) pairs
+        struct StackEntry { JSONValue* section; int indent; }
+        StackEntry[] stack = [StackEntry(&result, -1)];
         
         string currentMultilineKey = null;
-        bool multilineIsArray = false;
         int multilineIndent = -1;
+        JSONValue* multilineTarget = null;
         
         foreach (line; lines)
         {
             auto stripped = line.strip();
-            
-            // Handle blank lines
-            if (stripped.length == 0)
+            if (stripped.length == 0 || stripped.startsWith("#"))
             {
-                if (currentMultilineKey !is null || multilineIsArray)
+                // Append newline to multiline if active
+                if (currentMultilineKey !is null && multilineTarget !is null)
                 {
-                    string text = "\n";
-                    if (multilineIsArray)
+                    if (currentMultilineKey in (*multilineTarget).object &&
+                        (*multilineTarget)[currentMultilineKey].type == JSONType.string)
                     {
-                        auto arr = (*currentSection).array;
-                        if (arr.length > 0)
-                        {
-                            // Check if last item is string
-                            if (arr[$-1].type == JSONType.string)
-                            {
-                                string current = arr[$-1].str;
-                                arr[$-1] = JSONValue(current ~ text);
-                                (*currentSection).array = arr;
-                            }
-                        }
-                    }
-                    else if (currentMultilineKey in (*currentSection).object)
-                    {
-                        string current = (*currentSection).object[currentMultilineKey].str;
-                        (*currentSection).object[currentMultilineKey] = JSONValue(current ~ text);
+                        string cur = (*multilineTarget)[currentMultilineKey].str;
+                        (*multilineTarget).object[currentMultilineKey] = JSONValue(cur ~ "\n");
                     }
                 }
                 continue;
             }
             
-            if (stripped.startsWith("#"))
-                continue;
+            auto indent = cast(int)(line.length - line.stripLeft().length);
             
-            auto indent = line.length - line.stripLeft().length;
-            
-            // Check continuation of multiline string
-            if ((currentMultilineKey !is null || multilineIsArray) && multilineIndent != -1)
+            // Handle multiline string continuation
+            if (currentMultilineKey !is null && multilineIndent != -1 && indent > multilineIndent)
             {
-                if (indent > multilineIndent)
+                if (multilineTarget !is null && currentMultilineKey in (*multilineTarget).object)
                 {
-                    string text = stripped ~ "\n";
-                    
-                    if (multilineIsArray)
-                    {
-                        auto arr = (*currentSection).array;
-                        if (arr.length > 0 && arr[$-1].type == JSONType.string)
-                        {
-                            string current = arr[$-1].str;
-                            arr[$-1] = JSONValue(current ~ text);
-                            (*currentSection).array = arr;
-                        }
-                    }
-                    else if (currentMultilineKey in (*currentSection).object)
-                    {
-                        string current = (*currentSection).object[currentMultilineKey].str;
-                        (*currentSection).object[currentMultilineKey] = JSONValue(current ~ text);
-                    }
-                    continue;
+                    string cur = (*multilineTarget)[currentMultilineKey].str;
+                    (*multilineTarget).object[currentMultilineKey] = JSONValue(cur ~ stripped ~ "\n");
                 }
-                else
-                {
-                    // End of block
-                    currentMultilineKey = null;
-                    multilineIsArray = false;
-                    multilineIndent = -1;
-                }
+                continue;
+            }
+            else if (currentMultilineKey !is null)
+            {
+                // End multiline mode
+                currentMultilineKey = null;
+                multilineIndent = -1;
+                multilineTarget = null;
             }
             
-            if (stripped.endsWith(":"))
+            // Pop stack to correct indent level
+            while (stack.length > 1 && indent <= stack[$ - 1].indent)
+                stack = stack[0 .. $ - 1];
+            
+            auto currentSection = stack[$ - 1].section;
+            
+            // Ensure current section is an object (not array or null type)
+            if ((*currentSection).type != JSONType.object)
+                (*currentSection).object = null;
+            
+            if (stripped.endsWith(":") && !stripped.canFind(": "))
             {
-                // Section or key
-                auto key = stripped[0 .. $ - 1];
-                
-                if (indent <= indentStack[$ - 1] && sectionStack.length > 0)
-                {
-                    // Pop stack
-                    while (indentStack.length > 1 && indent <= indentStack[$ - 1])
-                    {
-                        sectionStack = sectionStack[0 .. $ - 1];
-                        indentStack = indentStack[0 .. $ - 1];
-                        currentSection = navigateToSection(&result, sectionStack);
-                    }
-                }
-                
+                // New section (no value after colon)
+                auto key = stripped[0 .. $ - 1].strip();
                 (*currentSection).object[key] = JSONValue();
                 (*currentSection)[key].object = null;
-                
-                sectionStack ~= key;
-                indentStack ~= cast(int)indent;
-                currentSection = &(*currentSection)[key];
+                stack ~= StackEntry(&(*currentSection)[key], indent);
             }
             else if (stripped.startsWith("- "))
             {
                 // Array item
                 auto valueStr = stripped[2 .. $].strip();
-                JSONValue val;
                 
-                // Check for object in array (e.g. "- key: value")
-                // But ignore : inside quotes
-                long sepIndex = -1;
-                bool inQuote = false;
-                for (size_t i = 0; i < valueStr.length - 1; i++)
-                {
-                    if (valueStr[i] == '"' && (i == 0 || valueStr[i-1] != '\\'))
-                        inQuote = !inQuote;
-                    
-                    if (!inQuote && valueStr[i] == ':' && valueStr[i+1] == ' ')
-                    {
-                        sepIndex = i;
-                        break;
-                    }
-                }
-                
-                if (sepIndex != -1)
-                {
-                    auto key = valueStr[0 .. sepIndex].strip();
-                    auto v = valueStr[sepIndex + 2 .. $].strip();
-                    if (v.startsWith("\"") && v.endsWith("\""))
-                        v = v[1 .. $ - 1];
-                        
-                    val = JSONValue([key: JSONValue(v)]);
-                }
-                else
-                {
-                    if (valueStr.startsWith("\"") && valueStr.endsWith("\""))
-                        valueStr = valueStr[1 .. $ - 1];
-                        
-                    val = JSONValue(valueStr);
-                    
-                    // Handle multiline array item
-                    if (valueStr == "|")
-                    {
-                        val = JSONValue("");
-                        multilineIsArray = true;
-                        multilineIndent = cast(int)indent;
-                    }
-                }
-                
+                // Ensure we're working with an array
                 if ((*currentSection).type != JSONType.array)
                     (*currentSection).array = null;
                 
-                (*currentSection).array ~= val;
-            }
-            else if (stripped.canFind(": "))
-            {
-                // Key-value pair
-                auto parts = stripped.split(": ");
-                if (parts.length >= 2)
+                // Check for key: value in array item (object start)
+                long colonIdx = findUnquotedColon(valueStr);
+                
+                if (colonIdx > 0)
                 {
-                    auto key = parts[0].strip();
-                    auto value = parts[1 .. $].join(": ").strip();
+                    auto key = valueStr[0 .. colonIdx].strip();
+                    auto val = valueStr[colonIdx + 1 .. $].strip();
+                    if (val.startsWith("\"") && val.endsWith("\"") && val.length > 1)
+                        val = val[1 .. $ - 1];
                     
-                    // Handle multiline strings (|)
-                    if (value == "|")
+                    // Handle multiline value in array object
+                    if (val == "|")
                     {
-                        JSONValue empty = JSONValue("");
+                        JSONValue obj;
+                        obj.object = null;
+                        obj.object[key] = JSONValue("");
+                        (*currentSection).array ~= obj;
                         currentMultilineKey = key;
-                        multilineIsArray = false;
-                        multilineIndent = cast(int)indent;
-                        
-                        if ((*currentSection).type == JSONType.array && (*currentSection).array.length > 0 && 
-                            (*currentSection).array[$ - 1].type == JSONType.object)
-                            (*currentSection).array[$ - 1].object[key] = empty;
-                        else
-                            (*currentSection).object[key] = empty;
-                        continue;
-                    }
-                    
-                    if (value.startsWith("\"") && value.endsWith("\""))
-                        value = value[1 .. $ - 1];
-                    
-                    // If we're in an array and the last item is an object, assume this key belongs to it
-                    // This handles YAML list of objects where keys are on subsequent lines
-                    if ((*currentSection).type == JSONType.array && (*currentSection).array.length > 0 && 
-                        (*currentSection).array[$ - 1].type == JSONType.object)
-                    {
-                        (*currentSection).array[$ - 1].object[key] = JSONValue(value);
+                        multilineIndent = indent;
+                        multilineTarget = &(*currentSection).array[$ - 1];
                     }
                     else
                     {
-                        (*currentSection).object[key] = JSONValue(value);
+                        JSONValue obj;
+                        obj.object = null;
+                        obj.object[key] = JSONValue(val);
+                        (*currentSection).array ~= obj;
+                        // Push to stack so subsequent keys at deeper indent add to this object
+                        stack ~= StackEntry(&(*currentSection).array[$ - 1], indent);
                     }
+                }
+                else
+                {
+                    // Plain array item (string)
+                    if (valueStr.startsWith("\"") && valueStr.endsWith("\"") && valueStr.length > 1)
+                        valueStr = valueStr[1 .. $ - 1];
+                    (*currentSection).array ~= JSONValue(valueStr);
+                }
+            }
+            else if (stripped.canFind(": "))
+            {
+                // Key: value pair
+                long colonIdx = findUnquotedColon(stripped);
+                if (colonIdx > 0)
+                {
+                    auto key = stripped[0 .. colonIdx].strip();
+                    auto value = stripped[colonIdx + 1 .. $].strip();
+                    
+                    // Multiline string
+                    if (value == "|")
+                    {
+                        (*currentSection).object[key] = JSONValue("");
+                        currentMultilineKey = key;
+                        multilineIndent = indent;
+                        multilineTarget = currentSection;
+                        continue;
+                    }
+                    
+                    // Strip quotes
+                    if (value.startsWith("\"") && value.endsWith("\"") && value.length > 1)
+                        value = value[1 .. $ - 1];
+                    
+                    (*currentSection).object[key] = JSONValue(value);
                 }
             }
         }
         
         return result;
+    }
+    
+    /// Find first unquoted colon followed by space or end
+    private static long findUnquotedColon(string s) @safe pure nothrow
+    {
+        bool inQuote = false;
+        foreach (i, c; s)
+        {
+            if (c == '"') inQuote = !inQuote;
+            else if (!inQuote && c == ':' && (i + 1 >= s.length || s[i + 1] == ' '))
+                return cast(long)i;
+        }
+        return -1;
     }
     
     /// Navigate to a section in nested JSON

@@ -45,6 +45,7 @@ shared static this()
     aliases[TargetLanguage.PHP] = ["php"];
     aliases[TargetLanguage.Scala] = ["scala"];
     aliases[TargetLanguage.Elixir] = ["elixir", "ex"];
+    aliases[TargetLanguage.Gleam] = ["gleam"];
     aliases[TargetLanguage.Nim] = ["nim"];
     aliases[TargetLanguage.Lua] = ["lua"];
     aliases[TargetLanguage.R] = ["r"];
@@ -136,6 +137,9 @@ shared static this()
     // Elixir
     extensions[".ex"] = TargetLanguage.Elixir;
     extensions[".exs"] = TargetLanguage.Elixir;
+    
+    // Gleam
+    extensions[".gleam"] = TargetLanguage.Gleam;
     
     // Nim
     extensions[".nim"] = TargetLanguage.Nim;
@@ -305,6 +309,7 @@ string getLanguageLabel(TargetLanguage language)
         case TargetLanguage.PHP: return "PHP";
         case TargetLanguage.Scala: return "Scala";
         case TargetLanguage.Elixir: return "Elixir";
+        case TargetLanguage.Gleam: return "Gleam";
         case TargetLanguage.Nim: return "Nim";
         case TargetLanguage.Lua: return "Lua";
         case TargetLanguage.R: return "R";
@@ -354,6 +359,7 @@ LanguageCategory getLanguageCategory(TargetLanguage language)
         case TargetLanguage.Lua:
         case TargetLanguage.R:
         case TargetLanguage.Elixir:
+        case TargetLanguage.Gleam:
             return LanguageCategory.Scripting;
             
         case TargetLanguage.Java:
