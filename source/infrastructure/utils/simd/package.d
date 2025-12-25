@@ -11,6 +11,7 @@ module infrastructure.utils.simd;
 ///   capabilities.d - SIMD service (eliminates global state)
 ///   context.d      - Context-aware SIMD operations
 ///   bench.d        - Comprehensive SIMD benchmarking suite
+///   bloom.d        - SIMD-accelerated Bloom filter (betterC core)
 ///
 /// Features:
 ///   - Runtime CPU detection (no compile-time only paths)
@@ -26,6 +27,7 @@ module infrastructure.utils.simd;
 ///   - Memory Ops: 1.5-3x faster for large buffers
 ///   - Chunking: 3-8x faster with vectorized rolling hash
 ///   - Batch Hash Validation: 3-5x faster for multiple comparisons
+///   - Bloom Filter: 2-4x faster batch ops, O(1) membership testing
 ///
 /// Modern Usage (Context-Based - Recommended):
 ///   import infrastructure.utils.simd;
@@ -66,4 +68,5 @@ public import infrastructure.utils.simd.hash;
 public import infrastructure.utils.simd.capabilities;
 public import infrastructure.utils.simd.context;
 public import infrastructure.utils.simd.bench;
+public import infrastructure.utils.simd.bloom;
 

@@ -37,7 +37,7 @@ else ifeq ($(UNAME_M),aarch64)
 endif
 
 # Source files
-SOURCES = cpu_detect.c blake3_dispatch.c simd_ops.c
+SOURCES = cpu_detect.c blake3_dispatch.c simd_ops.c bloom.c
 
 # x86/x64 SIMD sources
 ifeq ($(ARCH_X86),1)
@@ -89,6 +89,9 @@ blake3_dispatch.o: blake3_dispatch.c blake3_simd.h cpu_detect.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 simd_ops.o: simd_ops.c simd_ops.h cpu_detect.h
+	$(CC) $(CFLAGS) -c $< -o $@
+
+bloom.o: bloom.c bloom.h cpu_detect.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # x86 SIMD-specific compilation

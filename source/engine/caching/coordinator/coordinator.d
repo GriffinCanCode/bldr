@@ -18,6 +18,7 @@ import frontend.cli.events.events : EventPublisher;
 import infrastructure.errors;
 import infrastructure.utils.logging.logger;
 import infrastructure.utils.files.directories : ensureDirectoryWithGitignore;
+import infrastructure.utils.simd.bloom : BloomFilter;
 
 /// Unified cache coordinator orchestrating all caching tiers
 /// Single source of truth for cache operations with:
@@ -40,6 +41,8 @@ final class CacheCoordinator
     private SourceRepository sourceRepo;
     private SourceTracker sourceTracker;
     private DedupStore dedupStore;  // CAS deduplication for action outputs
+    private BloomFilter targetBloom; // Fast target lookup prefilter
+    private BloomFilter actionBloom; // Fast action lookup prefilter
     private EventPublisher publisher;
     private Mutex coordinatorMutex;
     private CoordinatorConfig config;
@@ -93,12 +96,24 @@ final class CacheCoordinator
         
         // Initialize garbage collector
         this.gc = new CacheGarbageCollector(cas, publisher);
+        
+        // Initialize bloom filters for fast negative lookups
+        // Sized for typical project scale, 0.1% FPR
+        this.targetBloom = BloomFilter.create(50_000, 0.001);
+        this.actionBloom = BloomFilter.create(100_000, 0.001);
     }
     
     /// Check if target is cached (checks all tiers)
     bool isCached(string targetId, const(string)[] sources, const(string)[] deps) @system
     {
         auto timer = StopWatch(AutoStart.yes);
+        
+        // Fast path: bloom filter says definitely not cached
+        if (targetBloom.valid && !targetBloom.mayContain(targetId))
+        {
+            emitEvent!CacheMissEvent(targetId, timer.peek());
+            return false;
+        }
         
         // Check local target cache first (fastest)
         if (targetCache.isCached(targetId, sources, deps))
@@ -204,6 +219,11 @@ final class CacheCoordinator
         synchronized (coordinatorMutex)
         {
             targetCache.update(targetId, sources, deps, outputHash);
+            
+            // Add to bloom filter for fast future lookups
+            if (targetBloom.valid)
+                targetBloom.insert(targetId);
+            
             emitEvent!CacheUpdateEvent(targetId, 0, timer.peek());
             
             // Push to remote cache asynchronously if configured
@@ -219,10 +239,19 @@ final class CacheCoordinator
     bool isActionCached(ActionId actionId, const(string)[] inputs, const(string[string]) metadata) @system
     {
         auto timer = StopWatch(AutoStart.yes);
+        immutable actionKey = actionId.toString();
+        
+        // Fast path: bloom filter says definitely not cached
+        if (actionBloom.valid && !actionBloom.mayContain(actionKey))
+        {
+            emitEvent!ActionCacheEvent(CacheEventType.ActionMiss, actionKey, actionId.targetId, timer.peek());
+            return false;
+        }
+        
         immutable cached = actionCache.isCached(actionId, inputs, metadata);
         emitEvent!ActionCacheEvent(
             cached ? CacheEventType.ActionHit : CacheEventType.ActionMiss,
-            actionId.toString(), actionId.targetId, timer.peek()
+            actionKey, actionId.targetId, timer.peek()
         );
         return cached;
     }
@@ -293,7 +322,13 @@ final class CacheCoordinator
     /// Record action result
     void recordAction(ActionId actionId, const(string)[] inputs, const(string)[] outputs,
                      const(string[string]) metadata, bool success) @system
-        => actionCache.update(actionId, inputs, outputs, metadata, success);
+    {
+        actionCache.update(actionId, inputs, outputs, metadata, success);
+        
+        // Add to bloom filter for fast future lookups
+        if (actionBloom.valid)
+            actionBloom.insert(actionId.toString());
+    }
     
     /// Flush all caches to disk
     void flush() @system

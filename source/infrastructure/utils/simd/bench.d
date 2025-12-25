@@ -7,6 +7,7 @@ import std.algorithm;
 import infrastructure.utils.simd.detection;
 import infrastructure.utils.simd.dispatch;
 import infrastructure.utils.simd.ops;
+import infrastructure.utils.simd.bloom;
 import infrastructure.utils.crypto.blake3;
 import infrastructure.utils.benchmarking.bench;
 
@@ -220,6 +221,112 @@ struct SIMDBench
         writefln("Files/sec:  %,d", cast(ulong)(numFiles * 10.0 / (result.avgTime.total!"nsecs" / 1e9)));
     }
     
+    /// Benchmark Bloom filter operations
+    static void benchmarkBloomFilter()
+    {
+        writeln("\n╔══════════════════════════════════════════════════════════════╗");
+        writeln("║         BLOOM FILTER SIMD BENCHMARK                          ║");
+        writeln("╚══════════════════════════════════════════════════════════════╝");
+        
+        // Test different filter sizes
+        enum size_t[] sizes = [10_000, 100_000, 1_000_000];
+        
+        foreach (size; sizes)
+        {
+            writefln("\n--- Filter for %,d items (1%% FPR) ---", size);
+            
+            auto filter = BloomFilter.create(size, 0.01);
+            auto stats = filter.stats();
+            writefln("  Memory: %,d bytes (%.2f KB)", stats.memoryBytes, stats.memoryBytes / 1024.0);
+            writefln("  Hash functions: %d", stats.numHashes);
+            
+            // Prepare test data
+            auto hashes = new ulong[1000];
+            foreach (i, ref h; hashes)
+                h = i * 0x9e3779b97f4a7c15UL;
+            
+            // Benchmark insert
+            {
+                auto bench = Benchmark("Insert (1K items)", 1000);
+                bench.run(() {
+                    foreach (h; hashes)
+                        filter.insertHash(h);
+                });
+                auto result = bench.result();
+                writefln("  Insert:     %s (%.2f M ops/s)", 
+                    BenchmarkResult.formatDuration(result.avgTime),
+                    1000.0 * 1000 / (result.avgTime.total!"nsecs" / 1e3));
+            }
+            
+            // Benchmark single lookup
+            {
+                auto bench = Benchmark("Lookup (1K items)", 10_000);
+                bench.run(() {
+                    foreach (h; hashes)
+                        cast(void)filter.mayContainHash(h);
+                });
+                auto result = bench.result();
+                writefln("  Lookup:     %s (%.2f M ops/s)",
+                    BenchmarkResult.formatDuration(result.avgTime),
+                    1000.0 * 10_000 / (result.avgTime.total!"nsecs" / 1e3));
+            }
+            
+            // Benchmark batch lookup (SIMD)
+            {
+                auto batch = hashes[0 .. 64];  // Max batch size
+                auto bench = Benchmark("Batch (64 items)", 10_000);
+                bench.run(() {
+                    cast(void)filter.mayContainBatch(batch);
+                });
+                auto result = bench.result();
+                writefln("  Batch (64): %s (%.2f M ops/s)",
+                    BenchmarkResult.formatDuration(result.avgTime),
+                    64.0 * 10_000 / (result.avgTime.total!"nsecs" / 1e3));
+            }
+            
+            // Benchmark count matches
+            {
+                auto bench = Benchmark("Count (1K items)", 1000);
+                bench.run(() {
+                    cast(void)filter.countMatches(hashes);
+                });
+                auto result = bench.result();
+                writefln("  Count:      %s (%.2f M ops/s)",
+                    BenchmarkResult.formatDuration(result.avgTime),
+                    1000.0 * 1000 / (result.avgTime.total!"nsecs" / 1e3));
+            }
+        }
+        
+        // Real-world scenario: cache lookup
+        writeln("\n--- Real-World: Cache Prefilter (100K entries) ---");
+        {
+            auto filter = BloomFilter.create(100_000, 0.01);
+            
+            // Insert 100K hashes
+            foreach (i; 0 .. 100_000)
+                filter.insertHash(i * 0xdeadbeefUL);
+            
+            // Query mixed (50% hits, 50% misses)
+            auto queryHashes = new ulong[10_000];
+            foreach (i, ref h; queryHashes)
+                h = (i % 2 == 0) ? (i / 2) * 0xdeadbeefUL : i * 0xcafebabeUL;
+            
+            auto bench = Benchmark("Mixed query (10K)", 100);
+            size_t hits = 0;
+            bench.run(() {
+                hits = filter.countMatches(queryHashes);
+            });
+            
+            auto result = bench.result();
+            auto savings = (10_000 - hits) * 100.0 / 10_000;
+            
+            writefln("  Query time:   %s", BenchmarkResult.formatDuration(result.avgTime));
+            writefln("  Potential hits: %,d / 10,000", hits);
+            writefln("  Lookups avoided: %.1f%%", savings);
+            writefln("  Estimated FPR: %.4f%%", filter.estimatedFPR * 100);
+        }
+    }
+    
     /// Run all benchmarks
     static void compareAll()
     {
@@ -236,6 +343,7 @@ struct SIMDBench
         benchmarkBlake3Compression();
         benchmarkMemoryOps();
         benchmarkHashThroughput();
+        benchmarkBloomFilter();
         benchmarkRealWorld();
         
         writeln("\n╔════════════════════════════════════════════════════════════════╗");

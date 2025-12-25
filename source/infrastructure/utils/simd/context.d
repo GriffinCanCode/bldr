@@ -2,6 +2,7 @@ module infrastructure.utils.simd.context;
 
 import infrastructure.utils.simd.capabilities;
 import infrastructure.utils.simd.ops;
+import infrastructure.utils.simd.bloom;
 import std.range;
 import std.algorithm;
 
@@ -122,6 +123,20 @@ struct SIMDContext
         }
         
         return differences;
+    }
+    
+    /// Create Bloom filter optimized for SIMD batch operations
+    /// Uses capabilities to determine optimal parameters
+    BloomFilter createBloomFilter(size_t expectedItems, double errorRate = 0.01) @system
+    {
+        return BloomFilter.create(expectedItems, errorRate);
+    }
+    
+    /// Batch Bloom filter lookup with SIMD acceleration
+    /// Returns count of potential matches
+    size_t bloomBatchLookup(ref const BloomFilter filter, scope const(ulong)[] hashes) @system
+    {
+        return filter.countMatches(hashes);
     }
 }
 
