@@ -14,6 +14,7 @@ import engine.distributed.protocol.messages;
 import infrastructure.utils.concurrency.deque : WorkStealingDeque;
 import engine.distributed.worker.peers;
 import engine.distributed.worker.steal;
+import engine.distributed.worker.adaptive;
 import engine.distributed.memory;
 import engine.distributed.metrics.steal : StealTelemetry;
 import infrastructure.errors;
@@ -31,7 +32,15 @@ struct WorkerConfig
     Capabilities defaultCapabilities;               // Default sandbox settings
     Duration heartbeatInterval = 5.seconds;         // Heartbeat frequency
     Duration peerAnnounceInterval = 10.seconds;     // Peer announce frequency
-    StealConfig stealConfig;                        // Work-stealing config
+    StealConfig stealConfig = defaultStealConfig(); // Work-stealing config (adaptive by default)
+}
+
+/// Default steal config with adaptive thresholds enabled
+StealConfig defaultStealConfig() pure nothrow @safe @nogc
+{
+    StealConfig cfg;
+    cfg.enableAdaptive = true;  // Adaptive tuning on by default for optimal load balancing
+    return cfg;
 }
 
 /// Worker lifecycle manager
@@ -104,6 +113,15 @@ struct WorkerLifecycle
         if (peerAnnounceThread !is null) peerAnnounceThread.join();
         if (coordinatorTransport !is null) coordinatorTransport.close();
         if (stealTelemetry !is null) Logger.info("Work-stealing stats: " ~ stealTelemetry.getStats().toString());
+        
+        // Log adaptive threshold state on shutdown
+        if (stealEngine !is null && stealEngine.isAdaptiveEnabled())
+        {
+            auto state = stealEngine.getAdaptiveState();
+            auto stats = stealEngine.getAdaptiveStats();
+            Logger.info("Adaptive thresholds: " ~ state.toString());
+            Logger.info("Adaptive stats: " ~ stats.toString());
+        }
         Logger.info("Worker stopped: " ~ id.toString());
     }
     
@@ -207,6 +225,11 @@ struct WorkerLifecycle
     StealEngine getStealEngine() @trusted => stealEngine;
     StealTelemetry getStealTelemetry() @trusted => stealTelemetry;
     SystemMetrics getMetrics() @trusted => collectMetrics();
+    
+    /// Adaptive threshold accessors (for monitoring and debugging)
+    bool isAdaptiveEnabled() @trusted => stealEngine !is null && stealEngine.isAdaptiveEnabled();
+    ThresholdState getAdaptiveState() @trusted => stealEngine !is null ? stealEngine.getAdaptiveState() : ThresholdState.init;
+    AdaptiveStats getAdaptiveStats() @trusted => stealEngine !is null ? stealEngine.getAdaptiveStats() : AdaptiveStats.init;
     
     /// Set thread handles (called by worker main)
     void setMainThread(Thread t) @trusted { mainThread = t; }

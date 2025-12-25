@@ -39,6 +39,9 @@ struct CoordinatorConfig
     
     /// Execution history for profile-guided scheduling (optional, created if null)
     ExecutionHistory executionHistory = null;
+    
+    /// Enable adaptive work-stealing thresholds (auto-tune based on success rates)
+    bool enableAdaptiveStealThresholds = true;
 }
 
 /// Build coordinator (manages distributed build execution)

@@ -111,6 +111,9 @@ struct RemoteServiceConfig
     
     // Execution history for profile-guided scheduling (shared from economics integration)
     ExecutionHistory executionHistory = null;
+    
+    // Enable adaptive work-stealing thresholds (auto-tune based on success rates)
+    bool enableAdaptiveStealThresholds = true;
 }
 
 /// Remote execution service
@@ -176,7 +179,7 @@ final class RemoteExecutionService : IRemoteExecutionService
         // Worker registry
         this.registry = new WorkerRegistry(config.poolConfig.workerStartTimeout);
         
-        // Coordinator with profile-guided scheduling
+        // Coordinator with profile-guided scheduling and adaptive thresholds
         CoordinatorConfig coordConfig;
         coordConfig.host = config.coordinatorHost;
         coordConfig.port = config.coordinatorPort;
@@ -184,6 +187,7 @@ final class RemoteExecutionService : IRemoteExecutionService
         coordConfig.enableWorkStealing = true;
         coordConfig.enableProfileGuidedScheduling = config.enableProfileGuidedScheduling;
         coordConfig.executionHistory = config.executionHistory;  // Share economics history
+        coordConfig.enableAdaptiveStealThresholds = config.enableAdaptiveStealThresholds;
         
         this.coordinator = new Coordinator(graph, coordConfig);
         
@@ -520,6 +524,13 @@ struct RemoteServiceBuilder
     {
         config.enableProfileGuidedScheduling = true;
         config.executionHistory = history;
+        return this;
+    }
+    
+    /// Enable/disable adaptive work-stealing thresholds
+    ref RemoteServiceBuilder adaptiveStealing(bool enabled = true) return pure nothrow @safe @nogc
+    {
+        config.enableAdaptiveStealThresholds = enabled;
         return this;
     }
     

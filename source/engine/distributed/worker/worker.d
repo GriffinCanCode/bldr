@@ -85,15 +85,20 @@ final class Worker
             if (auto coordinatorAction = communication.requestWork(lifecycle.getId(), lifecycle.getCoordinatorTransport()))
             { executeAction(coordinatorAction); consecutiveIdle = 0; continue; }
             
-            // 3. Try stealing from peers (if enabled)
+            // 3. Try stealing from peers (if enabled and local queue below threshold)
             if (config.enableWorkStealing && lifecycle.getStealEngine() !is null)
             {
-                immutable startTime = MonoTime.currTime;
-                auto stolenAction = lifecycle.getStealEngine().steal(lifecycle.getCoordinatorTransport());
-                immutable latency = MonoTime.currTime - startTime;
-                
-                if (auto telemetry = lifecycle.getStealTelemetry()) telemetry.recordAttempt(WorkerId(0), latency, stolenAction !is null);
-                if (stolenAction !is null) { executeAction(stolenAction); consecutiveIdle = 0; continue; }
+                // Only steal if local queue is below adaptive minLocalQueue threshold
+                immutable minLocal = lifecycle.getStealEngine().getEffectiveMinLocalQueue();
+                if (lifecycle.getLocalQueue().size() < minLocal)
+                {
+                    immutable startTime = MonoTime.currTime;
+                    auto stolenAction = lifecycle.getStealEngine().steal(lifecycle.getCoordinatorTransport());
+                    immutable latency = MonoTime.currTime - startTime;
+                    
+                    if (auto telemetry = lifecycle.getStealTelemetry()) telemetry.recordAttempt(WorkerId(0), latency, stolenAction !is null);
+                    if (stolenAction !is null) { executeAction(stolenAction); consecutiveIdle = 0; continue; }
+                }
             }
             
             // 4. No work available, backoff
