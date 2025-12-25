@@ -133,7 +133,7 @@ class Renderer : EventSubscriber
         
         terminal.writeln();
         terminal.writeln(formatter.formatBuildCompleted(
-            event.built, event.cached, event.duration));
+            event.built, event.cached, event.duration, event.traceId));
         terminal.writeln();
         terminal.flush();
     }
@@ -147,7 +147,7 @@ class Renderer : EventSubscriber
         
         terminal.writeln();
         terminal.writeln(formatter.formatBuildFailed(
-            event.failedCount, event.duration));
+            event.failedCount, event.duration, event.traceId));
         terminal.writeln();
         terminal.flush();
     }

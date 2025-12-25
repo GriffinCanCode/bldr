@@ -86,7 +86,8 @@ struct EngineCoordinator
             observability.recordException(buildSpan, new Exception(errorMsg));
             observability.setSpanStatus(buildSpan, SpanStatus.Error, errorMsg);
             observability.logError("Cannot build: " ~ errorMsg, ["error.type": "topological_sort_failed"]);
-            observability.publishEvent(new BuildFailedEvent(errorMsg, 0, sw.peek(), sw.peek()));
+            observability.publishEvent(new BuildFailedEvent(errorMsg, 0, sw.peek(), sw.peek(), 
+                observability.getCurrentTraceId()));
             return false;
         }
         
@@ -362,14 +363,15 @@ struct EngineCoordinator
     {
         auto observability = lifecycle.getObservability();
         auto cache = lifecycle.getCache();
+        auto traceId = observability.getCurrentTraceId();
         
         if (failed > 0)
         {
-            observability.publishEvent(new BuildFailedEvent("Build failed", failed, elapsed, elapsed));
+            observability.publishEvent(new BuildFailedEvent("Build failed", failed, elapsed, elapsed, traceId));
         }
         else
         {
-            observability.publishEvent(new BuildCompletedEvent(built, cached, failed, elapsed, elapsed));
+            observability.publishEvent(new BuildCompletedEvent(built, cached, failed, elapsed, elapsed, traceId));
         }
         
         // Publish statistics

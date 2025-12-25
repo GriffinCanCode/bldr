@@ -36,19 +36,44 @@ struct Formatter
     /// Format build completed message
     string formatBuildCompleted(in size_t built, in size_t cached, in Duration duration) const @system
     {
+        return formatBuildCompleted(built, cached, duration, null);
+    }
+    
+    /// Format build completed message with trace ID for debugging
+    string formatBuildCompleted(in size_t built, in size_t cached, in Duration duration,
+                                string traceId) const @system
+    {
         immutable msg = format("%s Build completed in %s", 
                          symbols.checkmark, formatDuration(duration));
         immutable stats = format("  Built: %d, Cached: %d", built, cached);
-        return styled(msg, Color.Green, Style.Bold) ~ "\n" ~ 
+        auto result = styled(msg, Color.Green, Style.Bold) ~ "\n" ~ 
                styled(stats, Color.Green);
+        
+        // Show trace ID for debugging/observability (verbose mode or on failure analysis)
+        if (traceId.length > 0)
+            result ~= "\n" ~ styled(format("  Trace: %s", traceId[0 .. min(16, traceId.length)]), 
+                                   Color.BrightBlack);
+        return result;
     }
     
     /// Format build failed message
     string formatBuildFailed(in size_t failed, in Duration duration) const @system
     {
+        return formatBuildFailed(failed, duration, null);
+    }
+    
+    /// Format build failed message with trace ID for debugging
+    string formatBuildFailed(in size_t failed, in Duration duration, string traceId) const @system
+    {
         immutable msg = format("%s Build failed with %d errors in %s",
                          symbols.cross, failed, formatDuration(duration));
-        return styled(msg, Color.Red, Style.Bold);
+        auto result = styled(msg, Color.Red, Style.Bold);
+        
+        // Always show trace ID on failure for easier debugging
+        if (traceId.length > 0)
+            result ~= "\n" ~ styled(format("  Trace: %s (use for debugging)", 
+                                   traceId[0 .. min(16, traceId.length)]), Color.BrightBlack);
+        return result;
     }
     
     /// Format target started message

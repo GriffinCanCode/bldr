@@ -53,6 +53,9 @@ interface IObservabilityService
     
     /// Get structured logger for direct access (for passing to BuildContext)
     @property StructuredLogger logger();
+    
+    /// Get current trace ID (for event correlation and display)
+    string getCurrentTraceId();
 }
 
 /// Concrete observability service implementation
@@ -152,6 +155,13 @@ final class ObservabilityService : IObservabilityService
     {
         return this._structuredLogger;
     }
+    
+    string getCurrentTraceId() @trusted
+    {
+        if (_tracer is null) return "";
+        auto ctx = _tracer.getContextForPropagation();
+        return ctx.traceId.toString();
+    }
 }
 
 /// Null observability service for testing/disabled observability
@@ -181,6 +191,7 @@ final class NullObservabilityService : IObservabilityService
         void setSpanAttribute(Span span, string key, string value) { }
         @property Tracer tracer() { return null; }
         @property StructuredLogger logger() { return null; }
+        string getCurrentTraceId() { return ""; }
     }
 }
 

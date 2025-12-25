@@ -70,6 +70,7 @@ final class BuildCompletedEvent : BuildEvent
     immutable size_t cached;
     immutable size_t failed;
     immutable Duration duration;
+    string traceId;  // Optional: root trace ID for debugging/correlation
     
     this(in size_t built, in size_t cached, in size_t failed, in Duration duration, in Duration timestamp) pure @system
     {
@@ -78,6 +79,17 @@ final class BuildCompletedEvent : BuildEvent
         this.failed = failed;
         this.duration = duration;
         this._timestamp = timestamp;
+    }
+    
+    this(in size_t built, in size_t cached, in size_t failed, in Duration duration, 
+         in Duration timestamp, string traceId) @system
+    {
+        this.built = built;
+        this.cached = cached;
+        this.failed = failed;
+        this.duration = duration;
+        this._timestamp = timestamp;
+        this.traceId = traceId;
     }
     
     @property EventType type() const pure nothrow @system @nogc { return _type; }
@@ -92,6 +104,7 @@ final class BuildFailedEvent : BuildEvent
     immutable string reason;
     immutable size_t failedCount;
     immutable Duration duration;
+    string traceId;  // Optional: root trace ID for debugging/correlation
     
     this(in string reason, in size_t failedCount, in Duration duration, in Duration timestamp) pure @system
     {
@@ -99,6 +112,16 @@ final class BuildFailedEvent : BuildEvent
         this.failedCount = failedCount;
         this.duration = duration;
         this._timestamp = timestamp;
+    }
+    
+    this(in string reason, in size_t failedCount, in Duration duration, 
+         in Duration timestamp, string traceId) @system
+    {
+        this.reason = reason;
+        this.failedCount = failedCount;
+        this.duration = duration;
+        this._timestamp = timestamp;
+        this.traceId = traceId;
     }
     
     @property EventType type() const pure nothrow { return _type; }

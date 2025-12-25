@@ -136,6 +136,7 @@ final class Span
     private SpanStatus status;
     private string[string] attributes;
     private SpanEvent[] events;
+    private SpanLink[] links;
     private bool finished;
     private Mutex spanMutex;
     
@@ -207,6 +208,27 @@ final class Span
         }
     }
     
+    /// Add link to related span (e.g., cache hit → original build span)
+    void addLink(TraceId linkedTraceId, SpanId linkedSpanId, string[string] attrs = null) @system
+    {
+        synchronized (spanMutex)
+        {
+            SpanLink link;
+            link.traceId = linkedTraceId;
+            link.spanId = linkedSpanId;
+            link.attributes = attrs;
+            links ~= link;
+        }
+    }
+    
+    /// Add link with type annotation
+    void addLinkWithType(TraceId linkedTraceId, SpanId linkedSpanId, string linkType) @system
+    {
+        string[string] attrs;
+        attrs["link.type"] = linkType;
+        addLink(linkedTraceId, linkedSpanId, attrs);
+    }
+    
     /// Finish span (stops timing)
     void finish() @system
     {
@@ -259,6 +281,20 @@ final class Span
                 }
                 data.events ~= newEvent;
             }
+            
+            // Duplicate links array
+            foreach (link; this.links)
+            {
+                SpanLink newLink;
+                newLink.traceId = link.traceId;
+                newLink.spanId = link.spanId;
+                foreach (k, v; link.attributes)
+                {
+                    newLink.attributes[k] = v;
+                }
+                data.links ~= newLink;
+            }
+            
             data.finished = this.finished;
             return data;
         }
@@ -291,7 +327,16 @@ struct SpanData
     SpanStatus status;
     string[string] attributes;
     SpanEvent[] events;
+    SpanLink[] links;   // Links to related spans (e.g., cache hit → original build)
     bool finished;
+}
+
+/// Span link to a related span (e.g., cache hit referencing original build)
+struct SpanLink
+{
+    TraceId traceId;
+    SpanId spanId;
+    string[string] attributes;  // Link attributes (e.g., link.type = "cache_origin")
 }
 
 /// Span event (timestamped log entry within a span)
@@ -321,17 +366,58 @@ enum SpanStatus
 }
 
 /// Trace context for propagation across threads
+/// Includes baggage for application-specific metadata (PR#, branch, etc.)
 struct TraceContext
 {
     TraceId traceId;
     SpanId spanId;
     bool sampled;
+    string[string] baggage;  // W3C Baggage for metadata propagation
     
     /// Serialize to W3C Trace Context format (traceparent header)
     string toTraceparent() const pure @system
     {
         immutable sampledFlag = sampled ? "01" : "00";
         return format("00-%s-%s-%s", traceId.toString(), spanId.toString(), sampledFlag);
+    }
+    
+    /// Serialize baggage to W3C Baggage header format
+    string toBaggage() const pure @system
+    {
+        if (baggage.length == 0)
+            return "";
+        
+        import std.array : appender;
+        auto result = appender!string;
+        bool first = true;
+        foreach (key, value; baggage)
+        {
+            if (!first) result ~= ",";
+            result ~= key ~ "=" ~ value;
+            first = false;
+        }
+        return result.data;
+    }
+    
+    /// Parse baggage from W3C Baggage header
+    static string[string] parseBaggage(string header) pure @system
+    {
+        import std.string : split, strip, indexOf;
+        
+        string[string] result;
+        if (header.length == 0)
+            return result;
+        
+        foreach (item; header.split(","))
+        {
+            auto stripped = item.strip();
+            immutable eqIdx = stripped.indexOf('=');
+            if (eqIdx > 0)
+            {
+                result[stripped[0 .. eqIdx]] = stripped[eqIdx + 1 .. $];
+            }
+        }
+        return result;
     }
     
     /// Parse from W3C Trace Context format
@@ -369,6 +455,49 @@ struct TraceContext
         
         return Result!(TraceContext, TraceError).ok(ctx);
     }
+    
+    /// Get short trace ID for display (first 16 chars)
+    string shortTraceId() const pure @system =>
+        traceId.toString()[0 .. 16];
+}
+
+/// Tracer configuration for resource attributes and sampling
+struct TracerConfig
+{
+    /// Service name (required for OTLP)
+    string serviceName = "builder";
+    
+    /// Service version
+    string serviceVersion = "";
+    
+    /// Service instance ID
+    string serviceInstanceId = "";
+    
+    /// Custom resource attributes
+    string[string] resourceAttributes;
+    
+    /// Sampling ratio (0.0 to 1.0, default 1.0 = 100%)
+    double samplingRatio = 1.0;
+    
+    /// Whether to propagate sampling decision from parent
+    bool parentBasedSampling = true;
+    
+    /// Create default config
+    static TracerConfig defaults() pure nothrow @safe @nogc
+    {
+        TracerConfig cfg;
+        return cfg;
+    }
+    
+    /// Create config for build service
+    static TracerConfig forBuild(string workspaceName = "") pure @safe
+    {
+        TracerConfig cfg;
+        cfg.serviceName = "builder";
+        if (workspaceName.length > 0)
+            cfg.resourceAttributes["workspace.name"] = workspaceName;
+        return cfg;
+    }
 }
 
 /// Global tracer instance
@@ -380,12 +509,16 @@ final class Tracer
     private Mutex tracerMutex;
     private SpanExporter exporter;
     private bool enabled;
+    private TracerConfig config;
+    private bool currentTraceSampled;
     
-    this(SpanExporter exporter = null) @system
+    this(SpanExporter exporter = null, TracerConfig config = TracerConfig.defaults()) @system
     {
         this.tracerMutex = new Mutex();
         this.exporter = exporter;
         this.enabled = true;
+        this.config = config;
+        this.currentTraceSampled = true;
     }
     
     /// Start new trace
@@ -394,6 +527,17 @@ final class Tracer
         synchronized (tracerMutex)
         {
             this.currentTraceId = TraceId.generate();
+            this.currentTraceSampled = shouldSample(currentTraceId);
+        }
+    }
+    
+    /// Start new trace with explicit sampling decision (for propagated contexts)
+    void startTraceWithContext(TraceId traceId, bool sampled) @system
+    {
+        synchronized (tracerMutex)
+        {
+            this.currentTraceId = traceId;
+            this.currentTraceSampled = config.parentBasedSampling ? sampled : shouldSample(traceId);
         }
     }
     
@@ -407,11 +551,60 @@ final class Tracer
         {
             immutable traceId = parent !is null ? parent.trace : currentTraceId;
             immutable parentId = parent !is null ? parent.id : SpanId(0);
+            
+            // Check sampling (inherit from parent or use current decision)
+            if (!currentTraceSampled)
+                return null;
+            
             immutable spanId = SpanId.generate();
             
             auto span = new Span(traceId, spanId, parentId, name, kind);
+            
+            // Add resource attributes to root spans
+            if (parentId.value == 0)
+            {
+                span.setAttribute("service.name", config.serviceName);
+                if (config.serviceVersion.length > 0)
+                    span.setAttribute("service.version", config.serviceVersion);
+                if (config.serviceInstanceId.length > 0)
+                    span.setAttribute("service.instance.id", config.serviceInstanceId);
+                    
+                foreach (key, value; config.resourceAttributes)
+                {
+                    span.setAttribute(key, value);
+                }
+            }
+            
             activeSpans ~= span;
             
+            return span;
+        }
+    }
+    
+    /// Start span from propagated trace context (for distributed builds)
+    Span startSpanFromContext(string name, TraceId traceId, SpanId parentSpanId, 
+                              bool sampled, SpanKind kind = SpanKind.Server) @system
+    {
+        if (!enabled)
+            return null;
+        
+        // Use parent-based sampling if enabled
+        if (config.parentBasedSampling && !sampled)
+            return null;
+        
+        synchronized (tracerMutex)
+        {
+            // Override current trace with propagated context
+            this.currentTraceId = traceId;
+            this.currentTraceSampled = sampled;
+            
+            immutable spanId = SpanId.generate();
+            auto span = new Span(traceId, spanId, parentSpanId, name, kind);
+            
+            // Mark as remote parent
+            span.setAttribute("builder.remote_parent", "true");
+            
+            activeSpans ~= span;
             return span;
         }
     }
@@ -454,9 +647,43 @@ final class Tracer
             TraceContext ctx;
             ctx.traceId = span.trace;
             ctx.spanId = span.id;
-            ctx.sampled = true;
+            ctx.sampled = currentTraceSampled;
             
             return Result!(TraceContext, TraceError).ok(ctx);
+        }
+    }
+    
+    /// Get current trace context for distributed propagation (returns default if none)
+    TraceContext getContextForPropagation() @system
+    {
+        synchronized (tracerMutex)
+        {
+            TraceContext ctx;
+            
+            if (activeSpans.length > 0)
+            {
+                auto span = activeSpans[$ - 1];
+                ctx.traceId = span.trace;
+                ctx.spanId = span.id;
+                ctx.sampled = currentTraceSampled;
+            }
+            else if (currentTraceId.high != 0 || currentTraceId.low != 0)
+            {
+                ctx.traceId = currentTraceId;
+                ctx.spanId = SpanId(0);
+                ctx.sampled = currentTraceSampled;
+            }
+            
+            return ctx;
+        }
+    }
+    
+    /// Check if current trace is being sampled
+    bool isSampled() const @system
+    {
+        synchronized (cast(Mutex)tracerMutex)
+        {
+            return currentTraceSampled;
         }
     }
     
@@ -482,6 +709,31 @@ final class Tracer
         }
     }
     
+    /// Update configuration
+    void setConfig(TracerConfig cfg) @system
+    {
+        synchronized (tracerMutex)
+        {
+            this.config = cfg;
+        }
+    }
+    
+    /// Get current configuration
+    TracerConfig getConfig() const @system
+    {
+        synchronized (cast(Mutex)tracerMutex)
+        {
+            // Copy to convert from const
+            TracerConfig result;
+            result.serviceName = config.serviceName;
+            result.serviceVersion = config.serviceVersion;
+            result.serviceInstanceId = config.serviceInstanceId;
+            result.samplingRatio = config.samplingRatio;
+            result.parentBasedSampling = config.parentBasedSampling;
+            return result;
+        }
+    }
+    
     /// Get all completed spans
     SpanData[] getCompletedSpans() const @system
     {
@@ -497,6 +749,20 @@ final class Tracer
             }
             return result.data;
         }
+    }
+    
+    /// Determine if a trace should be sampled based on config
+    private bool shouldSample(TraceId traceId) const pure @system
+    {
+        if (config.samplingRatio >= 1.0)
+            return true;
+        if (config.samplingRatio <= 0.0)
+            return false;
+        
+        // Use low bits for deterministic sampling
+        immutable hashValue = traceId.low;
+        immutable maxValue = ulong.max;
+        return cast(double)hashValue / cast(double)maxValue < config.samplingRatio;
     }
 }
 

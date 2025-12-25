@@ -37,6 +37,7 @@ enum LogLevel
 }
 
 /// Log entry with structured fields
+/// Includes trace context for distributed tracing correlation
 struct LogEntry
 {
     SysTime timestamp;
@@ -45,10 +46,12 @@ struct LogEntry
     string targetId;
     size_t threadId;
     string correlationId;
+    string traceId;      // OpenTelemetry trace ID for log correlation
+    string spanId;       // Current span ID
     string[string] fields;
     string stackTrace;
     
-    /// Convert to JSON
+    /// Convert to JSON (compatible with log aggregation systems)
     JSONValue toJson() const @system
     {
         JSONValue json;
@@ -58,6 +61,13 @@ struct LogEntry
         json["target"] = targetId;
         json["thread"] = threadId;
         json["correlationId"] = correlationId;
+        
+        // Include trace context for distributed tracing correlation
+        // These fields follow OpenTelemetry conventions for log correlation
+        if (traceId.length > 0)
+            json["trace_id"] = traceId;
+        if (spanId.length > 0)
+            json["span_id"] = spanId;
         
         if (fields.length > 0)
         {
@@ -145,10 +155,13 @@ struct LogEntry
 }
 
 /// Thread context for structured logging
+/// Supports distributed tracing correlation via traceId/spanId
 struct LogContext
 {
     string targetId;
     string correlationId;
+    string traceId;      // Distributed trace ID (for log correlation)
+    string spanId;       // Current span ID
     string[string] fields;
     
     /// Clone context with additional fields
@@ -157,6 +170,8 @@ struct LogContext
         LogContext ctx;
         ctx.targetId = this.targetId;
         ctx.correlationId = this.correlationId;
+        ctx.traceId = this.traceId;
+        ctx.spanId = this.spanId;
         
         // Duplicate fields manually
         foreach (key, value; this.fields)
@@ -167,6 +182,15 @@ struct LogContext
         {
             ctx.fields[key] = value;
         }
+        return ctx;
+    }
+    
+    /// Clone context with trace context (for distributed tracing)
+    LogContext withTraceContext(string traceId, string spanId) const @system
+    {
+        LogContext ctx = this.withFields(null);
+        ctx.traceId = traceId;
+        ctx.spanId = spanId;
         return ctx;
     }
 }
@@ -227,6 +251,8 @@ final class StructuredLogger
             entry.targetId = ctx.targetId;
             entry.threadId = cast(size_t)Thread.getThis().id;
             entry.correlationId = ctx.correlationId;
+            entry.traceId = ctx.traceId;
+            entry.spanId = ctx.spanId;
             
             // Merge context fields with provided fields
             foreach (key, value; ctx.fields)
@@ -334,6 +360,8 @@ final class StructuredLogger
             entry.targetId = ctx.targetId;
             entry.threadId = cast(size_t)Thread.getThis().id;
             entry.correlationId = ctx.correlationId;
+            entry.traceId = ctx.traceId;
+            entry.spanId = ctx.spanId;
             
             // Merge context fields
             foreach (key, value; ctx.fields)
