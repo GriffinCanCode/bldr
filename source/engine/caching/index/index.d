@@ -508,6 +508,15 @@ final class CacheIndex
         }
     }
     
+    /// Clear only action entries
+    void clearActions() @system
+    {
+        synchronized (dbMutex)
+        {
+            execSQL("DELETE FROM action_entries");
+        }
+    }
+    
     /// Get total entry count (for quick checks)
     size_t totalEntryCount() @system
     {

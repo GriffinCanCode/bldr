@@ -44,8 +44,8 @@ struct EvictionPolicy
                 .array;
         }
         
-        // 3. Add entries if size exceeds limit (LRU)
-        if (currentSize > maxSize)
+        // 3. Add entries if size exceeds limit (LRU) - maxSize of 0 disables size limit
+        if (maxSize > 0 && currentSize > maxSize)
         {
             size_t removed = 0;
             foreach (kv; sorted)

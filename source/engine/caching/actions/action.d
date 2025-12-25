@@ -386,6 +386,9 @@ final class ActionCache
             dirty = false;
         }
         
+        // Clear the SQLite index as well
+        index.clearActions();
+        
         if (exists(cacheDir))
             rmdirRecurse(cacheDir);
         mkdirRecurse(cacheDir);

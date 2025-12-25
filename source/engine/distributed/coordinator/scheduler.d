@@ -602,8 +602,8 @@ final class DistributedScheduler
                     final switch (info.state)
                     {
                         case ActionState.Pending: stats.pending++; break;
-                        case ActionState.Ready:
-                        case ActionState.Scheduled: stats.ready++; break;
+                        case ActionState.Ready: stats.ready++; break;
+                        case ActionState.Scheduled: stats.scheduled++; break;
                         case ActionState.Executing: stats.executing++; break;
                         case ActionState.Completed: stats.completed++; break;
                         case ActionState.Failed: stats.failed++; break;
@@ -618,6 +618,7 @@ final class DistributedScheduler
     {
         size_t pending;
         size_t ready;
+        size_t scheduled;
         size_t executing;
         size_t completed;
         size_t failed;

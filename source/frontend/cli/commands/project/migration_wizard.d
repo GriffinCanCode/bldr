@@ -285,11 +285,11 @@ struct MigrationWizard
     private void showSystemInfo(IMigrator migrator) @system
     {
         terminal.writeln();
-        terminal.writeln(formatter.formatSeparator('─', 60));
+        terminal.writeln(formatter.formatSeparator('-', 60));
         terminal.writeColored("  Build System: ", Color.White);
         terminal.writeColored(migrator.systemName().toUpper(), Color.Cyan, Style.Bold);
         terminal.writeln();
-        terminal.writeln(formatter.formatSeparator('─', 60));
+        terminal.writeln(formatter.formatSeparator('-', 60));
         terminal.writeln();
         
         // Supported features
@@ -480,9 +480,9 @@ struct MigrationWizard
     private void showTranslationExplanation(MigrationResult* result, DetectedBuildFile* sourceFile) @system
     {
         terminal.writeln();
-        terminal.writeln(formatter.formatSeparator('═', 60));
+        terminal.writeln(formatter.formatSeparator('=', 60));
         terminal.writeColored("  Translation Breakdown\n", Color.Cyan, Style.Bold);
-        terminal.writeln(formatter.formatSeparator('═', 60));
+        terminal.writeln(formatter.formatSeparator('=', 60));
         terminal.writeln();
         
         // Show each target translation
@@ -505,7 +505,7 @@ struct MigrationWizard
             terminal.writeln();
         }
         
-        terminal.writeln(formatter.formatSeparator('─', 60));
+        terminal.writeln(formatter.formatSeparator('-', 60));
         terminal.writeln();
     }
     
@@ -782,9 +782,9 @@ struct MigrationWizard
         context.generatedContent = content;
         
         // Show preview
-        terminal.writeln(formatter.formatSeparator('═', 60));
+        terminal.writeln(formatter.formatSeparator('=', 60));
         terminal.writeColored("  Generated Builderfile Preview\n", Color.Cyan, Style.Bold);
-        terminal.writeln(formatter.formatSeparator('═', 60));
+        terminal.writeln(formatter.formatSeparator('=', 60));
         terminal.writeln();
         
         // Show content with syntax highlighting (basic)
@@ -814,7 +814,7 @@ struct MigrationWizard
         }
         
         terminal.writeln();
-        terminal.writeln(formatter.formatSeparator('─', 60));
+        terminal.writeln(formatter.formatSeparator('-', 60));
         terminal.writeln();
         
         // Summary

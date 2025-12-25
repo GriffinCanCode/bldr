@@ -221,7 +221,7 @@ abstract class BaseCppBuilder : CppBuilder
     }
     
     /// Build compiler flags from config
-    protected string[] buildCompilerFlags(in CppConfig config, bool isCpp)
+    string[] buildCompilerFlags(in CppConfig config, bool isCpp)
     {
         import std.conv : to;
         
@@ -464,5 +464,48 @@ abstract class BaseCppBuilder : CppBuilder
             case Sanitizer.HWAddress: return "-fsanitize=hwaddress";
         }
     }
+}
+
+/// Module-level helper to build compiler flags (for use without class instance)
+string[] buildCompilerFlags(in CppConfig config, bool isCpp)
+{
+    import std.conv : to;
+    
+    string[] flags;
+    
+    // Standard
+    final switch (isCpp ? config.cppStandard : CppStandard.Cpp14) // Convert to string-based comparison
+    {
+        case CppStandard.Cpp98: flags ~= "-std=c++98"; break;
+        case CppStandard.Cpp11: flags ~= "-std=c++11"; break;
+        case CppStandard.Cpp14: flags ~= "-std=c++14"; break;
+        case CppStandard.Cpp17: flags ~= "-std=c++17"; break;
+        case CppStandard.Cpp20: flags ~= "-std=c++20"; break;
+        case CppStandard.Cpp23: flags ~= "-std=c++23"; break;
+    }
+    
+    // Optimization
+    final switch (config.optLevel)
+    {
+        case OptimizationLevel.Debug: flags ~= "-O0"; break;
+        case OptimizationLevel.Release: flags ~= "-O2"; break;
+        case OptimizationLevel.Speed: flags ~= "-O3"; break;
+        case OptimizationLevel.Size: flags ~= "-Os"; break;
+        case OptimizationLevel.Custom: break;
+    }
+    
+    // Debug info
+    if (config.debugInfo) flags ~= "-g";
+    
+    // Warnings
+    foreach (warn; config.warnings) flags ~= warn;
+    
+    // Defines
+    foreach (def; config.defines) flags ~= "-D" ~ def;
+    
+    // Includes  
+    foreach (inc; config.includeDirs) flags ~= "-I" ~ inc;
+    
+    return flags;
 }
 

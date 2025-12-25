@@ -207,6 +207,7 @@ unittest
     hashData[1] = 0x22;
     digest.hash = hashData[].dup;
     digest.sizeBytes = 512;
+    digest.func = DigestFunction.BLAKE3;  // Must specify digest function for conversion
     
     auto result = translator.digestToActionId(digest);
     
@@ -436,11 +437,11 @@ unittest
     auto server = new ReapiV2Server();
     
     // Register execute handler
-    server.onExecute((ActionRequest req) @safe {
+    server.onExecute((ActionRequest req) @trusted {
         ActionResult result;
         result.status = ResultStatus.Success;
         result.exitCode = 0;
-        return Ok!(ActionResult, BuildError)(result);
+        return Result!(ActionResult, BuildError).ok(result);
     });
     
     Assert.notNull(server.getAdapter());
@@ -543,15 +544,15 @@ unittest
 
 unittest
 {
-    writeln("\x1b[36m[TEST]\x1b[0m REAPI - Wire format tag creation");
+    writeln("\x1b[36m[TEST]\x1b[0m REAPI - Wire format encoding");
     
-    auto tag = ReapiV2Codec.makeTag(1, ReapiV2Codec.WireType.Varint);
-    Assert.equal(tag[0], 0x08);  // Field 1, wire type 0
+    // Test varint encoding (makeTag is package-private)
+    auto encoded = ReapiV2Codec.encodeVarint(300);
+    Assert.isTrue(encoded.length > 0);
+    Assert.equal(encoded[0], cast(ubyte)0xAC);  // 300 as varint: AC 02
+    Assert.equal(encoded[1], cast(ubyte)0x02);
     
-    auto tag2 = ReapiV2Codec.makeTag(2, ReapiV2Codec.WireType.LengthDelimited);
-    Assert.equal(tag2[0], 0x12);  // Field 2, wire type 2
-    
-    writeln("\x1b[32m  ✓ Wire format tag creation works\x1b[0m");
+    writeln("\x1b[32m  ✓ Wire format encoding works\x1b[0m");
 }
 
 unittest

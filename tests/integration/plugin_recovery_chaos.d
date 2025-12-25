@@ -599,11 +599,11 @@ unittest
     auto system = new ResilientPluginSystem();
     auto plugin = new ChaoticMockPlugin("error-plugin", "/usr/local/bin/error");
     
-    // Inject error response chaos
+    // Inject error response chaos - maxFaults must exceed maxRetries (3) to ensure all retries fail
     PluginChaosConfig errorChaos;
     errorChaos.type = PluginChaosType.ErrorResponse;
     errorChaos.probability = 1.0;
-    errorChaos.maxFaults = 1;
+    errorChaos.maxFaults = 5;
     plugin.addChaos(errorChaos);
     
     system.addPlugin(plugin);

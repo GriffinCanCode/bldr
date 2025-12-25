@@ -257,8 +257,9 @@ unittest
     Assert.isTrue(results.results[action2.toString()].cached, "action2 should be cached");
     Assert.isFalse(results.results[action3.toString()].cached, "action3 should not be cached");
     
-    // Check hit rate
-    Assert.equal(results.hitRate(), 66.666664, "Hit rate should be ~66.67%");
+    // Check hit rate (use range check for float comparison)
+    immutable rate = results.hitRate();
+    Assert.isTrue(rate > 66.0 && rate < 67.0, "Hit rate should be ~66.67%");
     
     coordinator.close();
     writeln("\x1b[32m  ✓ Batch action validation works correctly\x1b[0m");

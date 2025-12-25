@@ -346,14 +346,14 @@ unittest
     auto id1 = result1.unwrap();
     auto id2 = result2.unwrap();
     
-    // Keep worker2 alive with heartbeat
+    // Let worker1 timeout (don't send heartbeat for worker1)
+    Thread.sleep(100.msecs);
+    
+    // Now send heartbeat for worker2 AFTER the sleep to keep it healthy
     HeartBeat hb2;
     hb2.worker = id2;
     hb2.state = WorkerState.Idle;
     registry.updateHeartbeat(id2, hb2);
-    
-    // Let worker1 timeout
-    Thread.sleep(100.msecs);
     
     // Select worker - should only pick healthy worker2
     Capabilities caps;
