@@ -88,6 +88,9 @@ public import engine.caching.actions;
 public import engine.caching.policies;
 public import engine.caching.distributed;
 
+// Module interface caching (C++20 BMI)
+public import engine.caching.modules;
+
 // Storage layer
 public import engine.caching.storage;
 

@@ -105,17 +105,17 @@ struct BMICacheConfig
         if (auto v = environment.get("BUILDER_BMI_CACHE_MAX_AGE_DAYS"))
             config.maxAge = v.to!size_t;
         if (auto v = environment.get("BUILDER_BMI_CACHE_VALIDATE"))
-            config.validateOnLoad = (v == "1" || v.toLower == "true");
+            config.validateOnLoad = (v == "1" || toLowerCase(v) == "true");
             
         return config;
     }
     
-    private static string toLower(string s) pure @safe
+    private static string toLowerCase(string s) pure @trusted
     {
         import std.ascii : toLower;
-        char[] result = new char[s.length];
+        auto result = new char[s.length];
         foreach (i, c; s) result[i] = toLower(c);
-        return cast(string)result;
+        return (() @trusted => cast(string)result)();
     }
 }
 

@@ -5,4 +5,5 @@ module languages.compiled.cpp.analysis;
 /// See: cpp.json config for C++ AST symbol mapping
 
 public import languages.compiled.cpp.analysis.analysis;
+public import languages.compiled.cpp.analysis.modules;
 

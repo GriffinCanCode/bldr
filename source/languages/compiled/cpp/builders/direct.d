@@ -11,19 +11,24 @@ import std.conv;
 import languages.compiled.cpp.core.config;
 import infrastructure.toolchain;
 import languages.compiled.cpp.builders.base;
+import languages.compiled.cpp.builders.modules : ModuleBuilder;
+import languages.compiled.cpp.analysis.modules : isModuleInterface;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.logging.logger;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
+import engine.caching.modules.bmi : BMICache, BMICacheConfig;
 
 /// Direct compiler builder - compiles without external build system with action-level caching
 class DirectBuilder : BaseCppBuilder
 {
     private Toolchain toolchain;
     private ActionCache actionCache;
+    private BMICache bmiCache;
+    private ModuleBuilder moduleBuilder;
     
-    this(CppConfig config, ActionCache cache = null)
+    this(CppConfig config, ActionCache cache = null, BMICache bmiCacheParam = null)
     {
         super(config);
         // Get toolchain from registry
@@ -72,6 +77,21 @@ class DirectBuilder : BaseCppBuilder
         {
             actionCache = cache;
         }
+        
+        // Initialize BMI cache for C++20 modules
+        if (bmiCacheParam is null)
+        {
+            auto bmiConfig = BMICacheConfig.fromEnvironment();
+            bmiCache = new BMICache(".builder-cache/bmi", bmiConfig);
+        }
+        else
+        {
+            bmiCache = bmiCacheParam;
+        }
+        
+        // Initialize module builder (lazy - only when modules enabled)
+        if (config.modules)
+            moduleBuilder = new ModuleBuilder(toolchain, bmiCache);
     }
     
     override CppCompileResult build(
@@ -98,17 +118,23 @@ class DirectBuilder : BaseCppBuilder
         
         Logger.debugLog("Direct compilation with " ~ toolchain.name ~ " v" ~ compiler.version_.toString());
         
-        // Separate C and C++ files
+        // Separate C, C++, and module files
         string[] cppFiles;
         string[] cFiles;
+        string[] moduleFiles;
         
         foreach (source; sources)
         {
-            string ext = extension(source).toLower;
-            if (ext == ".cpp" || ext == ".cxx" || ext == ".cc" || ext == ".C" || ext == ".c++")
-                cppFiles ~= source;
-            else if (ext == ".c")
-                cFiles ~= source;
+            if (isModuleInterface(source))
+                moduleFiles ~= source;
+            else
+            {
+                string ext = extension(source).toLower;
+                if (ext == ".cpp" || ext == ".cxx" || ext == ".cc" || ext == ".C" || ext == ".c++")
+                    cppFiles ~= source;
+                else if (ext == ".c")
+                    cFiles ~= source;
+            }
         }
         
         // Determine output file
@@ -136,7 +162,31 @@ class DirectBuilder : BaseCppBuilder
         if (!exists(objDir))
             mkdirRecurse(objDir);
         
-        // Compile C++ files
+        // Compile C++20 modules first (if any)
+        string[] moduleObjects;
+        if (!moduleFiles.empty && config.modules)
+        {
+            if (moduleBuilder is null)
+                moduleBuilder = new ModuleBuilder(toolchain, bmiCache);
+            
+            Logger.debugLog("Building C++20 modules with BMI caching...");
+            moduleObjects = moduleBuilder.buildModuleProject(
+                cast(string[])moduleFiles ~ cast(string[])cppFiles, 
+                objDir, 
+                config
+            );
+            
+            if (moduleObjects.empty && (!moduleFiles.empty || !cppFiles.empty))
+            {
+                result.error = "Module compilation failed";
+                return result;
+            }
+            
+            // Module builder handles all C++ sources when modules are present
+            cppFiles = [];
+        }
+        
+        // Compile regular C++ files (when not using modules)
         string[] cppObjects;
         if (!cppFiles.empty)
         {
@@ -171,11 +221,12 @@ class DirectBuilder : BaseCppBuilder
         }
         
         // Combine all objects
-        string[] allObjects = cppObjects ~ cObjects;
+        string[] allObjects = moduleObjects ~ cppObjects ~ cObjects;
         result.objects = allObjects;
         
-        // Link
-        auto linkResult = linkObjects(allObjects, outputFile, config, !cppFiles.empty, target);
+        // Link (use C++ linker if we have any C++ code or modules)
+        bool hasCpp = !cppObjects.empty || !moduleObjects.empty;
+        auto linkResult = linkObjects(allObjects, outputFile, config, hasCpp, target);
         if (!linkResult.success)
         {
             result.error = linkResult.error;
@@ -233,10 +284,23 @@ class DirectBuilder : BaseCppBuilder
             case "pch":
             case "lto":
             case "sanitizers":
+            case "modules":
+            case "header-units":
                 return true;
             default:
                 return super.supportsFeature(feature);
         }
+    }
+    
+    /// Get BMI cache for C++20 modules
+    BMICache getBMICache() @safe => bmiCache;
+    
+    /// Flush all caches to disk
+    void flushCaches() @system
+    {
+        actionCache.flush();
+        if (bmiCache !is null)
+            bmiCache.flush();
     }
     
     /// Compile source files to object files with action-level caching

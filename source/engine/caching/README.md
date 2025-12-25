@@ -89,6 +89,10 @@ engine/caching/
 ├── helpers/               # Cache helpers
 │   └── action.d           # Action cache helpers
 │
+├── modules/               # Module interface caching (C++20 BMI)
+│   ├── bmi.d              # BMICache implementation
+│   └── package.d          # Module exports
+│
 └── events/                # Cache events
     └── package.d          # Event definitions
 ```
@@ -157,6 +161,38 @@ Cache eviction policies. Now powered by SQLite index queries.
 
 **Key Types:**
 - `EvictionPolicy` - Hybrid LRU + age + size eviction
+
+### `caching.modules`
+
+Binary Module Interface (BMI) caching for C++20 modules and header units.
+
+**Key Types:**
+- `BMICache` - Cache for compiled module interfaces
+- `BMIKey` - Composite key (module name + compiler + version + flags + content)
+- `BMIEntry` - Cache entry with dependency tracking
+- `BMICompiler` - Compiler type enum (GCC, Clang, MSVC)
+- `ModuleType` - Module classification (Interface, Partition, HeaderUnit)
+
+**Features:**
+- Compiler-aware invalidation (different compilers use different BMI formats)
+- Compiler version tracking (BMIs are version-specific)
+- Flag-based invalidation (optimization levels affect BMI content)
+- Transitive dependency tracking (invalidate when dependencies change)
+- Header unit caching (for `import <header>;` syntax)
+
+**File Formats:**
+- GCC: `.gcm` files
+- Clang: `.pcm` files  
+- MSVC: `.ifc` files
+
+**Storage Layout:**
+```
+.builder-cache/bmi/
+├── bmi_index.bin    # Signed binary index
+├── gcc/             # GCC BMI files
+├── clang/           # Clang BMI files
+└── msvc/            # MSVC BMI files
+```
 
 ### `caching.distributed`
 
@@ -227,6 +263,12 @@ export BUILDER_CACHE_MAX_AGE_DAYS=30            # 30 days
 export BUILDER_ACTION_CACHE_MAX_SIZE=1073741824
 export BUILDER_ACTION_CACHE_MAX_ENTRIES=50000   # More than targets
 export BUILDER_ACTION_CACHE_MAX_AGE_DAYS=30
+
+# BMI cache limits (C++20 modules)
+export BUILDER_BMI_CACHE_MAX_SIZE=2147483648    # 2 GB (BMIs can be large)
+export BUILDER_BMI_CACHE_MAX_ENTRIES=10000      # 10k modules
+export BUILDER_BMI_CACHE_MAX_AGE_DAYS=60        # 60 days
+export BUILDER_BMI_CACHE_VALIDATE=true          # Verify BMI integrity
 
 # Remote cache configuration
 export BUILDER_REMOTE_CACHE_URL=http://cache.example.com:8080
