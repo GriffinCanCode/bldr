@@ -60,11 +60,12 @@ Production-ready distributed caching system with enterprise features.
 ┌─────────────────────────────────────────────────────────┐
 │                    CacheServer                          │
 ├─────────────────────────────────────────────────────────┤
-│  Rate Limiter ──► Hierarchical token buckets           │
-│  Compressor   ──► Zstd/LZ4 adaptive compression        │
-│  Metrics      ──► Prometheus lock-free counters        │
-│  TLS Context  ──► Optional HTTPS with ACME renewal     │
-│  CDN Manager  ──► Signed URLs and cache headers        │
+│  Connection Pool ──► Bounded thread pool (not 1:1)     │
+│  Rate Limiter    ──► Hierarchical token buckets        │
+│  Compressor      ──► Zstd/LZ4 adaptive compression     │
+│  Metrics         ──► Prometheus lock-free counters     │
+│  TLS Context     ──► Optional HTTPS with ACME renewal  │
+│  CDN Manager     ──► Signed URLs and cache headers     │
 └─────────────────────────────────────────────────────────┘
            │
            ▼
@@ -72,6 +73,15 @@ Production-ready distributed caching system with enterprise features.
   │  File Storage  │  (Content-addressable)
   └────────────────┘
 ```
+
+### Connection Handling (Bounded Thread Pool)
+
+The server uses a **bounded thread pool** instead of thread-per-connection:
+
+- **Worker threads**: Fixed pool (default: 2× CPU cores)
+- **Connection queue**: Bounded backlog (default: 1024)
+- **Backpressure**: Returns 503 when queue is full
+- **Benefits**: Predictable resource usage, no thread exhaustion under load
 
 ## Usage
 
@@ -83,7 +93,7 @@ server.start();
 
 ### Production Server
 ```d
-import core.caching.distributed.remote;
+import engine.caching.distributed.remote;
 
 // Configure TLS
 auto tlsConfig = TlsConfig.init;
@@ -109,7 +119,9 @@ auto server = new CacheServer(
     true,                    // enable rate limiting
     true,                    // enable metrics
     tlsConfig,              // TLS configuration
-    cdnConfig               // CDN configuration
+    cdnConfig,              // CDN configuration
+    32,                      // worker threads (0 = 2*CPUs)
+    4096                     // connection queue size
 );
 
 server.start();

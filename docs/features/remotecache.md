@@ -186,6 +186,11 @@ builder cache-server \
   --port 8080 \
   --storage /var/cache/bldr \
   --max-size 50000000000
+
+# High-concurrency server (custom thread pool)
+builder cache-server \
+  --workers 32 \
+  --queue-size 4096
 ```
 
 **Docker deployment:**
@@ -284,6 +289,8 @@ export BUILDER_CACHE_SERVER_PORT=8080
 export BUILDER_CACHE_SERVER_STORAGE=/var/cache/bldr
 export BUILDER_CACHE_SERVER_MAX_SIZE=100000000000  # 100 GB
 export BUILDER_CACHE_SERVER_AUTH_TOKEN=your-secret-token
+export BUILDER_CACHE_SERVER_WORKERS=32              # Thread pool size
+export BUILDER_CACHE_SERVER_QUEUE_SIZE=4096         # Connection backlog
 export BUILDER_CACHE_SERVER_ENABLE_COMPRESSION=true
 export BUILDER_CACHE_SERVER_ENABLE_RATE_LIMITING=true
 export BUILDER_CACHE_SERVER_ENABLE_METRICS=true
@@ -302,6 +309,8 @@ builder cache-server \
   --storage /var/cache/bldr \
   --auth your-secret-token \
   --max-size 100000000000 \
+  --workers 32 \
+  --queue-size 4096 \
   --enable-compression \
   --enable-rate-limiting \
   --enable-metrics \

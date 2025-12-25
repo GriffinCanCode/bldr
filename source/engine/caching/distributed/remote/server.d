@@ -12,6 +12,8 @@ import std.array : Appender;
 import std.uri : decode;
 import core.thread : Thread;
 import core.sync.mutex;
+import core.sync.condition;
+import core.atomic;
 import engine.caching.distributed.remote.protocol;
 import engine.caching.distributed.remote.limiter;
 import engine.caching.distributed.remote.compress;
@@ -22,8 +24,118 @@ import infrastructure.utils.files.hash : FastHash;
 import infrastructure.utils.security.integrity : IntegrityValidator;
 import infrastructure.errors;
 
+/// Bounded connection pool for scalable client handling
+/// Uses a fixed thread pool with work queue instead of thread-per-connection
+private final class ConnectionPool
+{
+    private Thread[] workers;
+    private Socket[] queue;
+    private size_t queueHead, queueTail, queueSize;
+    private Mutex queueMutex;
+    private Condition workAvailable;
+    private shared bool running;
+    private immutable size_t queueCapacity;
+    private void delegate(Socket) @trusted handler;
+    
+    this(size_t workerCount, size_t queueCapacity, void delegate(Socket) @trusted handler) @trusted
+    {
+        import std.parallelism : totalCPUs;
+        
+        this.handler = handler;
+        this.queueCapacity = queueCapacity;
+        this.queue = new Socket[queueCapacity];
+        this.queueMutex = new Mutex();
+        this.workAvailable = new Condition(queueMutex);
+        atomicStore(running, true);
+        
+        immutable numWorkers = workerCount == 0 ? totalCPUs * 2 : workerCount;
+        workers.reserve(numWorkers);
+        foreach (_; 0 .. numWorkers)
+        {
+            auto worker = new Thread(&workerLoop);
+            workers ~= worker;
+            worker.start();
+        }
+    }
+    
+    /// Submit a client socket for processing. Returns false if queue is full.
+    bool submit(Socket client) @trusted nothrow
+    {
+        try
+        {
+            synchronized (queueMutex)
+            {
+                if (queueSize >= queueCapacity)
+                    return false;
+                
+                queue[queueTail] = client;
+                queueTail = (queueTail + 1) % queueCapacity;
+                queueSize++;
+                workAvailable.notify();
+            }
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+    
+    /// Shutdown the pool and wait for workers to finish
+    void shutdown() @trusted nothrow
+    {
+        atomicStore(running, false);
+        
+        try
+        {
+            synchronized (queueMutex)
+                workAvailable.notifyAll();
+            
+            foreach (worker; workers)
+            {
+                try { worker.join(); } catch (Exception) {}
+            }
+        }
+        catch (Exception) {}
+    }
+    
+    private void workerLoop() @trusted
+    {
+        while (atomicLoad(running))
+        {
+            Socket client;
+            
+            synchronized (queueMutex)
+            {
+                while (queueSize == 0 && atomicLoad(running))
+                    workAvailable.wait();
+                
+                if (!atomicLoad(running) && queueSize == 0)
+                    break;
+                
+                if (queueSize > 0)
+                {
+                    client = queue[queueHead];
+                    queue[queueHead] = null;
+                    queueHead = (queueHead + 1) % queueCapacity;
+                    queueSize--;
+                }
+            }
+            
+            if (client !is null)
+            {
+                try
+                {
+                    handler(client);
+                }
+                catch (Exception) {}
+            }
+        }
+    }
+}
+
 /// Production-ready HTTP cache server
-/// Features: compression, rate limiting, TLS, metrics, CDN integration
+/// Features: compression, rate limiting, TLS, metrics, CDN integration, bounded thread pool
 /// Content-addressable storage with LRU eviction
 final class CacheServer
 {
@@ -33,7 +145,7 @@ final class CacheServer
     private string authToken;
     private size_t maxStorageSize;
     private Socket listener;
-    private bool running;
+    private shared bool running;
     private Mutex storageMutex;
     private RemoteCacheStats stats;
     
@@ -47,6 +159,11 @@ final class CacheServer
     private bool enableRateLimiting;
     private bool enableMetrics;
     
+    // Connection pool (replaces thread-per-connection)
+    private ConnectionPool connectionPool;
+    private immutable size_t workerCount;
+    private immutable size_t connectionQueueSize;
+    
     /// Constructor
     this(
         string host = "0.0.0.0",
@@ -58,7 +175,9 @@ final class CacheServer
         bool enableRateLimiting = true,
         bool enableMetrics = true,
         TlsConfig tlsConfig = TlsConfig.init,
-        CdnConfig cdnConfig = CdnConfig.init
+        CdnConfig cdnConfig = CdnConfig.init,
+        size_t workerCount = 0,           // 0 = 2 * CPU cores
+        size_t connectionQueueSize = 1024 // Backlog for pending connections
     ) @trusted
     {
         this.host = host;
@@ -70,6 +189,8 @@ final class CacheServer
         this.enableCompression = enableCompression;
         this.enableRateLimiting = enableRateLimiting;
         this.enableMetrics = enableMetrics;
+        this.workerCount = workerCount;
+        this.connectionQueueSize = connectionQueueSize;
         
         // Initialize production features
         if (enableRateLimiting)
@@ -89,7 +210,7 @@ final class CacheServer
             mkdirRecurse(storageDir);
     }
     
-    /// Start the cache server
+    /// Start the cache server with bounded thread pool
     void start() @trusted
     {
         listener = new TcpSocket();
@@ -97,34 +218,58 @@ final class CacheServer
         listener.bind(new InternetAddress(host, port));
         listener.listen(128);
         
-        running = true;
+        atomicStore(running, true);
+        
+        // Initialize connection pool
+        connectionPool = new ConnectionPool(workerCount, connectionQueueSize, &handleClient);
+        
+        import std.parallelism : totalCPUs;
+        immutable actualWorkers = workerCount == 0 ? totalCPUs * 2 : workerCount;
         
         writefln("Cache server listening on %s:%d", host, port);
+        writefln("Worker threads: %d, connection queue: %d", actualWorkers, connectionQueueSize);
         writefln("Storage directory: %s", storageDir);
         writefln("Max storage size: %.2f GB", maxStorageSize / 1_000_000_000.0);
         
-        while (running)
+        while (atomicLoad(running))
         {
             try
             {
                 auto client = listener.accept();
                 
-                // Handle in new thread for concurrency
-                auto thread = new Thread(() => handleClient(client));
-                thread.start();
+                // Submit to connection pool; reject if queue full (backpressure)
+                if (!connectionPool.submit(client))
+                {
+                    // Queue full - send 503 and close
+                    try
+                    {
+                        sendErrorResponse(client, 503, "Service Unavailable");
+                        client.shutdown(SocketShutdown.BOTH);
+                        client.close();
+                    }
+                    catch (Exception) {}
+                    
+                    if (enableMetrics)
+                        metricsExporter.recordRequest("REJECTED", 503, MonoTime.currTime - MonoTime.currTime);
+                }
             }
             catch (Exception e)
             {
-                if (running)
+                if (atomicLoad(running))
                     writeln("Error accepting connection: ", e.msg);
             }
         }
     }
     
-    /// Stop the cache server
+    /// Stop the cache server and cleanup resources
     void stop() @trusted
     {
-        running = false;
+        atomicStore(running, false);
+        
+        // Shutdown connection pool first to stop processing
+        if (connectionPool !is null)
+            connectionPool.shutdown();
+        
         if (listener !is null)
         {
             try

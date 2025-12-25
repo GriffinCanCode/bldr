@@ -11,6 +11,7 @@ module engine.caching.distributed.remote;
 /// - Connection pooling and retry logic
 /// 
 /// Production Features:
+/// - Connection Pool: Bounded thread pool (not thread-per-connection)
 /// - Compression: Zstd/LZ4 with adaptive selection
 /// - Rate Limiting: Token bucket with reputation tracking
 /// - TLS: Built-in HTTPS support
@@ -29,14 +30,16 @@ module engine.caching.distributed.remote;
 /// auto server = new CacheServer("0.0.0.0", 8080);
 /// server.start();
 /// 
-/// // Production Server
+/// // Production Server (with thread pool tuning)
 /// auto tlsConfig = TlsConfig("cert.pem", "key.pem");
 /// auto cdnConfig = CdnConfig("cdn.example.com", "signing-key");
 /// auto prodServer = new CacheServer(
 ///     "0.0.0.0", 8080, ".cache",
 ///     "auth-token", 100_000_000_000,
 ///     true, true, true,  // compression, rate limiting, metrics
-///     tlsConfig, cdnConfig
+///     tlsConfig, cdnConfig,
+///     32,    // worker threads (0 = 2*CPUs)
+///     4096   // connection queue size
 /// );
 /// prodServer.start();
 /// ```

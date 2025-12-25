@@ -4,6 +4,8 @@ import std.stdio : writeln, writefln;
 import std.conv : to;
 import std.getopt;
 import engine.caching.distributed.remote.server : CacheServer;
+import engine.caching.distributed.remote.tls : TlsConfig;
+import engine.caching.distributed.remote.cdn : CdnConfig;
 import infrastructure.utils.logging.logger : Logger;
 
 /// Cache server command
@@ -13,11 +15,15 @@ struct CacheServerCommand
     /// Execute cache server command
     static void execute(string[] args) @system
     {
+        import std.parallelism : totalCPUs;
+        
         string host = "0.0.0.0";
         ushort port = 8080;
         string storageDir = ".cache-storage";
         string authToken = "";
         size_t maxSize = 10_000_000_000;  // 10 GB default
+        size_t workers = 0;               // 0 = 2 * CPU cores
+        size_t queueSize = 1024;          // Connection backlog
         bool help = false;
         
         auto helpInfo = getopt(
@@ -27,6 +33,8 @@ struct CacheServerCommand
             "storage|s", "Storage directory (default: .cache-storage)", &storageDir,
             "auth|a", "Authentication token (optional)", &authToken,
             "max-size|m", "Maximum storage size in bytes (default: 10GB)", &maxSize,
+            "workers|w", "Worker threads (default: 2 * CPU cores)", &workers,
+            "queue-size|q", "Connection queue capacity (default: 1024)", &queueSize,
             "help", "Show this help message", &help
         );
         
@@ -36,9 +44,13 @@ struct CacheServerCommand
             return;
         }
         
+        immutable actualWorkers = workers == 0 ? totalCPUs * 2 : workers;
+        
         Logger.info("Starting Builder cache server...");
         Logger.info("Host: " ~ host);
         Logger.info("Port: " ~ port.to!string);
+        Logger.info("Workers: " ~ actualWorkers.to!string);
+        Logger.info("Queue size: " ~ queueSize.to!string);
         Logger.info("Storage: " ~ storageDir);
         Logger.info("Max size: " ~ formatBytes(maxSize));
         
@@ -49,7 +61,12 @@ struct CacheServerCommand
         
         try
         {
-            auto server = new CacheServer(host, port, storageDir, authToken, maxSize);
+            auto server = new CacheServer(
+                host, port, storageDir, authToken, maxSize,
+                true, true, true,  // compression, rate limiting, metrics
+                TlsConfig.init, CdnConfig.init,
+                workers, queueSize
+            );
             
             // Handle Ctrl+C gracefully
             import core.sys.posix.signal : signal, SIGINT, SIGTERM;
@@ -97,6 +114,8 @@ struct CacheServerCommand
         writeln("  -s, --storage <dir>       Storage directory (default: .cache-storage)");
         writeln("  -a, --auth <token>        Authentication token (optional)");
         writeln("  -m, --max-size <bytes>    Maximum storage size (default: 10GB)");
+        writeln("  -w, --workers <count>     Worker threads (default: 2 * CPU cores)");
+        writeln("  -q, --queue-size <count>  Connection queue capacity (default: 1024)");
         writeln("      --help                Show this help message");
         writeln();
         writeln("Examples:");
@@ -108,6 +127,9 @@ struct CacheServerCommand
         writeln();
         writeln("  # Start server with custom storage");
         writeln("  bldr cache-server --storage /var/cache/bldr --max-size 50000000000");
+        writeln();
+        writeln("  # High-concurrency server (custom thread pool)");
+        writeln("  bldr cache-server --workers 32 --queue-size 4096");
         writeln();
         writeln("Client Configuration:");
         writeln("  Set environment variables to use remote cache:");
