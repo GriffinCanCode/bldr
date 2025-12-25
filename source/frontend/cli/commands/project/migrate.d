@@ -12,8 +12,10 @@ import infrastructure.utils.logging.logger;
 import frontend.cli.control.terminal;
 import frontend.cli.display.format;
 import infrastructure.errors.formatting.format : format;
+import frontend.cli.commands.project.migration_wizard : MigrationWizard;
 
 /// Migration command - convert build files from other build systems
+/// Default: runs interactive wizard. Use --no-wizard for non-interactive mode.
 struct MigrateCommand
 {
     private static Terminal terminal;
@@ -37,34 +39,69 @@ struct MigrateCommand
     {
         init();
         
-        if (args.length < 2 || args[1] == "--help" || args[1] == "-h")
+        // Check for --help
+        if (args.canFind("--help") || args.canFind("-h"))
         {
             showHelp();
             return 0;
         }
         
-        string subcommand = args[1];
+        // Check for --no-wizard flag
+        bool noWizard = args.canFind("--no-wizard") || args.canFind("--batch");
         
-        switch (subcommand)
+        // Handle subcommands that don't need wizard
+        if (args.length >= 2)
         {
-            case "list":
-                listSystems();
-                return 0;
-                
-            case "info":
-                if (args.length < 3)
-                {
-                    Logger.error("Build system name required");
-                    Logger.info("Usage: bldr migrate info <system>");
-                    return 1;
-                }
-                showSystemInfo(args[2]);
-                return 0;
-                
-            default:
-                // Assume it's --from flag or direct execution
-                return performMigration(args[1 .. $]);
+            string subcommand = args[1];
+            switch (subcommand)
+            {
+                case "list":
+                    listSystems();
+                    return 0;
+                    
+                case "info":
+                    if (args.length < 3)
+                    {
+                        Logger.error("Build system name required");
+                        Logger.info("Usage: bldr migrate info <system>");
+                        return 1;
+                    }
+                    showSystemInfo(args[2]);
+                    return 0;
+                    
+                default:
+                    break;
+            }
         }
+        
+        // If --no-wizard or explicit flags provided, use non-interactive mode
+        if (noWizard || hasExplicitFlags(args))
+        {
+            // Filter out wizard-related flags
+            auto filteredArgs = args.filter!(a => a != "--no-wizard" && a != "--batch").array;
+            if (filteredArgs.length < 2)
+            {
+                Logger.error("Input file required for non-interactive mode");
+                Logger.info("Usage: bldr migrate --no-wizard --auto <file>");
+                return 1;
+            }
+            return performMigration(filteredArgs[1 .. $]);
+        }
+        
+        // Default: run the interactive wizard
+        return MigrationWizard.execute(args);
+    }
+    
+    /// Check if explicit non-wizard flags are provided
+    private static bool hasExplicitFlags(string[] args) @safe
+    {
+        foreach (arg; args)
+        {
+            if (arg.startsWith("--from") || arg.startsWith("--input") || 
+                arg == "--auto" || arg == "-a" || arg == "--dry-run" || arg == "-n")
+                return true;
+        }
+        return false;
     }
     
     private static int performMigration(string[] args) @system
@@ -260,12 +297,14 @@ struct MigrateCommand
         Logger.info("Convert build files from other build systems to Builderfile format.");
         Logger.info("");
         Logger.info("USAGE:");
-        Logger.info("  bldr migrate --from=<system> --input=<file> [--output=<file>]");
-        Logger.info("  bldr migrate --auto <file>");
-        Logger.info("  bldr migrate list");
-        Logger.info("  bldr migrate info <system>");
+        Logger.info("  bldr migrate                 Interactive wizard (default)");
+        Logger.info("  bldr migrate --no-wizard     Non-interactive mode");
+        Logger.info("  bldr migrate --auto <file>   Auto-detect and migrate (non-interactive)");
+        Logger.info("  bldr migrate list            List supported build systems");
+        Logger.info("  bldr migrate info <system>   Show build system details");
         Logger.info("");
         Logger.info("OPTIONS:");
+        Logger.info("  --no-wizard         Skip wizard, use non-interactive mode");
         Logger.info("  --from=<system>     Source build system (bazel, cmake, maven, etc.)");
         Logger.info("  --input=<file>      Input build file to migrate");
         Logger.info("  --output=<file>     Output Builderfile (default: Builderfile)");
@@ -278,14 +317,14 @@ struct MigrateCommand
         Logger.info("  info <system>       Show details about a specific build system");
         Logger.info("");
         Logger.info("EXAMPLES:");
-        Logger.info("  # Auto-detect and migrate");
+        Logger.info("  # Interactive wizard (recommended)");
+        Logger.info("  bldr migrate");
+        Logger.info("");
+        Logger.info("  # Auto-detect and migrate (non-interactive)");
         Logger.info("  bldr migrate --auto BUILD");
         Logger.info("");
-        Logger.info("  # Migrate from Bazel");
-        Logger.info("  bldr migrate --from=bazel --input=BUILD --output=Builderfile");
-        Logger.info("");
-        Logger.info("  # Migrate from CMake");
-        Logger.info("  bldr migrate --from=cmake CMakeLists.txt");
+        Logger.info("  # Explicit non-interactive migration");
+        Logger.info("  bldr migrate --no-wizard --from=cmake CMakeLists.txt");
         Logger.info("");
         Logger.info("  # Dry run to preview");
         Logger.info("  bldr migrate --auto pom.xml --dry-run");

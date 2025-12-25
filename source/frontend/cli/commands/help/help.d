@@ -81,6 +81,7 @@ struct HelpCommand
         printCommand("wizard", "", "Project setup wizard");
         printCommand("init", "", "Initialize Builderfile with auto-detection");
         printCommand("infer", "", "Preview auto-detected targets (dry-run)");
+        printCommand("migrate", "", "Interactive migration wizard (default)");
         terminal.writeln();
         
         // Monitoring & tools
@@ -319,6 +320,9 @@ struct HelpCommand
                 break;
             case "infer":
                 showInferHelp();
+                break;
+            case "migrate":
+                showMigrateHelp();
                 break;
             case "telemetry":
                 showTelemetryHelp();
@@ -932,6 +936,82 @@ struct HelpCommand
         printSeeAlso("bldr wizard", "Interactive setup wizard");
         printSeeAlso("bldr init", "Generate Builderfile from detection");
         printSeeAlso("bldr build", "Build using zero-config");
+        terminal.writeln();
+    }
+    
+    private static void showMigrateHelp()
+    {
+        terminal.writeln();
+        
+        string[] description = [
+            "Migrate build configuration from other build systems to Builderfile.",
+            "Runs interactive wizard by default. Use --no-wizard for batch mode.",
+            "Supports Bazel, CMake, Maven, Gradle, Make, Cargo, npm, and more."
+        ];
+        terminal.writeln(formatter.formatBox("bldr migrate [options]", description));
+        terminal.writeln();
+        
+        printSectionHeader("USAGE");
+        terminal.writeColored("  bldr migrate", Color.Cyan, Style.Bold);
+        terminal.write("                    ");
+        terminal.writeColored("Interactive wizard (default)", Color.BrightBlack);
+        terminal.writeln();
+        terminal.writeColored("  bldr migrate", Color.Cyan, Style.Bold);
+        terminal.write(" ");
+        terminal.writeColored("--no-wizard", Color.Yellow);
+        terminal.write("      ");
+        terminal.writeColored("Non-interactive batch mode", Color.BrightBlack);
+        terminal.writeln();
+        terminal.writeln();
+        
+        printSectionHeader("OPTIONS");
+        printOption("--no-wizard", "Skip wizard, use non-interactive batch mode");
+        printOption("--from=<system>", "Source build system (bazel, cmake, etc.)");
+        printOption("--input=<file>", "Input build file to migrate");
+        printOption("--output=<file>", "Output Builderfile (default: Builderfile)");
+        printOption("--auto, -a", "Auto-detect build system from file");
+        printOption("--dry-run, -n", "Preview migration without writing files");
+        terminal.writeln();
+        
+        printSectionHeader("SUBCOMMANDS");
+        printCommand("list", "", "List all supported build systems");
+        printCommand("info", "<system>", "Show details about a build system");
+        terminal.writeln();
+        
+        printSectionHeader("WIZARD FEATURES");
+        printFeature("Auto-scans project for existing build files");
+        printFeature("Shows confidence scores for detected systems");
+        printFeature("Explains each translation step in detail");
+        printFeature("Handles edge cases with interactive prompts");
+        printFeature("Validates generated configuration");
+        printFeature("Shows side-by-side preview before writing");
+        terminal.writeln();
+        
+        printSectionHeader("SUPPORTED BUILD SYSTEMS");
+        printFeature("Bazel (BUILD, BUILD.bazel)");
+        printFeature("CMake (CMakeLists.txt)");
+        printFeature("Maven (pom.xml)");
+        printFeature("Gradle (build.gradle, build.gradle.kts)");
+        printFeature("Make (Makefile, GNUmakefile)");
+        printFeature("Cargo (Cargo.toml)");
+        printFeature("npm (package.json)");
+        printFeature("Go Modules (go.mod)");
+        printFeature("DUB (dub.json)");
+        printFeature("SBT (build.sbt)");
+        printFeature("Meson (meson.build)");
+        terminal.writeln();
+        
+        printSectionHeader("EXAMPLES");
+        printExample("bldr migrate", "Interactive wizard (recommended)");
+        printExample("bldr migrate --auto BUILD", "Auto-detect and migrate (batch)");
+        printExample("bldr migrate --no-wizard --from=cmake CMakeLists.txt", "Explicit batch mode");
+        printExample("bldr migrate list", "List all systems");
+        printExample("bldr migrate info cmake", "Show CMake migration info");
+        terminal.writeln();
+        
+        printSectionHeader("SEE ALSO");
+        printSeeAlso("bldr wizard", "Interactive project setup");
+        printSeeAlso("bldr init", "Initialize from scratch");
         terminal.writeln();
     }
     
