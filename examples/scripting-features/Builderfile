@@ -1,0 +1,51 @@
+# Scripting Features Test - Main Builderfile
+# A simpler example that can actually run
+
+const VERSION = "1.0.0";
+let build_dir = "bin";
+
+# Define packages
+let packages = ["core", "utils"];
+
+# Generate library targets for each package
+for pkg in packages {
+    target(pkg) {
+        type: library;
+        language: python;
+        sources: ["src/${pkg}.py"];
+    }
+}
+
+# Conditional based on platform
+let os = platform();
+let extra_deps = [];
+
+if (os == "darwin") {
+    let extra_deps = ["darwin-support"];
+}
+
+# Main application
+target("app") {
+    type: executable;
+    language: python;
+    sources: ["src/main.py"];
+    deps: packages + extra_deps;
+    env: {
+        "VERSION": VERSION,
+        "PLATFORM": os
+    };
+}
+
+# Function-based target
+fn test_target(name) {
+    return {
+        type: test,
+        language: python,
+        sources: ["tests/test_${name}.py"],
+        deps: [name]
+    };
+}
+
+target("test-core") = test_target("core");
+target("test-utils") = test_target("utils");
+

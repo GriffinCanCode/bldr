@@ -1,0 +1,45 @@
+# Example: Variables and Constants
+# Demonstrates let/const declarations and string interpolation
+
+# Constants - cannot be reassigned
+const VERSION = "1.0.0";
+const BUILD_DIR = "bin";
+const PROJECT_NAME = "myapp";
+
+# Variables - can be reassigned
+let debug_mode = true;
+let optimization_level = 2;
+
+# String interpolation with ${...}
+let app_name = "${PROJECT_NAME}-${VERSION}";
+
+# Arrays
+let source_dirs = ["src", "lib", "utils"];
+let compiler_flags = ["-Wall", "-Wextra"];
+
+# Maps
+let env_vars = {
+    "DEBUG": "1",
+    "VERSION": VERSION
+};
+
+# Target using variables
+target("${app_name}") {
+    type: executable;
+    language: c;
+    sources: ["src/main.c"];
+    output: "${BUILD_DIR}/${app_name}";
+    flags: compiler_flags;
+    env: env_vars;
+}
+
+# Another target with computed values
+let lib_name = "lib${PROJECT_NAME}";
+
+target(lib_name) {
+    type: library;
+    language: c;
+    sources: ["lib/*.c"];
+    output: "${BUILD_DIR}/${lib_name}.a";
+}
+

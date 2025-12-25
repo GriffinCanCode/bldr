@@ -1,0 +1,6 @@
+# Scripting Features Examples Workspace
+workspace {
+    name: "scripting-examples";
+    version: "1.0.0";
+}
+

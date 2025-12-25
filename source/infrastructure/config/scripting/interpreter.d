@@ -265,10 +265,85 @@ class Interpreter
     /// Execute target statement
     private Result!BuildError executeTargetStmt(TargetDeclStmt stmt) @system
     {
-        // Add target to generated targets list
-        // Note: TargetDeclStmt contains fields that need to be converted to a Target
-        // This is handled by the semantic analyzer
+        // Evaluate expressions in target fields before passing to semantic analyzer
+        auto expandedTarget = expandTargetExpressions(stmt);
+        if (expandedTarget.isErr)
+            return Result!BuildError.err(expandedTarget.unwrapErr());
+        
+        generatedTargets ~= expandedTarget.unwrap();
         return Result!BuildError.ok();
+    }
+    
+    /// Expand expressions in target fields (resolve variables, concatenations, etc.)
+    private Result!(TargetDeclStmt, BuildError) expandTargetExpressions(TargetDeclStmt stmt) @system
+    {
+        import infrastructure.config.workspace.ast : Field, Location;
+        
+        Field[] expandedFields;
+        foreach (field; stmt.fields)
+        {
+            auto expandedValue = expandExpr(field.value);
+            if (expandedValue.isErr)
+                return Result!(TargetDeclStmt, BuildError).err(expandedValue.unwrapErr());
+            expandedFields ~= Field(field.name, expandedValue.unwrap(), field.loc);
+        }
+        
+        return Result!(TargetDeclStmt, BuildError).ok(
+            new TargetDeclStmt(stmt.name, expandedFields, stmt.location()));
+    }
+    
+    /// Expand expression - evaluate variables and create literal expression
+    private Result!(Expr, BuildError) expandExpr(Expr expr) @system
+    {
+        import infrastructure.config.workspace.ast : LiteralExpr, Literal, LiteralKind, Location;
+        
+        auto valueResult = evaluateExpr(expr);
+        if (valueResult.isErr)
+            return Result!(Expr, BuildError).err(valueResult.unwrapErr());
+        
+        auto value = valueResult.unwrap();
+        return Result!(Expr, BuildError).ok(valueToExpr(value, expr.location()));
+    }
+    
+    /// Convert Value to Expr (for expanded target fields)
+    private Expr valueToExpr(Value value, Location loc) @system
+    {
+        import infrastructure.config.workspace.ast : LiteralExpr, Literal, LiteralKind;
+        
+        final switch (value.type())
+        {
+            case ValueType.Null:
+                return new LiteralExpr(Literal.makeNull(), loc);
+            case ValueType.Bool:
+                return new LiteralExpr(Literal.makeBool(value.asBool()), loc);
+            case ValueType.Number:
+                return new LiteralExpr(Literal.makeNumber(cast(long)value.asNumber()), loc);
+            case ValueType.String:
+                return new LiteralExpr(Literal.makeString(value.asString()), loc);
+            case ValueType.Array:
+                Literal[] elements;
+                foreach (elem; value.asArray())
+                    elements ~= exprToLiteral(valueToExpr(elem, loc));
+                return new LiteralExpr(Literal.makeArray(elements), loc);
+            case ValueType.Map:
+                Literal[string] pairs;
+                foreach (k, v; value.asMap())
+                    pairs[k] = exprToLiteral(valueToExpr(v, loc));
+                return new LiteralExpr(Literal.makeMap(pairs), loc);
+            case ValueType.Function:
+            case ValueType.Target:
+                // Functions and targets can't be directly converted to literals
+                return new LiteralExpr(Literal.makeNull(), loc);
+        }
+    }
+    
+    /// Extract Literal from LiteralExpr
+    private Literal exprToLiteral(Expr expr) @system
+    {
+        import infrastructure.config.workspace.ast : LiteralExpr;
+        if (auto lit = cast(LiteralExpr)expr)
+            return lit.value;
+        return Literal.makeNull();
     }
     
     /// Execute expression statement

@@ -1,0 +1,235 @@
+# Complete Example: Full-Featured Builderfile
+# Demonstrates all Tier 1 scripting features together
+
+# ============================================
+# Configuration Constants
+# ============================================
+
+const VERSION = "2.0.0";
+const PROJECT = "microservices-demo";
+const BUILD_DIR = "dist";
+
+# ============================================
+# Environment Detection
+# ============================================
+
+let os = platform();
+let cpu = arch();
+let is_ci = env("CI", "false") == "true";
+let build_mode = env("BUILD_MODE", "debug");
+
+# ============================================
+# Platform-Specific Configuration
+# ============================================
+
+fn get_platform_config() {
+    if (os == "darwin") {
+        return {
+            cc: "clang",
+            flags: ["-framework", "CoreFoundation"],
+            lib_ext: ".dylib"
+        };
+    } else if (os == "windows") {
+        return {
+            cc: "cl",
+            flags: ["/W4"],
+            lib_ext: ".dll"
+        };
+    } else {
+        return {
+            cc: "gcc",
+            flags: ["-pthread"],
+            lib_ext: ".so"
+        };
+    }
+}
+
+let platform_config = get_platform_config();
+
+# ============================================
+# Build Mode Configuration  
+# ============================================
+
+let opt_flags = [];
+let debug_flags = [];
+
+if (build_mode == "release") {
+    let opt_flags = ["-O3", "-DNDEBUG", "-flto"];
+} else if (build_mode == "debug") {
+    let debug_flags = ["-g", "-O0", "-DDEBUG"];
+} else {
+    let opt_flags = ["-O2"];
+}
+
+let common_flags = platform_config.flags + opt_flags + debug_flags;
+
+# ============================================
+# Target Builder Functions
+# ============================================
+
+fn go_service(name, port, deps) {
+    let service_deps = deps;
+    if (is_ci) {
+        let service_deps = deps + ["ci-tools"];
+    }
+    
+    return {
+        type: executable,
+        language: go,
+        sources: ["services/${name}/**/*.go"],
+        deps: service_deps,
+        env: {
+            "PORT": str(port),
+            "VERSION": VERSION,
+            "SERVICE": name
+        }
+    };
+}
+
+fn python_package(name) {
+    return {
+        type: library,
+        language: python,
+        sources: ["python/${name}/**/*.py"]
+    };
+}
+
+fn c_library(name, extra_flags) {
+    let flags = common_flags + extra_flags;
+    return {
+        type: library,
+        language: c,
+        sources: ["native/${name}/**/*.c"],
+        flags: flags,
+        output: "${BUILD_DIR}/lib${name}${platform_config.lib_ext}"
+    };
+}
+
+# ============================================
+# Service Definitions
+# ============================================
+
+let services = [
+    {name: "gateway", port: 8080, deps: ["auth-client", "rate-limiter"]},
+    {name: "auth", port: 8081, deps: ["user-store", "token-service"]},
+    {name: "users", port: 8082, deps: ["database", "cache"]},
+    {name: "orders", port: 8083, deps: ["database", "messaging"]},
+    {name: "inventory", port: 8084, deps: ["database"]}
+];
+
+# Generate service targets
+for svc in services {
+    target("${svc.name}-service") = go_service(svc.name, svc.port, svc.deps);
+}
+
+# ============================================
+# Shared Libraries
+# ============================================
+
+let shared_packages = ["common", "models", "utils", "clients"];
+
+for pkg in shared_packages {
+    target("${pkg}-lib") = python_package(pkg);
+}
+
+# Native extensions with platform-specific flags
+let native_libs = [
+    {name: "crypto", flags: ["-lcrypto", "-lssl"]},
+    {name: "compress", flags: ["-lz", "-llz4"]},
+    {name: "simd", flags: ["-mavx2", "-msse4.2"]}
+];
+
+for lib in native_libs {
+    # Skip SIMD on ARM
+    if (lib.name == "simd" && cpu == "arm64") {
+        # Use NEON instead on ARM
+        target("${lib.name}-native") = c_library(lib.name, ["-mfpu=neon"]);
+    } else {
+        target("${lib.name}-native") = c_library(lib.name, lib.flags);
+    }
+}
+
+# ============================================
+# Tests (only in CI or when enabled)
+# ============================================
+
+let run_tests = is_ci || env("RUN_TESTS", "false") == "true";
+
+if (run_tests) {
+    # Discover test files
+    let test_files = glob("tests/**/*_test.go");
+    let test_names = map(test_files, |f| {
+        let base = basename(f);
+        return stripExtension(replace(base, "_test", ""));
+    });
+    
+    for test in test_names {
+        target("test-${test}") {
+            type: test;
+            language: go;
+            sources: ["tests/${test}_test.go"];
+            deps: ["${test}-service"];
+        }
+    }
+    
+    # Integration test suite
+    target("integration-tests") {
+        type: test;
+        language: go;
+        sources: ["tests/integration/**/*.go"];
+        deps: map(services, |s| "${s.name}-service");
+        env: {
+            "TEST_MODE": "integration",
+            "VERBOSE": is_ci ? "true" : "false"
+        };
+    }
+}
+
+# ============================================
+# Docker Images (CI only)
+# ============================================
+
+if (is_ci) {
+    for svc in services {
+        target("docker-${svc.name}") {
+            type: custom;
+            sources: ["docker/${svc.name}/Dockerfile"];
+            deps: ["${svc.name}-service"];
+            config: {
+                "command": "docker build -t ${PROJECT}/${svc.name}:${VERSION} .",
+                "cwd": "docker/${svc.name}"
+            };
+        }
+    }
+}
+
+# ============================================
+# Documentation
+# ============================================
+
+let doc_formats = ["html", "pdf"];
+
+for fmt in doc_formats {
+    target("docs-${fmt}") {
+        type: custom;
+        sources: ["docs/**/*.md"];
+        config: {
+            "command": "mkdocs build --format ${fmt}",
+            "output": "${BUILD_DIR}/docs/${fmt}"
+        };
+    }
+}
+
+# ============================================
+# Meta Target - Build Everything
+# ============================================
+
+let all_services = map(services, |s| "${s.name}-service");
+let all_libs = map(shared_packages, |p| "${p}-lib");
+let all_native = map(native_libs, |l| "${l.name}-native");
+
+target("all") {
+    type: alias;
+    deps: all_services + all_libs + all_native;
+}
+

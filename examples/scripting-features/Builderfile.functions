@@ -1,0 +1,105 @@
+# Example: Functions and Closures
+# Demonstrates user-defined functions, closures, and lambdas
+
+# Simple function - creates a Python library target template
+fn python_lib(name) {
+    return {
+        type: library,
+        language: python,
+        sources: ["src/${name}/**/*.py"]
+    };
+}
+
+# Function with multiple parameters
+fn cpp_executable(name, srcs, deps) {
+    return {
+        type: executable,
+        language: cpp,
+        sources: srcs,
+        deps: deps,
+        flags: ["-std=c++17", "-Wall"]
+    };
+}
+
+# Function with default parameter
+fn go_service(name, port) {
+    let default_port = 8080;
+    let actual_port = port;
+    
+    return {
+        type: executable,
+        language: go,
+        sources: ["services/${name}/**/*.go"],
+        env: {"PORT": str(actual_port)}
+    };
+}
+
+# Closure - function that captures its environment
+fn make_library_builder(lang, base_flags) {
+    # This inner function captures 'lang' and 'base_flags'
+    return |name| {
+        type: library,
+        language: lang,
+        sources: ["lib/${name}/**/*"],
+        flags: base_flags
+    };
+}
+
+# Create specialized builders using closures
+let c_lib = make_library_builder("c", ["-O2", "-Wall"]);
+let rust_lib = make_library_builder("rust", ["--edition=2021"]);
+
+# Higher-order function - applies a transform to each item
+fn build_all(names, builder_fn) {
+    for name in names {
+        target(name) = builder_fn(name);
+    }
+}
+
+# Lambda expressions - anonymous functions
+let double = |x| x * 2;
+let add_prefix = |s| "lib" + s;
+
+# Use lambdas with built-in map/filter
+let numbers = [1, 2, 3, 4, 5];
+let doubled = map(numbers, |x| x * 2);
+let evens = filter(numbers, |x| x % 2 == 0);
+
+# Apply functions to create targets
+target("mylib") = python_lib("mylib");
+
+target("myapp") = cpp_executable(
+    "myapp",
+    ["src/main.cpp", "src/app.cpp"],
+    ["mylib"]
+);
+
+target("api") = go_service("api", 8080);
+target("auth") = go_service("auth", 8081);
+
+# Build multiple libraries using the closure
+let lib_names = ["utils", "core", "network"];
+build_all(lib_names, c_lib);
+
+# Function returning function (currying)
+fn with_optimization(level) {
+    return |target_config| {
+        let flags = target_config.flags + ["-O" + str(level)];
+        return {
+            type: target_config.type,
+            language: target_config.language,
+            sources: target_config.sources,
+            flags: flags
+        };
+    };
+}
+
+let optimize_3 = with_optimization(3);
+
+# Compose functions
+fn compose(f, g) {
+    return |x| f(g(x));
+}
+
+let upper_trim = compose(|s| upper(s), |s| trim(s));
+

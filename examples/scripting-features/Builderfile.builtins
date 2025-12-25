@@ -1,0 +1,143 @@
+# Example: Built-in Functions
+# Demonstrates the standard library functions
+
+# ============================================
+# String Operations
+# ============================================
+
+let raw_name = "  MyProject  ";
+let clean_name = trim(raw_name);           # "MyProject"
+let lower_name = lower(clean_name);        # "myproject"
+let upper_name = upper(clean_name);        # "MYPROJECT"
+
+# Split and join
+let path = "src/main/java";
+let parts = split(path, "/");              # ["src", "main", "java"]
+let rejoined = join(parts, "-");           # "src-main-java"
+
+# Replace
+let template = "Hello, {name}!";
+let greeting = replace(template, "{name}", "World");
+
+# String predicates
+let filename = "test_utils.py";
+let is_test = startsWith(filename, "test_");
+let is_python = endsWith(filename, ".py");
+let has_utils = contains(filename, "utils");
+
+# ============================================
+# Array Operations
+# ============================================
+
+let numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+let count = len(numbers);                  # 10
+
+# Append (immutable - returns new array)
+let more = append(numbers, 11);            # [1, 2, ..., 11]
+
+# Range generation
+let indices = range(0, 5);                 # [0, 1, 2, 3, 4]
+
+# Filter with lambda
+let evens = filter(numbers, |n| n % 2 == 0);     # [2, 4, 6, 8, 10]
+let large = filter(numbers, |n| n > 5);          # [6, 7, 8, 9, 10]
+
+# Map with lambda  
+let doubled = map(numbers, |n| n * 2);           # [2, 4, 6, ..., 20]
+let squared = map(numbers, |n| n * n);           # [1, 4, 9, ..., 100]
+
+# String filter/map
+let files = ["main.py", "test.py", "utils.js", "app.py"];
+let py_files = filter(files, |f| endsWith(f, ".py"));
+let basenames = map(py_files, |f| stripExtension(f));
+
+# ============================================
+# Type Conversions
+# ============================================
+
+let num_str = str(42);                     # "42"
+let str_num = int("123");                  # 123
+let truthy = bool("yes");                  # true
+let falsy = bool("");                      # false
+
+# ============================================
+# File Operations
+# ============================================
+
+# Glob patterns - find files
+let c_sources = glob("src/**/*.c");
+let headers = glob("include/**/*.h");
+let all_sources = glob("**/*.{c,h}");
+
+# File existence check
+let has_config = fileExists("config.json");
+let has_makefile = fileExists("Makefile");
+
+# Path manipulation
+let full_path = "src/utils/string_helpers.c";
+let base = basename(full_path);            # "string_helpers.c"
+let dir = dirname(full_path);              # "src/utils"
+let no_ext = stripExtension(base);         # "string_helpers"
+
+# ============================================
+# Environment
+# ============================================
+
+# Get environment variable with default
+let build_type = env("BUILD_TYPE", "debug");
+let home_dir = env("HOME", "/tmp");
+let ci_mode = env("CI", "false");
+
+# Platform detection
+let os = platform();                       # "linux", "darwin", or "windows"
+let cpu = arch();                          # "x86_64", "arm64", etc.
+
+# ============================================
+# Practical Examples
+# ============================================
+
+# Build configuration based on environment
+let debug = env("DEBUG", "0") == "1";
+let opt_level = debug ? 0 : 3;
+
+# Auto-discover source files
+let sources = glob("src/**/*.c");
+let test_sources = filter(glob("**/*.c"), |f| contains(f, "test"));
+
+# Platform-specific library extensions
+let lib_ext = "";
+if (platform() == "darwin") {
+    let lib_ext = ".dylib";
+} else if (platform() == "windows") {
+    let lib_ext = ".dll";
+} else {
+    let lib_ext = ".so";
+}
+
+# Generate targets from discovered files
+for src in sources {
+    let name = stripExtension(basename(src));
+    
+    target(name) {
+        type: library;
+        language: c;
+        sources: [src];
+        output: "lib/${name}${lib_ext}";
+    }
+}
+
+# Main application with auto-discovered dependencies
+let lib_targets = map(sources, |s| stripExtension(basename(s)));
+
+target("app") {
+    type: executable;
+    language: c;
+    sources: ["main.c"];
+    deps: lib_targets;
+    env: {
+        "BUILD_TYPE": build_type,
+        "PLATFORM": platform(),
+        "ARCH": arch()
+    };
+}
+

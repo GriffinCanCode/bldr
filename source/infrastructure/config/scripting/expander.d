@@ -98,9 +98,92 @@ class MacroExpander
     /// Execute statement and return generated targets
     private Result!(TargetDeclStmt[], BuildError) executeStatement(Statement stmt) @system
     {
-        // Implementation based on Statement AST node types
-        // Extended in full scripting implementation
-        return Result!(TargetDeclStmt[], BuildError).ok([]);
+        final switch (stmt.type)
+        {
+            case StatementType.TargetDeclStmt:
+                // Return target declaration directly
+                if (stmt.targetDecl !is null)
+                    return Result!(TargetDeclStmt[], BuildError).ok([stmt.targetDecl]);
+                return Result!(TargetDeclStmt[], BuildError).ok([]);
+                
+            case StatementType.ForLoop:
+                return executeForLoop(stmt);
+                
+            case StatementType.IfStatement:
+                return executeIfStatement(stmt);
+                
+            case StatementType.LetDecl:
+                // Variable declarations don't generate targets, just evaluate
+                return Result!(TargetDeclStmt[], BuildError).ok([]);
+                
+            case StatementType.Assignment:
+                // Assignments don't generate targets
+                return Result!(TargetDeclStmt[], BuildError).ok([]);
+        }
+    }
+    
+    /// Execute for loop and collect generated targets
+    private Result!(TargetDeclStmt[], BuildError) executeForLoop(Statement stmt) @system
+    {
+        // Evaluate iterable expression
+        auto iterableResult = evaluator.evaluate(stmt.loopIterable);
+        if (iterableResult.isErr)
+            return Result!(TargetDeclStmt[], BuildError).err(iterableResult.unwrapErr());
+        
+        auto iterable = iterableResult.unwrap();
+        if (!iterable.isArray())
+        {
+            auto error = new ParseError("For loop requires array iterable", null);
+            return Result!(TargetDeclStmt[], BuildError).err(error);
+        }
+        
+        TargetDeclStmt[] targets;
+        
+        // Enter loop scope
+        evaluator.enterScope();
+        scope(exit) evaluator.exitScope();
+        
+        // Iterate over array elements
+        foreach (elem; iterable.asArray())
+        {
+            // Bind loop variable
+            auto defineResult = evaluator.defineVariable(stmt.loopVar, elem, false);
+            if (defineResult.isErr)
+                return Result!(TargetDeclStmt[], BuildError).err(defineResult.unwrapErr());
+            
+            // Execute loop body
+            foreach (bodyStmt; stmt.loopBody)
+            {
+                auto result = executeStatement(bodyStmt);
+                if (result.isErr)
+                    return result;
+                targets ~= result.unwrap();
+            }
+        }
+        
+        return Result!(TargetDeclStmt[], BuildError).ok(targets);
+    }
+    
+    /// Execute if statement and return targets from appropriate branch
+    private Result!(TargetDeclStmt[], BuildError) executeIfStatement(Statement stmt) @system
+    {
+        // Evaluate condition
+        auto condResult = evaluator.evaluate(stmt.condition);
+        if (condResult.isErr)
+            return Result!(TargetDeclStmt[], BuildError).err(condResult.unwrapErr());
+        
+        TargetDeclStmt[] targets;
+        auto branch = condResult.unwrap().toBool() ? stmt.thenBranch : stmt.elseBranch;
+        
+        foreach (branchStmt; branch)
+        {
+            auto result = executeStatement(branchStmt);
+            if (result.isErr)
+                return result;
+            targets ~= result.unwrap();
+        }
+        
+        return Result!(TargetDeclStmt[], BuildError).ok(targets);
     }
 }
 

@@ -377,6 +377,7 @@ Result!(ParseResult, BuildError) parseDSL(
     string workspaceRoot) @system
 {
     import infrastructure.config.parsing.unified : parse;
+    import infrastructure.config.scripting.interpreter : Interpreter;
     
     // Parse to AST
     auto astResult = parse(source, filePath, workspaceRoot, null);
@@ -385,9 +386,29 @@ Result!(ParseResult, BuildError) parseDSL(
     
     auto ast = astResult.unwrap();
     
-    // Analyze targets
+    // Execute interpreter to process variables, loops, conditionals
+    // This expands for loops, evaluates if conditions, resolves variables
+    auto interpreter = new Interpreter();
+    auto execResult = interpreter.execute(ast.statements);
+    if (execResult.isErr)
+        return Err!(ParseResult, BuildError)(execResult.unwrapErr());
+    
+    auto generatedTargets = execResult.unwrap();
+    
+    // Create a new BuildFile with the expanded/generated targets
+    BuildFile expandedAst;
+    expandedAst.filePath = ast.filePath;
+    foreach (target; generatedTargets)
+        expandedAst.statements ~= target;
+    
+    // Also preserve repository declarations from original AST
+    foreach (stmt; ast.statements)
+        if (auto repoDecl = cast(RepositoryDeclStmt)stmt)
+            expandedAst.statements ~= repoDecl;
+    
+    // Analyze targets from expanded AST
     auto analyzer = SemanticAnalyzer(workspaceRoot, filePath);
-    auto targetsResult = analyzer.analyzeTargets(ast);
+    auto targetsResult = analyzer.analyzeTargets(expandedAst);
     if (targetsResult.isErr)
         return Err!(ParseResult, BuildError)(targetsResult.unwrapErr());
     

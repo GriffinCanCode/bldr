@@ -30,6 +30,10 @@ class Evaluator
         typeCheckOnly = false;
         returnValue = Value.makeNull();
         hasReturned = false;
+        
+        // Register this evaluator's closure invoker for builtins (filter/map)
+        import infrastructure.config.scripting.builtins : setClosureInvoker;
+        setClosureInvoker(&this.invokeClosure);
     }
     
     /// Get scope manager

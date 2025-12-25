@@ -1,0 +1,66 @@
+# Example: For Loops
+# Demonstrates generating multiple targets from arrays
+
+# Define packages to build
+let packages = ["core", "api", "cli", "utils"];
+
+# Generate a library target for each package
+for pkg in packages {
+    target(pkg) {
+        type: library;
+        language: python;
+        sources: ["src/${pkg}/**/*.py"];
+    }
+}
+
+# Generate executables with index using range()
+let services = ["auth", "users", "orders"];
+let base_port = 8000;
+
+for i in range(0, 3) {
+    let svc = services[i];
+    let port = base_port + i;
+    
+    target("${svc}-service") {
+        type: executable;
+        language: go;
+        sources: ["services/${svc}/**/*.go"];
+        env: {
+            "PORT": str(port),
+            "SERVICE_NAME": svc
+        };
+    }
+}
+
+# Nested data - generate from array of maps
+let components = [
+    {name: "frontend", lang: "typescript", dir: "web"},
+    {name: "backend", lang: "python", dir: "api"},
+    {name: "worker", lang: "go", dir: "worker"}
+];
+
+for comp in components {
+    target(comp.name) {
+        type: executable;
+        language: comp.lang;
+        sources: ["${comp.dir}/**/*"];
+    }
+}
+
+# Cross-product: multiple platforms x multiple apps
+let platforms = ["linux", "darwin", "windows"];
+let apps = ["client", "server"];
+
+for plat in platforms {
+    for app in apps {
+        target("${app}-${plat}") {
+            type: executable;
+            language: c;
+            sources: ["src/${app}/*.c"];
+            config: {
+                "platform": plat
+            };
+        }
+    }
+}
+

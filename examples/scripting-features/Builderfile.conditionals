@@ -1,0 +1,88 @@
+# Example: Conditionals
+# Demonstrates if/else statements for platform-specific builds
+
+# Get current platform
+let current_platform = platform();
+let current_arch = arch();
+
+# Platform-specific flags
+let platform_flags = [];
+let platform_libs = [];
+
+if (current_platform == "linux") {
+    let platform_flags = ["-pthread", "-D_GNU_SOURCE"];
+    let platform_libs = ["pthread", "dl"];
+} else if (current_platform == "darwin") {
+    let platform_flags = ["-framework", "CoreFoundation"];
+    let platform_libs = [];
+} else if (current_platform == "windows") {
+    let platform_flags = ["-DWIN32", "-D_WINDOWS"];
+    let platform_libs = ["ws2_32", "user32"];
+}
+
+# Architecture-specific optimizations
+let arch_flags = [];
+
+if (current_arch == "x86_64") {
+    let arch_flags = ["-march=native", "-mavx2"];
+} else if (current_arch == "arm64") {
+    let arch_flags = ["-march=armv8-a+simd"];
+}
+
+# Debug vs Release builds
+let build_mode = env("BUILD_MODE", "debug");
+let opt_flags = [];
+
+if (build_mode == "release") {
+    let opt_flags = ["-O3", "-DNDEBUG", "-flto"];
+} else {
+    let opt_flags = ["-O0", "-g", "-DDEBUG"];
+}
+
+# Combine all flags
+let all_flags = platform_flags + arch_flags + opt_flags;
+
+# Main target with conditional configuration
+target("app") {
+    type: executable;
+    language: c;
+    sources: ["src/**/*.c"];
+    flags: all_flags;
+    deps: platform_libs;
+}
+
+# Conditional target generation
+let enable_tests = env("ENABLE_TESTS", "true");
+
+if (enable_tests == "true") {
+    target("tests") {
+        type: test;
+        language: c;
+        sources: ["tests/**/*.c"];
+        deps: ["app"];
+        flags: ["-DTEST_MODE"];
+    }
+}
+
+# Feature flags
+let features = env("FEATURES", "");
+let feature_list = split(features, ",");
+
+if (contains(features, "ssl")) {
+    target("ssl-support") {
+        type: library;
+        language: c;
+        sources: ["src/ssl/*.c"];
+        deps: ["openssl"];
+    }
+}
+
+if (contains(features, "compression")) {
+    target("compression-support") {
+        type: library;
+        language: c;
+        sources: ["src/compress/*.c"];
+        deps: ["zlib", "lz4"];
+    }
+}
+

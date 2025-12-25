@@ -12,6 +12,26 @@ import infrastructure.config.scripting.types;
 import infrastructure.utils.files.glob;
 import infrastructure.errors;
 
+/// Closure invoker delegate for higher-order functions
+alias ClosureInvoker = Result!(Value, BuildError) delegate(Closure, Value[]) @system;
+
+/// Module-level evaluator context for closure invocation in builtins
+private ClosureInvoker closureInvoker_;
+
+/// Set the closure invoker (called by Evaluator on init)
+void setClosureInvoker(ClosureInvoker invoker) @system
+{
+    closureInvoker_ = invoker;
+}
+
+/// Invoke a closure with arguments (used by filter/map)
+private Result!(Value, BuildError) invokeClosure(Closure closure, Value[] args) @system
+{
+    if (closureInvoker_ is null)
+        return err("Closure invoker not initialized");
+    return closureInvoker_(closure, args);
+}
+
 /// Built-in function registry
 class BuiltinRegistry
 {
@@ -244,27 +264,35 @@ private Result!(Value, BuildError) builtinFilter(Value[] args) @system
     auto arr = args[0].asArray();
     Value[] filtered;
     
-    // Handle function value (closure/lambda)
-    if (args[1].isString())
+    // Handle closure/lambda predicate
+    if (args[1].isFunction())
     {
-        // String expression predicate: evaluate for each element
-        immutable predicateExpr = args[1].asString();
-        
+        auto closure = args[1].asClosure();
         foreach (elem; arr)
         {
-            // Create mini evaluator context with 'it' variable
+            auto result = invokeClosure(closure, [elem]);
+            if (result.isErr)
+                return result;
+            if (result.unwrap().toBool())
+                filtered ~= elem;
+        }
+    }
+    // Handle string expression predicate (legacy support)
+    else if (args[1].isString())
+    {
+        immutable predicateExpr = args[1].asString();
+        foreach (elem; arr)
+        {
             auto evalResult = evaluatePredicateExpression(predicateExpr, elem);
             if (evalResult.isErr)
                 return evalResult;
-            
             if (evalResult.unwrap().toBool())
                 filtered ~= elem;
         }
     }
     else
     {
-        // Direct predicate function (for future extension)
-        return err("filter() currently only supports string expressions as predicates");
+        return err("filter() expects a function or string expression as predicate");
     }
     
     return ok(Value.makeArray(filtered));
@@ -281,26 +309,33 @@ private Result!(Value, BuildError) builtinMap(Value[] args) @system
     auto arr = args[0].asArray();
     Value[] mapped;
     
-    // Handle function value (closure/lambda)
-    if (args[1].isString())
+    // Handle closure/lambda transform
+    if (args[1].isFunction())
     {
-        // String expression transform: evaluate for each element
-        immutable transformExpr = args[1].asString();
-        
+        auto closure = args[1].asClosure();
         foreach (elem; arr)
         {
-            // Create mini evaluator context with 'it' variable
+            auto result = invokeClosure(closure, [elem]);
+            if (result.isErr)
+                return result;
+            mapped ~= result.unwrap();
+        }
+    }
+    // Handle string expression transform (legacy support)
+    else if (args[1].isString())
+    {
+        immutable transformExpr = args[1].asString();
+        foreach (elem; arr)
+        {
             auto evalResult = evaluateTransformExpression(transformExpr, elem);
             if (evalResult.isErr)
                 return evalResult;
-            
             mapped ~= evalResult.unwrap();
         }
     }
     else
     {
-        // Direct transform function (for future extension)
-        return err("map() currently only supports string expressions as transforms");
+        return err("map() expects a function or string expression as transform");
     }
     
     return ok(Value.makeArray(mapped));

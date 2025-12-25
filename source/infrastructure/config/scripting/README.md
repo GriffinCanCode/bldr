@@ -13,7 +13,7 @@ This module implements functional DSL extensions for Builderfiles, enabling:
 - **Conditionals**: `if`/`else` statements
 - **Loops**: `for` loops and `range()` iteration
 - **Macros**: Code generation at parse time
-- **Built-ins**: 30+ standard library functions
+- **Built-ins**: 26 standard library functions
 - **Type Safety**: Static type checking
 - **Performance**: Compile-time evaluation
 
@@ -69,14 +69,14 @@ This module implements functional DSL extensions for Builderfiles, enabling:
 
 ### scopemanager.d
 - `ScopeManager`: Lexical scope management
-- `Symbol`: Variable binding with metadata
+- `Symbol`: Variable binding with metadata (name, value, isConst, isFunction, scopeLevel)
 - Nested scope support with automatic cleanup
 
 **Features:**
-- Stack-based symbol tables
-- Const enforcement
-- Shadowing detection
-- Scope guards for RAII
+- Stack-based symbol tables per name
+- Const enforcement (cannot reassign)
+- Shadowing detection (same-scope redefinition error)
+- `ScopedBlock` RAII guard for automatic scope cleanup
 
 ### builtins.d
 - `BuiltinRegistry`: Function registry
@@ -106,13 +106,24 @@ This module implements functional DSL extensions for Builderfiles, enabling:
 
 ### expander.d
 - `MacroExpander`: Macro expansion engine
-- `MacroDefinition`: Macro structure
-- Code generation at parse time
+- `MacroDefinition`: Macro structure (name, parameters, body)
+- `Statement`: Legacy statement struct for macro bodies
 
 **Features:**
 - Macro definitions with parameters
-- Hygiene (prevent name collisions)
-- Target generation
+- Scoped argument binding during expansion
+- Target generation (stub - needs completion)
+
+### interpreter.d
+- `Interpreter`: Statement execution engine
+- Bridges AST statements to evaluator
+
+**Features:**
+- Variable declaration execution (`let`, `const`)
+- Function declaration with closure capture
+- Control flow (`if`/`else`, `for` loops)
+- Block statements with scoping
+- Expression statement evaluation
 
 ## Usage Examples
 
@@ -210,25 +221,26 @@ genServices([
 
 ### Phase 1: Core Infrastructure ✅
 - [x] Type system (`types.d`)
-- [x] Scope management (`scope.d`)
-- [x] Built-in functions (`builtins.d`)
+- [x] Scope management (`scopemanager.d`)
+- [x] Built-in functions (`builtins.d`) - 26 functions
 - [x] Expression evaluator (`evaluator.d`)
-- [x] Macro expander (`expander.d`)
+- [x] Macro expander (`expander.d`) - full expansion with for/if support
+- [x] Statement interpreter (`interpreter.d`)
 - [x] Closures and first-class functions
 - [x] Lambda expressions
 - [x] Return statements with early exit
 
-### Phase 2: Parser Integration 🚧
-- [ ] Extend lexer with new tokens
-- [ ] Parse variable declarations
-- [ ] Parse functions and macros
-- [ ] Parse conditionals and loops
-- [ ] Integrate evaluator
+### Phase 2: Parser Integration ✅
+- [x] Extend lexer with new tokens
+- [x] Parse variable declarations (`let`, `const`)
+- [x] Parse functions (`fn`) and macros (`macro`)
+- [x] Parse conditionals (`if`/`else`) and loops (`for`)
+- [x] Wire interpreter into semantic analysis pipeline
 
-### Phase 3: Testing 📋
-- [ ] Unit tests for each module
-- [ ] Integration tests
-- [ ] Example Builderfiles
+### Phase 3: Testing ✅
+- [x] Unit tests for each module
+- [x] Type, scope, builtin, evaluator tests
+- [ ] Integration tests with full Builderfiles
 - [ ] Performance benchmarks
 
 ## Performance
@@ -306,13 +318,11 @@ dmd -unittest -main config/scripting/*.d -of=test-scripting
 
 ## Next Steps
 
-1. **Parser Integration**: Wire evaluator into DSL parser
-2. **Statement Execution**: Implement for loops and conditionals ✅
-3. **Function Definitions**: Support user-defined functions ✅
-4. **Closures**: First-class functions with captured environment ✅
-5. **Macro System**: Complete macro expansion
-6. **Documentation**: User guide and examples
-7. **Testing**: Comprehensive test suite
+1. **Integration Tests**: Add end-to-end tests with real Builderfile examples
+2. **Performance Benchmarks**: Measure parsing/evaluation overhead
+3. **Error Messages**: Improve error context and suggestions
+4. **Additional Builtins**: Add `reduce`, `find`, `sort`, `keys`, `values`
+5. **Documentation**: User guide with more examples
 
 ## Design Decisions
 
