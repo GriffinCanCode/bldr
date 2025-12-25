@@ -12,6 +12,8 @@ The Builder LSP provides rich language features for Builderfile configuration fi
 - ✅ **Hover Documentation** - Rich documentation on hover
 - ✅ **Find All References** - Find where targets are used (Shift+F12)
 - ✅ **Rename Refactoring** - Rename targets across all files (F2)
+- ✅ **CodeLens** - Inline dependency counts and impact analysis above each target
+- ✅ **Impact Analysis** - Severity visualization with estimated rebuild times
 
 ## Quick Start
 
@@ -202,6 +204,35 @@ Rename targets across all Builderfiles:
 3. Enter new name
 4. All references are updated automatically
 
+### CodeLens (Inline Dependency Visualization)
+
+Each target displays inline CodeLens showing:
+
+```
+⬇ 3 dependencies (8 transitive)  🟢 2 dependents  🟢 Impact: Low (~1s rebuild)
+target("my-lib") {
+    type: library;
+    deps: [":utils", ":core", ":config"];
+}
+```
+
+**Dependency count** - Click to visualize the dependency graph  
+**Dependent count** - Color-coded: 🟢 Low / 🟡 Medium / 🔴 High impact  
+**Impact analysis** - Shows severity and estimated rebuild time
+
+Impact severity levels:
+- 🟢 **Low** - Affects < 5 targets
+- 🟡 **Medium** - Affects 5-20 targets
+- 🟠 **High** - Affects 20-50 targets
+- 🔴 **Critical** - Affects 50+ targets
+
+### Impact Analysis Command
+
+Execute `builder.showImpactAnalysis` to see detailed impact:
+- Direct vs transitive dependency counts
+- Critical path through dependency graph
+- Estimated rebuild time based on historical data
+
 ## Other Editors
 
 ### IntelliJ IDEA / CLion
@@ -345,7 +376,6 @@ Current version limitations:
 1. **Single-file parsing**: Doesn't yet understand cross-file dependencies
 2. **No workspace symbols**: Ctrl+T symbol search not yet implemented
 3. **Basic rename**: Renames in current file only (workspace rename coming soon)
-4. **Simple validation**: Advanced semantic checks coming in future versions
 
 These will be addressed in future releases!
 

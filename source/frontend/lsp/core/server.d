@@ -1,6 +1,7 @@
 module frontend.lsp.core.server;
 
 import std.json;
+import std.json : JSONType;
 import std.stdio;
 import std.conv;
 import std.string;
@@ -18,6 +19,7 @@ import frontend.lsp.providers.references;
 import frontend.lsp.providers.rename;
 import frontend.lsp.providers.symbols;
 import frontend.lsp.providers.graph;
+import frontend.lsp.providers.codelens;
 import infrastructure.utils.logging.logger;
 
 /// LSP Server implementation with async message loop
@@ -32,6 +34,7 @@ class LSPServer
     private RenameProvider renameProvider;
     private SymbolsProvider symbolsProvider;
     private GraphProvider graphProvider;
+    private CodeLensProvider codeLensProvider;
     private string rootUri;
     
     // Async infrastructure
@@ -76,6 +79,8 @@ class LSPServer
         dispatcher.onRequest("textDocument/references", (p) => handleReferences(p));
         dispatcher.onRequest("textDocument/rename", (p) => handleRename(p));
         dispatcher.onRequest("textDocument/documentSymbol", (p) => handleDocumentSymbol(p));
+        dispatcher.onRequest("textDocument/codeLens", (p) => handleCodeLens(p));
+        dispatcher.onRequest("codeLens/resolve", (p) => handleCodeLensResolve(p));
         dispatcher.onRequest("workspace/executeCommand", (p) => handleExecuteCommand(p));
         
         // Notifications
@@ -114,6 +119,9 @@ class LSPServer
         // Create graph provider with workspace cache directory
         string cacheDir = uriToPath(rootUri) ~ "/.builder-cache";
         graphProvider = GraphProvider(workspace, cacheDir);
+        
+        // Create CodeLens provider with graph awareness
+        codeLensProvider = CodeLensProvider(workspace, &graphProvider);
         
         Logger.info("Workspace root: " ~ rootUri);
         if (graphProvider.hasGraph)
@@ -228,11 +236,30 @@ class LSPServer
         
         JSONValue[] symbolsJson;
         foreach (sym; symbols)
-        {
             symbolsJson ~= sym.toJSON();
-        }
         
         return JSONValue(symbolsJson);
+    }
+    
+    /// Handle CodeLens request - provides inline dependency visualization
+    private JSONValue handleCodeLens(JSONValue params)
+    {
+        auto lensParams = CodeLensParams.fromJSON(params);
+        auto lenses = codeLensProvider.provideCodeLenses(lensParams.textDocument.uri);
+        
+        JSONValue[] lensesJson;
+        foreach (ref lens; lenses)
+            lensesJson ~= lens.toJSON();
+        
+        return JSONValue(lensesJson);
+    }
+    
+    /// Handle CodeLens resolve request
+    private JSONValue handleCodeLensResolve(JSONValue params)
+    {
+        auto lens = CodeLens.fromJSON(params);
+        auto resolved = codeLensProvider.resolveCodeLens(lens);
+        return resolved.toJSON();
     }
     
     /// Handle workspace/executeCommand request
@@ -242,20 +269,31 @@ class LSPServer
         
         Logger.debugLog("Execute command: " ~ cmdParams.command);
         
+        // Extract args from array if needed
+        JSONValue args = cmdParams.arguments;
+        if (args.type == JSONType.array && args.array.length > 0)
+            args = args.array[0];
+        
         // Parse command and delegate to graph provider
         switch (cmdParams.command)
         {
             case "builder.goToDependency":
-                return graphProvider.executeCommand(GraphCommand.GoToDependency, cmdParams.arguments);
+                return graphProvider.executeCommand(GraphCommand.GoToDependency, args);
                 
             case "builder.findReverseDependencies":
-                return graphProvider.executeCommand(GraphCommand.FindReverseDependencies, cmdParams.arguments);
+                return graphProvider.executeCommand(GraphCommand.FindReverseDependencies, args);
                 
             case "builder.showDependencyTree":
-                return graphProvider.executeCommand(GraphCommand.ShowDependencyTree, cmdParams.arguments);
+                return graphProvider.executeCommand(GraphCommand.ShowDependencyTree, args);
                 
             case "builder.showImpactAnalysis":
-                return graphProvider.executeCommand(GraphCommand.ShowImpactAnalysis, cmdParams.arguments);
+                return graphProvider.executeCommand(GraphCommand.ShowImpactAnalysis, args);
+            
+            case "builder.showDependencyGraph":
+                return handleShowDependencyGraph(args);
+            
+            case "builder.navigateToTarget":
+                return handleNavigateToTarget(args);
                 
             default:
                 Logger.warning("Unknown command: " ~ cmdParams.command);
@@ -263,6 +301,53 @@ class LSPServer
                 error["error"] = "Unknown command: " ~ cmdParams.command;
                 return error;
         }
+    }
+    
+    /// Handle showDependencyGraph command - builds visual tree
+    private JSONValue handleShowDependencyGraph(JSONValue args)
+    {
+        string targetName;
+        if ("targetName" in args)
+            targetName = args["targetName"].str;
+        else if ("target" in args)
+            targetName = args["target"].str;
+        
+        if (targetName.length == 0)
+            return JSONValue(["error": "No target specified"]);
+        
+        bool isDeps = true;
+        if ("mode" in args && args["mode"].str == "dependents")
+            isDeps = false;
+        
+        // Build dependency tree structure
+        auto tree = graphProvider.buildDependencyTree(targetName, !isDeps);
+        
+        JSONValue result;
+        result["target"] = targetName;
+        result["mode"] = isDeps ? "dependencies" : "dependents";
+        result["tree"] = tree.toJSON();
+        result["ascii"] = DependencyGraphLens.renderDependencyTree(tree);
+        
+        return result;
+    }
+    
+    /// Handle navigateToTarget command
+    private JSONValue handleNavigateToTarget(JSONValue args)
+    {
+        string targetName;
+        if ("targetName" in args)
+            targetName = args["targetName"].str;
+        else if ("target" in args)
+            targetName = args["target"].str;
+        
+        if (targetName.length == 0)
+            return JSONValue(["error": "No target specified"]);
+        
+        auto loc = workspace.findDefinition(targetName);
+        if (loc is null)
+            return JSONValue(["error": "Target not found: " ~ targetName]);
+        
+        return loc.toJSON();
     }
     
     /// Handle didOpen notification

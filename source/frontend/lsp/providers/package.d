@@ -9,6 +9,7 @@
  * - Rename: Workspace-wide symbol renaming
  * - Symbols: Document outline and symbol navigation
  * - Graph: Build dependency navigation (Go to Dependency, Find Reverse Dependencies)
+ * - CodeLens: Inline dependency counts and impact analysis visualization
  * 
  * Each provider implements a specific LSP capability and operates
  * on the workspace state maintained by the workspace module.
@@ -22,4 +23,5 @@ public import frontend.lsp.providers.references;
 public import frontend.lsp.providers.rename;
 public import frontend.lsp.providers.symbols;
 public import frontend.lsp.providers.graph;
+public import frontend.lsp.providers.codelens;
 

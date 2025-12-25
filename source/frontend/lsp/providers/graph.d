@@ -1,9 +1,10 @@
 module frontend.lsp.providers.graph;
 
-import std.algorithm : map, filter;
-import std.array : array;
+import std.algorithm : map, filter, sort, min, max;
+import std.array : array, appender;
 import std.string : startsWith;
 import std.path : buildPath, dirName;
+import std.conv : to;
 import frontend.lsp.core.protocol;
 import frontend.lsp.workspace.workspace;
 import engine.graph.persistence.index;
@@ -243,29 +244,203 @@ struct GraphProvider
         if (targetName.length == 0)
             return JSONValue(["error": "No target specified"]);
 
-        auto impacted = graphIndex.getTransitiveDependents(targetName);
+        // Use enhanced impact analysis
+        auto impact = computeImpactAnalysis(targetName);
+        return impact.toJSON();
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Enhanced Impact Analysis
+    // ─────────────────────────────────────────────────────────────────
+
+    /// Compute full impact analysis for a target
+    ImpactAnalysis computeImpactAnalysis(string targetName)
+    {
+        ImpactAnalysis impact;
+        impact.targetName = targetName;
+
+        // Get direct dependents from workspace
+        auto directDeps = workspace.getDeclaredDependents(targetName);
+        impact.directCount = directDeps.length;
+        impact.directImpacts = directDeps.length <= 10 
+            ? directDeps 
+            : directDeps[0..10];  // Truncate for display
+
+        // Get transitive dependents if graph available
+        if (graphAvailable)
+        {
+            auto transitiveDeps = graphIndex.getTransitiveDependents(targetName);
+            impact.transitiveCount = transitiveDeps.length;
+            
+            // Compute critical path
+            impact.criticalPath = computeCriticalImpactPath(targetName, transitiveDeps);
+            
+            // Estimate rebuild time
+            impact.estimatedRebuildTime = estimateRebuildTime(targetName, transitiveDeps);
+        }
+        else
+        {
+            impact.transitiveCount = impact.directCount;
+        }
+
+        // Determine severity
+        impact.severity = computeSeverity(impact.transitiveCount);
+
+        return impact;
+    }
+
+    /// Build a dependency tree structure for visualization
+    DependencyNode buildDependencyTree(string targetName, bool reverse = false, int maxDepth = 5)
+    {
+        return buildTreeNodeRecursive(targetName, reverse, 0, maxDepth, null);
+    }
+
+    private DependencyNode buildTreeNodeRecursive(string name, bool reverse, int depth, int maxDepth, bool[string] visited)
+    {
+        if (visited is null)
+            visited = new bool[string];
         
-        JSONValue result;
-        result["target"] = targetName;
-        result["impactCount"] = impacted.length;
+        DependencyNode node;
+        node.name = name;
+        node.depth = depth;
+
+        // Get type from workspace or graph
+        auto sym = workspace.getIndex.getSymbol(name);
+        if (sym !is null)
+            node.nodeType = sym.detail;
+        else if (graphAvailable)
+        {
+            auto nodeResult = graphIndex.getNode(name);
+            if (nodeResult.isOk)
+                node.nodeType = nodeResult.unwrap().targetType;
+        }
+
+        // Check depth limit and cycles
+        if (depth >= maxDepth || name in visited)
+        {
+            node.isLeaf = true;
+            return node;
+        }
+        visited[name] = true;
+
+        // Get children (deps or dependents)
+        string[] children;
+        if (reverse)
+        {
+            children = graphAvailable 
+                ? graphIndex.getDependents(name)
+                : workspace.getDeclaredDependents(name);
+        }
+        else
+        {
+            children = graphAvailable
+                ? graphIndex.getDependencies(name)
+                : workspace.getDeclaredDependencies(name);
+        }
+
+        node.isLeaf = children.length == 0;
+
+        // Build child nodes
+        foreach (child; children)
+        {
+            node.children ~= buildTreeNodeRecursive(child, reverse, depth + 1, maxDepth, visited);
+        }
+
+        return node;
+    }
+
+    private ImpactSeverity computeSeverity(size_t impactCount) pure @safe
+    {
+        if (impactCount < 5) return ImpactSeverity.Low;
+        if (impactCount < 20) return ImpactSeverity.Medium;
+        if (impactCount < 50) return ImpactSeverity.High;
+        return ImpactSeverity.Critical;
+    }
+
+    private string[] computeCriticalImpactPath(string targetName, string[] impacted)
+    {
+        if (!graphAvailable || impacted.length == 0)
+            return [];
+
+        // Find the impacted node with the longest path from target
+        int maxDepth = 0;
+        string deepestNode;
         
-        JSONValue[] impacts;
         foreach (name; impacted)
         {
             auto nodeResult = graphIndex.getNode(name);
             if (nodeResult.isOk)
             {
-                auto node = nodeResult.unwrap();
-                JSONValue item;
-                item["name"] = name;
-                item["type"] = node.targetType;
-                item["status"] = cast(int)node.status;
-                impacts ~= item;
+                auto depth = nodeResult.unwrap().depth;
+                if (depth > maxDepth)
+                {
+                    maxDepth = depth;
+                    deepestNode = name;
+                }
             }
         }
-        result["impactedTargets"] = JSONValue(impacts);
+
+        if (deepestNode.length == 0)
+            return [];
+
+        // Trace path from target to deepest impacted
+        return tracePath(targetName, deepestNode);
+    }
+
+    private string[] tracePath(string from, string to)
+    {
+        // BFS to find shortest path
+        string[][string] pathTo;
+        pathTo[from] = [from];
         
-        return result;
+        string[] queue = [from];
+        size_t idx = 0;
+        
+        while (idx < queue.length)
+        {
+            auto current = queue[idx++];
+            if (current == to)
+                return pathTo[to];
+            
+            auto dependents = graphIndex.getDependents(current);
+            foreach (dep; dependents)
+            {
+                if (dep !in pathTo)
+                {
+                    pathTo[dep] = pathTo[current] ~ dep;
+                    queue ~= dep;
+                }
+            }
+        }
+        
+        return pathTo.get(to, []);
+    }
+
+    private long estimateRebuildTime(string targetName, string[] impacted)
+    {
+        if (!graphAvailable)
+            return 0;
+
+        long totalTime = 0;
+        
+        // Include target build time
+        auto targetResult = graphIndex.getNode(targetName);
+        if (targetResult.isOk)
+            totalTime += targetResult.unwrap().buildDuration;
+        
+        // Sum up impacted build times
+        foreach (name; impacted)
+        {
+            auto nodeResult = graphIndex.getNode(name);
+            if (nodeResult.isOk)
+            {
+                auto duration = nodeResult.unwrap().buildDuration;
+                // Use average if no recorded duration
+                totalTime += duration > 0 ? duration : 500;
+            }
+        }
+        
+        return totalTime;
     }
 
     // ─────────────────────────────────────────────────────────────────
