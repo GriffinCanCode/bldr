@@ -1,0 +1,118 @@
+topic: deduplication
+category: concepts
+summary: "CAS-based content deduplication reducing storage by 30-70%"
+definition: |
+  CAS (Content-Addressable Storage) deduplication stores output blobs by content hash 
+  and references them from action results via manifests. When multiple actions produce 
+  identical outputs, the content is stored once and referenced multiple times.
+  
+  This is particularly effective in monorepos where many targets share common libraries,
+  headers, or produce identical artifacts across different configurations.
+
+architecture:
+  components:
+    - name: "DedupEngine"
+      purpose: "Core reference counting and blob management"
+      location: "engine/caching/dedup/dedup.d"
+      
+    - name: "ActionManifest"
+      purpose: "Action outputs as blob references (small metadata)"
+      location: "engine/caching/dedup/manifest.d"
+      
+    - name: "DedupStore"
+      purpose: "Unified deduplicated storage API"
+      location: "engine/caching/dedup/store.d"
+      
+    - name: "BlobIndex"
+      purpose: "SQLite-backed reference tracking for GC"
+      location: "engine/caching/dedup/blobindex.d"
+  
+  storage_layout: |
+    .builder-cache/dedup/
+    ├── manifests/           # Action manifests (small, metadata)
+    │   ├── ab/
+    │   │   └── action:build:123.mnft
+    │   └── cd/
+    │       └── action:test:456.mnft
+    └── blobs/               # Content blobs (large, deduplicated)
+        ├── 12/
+        │   └── 12abc...
+        └── 34/
+            └── 34def...
+
+how_it_works:
+  store_flow: |
+    1. Action produces outputs [file1.o, file2.o, lib.a]
+    2. Each output hashed with BLAKE3
+    3. Check if blob exists in CAS (by hash)
+    4. If exists: increment reference count (deduplicated!)
+    5. If new: store blob, set ref count to 1
+    6. Create manifest referencing blob hashes
+    7. Store small manifest (not the large blobs)
+    
+  fetch_flow: |
+    1. Load action manifest by action ID
+    2. For each output entry in manifest
+    3. Fetch blob from CAS by content hash
+    4. Materialize to output path
+    
+  gc_flow: |
+    1. Scan all manifests, collect referenced hashes
+    2. Compare against all blobs in CAS
+    3. Delete blobs with ref_count = 0 (orphans)
+
+key_benefits:
+  - "30-70% storage reduction on large monorepos"
+  - "O(1) deduplication via content addressing"
+  - "Safe GC through reference counting"
+  - "Fast manifest lookup (small metadata)"
+  - "Incremental: only new content stored"
+
+deduplication_scenarios:
+  identical_library:
+    description: "100 targets produce same libcommon.a (10MB)"
+    without_dedup: "1GB storage"
+    with_dedup: "10MB + 100 manifests (~100KB)"
+    savings: "99%"
+    
+  typical_monorepo:
+    description: "10,000 actions with ~40% duplicate outputs"
+    without_dedup: "50GB"
+    with_dedup: "~30GB"
+    savings: "40%"
+    
+  multi_platform:
+    description: "3 platforms × 1000 targets with shared headers"
+    without_dedup: "15GB"
+    with_dedup: "~7GB"
+    savings: "53%"
+
+usage_examples:
+  - description: "Check deduplication stats"
+    command: "bldr telemetry cache"
+    output: |
+      Dedup Stats:
+        Unique blobs: 12,458
+        Duplicate refs: 34,892 (73.7% dedup rate)
+        Storage saved: 8.2 GB
+        
+  - description: "View storage breakdown"
+    command: "du -sh .builder-cache/dedup/*"
+    output: |
+      42M     .builder-cache/dedup/manifests
+      3.2G    .builder-cache/dedup/blobs
+
+performance:
+  store_blob_10kb: "0.3ms"
+  store_blob_1mb: "8ms"
+  dedup_check: "0.05ms"
+  manifest_lookup: "0.1ms"
+  materialize_10_files: "5ms"
+
+related: [caching, action-cache, blake3, content-addressed-sources, remote-cache]
+
+next_steps: |
+  - See 'bldr explain caching' for overall cache architecture
+  - See 'bldr explain action-cache' for action-level caching
+  - See 'bldr explain remote-cache' for distributed dedup benefits
+

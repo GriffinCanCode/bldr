@@ -91,6 +91,9 @@ public import engine.caching.distributed;
 // Storage layer
 public import engine.caching.storage;
 
+// Content deduplication
+public import engine.caching.dedup;
+
 // Metrics and events
 public import engine.caching.metrics;
 public import engine.caching.events;

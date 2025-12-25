@@ -11,6 +11,7 @@ import engine.caching.incremental.filter : IncrementalFilter;
 import engine.caching.distributed.remote.client : RemoteCacheClient;
 import engine.caching.distributed.remote.protocol : RemoteCacheConfig;
 import engine.caching.storage : ContentAddressableStorage, CacheGarbageCollector, SourceRepository, SourceTracker, SourceRef, SourceRefSet;
+import engine.caching.dedup : DedupStore, DedupStoreStats;
 import engine.caching.index : CacheIndex;
 import engine.caching.events;
 import frontend.cli.events.events : EventPublisher;
@@ -38,6 +39,7 @@ final class CacheCoordinator
     private CacheGarbageCollector gc;
     private SourceRepository sourceRepo;
     private SourceTracker sourceTracker;
+    private DedupStore dedupStore;  // CAS deduplication for action outputs
     private EventPublisher publisher;
     private Mutex coordinatorMutex;
     private CoordinatorConfig config;
@@ -67,6 +69,9 @@ final class CacheCoordinator
         
         // Initialize source tracker
         this.sourceTracker = new SourceTracker(sourceRepo);
+        
+        // Initialize deduplication store for action outputs
+        this.dedupStore = new DedupStore(cacheDir ~ "/dedup");
         
         // Initialize target cache with shared index
         auto targetConfig = CacheConfig.fromEnvironment();
@@ -344,6 +349,12 @@ final class CacheCoordinator
         ulong sourceBytes;
         ulong sourceBytesSaved;
         float sourceDeduplicationRatio;
+        
+        // Deduplication stats
+        size_t dedupUniqueBlobs;
+        size_t dedupDuplicateRefs;
+        ulong dedupSavedBytes;
+        float dedupEfficiency;
     }
     
     CacheCoordinatorStats getStats() @system
@@ -354,6 +365,7 @@ final class CacheCoordinator
             auto actionStats = actionCache.getStats();
             auto casStats = cas.getStats();
             auto sourceStats = sourceRepo.getStats();
+            auto dedupStats = dedupStore.getStats();
             
             CacheCoordinatorStats stats = {
                 // Target cache stats
@@ -376,7 +388,13 @@ final class CacheCoordinator
                 sourceDeduplicationHits: sourceStats.deduplicationHits,
                 sourceBytes: sourceStats.bytesStored,
                 sourceBytesSaved: sourceStats.bytesSaved,
-                sourceDeduplicationRatio: sourceStats.deduplicationRatio
+                sourceDeduplicationRatio: sourceStats.deduplicationRatio,
+                
+                // Deduplication stats
+                dedupUniqueBlobs: dedupStats.dedup.uniqueBlobs,
+                dedupDuplicateRefs: dedupStats.dedup.duplicateRefs,
+                dedupSavedBytes: dedupStats.dedup.savedBytes,
+                dedupEfficiency: dedupStats.dedup.efficiency
             };
             
             // Remote cache stats
@@ -495,6 +513,9 @@ final class CacheCoordinator
     
     /// Get shared cache index for introspection
     CacheIndex getIndex() @system => sharedIndex;
+    
+    /// Get deduplication store for action outputs
+    DedupStore getDedupStore() @system => dedupStore;
     
     // ─────────────────────────────────────────────────────────────────
     // Introspection API (powered by shared SQLite index)

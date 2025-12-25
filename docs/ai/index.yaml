@@ -88,6 +88,11 @@ concepts:
     file: "concepts/core/dependency-graph.yaml"
     summary: "Dependency Graph - Managing relationships"
 
+  deduplication:
+    file: "concepts/core/deduplication.yaml"
+    summary: "CAS-based content deduplication - 30-70% storage reduction"
+    keywords: ["cas", "dedup", "blob", "manifest", "storage", "savings"]
+
   determinism:
     file: "concepts/core/determinism.yaml"
     summary: "Bit-for-bit reproducible builds through syscall interception and enforcement"
@@ -350,6 +355,10 @@ aliases:
   graph-sqlite: "graph-persistence"
   graph-wal: "graph-persistence"
   crash-recovery: "graph-persistence"
+  dedup: "deduplication"
+  cas-dedup: "deduplication"
+  blob-storage: "deduplication"
+  content-dedup: "deduplication"
   verbose: "verbose-output"
   debug: "verbose-output"
   logging: "verbose-output"
