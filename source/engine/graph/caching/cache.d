@@ -13,6 +13,7 @@ import engine.graph.caching.storage;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.simd.hash;
 import infrastructure.utils.security.integrity;
+import infrastructure.utils.io : BatchHasher;
 import infrastructure.utils.files.directories : ensureDirectoryWithGitignore;
 import infrastructure.utils.memory.mmap : MmapRegion, MapMode;
 import infrastructure.errors;
@@ -210,16 +211,24 @@ final class GraphCache
                 // Compute hashes for all config files
                 string[string] metadata;
                 
-                foreach (file; configFiles)
-                {
-                    if (!exists(file))
-                        continue;
-                    
-                    auto metadataHash = FastHash.hashMetadata(file);
-                    auto contentHash = FastHash.hashFile(file);
-                    
-                    metadata[file] = metadataHash;
-                    metadata[file ~ ":content"] = contentHash;
+                auto existingFiles = cast(string[])configFiles.filter!exists.array;
+                
+                // Use async I/O for many config files (cold cache optimization)
+                if (existingFiles.length > 8) {
+                    auto contentHashes = FastHash.hashFilesAsync(existingFiles);
+                    foreach (i, file; existingFiles)
+                    {
+                        metadata[file] = FastHash.hashMetadata(file);
+                        metadata[file ~ ":content"] = contentHashes[i];
+                    }
+                }
+                else {
+                    // Sequential for few files
+                    foreach (file; existingFiles)
+                    {
+                        metadata[file] = FastHash.hashMetadata(file);
+                        metadata[file ~ ":content"] = FastHash.hashFile(file);
+                    }
                 }
                 
                 // Serialize graph

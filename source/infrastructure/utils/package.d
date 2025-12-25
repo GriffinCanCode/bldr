@@ -19,6 +19,11 @@ module infrastructure.utils;
 ///   validation.d - Security validation for paths and command arguments
 ///   process.d   - Process and tool availability checking utilities
 ///
+/// Async I/O (Linux io_uring):
+///   async.d     - Abstract async I/O with platform backends
+///   uring.d     - Linux io_uring bindings (kernel 5.1+)
+///   batch.d     - Batch file reading and hashing
+///
 /// Concurrency (Advanced):
 ///   deque.d     - Lock-free work-stealing deque (Chase-Lev algorithm)
 ///   scheduler.d - Work-stealing scheduler with priority support
@@ -70,6 +75,7 @@ public import infrastructure.utils.concurrency.scheduler;
 public import infrastructure.utils.concurrency.balancer;
 public import infrastructure.utils.concurrency.priority;
 public import infrastructure.utils.files.chunking;
+public import infrastructure.utils.files.cdc;
 public import infrastructure.utils.logging.logger;
 public import infrastructure.utils.files.metadata;
 public import infrastructure.utils.benchmarking.bench;
@@ -80,4 +86,5 @@ public import infrastructure.utils.simd;
 public import infrastructure.utils.security.validation;
 public import infrastructure.utils.process;
 public import infrastructure.utils.memory;
+public import infrastructure.utils.io;
 

@@ -11,6 +11,7 @@ import std.typecons : tuple, Tuple;
 import core.sync.mutex;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.simd.hash;
+import infrastructure.utils.io : BatchHasher;
 import engine.caching.policies.eviction;
 import engine.caching.index : CacheIndex, ActionIndexEntry;
 import infrastructure.utils.security.integrity;
@@ -219,10 +220,17 @@ final class ActionCache
                     return recordMiss();
                 
                 auto cached = hashCache.get(input);
-                string currentHash = cached.found ? cached.contentHash : FastHash.hashFile(input);
+                auto currentMeta = FastHash.hashMetadata(input);
                 
-                if (!cached.found)
-                    hashCache.put(input, currentHash, FastHash.hashMetadata(input));
+                // Use cached content hash only if metadata (mtime/size) hasn't changed
+                string currentHash;
+                if (cached.found && cached.metadataHash == currentMeta)
+                    currentHash = cached.contentHash;
+                else
+                {
+                    currentHash = FastHash.hashFile(input);
+                    hashCache.put(input, currentHash, currentMeta);
+                }
                 
                 if (!SIMDHash.equals(currentHash, entryPtr.inputHashes.get(input, "")))
                     return recordMiss();
@@ -277,25 +285,63 @@ final class ActionCache
             entry.inputs = inputs.dup;
             entry.outputs = outputs.dup;
             
-            // Hash all input files
-            foreach (input; inputs)
-            {
-                if (!exists(input))
-                    continue;
+            // Hash all input files - cast to mutable for hashFilesAsync
+            string[] existingInputs = inputs.filter!exists.map!(s => cast(string)s).array;
+            
+            if (existingInputs.length > 8) {
+                // Count uncached files to determine if cold cache
+                size_t uncachedCount = existingInputs.count!(s => !hashCache.get(s).found);
                 
-                auto cached = hashCache.get(input);
-                if (cached.found)
-                    entry.inputHashes[input] = cached.contentHash;
-                else
+                if (uncachedCount > existingInputs.length / 2) {
+                    // Cold cache - use async I/O (io_uring on Linux)
+                    auto contentHashes = FastHash.hashFilesAsync(existingInputs);
+                    foreach (i, input; existingInputs)
+                    {
+                        hashCache.put(input, contentHashes[i], FastHash.hashMetadata(input));
+                        entry.inputHashes[input] = contentHashes[i];
+                    }
+                }
+                else {
+                    // Warm cache - use cached values
+                    foreach (input; existingInputs)
+                    {
+                        auto cached = hashCache.get(input);
+                        if (cached.found)
+                            entry.inputHashes[input] = cached.contentHash;
+                        else
+                        {
+                            hashCache.put(input, FastHash.hashFile(input), FastHash.hashMetadata(input));
+                            entry.inputHashes[input] = hashCache.get(input).contentHash;
+                        }
+                    }
+                }
+            }
+            else {
+                // Small batch - sequential hashing
+                foreach (input; existingInputs)
                 {
-                    hashCache.put(input, FastHash.hashFile(input), FastHash.hashMetadata(input));
-                    entry.inputHashes[input] = hashCache.get(input).contentHash;
+                    auto cached = hashCache.get(input);
+                    if (cached.found)
+                        entry.inputHashes[input] = cached.contentHash;
+                    else
+                    {
+                        hashCache.put(input, FastHash.hashFile(input), FastHash.hashMetadata(input));
+                        entry.inputHashes[input] = hashCache.get(input).contentHash;
+                    }
                 }
             }
             
-            // Hash all output files
-            foreach (output; outputs.filter!exists)
-                entry.outputHashes[output] = FastHash.hashFile(output);
+            // Hash all output files (typically few, use sequential)
+            string[] existingOutputs = outputs.filter!exists.map!(s => cast(string)s).array;
+            if (existingOutputs.length > 8) {
+                auto outputHashes = FastHash.hashFilesAsync(existingOutputs);
+                foreach (i, output; existingOutputs)
+                    entry.outputHashes[output] = outputHashes[i];
+            }
+            else {
+                foreach (output; existingOutputs)
+                    entry.outputHashes[output] = FastHash.hashFile(output);
+            }
             
             entry.metadata = cast(string[string])metadata.dup;
             entry.executionHash = computeExecutionHash(metadata);

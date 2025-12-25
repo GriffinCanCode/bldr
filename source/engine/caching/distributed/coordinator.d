@@ -8,6 +8,7 @@ import engine.caching.targets.cache : BuildCache;
 import engine.caching.actions.action : ActionCache, ActionId;
 import engine.caching.distributed.remote.client : RemoteCacheClient;
 import infrastructure.utils.files.hash : FastHash;
+import infrastructure.utils.io : BatchHasher;
 import infrastructure.errors;
 
 /// Distributed cache coordinator
@@ -110,6 +111,8 @@ final class DistributedCache
     {
         import std.digest.sha : SHA256, toHexString;
         import std.conv : to;
+        import std.algorithm : filter;
+        import std.array : array;
         
         try
         {
@@ -120,20 +123,23 @@ final class DistributedCache
             hash.put(cast(ubyte[])targetId);
             
             // Hash all sources
-            foreach (source; sources)
-            {
-                if (exists(source))
-                {
-                    auto sourceHash = FastHash.hashFile(source);
-                    hash.put(cast(ubyte[])sourceHash);
-                }
+            auto existingSources = cast(string[])sources.filter!exists.array;
+            
+            if (existingSources.length > 8) {
+                // Use async I/O for many sources (io_uring on Linux)
+                auto sourceHashes = FastHash.hashFilesAsync(existingSources);
+                foreach (h; sourceHashes)
+                    hash.put(cast(ubyte[])h);
+            }
+            else {
+                // Sequential for few sources
+                foreach (source; existingSources)
+                    hash.put(cast(ubyte[])FastHash.hashFile(source));
             }
             
             // Hash dependencies
             foreach (dep; deps)
-            {
                 hash.put(cast(ubyte[])dep);
-            }
             
             auto result = toHexString(hash.finish()).to!string;
             return Ok!(string, BuildError)(result);
