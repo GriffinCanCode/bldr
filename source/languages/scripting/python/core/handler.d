@@ -77,6 +77,15 @@ class PythonHandler : BaseLanguageHandler
     {
         LanguageBuildResult result;
         
+        // Handle empty sources gracefully - Python is interpreted, no sources = nothing to do
+        if (target.sources.empty)
+        {
+            Logger.warning("No source files for Python target '" ~ target.name ~ "', skipping build");
+            result.success = true;
+            result.outputHash = "";
+            return result;
+        }
+        
         if (pyConfig.installDeps && !installDependencies(pyConfig, config.root, pythonCmd))
         {
             result.error = "Failed to install dependencies";
@@ -109,27 +118,78 @@ class PythonHandler : BaseLanguageHandler
             }
         }
 
-        auto validationResult = PyValidator.validate(target.sources);
-        if (!validationResult.success)
+        // Python is interpreted - validation is optional, not blocking
+        // For Script mode, just check syntax and continue even with warnings
+        PyValidationResult validationResult;
+        bool validationRan = false;
+        
+        try
         {
-            result.error = validationResult.firstError();
+            validationResult = PyValidator.validate(target.sources);
+            validationRan = true;
+            
+            if (!validationResult.success)
+            {
+                // Script mode: warn but continue for interpreted language
+                if (pyConfig.mode == PyBuildMode.Script)
+                {
+                    Logger.warning("Python validation issues (continuing for script mode): " ~ validationResult.firstError());
+                }
+                else
+                {
+                    // Other modes: fail on validation error
+                    result.error = validationResult.firstError();
+                    return result;
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            // Validator not available or failed - warn but don't block for interpreted language
+            Logger.warning("Python validator unavailable, skipping syntax check: " ~ e.msg);
+        }
+
+        // For Script mode, skip wrapper generation - just run the script directly
+        if (pyConfig.mode == PyBuildMode.Script)
+        {
+            // Script mode: sources are already executable, no wrapper needed
+            result.success = true;
+            result.outputs = target.sources.dup;
+            result.outputHash = FastHash.hashStrings(target.sources);
+            
+            if (pyConfig.compileBytecode)
+                compileToBytecodeWithCaching(target.sources, pyConfig, target.name, pythonCmd);
+            
             return result;
         }
 
+        // Application/Package modes: generate wrapper if we have valid entry point info
         auto outputs = getOutputs(target, config);
         if (!outputs.empty && !target.sources.empty)
         {
             auto outputPath = outputs[0];
             auto mainFile = target.sources[0];
-            auto mainFileResult = validationResult.files[0];
             
+            // Use validation result if available, otherwise create minimal entry point info
             WrapperConfig wrapperConfig;
             wrapperConfig.mainFile = mainFile;
             wrapperConfig.outputPath = outputPath;
             wrapperConfig.projectRoot = config.root.empty ? "." : config.root;
-            wrapperConfig.hasMain = mainFileResult.hasMain;
-            wrapperConfig.hasMainGuard = mainFileResult.hasMainGuard;
-            wrapperConfig.isExecutable = mainFileResult.isExecutable;
+            
+            if (validationRan && !validationResult.files.empty)
+            {
+                auto mainFileResult = validationResult.files[0];
+                wrapperConfig.hasMain = mainFileResult.hasMain;
+                wrapperConfig.hasMainGuard = mainFileResult.hasMainGuard;
+                wrapperConfig.isExecutable = mainFileResult.isExecutable;
+            }
+            else
+            {
+                // Fallback: assume it's a basic script
+                wrapperConfig.hasMain = false;
+                wrapperConfig.hasMainGuard = false;
+                wrapperConfig.isExecutable = false;
+            }
             
             try
             {
@@ -147,20 +207,15 @@ class PythonHandler : BaseLanguageHandler
                 result.error = "Invalid output directory: " ~ e.msg;
                 return result;
             }
-            catch (Throwable e)
-            {
-                result.error = "Critical error creating output directory: " ~ e.msg;
-                return result;
-            }
 
             try
             {
                 PyWrapperGenerator.generate(wrapperConfig);
             }
-            catch (Throwable e)
+            catch (Exception e)
             {
-                result.error = "Failed to generate wrapper: " ~ e.msg;
-                return result;
+                // For interpreted languages, wrapper generation failure is not fatal
+                Logger.warning("Failed to generate wrapper: " ~ e.msg ~ " (sources remain runnable)");
             }
         }
 
@@ -183,11 +238,21 @@ class PythonHandler : BaseLanguageHandler
     {
         LanguageBuildResult result;
         
+        // Handle empty sources gracefully for interpreted language
+        if (target.sources.empty)
+        {
+            Logger.warning("No source files for Python library '" ~ target.name ~ "', skipping build");
+            result.success = true;
+            result.outputs = [];
+            result.outputHash = "";
+            return result;
+        }
+        
         if (pyConfig.installDeps && !installDependencies(pyConfig, config.root, pythonCmd))
-            {
-                result.error = "Failed to install dependencies";
-                return result;
-            }
+        {
+            result.error = "Failed to install dependencies";
+            return result;
+        }
         
         if (pyConfig.typeCheck.enabled)
         {
@@ -201,11 +266,27 @@ class PythonHandler : BaseLanguageHandler
             }
         }
         
-        auto validationResult = PyValidator.validate(target.sources);
-        if (!validationResult.success)
+        // Validation for libraries - soft fail for interpreted language
+        try
         {
-            result.error = validationResult.firstError();
-            return result;
+            auto validationResult = PyValidator.validate(target.sources);
+            if (!validationResult.success)
+            {
+                // For Script mode libraries, just warn
+                if (pyConfig.mode == PyBuildMode.Script)
+                {
+                    Logger.warning("Python library validation issues: " ~ validationResult.firstError());
+                }
+                else
+                {
+                    result.error = validationResult.firstError();
+                    return result;
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Logger.warning("Python validator unavailable, skipping syntax check: " ~ e.msg);
         }
         
         if (pyConfig.generateStubs)

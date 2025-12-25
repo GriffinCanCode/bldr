@@ -27,7 +27,7 @@ class TargetInference
     /// Returns array of targets that can be used directly without Builderfile
     Target[] inferTargets()
     {
-        Logger.info("No Builderfile found - inferring targets from project structure...");
+        Logger.debugLog("No Builderfile found - inferring targets from project structure...");
         
         // Run project detector
         auto detector = new ProjectDetector(workspaceRoot);
@@ -39,12 +39,12 @@ class TargetInference
             return [];
         }
         
-        Logger.success(format("Detected %d language(s):", metadata.languages.length));
+        Logger.debugLog(format("Detected %d language(s):", metadata.languages.length));
         foreach (lang; metadata.languages)
         {
             string frameworkInfo = lang.framework != ProjectFramework.None ?
                 format(" [%s]", lang.framework) : "";
-            Logger.info(format("  • %s (%d files, %.0f%% confidence)%s",
+            Logger.debugLog(format("  • %s (%d files, %.0f%% confidence)%s",
                 lang.language,
                 lang.sourceFiles.length,
                 lang.confidence * 100,
@@ -204,11 +204,16 @@ class TargetInference
     }
     
     /// Infer Python configuration
+    /// Python is an interpreted language - default to Script mode for lenient handling
     private string[string] inferPythonConfig(LanguageInfo langInfo)
     {
         import std.json;
         
         JSONValue config = JSONValue.emptyObject;
+        
+        // Python is interpreted - always default to Script mode for lenient handling
+        // This allows Python files to be present without requiring compilation
+        config["mode"] = "script";
         
         // Check for requirements.txt
         bool hasRequirements = langInfo.manifestFiles.any!(f => 
@@ -221,21 +226,24 @@ class TargetInference
             config["virtualenv"] = true;
         }
         
-        // Framework-specific config
-        if (langInfo.framework == ProjectFramework.Django)
+        // Disable strict validation for auto-detected projects
+        // Users can override in Builderfile if they want stricter checks
+        config["typeCheck"] = JSONValue(["enabled": JSONValue(false)]);
+        config["autoLint"] = JSONValue(false);
+        config["autoFormat"] = JSONValue(false);
+        
+        // Framework-specific overrides
+        if (langInfo.framework == ProjectFramework.Django ||
+            langInfo.framework == ProjectFramework.Flask ||
+            langInfo.framework == ProjectFramework.FastAPI)
         {
-            config["mode"] = "module";
-        }
-        else
-        {
-            config["mode"] = "script";
+            // Web frameworks need proper application mode
+            config["mode"] = "application";
         }
         
         string[string] result;
         if (config.object.length > 0)
-        {
             result["python"] = config.toString();
-        }
         return result;
     }
     
