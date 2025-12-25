@@ -91,14 +91,14 @@ class PluginRegistry : IPluginRegistry {
             return Ok!(PluginInfo, BuildError)(*info);
         }
         
-        auto err = new PluginError(
-            "Plugin not found: " ~ name,
-            ErrorCode.ToolNotFound
+        return Err!(PluginInfo, BuildError)(
+            Errors.plugin("Plugin not found: " ~ name, ErrorCode.ToolNotFound)
+                .withSuggestion("Install the plugin: brew install builder-plugin-" ~ name)
+                .withSuggestion("List available plugins: bldr plugin list")
+                .withSuggestion("Refresh plugin registry: bldr plugin refresh")
+                .withLocation(__FILE__, __LINE__)
+                .build()
         );
-        err.addSuggestion("Install the plugin: brew install builder-plugin-" ~ name);
-        err.addSuggestion("List available plugins: bldr plugin list");
-        err.addSuggestion("Refresh plugin registry: bldr plugin refresh");
-        return Err!(PluginInfo, BuildError)(err);
     }
     
     /// Check if plugin exists
@@ -147,11 +147,11 @@ class NullPluginRegistry : IPluginRegistry {
     }
     
     BuildResult!PluginInfo get(string name) @system {
-        auto err = new PluginError(
-            "Plugin not found: " ~ name,
-            ErrorCode.ToolNotFound
+        return Err!(PluginInfo, BuildError)(
+            Errors.plugin("Plugin not found: " ~ name, ErrorCode.ToolNotFound)
+                .withLocation(__FILE__, __LINE__)
+                .build()
         );
-        return Err!(PluginInfo, BuildError)(err);
     }
     
     bool has(string name) pure nothrow @nogc @safe {

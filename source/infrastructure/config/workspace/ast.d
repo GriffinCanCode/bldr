@@ -154,13 +154,21 @@ struct Literal
     BuildResult!(string[]) toStringArray() const @trusted
     {
         if (kind != LiteralKind.Array)
-            return Err!(string[], BuildError)(new ParseError("Expected array", null));
+            return Err!(string[], BuildError)(
+                Errors.parse("", "Expected array")
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         
         string[] result;
         foreach (elem; asArray())
         {
             if (elem.kind != LiteralKind.String)
-                return Err!(string[], BuildError)(new ParseError("Array must contain strings", null));
+                return Err!(string[], BuildError)(
+                    Errors.parse("", "Array must contain strings")
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
+                );
             result ~= elem.asString();
         }
         return Ok!(string[], BuildError)(result);
@@ -169,13 +177,21 @@ struct Literal
     BuildResult!(string[string]) toStringMap() const @trusted
     {
         if (kind != LiteralKind.Map)
-            return Err!(string[string], BuildError)(new ParseError("Expected map", null));
+            return Err!(string[string], BuildError)(
+                Errors.parse("", "Expected map")
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         
         string[string] result;
         foreach (key, value; asMap())
         {
             if (value.kind != LiteralKind.String)
-                return Err!(string[string], BuildError)(new ParseError("Map values must be strings", null));
+                return Err!(string[string], BuildError)(
+                    Errors.parse("", "Map values must be strings")
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
+                );
             result[key] = value.asString();
         }
         return Ok!(string[string], BuildError)(result);

@@ -44,7 +44,10 @@ final class ASTStorage
             if (magic != MAGIC)
             {
                 return BuildResult!(FileAST[]).err(
-                    new GenericError("Invalid AST cache format", ErrorCode.CacheCorrupted));
+                    Errors.generic("Invalid AST cache format", ErrorCode.CacheCorrupted)
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
+                );
             }
             
             ushort ver;
@@ -52,8 +55,10 @@ final class ASTStorage
             if (ver != VERSION)
             {
                 return BuildResult!(FileAST[]).err(
-                    new GenericError("Unsupported AST cache version: " ~ ver.to!string,
-                                   ErrorCode.CacheCorrupted));
+                    Errors.generic("Unsupported AST cache version: " ~ ver.to!string, ErrorCode.CacheCorrupted)
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
+                );
             }
             
             // Read entries
@@ -122,8 +127,10 @@ final class ASTStorage
         catch (Exception e)
         {
             return BuildResult!(FileAST[]).err(
-                new GenericError("Failed to load AST cache: " ~ e.msg,
-                               ErrorCode.CacheLoadFailed));
+                Errors.generic("Failed to load AST cache: " ~ e.msg, ErrorCode.CacheLoadFailed)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
     }
     
@@ -197,8 +204,10 @@ final class ASTStorage
         catch (Exception e)
         {
             return Err!(bool, BuildError)(
-                new GenericError("Failed to save AST cache: " ~ e.msg,
-                               ErrorCode.CacheSaveFailed));
+                Errors.generic("Failed to save AST cache: " ~ e.msg, ErrorCode.CacheSaveFailed)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
     }
     

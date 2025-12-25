@@ -345,13 +345,8 @@ final class ReapiAdapter
         // Deserialize response
         auto parseResult = ReapiCodec.deserializeExecuteResponse(httpResult.unwrap());
         if (parseResult.isErr)
-        {
-            auto error = new GenericError(
-                "Failed to parse execute response: " ~ parseResult.unwrapErr(),
-                ErrorCode.NetworkError
-            );
-            return Err!(ExecuteResponse, BuildError)(error);
-        }
+            return Err!(ExecuteResponse, BuildError)(
+                Errors.generic("Failed to parse execute response: " ~ parseResult.unwrapErr(), ErrorCode.NetworkError));
         
         return Ok!(ExecuteResponse, BuildError)(parseResult.unwrap());
     }
@@ -385,21 +380,16 @@ final class ReapiAdapter
             
             // Check if error
             if (response.status.code != 0 && response.status.code != 1) // 1 = IN_PROGRESS
-            {
-                auto error = new GenericError(
-                    "Operation failed: " ~ response.status.message,
-                    ErrorCode.BuildFailed
-                );
-                return Err!(ExecuteResponse, BuildError)(error);
-            }
+                return Err!(ExecuteResponse, BuildError)(
+                    Errors.generic("Operation failed: " ~ response.status.message, ErrorCode.BuildFailed));
             
             // Wait before polling again
             Thread.sleep(500.msecs);
         }
         
         // Timeout reached
-        auto error = new GenericError("Operation timeout", ErrorCode.BuildTimeout);
-        return Err!(ExecuteResponse, BuildError)(error);
+        return Err!(ExecuteResponse, BuildError)(
+            Errors.generic("Operation timeout", ErrorCode.BuildTimeout));
     }
     
     /// Get operation status
@@ -412,13 +402,8 @@ final class ReapiAdapter
         
         auto parseResult = ReapiCodec.deserializeExecuteResponse(httpResult.unwrap());
         if (parseResult.isErr)
-        {
-            auto error = new GenericError(
-                "Failed to parse operation status: " ~ parseResult.unwrapErr(),
-                ErrorCode.NetworkError
-            );
-            return Err!(ExecuteResponse, BuildError)(error);
-        }
+            return Err!(ExecuteResponse, BuildError)(
+                Errors.generic("Failed to parse operation status: " ~ parseResult.unwrapErr(), ErrorCode.NetworkError));
         
         return Ok!(ExecuteResponse, BuildError)(parseResult.unwrap());
     }
@@ -454,13 +439,8 @@ final class ReapiAdapter
         // Deserialize action result
         auto parseResult = deserializeActionResult(httpResult.unwrap());
         if (parseResult.isErr)
-        {
-            auto error = new GenericError(
-                "Failed to parse action result: " ~ parseResult.unwrapErr(),
-                ErrorCode.NetworkError
-            );
-            return Err!(ActionResult, BuildError)(error);
-        }
+            return Err!(ActionResult, BuildError)(
+                Errors.generic("Failed to parse action result: " ~ parseResult.unwrapErr(), ErrorCode.NetworkError));
         
         return Ok!(ActionResult, BuildError)(parseResult.unwrap());
     }
@@ -558,35 +538,24 @@ final class ReapiAdapter
             immutable responseStr = cast(string)responseData;
             immutable headersEnd = responseStr.indexOf("\r\n\r\n");
             if (headersEnd < 0)
-            {
-                auto error = new GenericError("Invalid HTTP response", ErrorCode.NetworkError);
-                return Err!(ubyte[], BuildError)(error);
-            }
+                return Err!(ubyte[], BuildError)(
+                    Errors.generic("Invalid HTTP response", ErrorCode.NetworkError));
             
             // Extract status code
             import std.array : split;
             immutable firstLine = responseStr[0 .. responseStr.indexOf('\r')];
             auto parts = firstLine.split(' ');
             if (parts.length < 2)
-            {
-                auto error = new GenericError("Invalid HTTP status line", ErrorCode.NetworkError);
-                return Err!(ubyte[], BuildError)(error);
-            }
+                return Err!(ubyte[], BuildError)(
+                    Errors.generic("Invalid HTTP status line", ErrorCode.NetworkError));
             
             immutable statusCode = parts[1].to!int;
             if (statusCode == 404)
-            {
-                auto error = new CacheError("Not found", ErrorCode.CacheNotFound);
-                return Err!(ubyte[], BuildError)(error);
-            }
+                return Err!(ubyte[], BuildError)(
+                    Errors.cache("Not found", ErrorCode.CacheNotFound));
             else if (statusCode >= 400)
-            {
-                auto error = new GenericError(
-                    "HTTP error: " ~ statusCode.to!string,
-                    ErrorCode.NetworkError
-                );
-                return Err!(ubyte[], BuildError)(error);
-            }
+                return Err!(ubyte[], BuildError)(
+                    Errors.generic("HTTP error: " ~ statusCode.to!string, ErrorCode.NetworkError));
             
             // Extract body
             auto body_result = cast(ubyte[])responseData[headersEnd + 4 .. $];
@@ -594,8 +563,8 @@ final class ReapiAdapter
         }
         catch (Exception e)
         {
-            auto error = new GenericError("HTTP request failed: " ~ e.msg, ErrorCode.NetworkError);
-            return Err!(ubyte[], BuildError)(error);
+            return Err!(ubyte[], BuildError)(
+                Errors.generic("HTTP request failed: " ~ e.msg, ErrorCode.NetworkError));
         }
     }
     

@@ -136,11 +136,11 @@ final class RateLimiter
                 metrics.rejected++;
                 emitRateLimitHit(priority);
                 
-                BuildError error = new SystemError(
-                    "Rate limit exceeded for endpoint: " ~ endpoint,
-                    ErrorCode.NetworkError
+                return VoidBuildResult.err(
+                    Errors.system("Rate limit exceeded for endpoint: " ~ endpoint, ErrorCode.NetworkError)
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
                 );
-                return VoidBuildResult.err(error);
             }
         }
         
@@ -312,11 +312,11 @@ final class RateLimiter
         
         emitRateLimitHit(priority);
         
-        BuildError error = new SystemError(
-            "Rate limit timeout for endpoint: " ~ endpoint,
-            ErrorCode.NetworkError
+        return VoidBuildResult.err(
+            Errors.system("Rate limit timeout for endpoint: " ~ endpoint, ErrorCode.NetworkError)
+                .withLocation(__FILE__, __LINE__)
+                .build()
         );
-        return VoidBuildResult.err(error);
     }
     
     /// Emit rate limit hit event
@@ -409,11 +409,11 @@ final class SlidingWindowLimiter
                 if (requests.length >= limit)
                 {
                     metrics.rejected++;
-                    BuildError error = new SystemError(
-                    "Rate limit exceeded (sliding window): " ~ endpoint,
-                    ErrorCode.NetworkError
-                );
-                return VoidBuildResult.err(error);
+                    return VoidBuildResult.err(
+                        Errors.system("Rate limit exceeded (sliding window): " ~ endpoint, ErrorCode.NetworkError)
+                            .withLocation(__FILE__, __LINE__)
+                            .build()
+                    );
                 }
             }
             

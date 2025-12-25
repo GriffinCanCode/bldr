@@ -30,16 +30,17 @@ final class GoDependencyAnalyzer : BaseDependencyAnalyzer
     }
     
     /// Analyze Go import dependencies
-    override Result!(string[], BuildError) analyzeDependencies(
+    override BuildResult!(string[]) analyzeDependencies(
         string sourceFile,
         string[] additionalSearchPaths = []
     ) @system
     {
         if (!exists(sourceFile) || !isFile(sourceFile))
         {
-            return Result!(string[], BuildError).err(
-                new GenericError("Source file not found: " ~ sourceFile,
-                             ErrorCode.FileNotFound)
+            return BuildResult!(string[]).err(
+                Errors.generic("Source file not found: " ~ sourceFile, ErrorCode.FileNotFound)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
         }
         
@@ -70,14 +71,16 @@ final class GoDependencyAnalyzer : BaseDependencyAnalyzer
                 }
             }
             
-            return Result!(string[], BuildError).ok(resolvedDeps);
+            return BuildResult!(string[]).ok(resolvedDeps);
         }
         catch (Exception e)
         {
-            return Result!(string[], BuildError).err(
-                new GenericError("Failed to analyze Go dependencies for " ~ 
+            return BuildResult!(string[]).err(
+                Errors.generic("Failed to analyze Go dependencies for " ~ 
                              sourceFile ~ ": " ~ e.msg,
                              ErrorCode.AnalysisFailed)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
         }
     }

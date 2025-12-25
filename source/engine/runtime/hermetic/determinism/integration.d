@@ -134,7 +134,9 @@ struct DeterminismIntegration
         
         if (!initialized)
             return Err!(VerificationReport, BuildError)(
-                new SystemError("Integration not initialized", ErrorCode.NotInitialized));
+                Errors.system("Integration not initialized", ErrorCode.NotInitialized)
+                    .withLocation(__FILE__, __LINE__)
+                    .build());
         
         auto sw = StopWatch();
         sw.start();
@@ -236,11 +238,12 @@ struct DeterminismIntegration
         // Fail if configured to fail on violation
         if (!report.isDeterministic && config.failOnViolation)
         {
-            auto error = new SystemError(
+            auto error = Errors.system(
                 "Build is non-deterministic: " ~ 
                 verifyResult.violations.length.to!string ~ " violations",
-                ErrorCode.BuildFailed
-            );
+                ErrorCode.BuildFailed)
+                .withLocation(__FILE__, __LINE__)
+                .build();
             return Err!(VerificationReport, BuildError)(error);
         }
         

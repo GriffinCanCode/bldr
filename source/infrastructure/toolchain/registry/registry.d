@@ -80,7 +80,10 @@ class ToolchainRegistry
         if (tc is null)
         {
             return Err!(Toolchain, BuildError)(
-                new SystemError("Toolchain not found: " ~ id, ErrorCode.ToolNotFound));
+                Errors.system("Toolchain not found: " ~ id, ErrorCode.ToolNotFound)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         
         return Ok!(Toolchain, BuildError)(*tc);
@@ -127,9 +130,10 @@ class ToolchainRegistry
         }
         
         return Err!(Toolchain, BuildError)(
-            new SystemError(
-                "No toolchain found for platform: " ~ platform.toTriple(), 
-                ErrorCode.ToolNotFound));
+            Errors.system("No toolchain found for platform: " ~ platform.toTriple(), ErrorCode.ToolNotFound)
+                .withLocation(__FILE__, __LINE__)
+                .build()
+        );
     }
     
     /// Resolve toolchain reference
@@ -152,7 +156,10 @@ class ToolchainRegistry
             if (tcs.empty)
             {
                 return Err!(Toolchain, BuildError)(
-                    new SystemError("Toolchain not found: " ~ ref_.name, ErrorCode.ToolNotFound));
+                    Errors.system("Toolchain not found: " ~ ref_.name, ErrorCode.ToolNotFound)
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
+                );
             }
             
             // Return latest version

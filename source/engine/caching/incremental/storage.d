@@ -46,8 +46,9 @@ final class DependencyStorage
             if (result.isErr)
             {
                 return BuildResult!(FileDependency[]).err(
-                    new GenericError("Failed to deserialize dependency cache: " ~ 
-                                   result.unwrapErr(), ErrorCode.InvalidJson)
+                    Errors.generic("Failed to deserialize dependency cache: " ~ result.unwrapErr(), ErrorCode.InvalidJson)
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
                 );
             }
             
@@ -67,8 +68,9 @@ final class DependencyStorage
         catch (Exception e)
         {
             return BuildResult!(FileDependency[]).err(
-                new GenericError("Failed to load dependency cache: " ~ e.msg,
-                             ErrorCode.FileReadFailed)
+                Errors.generic("Failed to load dependency cache: " ~ e.msg, ErrorCode.FileReadFailed)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
         }
     }
@@ -123,8 +125,9 @@ final class DependencyStorage
         catch (Exception e)
         {
             return VoidBuildResult.err(
-                new GenericError("Failed to save dependency cache: " ~ e.msg,
-                             ErrorCode.FileReadFailed)
+                Errors.generic("Failed to save dependency cache: " ~ e.msg, ErrorCode.FileReadFailed)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
         }
     }

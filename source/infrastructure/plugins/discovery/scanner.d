@@ -113,14 +113,14 @@ class PluginScanner {
             }
         }
         
-        auto err = new PluginError(
-            "Plugin not found: " ~ name,
-            ErrorCode.ToolNotFound
+        return Err!(string, BuildError)(
+            Errors.plugin("Plugin not found: " ~ name, ErrorCode.ToolNotFound)
+                .withSuggestion("Install the plugin: brew install builder-plugin-" ~ name)
+                .withSuggestion("Check if the plugin is in PATH: which " ~ fullName)
+                .withSuggestion("List installed plugins: bldr plugin list")
+                .withLocation(__FILE__, __LINE__)
+                .build()
         );
-        err.addSuggestion("Install the plugin: brew install builder-plugin-" ~ name);
-        err.addSuggestion("Check if the plugin is in PATH: which " ~ fullName);
-        err.addSuggestion("List installed plugins: bldr plugin list");
-        return Err!(string, BuildError)(err);
     }
     
     /// Query plugin for its metadata
@@ -163,13 +163,13 @@ class PluginScanner {
             auto status = wait(pipes.pid);
             
             if (responseLine.empty) {
-                auto err = new PluginError(
-                    "Plugin did not respond to info request: " ~ pluginPath,
-                    ErrorCode.PluginTimeout
+                return Err!(PluginInfo, BuildError)(
+                    Errors.plugin("Plugin did not respond to info request: " ~ pluginPath, ErrorCode.PluginTimeout)
+                        .withSuggestion("Check if the plugin is a valid Builder plugin")
+                        .withSuggestion("Run the plugin manually to see error output")
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
                 );
-                err.addSuggestion("Check if the plugin is a valid Builder plugin");
-                err.addSuggestion("Run the plugin manually to see error output");
-                return Err!(PluginInfo, BuildError)(err);
             }
             
             // Decode response
@@ -180,23 +180,23 @@ class PluginScanner {
             
             auto response = responseResult.unwrap();
             if (response.isError) {
-                auto err = new PluginError(
-                    "Plugin returned error: " ~ response.error.message,
-                    ErrorCode.PluginError
+                return Err!(PluginInfo, BuildError)(
+                    Errors.plugin("Plugin returned error: " ~ response.error.message, ErrorCode.PluginError)
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
                 );
-                return Err!(PluginInfo, BuildError)(err);
             }
             
             // Parse plugin info
             return PluginInfo.fromJSON(response.result);
             
         } catch (Exception e) {
-            auto err = new PluginError(
-                "Failed to query plugin " ~ pluginPath ~ ": " ~ e.msg,
-                ErrorCode.PluginError
+            return Err!(PluginInfo, BuildError)(
+                Errors.plugin("Failed to query plugin " ~ pluginPath ~ ": " ~ e.msg, ErrorCode.PluginError)
+                    .withContext("querying plugin", "process execution failed")
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
-            err.addContext(ErrorContext("querying plugin", "process execution failed"));
-            return Err!(PluginInfo, BuildError)(err);
         }
     }
     
@@ -246,11 +246,11 @@ class PluginScanner {
             
             return Ok!BuildError();
         } catch (Exception e) {
-            auto err = new PluginError(
-                "Failed to save plugin cache: " ~ e.msg,
-                ErrorCode.CacheSaveFailed
+            return VoidBuildResult.err(
+                Errors.plugin("Failed to save plugin cache: " ~ e.msg, ErrorCode.CacheSaveFailed)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
-            return VoidBuildResult.err(err);
         }
     }
 }

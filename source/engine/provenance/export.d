@@ -308,7 +308,9 @@ private BuildResult!ProvenanceEnvelope parseEnvelope(string json) @system
     
     if (env.payload.length == 0)
         return Err!(ProvenanceEnvelope, BuildError)(
-            new ParseError(json, "Missing payload in envelope"));
+            Errors.parse(json, "Missing payload in envelope")
+                .withLocation(__FILE__, __LINE__)
+                .build());
     
     return Ok!(ProvenanceEnvelope, BuildError)(env);
 }

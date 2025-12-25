@@ -67,7 +67,10 @@ class UnifiedParser
         if (file.statements.empty)
         {
             return Err!(BuildFile, BuildError)(
-                new ParseError(filePath, "Builderfile is empty", ErrorCode.InvalidBuildFile));
+                Errors.parse(filePath, "Builderfile is empty", ErrorCode.InvalidBuildFile)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         
         return Ok!(BuildFile, BuildError)(file);
@@ -989,7 +992,9 @@ class UnifiedParser
     private BuildResult!T error(T)(string message) @system
     {
         auto token = peek();
-        auto err = new ParseError(filePath, message, token.line, token.column, ErrorCode.ParseFailed);
+        auto err = Errors.parseAt(filePath, message, token.line, token.column)
+            .withLocation(__FILE__, __LINE__)
+            .build();
         err.extractSnippet();
         return Err!(T, BuildError)(err);
     }

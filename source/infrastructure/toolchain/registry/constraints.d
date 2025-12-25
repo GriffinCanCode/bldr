@@ -243,7 +243,7 @@ struct VersionConstraint
             catch (Exception)
             {
                 return Err!(VersionConstraint, BuildError)(
-                    new SystemError("Invalid wildcard version: " ~ str, ErrorCode.InvalidInput));
+                    Errors.system("Invalid wildcard version: " ~ str, ErrorCode.InvalidInput));
             }
         }
         
@@ -254,7 +254,7 @@ struct VersionConstraint
             catch (Exception)
             {
                 return Err!(VersionConstraint, BuildError)(
-                    new SystemError("Invalid wildcard version: " ~ str, ErrorCode.InvalidInput));
+                    Errors.system("Invalid wildcard version: " ~ str, ErrorCode.InvalidInput));
             }
         }
         
@@ -268,17 +268,13 @@ struct VersionConstraint
         // Split on whitespace
         auto parts = str.split();
         if (parts.length != 2)
-        {
             return Err!(VersionConstraint, BuildError)(
-                new SystemError("Invalid range format: " ~ str, ErrorCode.InvalidInput));
-        }
+                Errors.system("Invalid range format: " ~ str, ErrorCode.InvalidInput));
         
         // Parse min version (>=X.Y.Z)
         if (!parts[0].startsWith(">="))
-        {
             return Err!(VersionConstraint, BuildError)(
-                new SystemError("Range must start with >=", ErrorCode.InvalidInput));
-        }
+                Errors.system("Range must start with >=", ErrorCode.InvalidInput));
         
         auto minStr = parts[0][2 .. $].strip();
         auto minResult = Version.parse(minStr);
@@ -287,10 +283,8 @@ struct VersionConstraint
         
         // Parse max version (<X.Y.Z)
         if (!parts[1].startsWith("<"))
-        {
             return Err!(VersionConstraint, BuildError)(
-                new SystemError("Range must have < for upper bound", ErrorCode.InvalidInput));
-        }
+                Errors.system("Range must have < for upper bound", ErrorCode.InvalidInput));
         
         auto maxStr = parts[1][1 .. $].strip();
         auto maxResult = Version.parse(maxStr);
@@ -325,10 +319,8 @@ struct ConstraintSolver
         }
         
         if (candidates.empty)
-        {
             return Err!(const(Toolchain)*, BuildError)(
-                new SystemError("No toolchain satisfies constraints", ErrorCode.ToolNotFound));
-        }
+                Errors.system("No toolchain satisfies constraints", ErrorCode.ToolNotFound));
         
         // Sort by version (newest first)
         import std.algorithm : sort;

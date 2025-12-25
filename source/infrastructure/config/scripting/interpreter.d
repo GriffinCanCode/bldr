@@ -210,8 +210,11 @@ class Interpreter
         // Check if iterable is array
         if (!iterable.isArray())
         {
-            auto error = new ParseError("For loop requires an array to iterate over", null);
-            return VoidBuildResult.err(error);
+            return VoidBuildResult.err(
+                Errors.parse("", "For loop requires an array to iterate over")
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         
         auto array = iterable.asArray();
@@ -472,8 +475,11 @@ class Interpreter
         }
         else
         {
-            auto error = new ParseError("Unsupported expression type for evaluation", null);
-            return BuildResult!Value.err(error);
+            return BuildResult!Value.err(
+                Errors.parse("", "Unsupported expression type for evaluation")
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
     }
     
@@ -481,8 +487,11 @@ class Interpreter
     
     private VoidBuildResult err(string msg) @system
     {
-        auto error = new ParseError(msg, null);
-        return VoidBuildResult.err(error);
+        return VoidBuildResult.err(
+            Errors.parse("", msg)
+                .withLocation(__FILE__, __LINE__)
+                .build()
+        );
     }
 }
 

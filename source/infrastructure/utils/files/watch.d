@@ -133,8 +133,11 @@ final class FSEventsWatcher : IFileWatcher
     {
         if (!exists(path) || !isDir(path))
         {
-            auto error = new IOError(path, "Directory not found", ErrorCode.FileNotFound);
-            return WatchResult.err(error);
+            return WatchResult.err(
+                Errors.io(path, "Directory not found", ErrorCode.FileNotFound)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         
         _watchPath = absolutePath(path);
@@ -240,8 +243,11 @@ final class INotifyWatcher : IFileWatcher
     {
         if (!exists(path) || !isDir(path))
         {
-            auto error = new IOError(path, "Directory not found", ErrorCode.FileNotFound);
-            return WatchResult.err(error);
+            return WatchResult.err(
+                Errors.io(path, "Directory not found", ErrorCode.FileNotFound)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         
         _active = true;
@@ -370,8 +376,11 @@ final class KQueueWatcher : IFileWatcher
     {
         if (!exists(path) || !isDir(path))
         {
-            auto error = new IOError(path, "Directory not found", ErrorCode.FileNotFound);
-            return WatchResult.err(error);
+            return WatchResult.err(
+                Errors.io(path, "Directory not found", ErrorCode.FileNotFound)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         
         _watchPath = absolutePath(path);
@@ -459,8 +468,11 @@ final class PollingWatcher : IFileWatcher
     {
         if (!exists(path) || !isDir(path))
         {
-            auto error = new IOError(path, "Directory not found", ErrorCode.FileNotFound);
-            return WatchResult.err(error);
+            return WatchResult.err(
+                Errors.io(path, "Directory not found", ErrorCode.FileNotFound)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         
         _active = true;

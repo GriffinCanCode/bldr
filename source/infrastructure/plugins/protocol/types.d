@@ -49,22 +49,15 @@ struct RPCRequest {
             req.method = json["method"].str;
             req.params = "params" in json ? json["params"] : JSONValue(null);
             
-            if (req.jsonrpc != JSONRPC_VERSION) {
-                auto err = new PluginError(
-                    "Invalid JSON-RPC version: " ~ req.jsonrpc,
-                    ErrorCode.InvalidMessage
-                );
-                err.addSuggestion("Use JSON-RPC 2.0 protocol");
-                return Err!(RPCRequest, BuildError)(err);
-            }
+            if (req.jsonrpc != JSONRPC_VERSION)
+                return Err!(RPCRequest, BuildError)(
+                    Errors.plugin("Invalid JSON-RPC version: " ~ req.jsonrpc, ErrorCode.InvalidMessage)
+                        .withSuggestion("Use JSON-RPC 2.0 protocol"));
             
             return Ok!(RPCRequest, BuildError)(req);
         } catch (Exception e) {
-            auto err = new PluginError(
-                "Failed to parse RPC request: " ~ e.msg,
-                ErrorCode.InvalidMessage
-            );
-            return Err!(RPCRequest, BuildError)(err);
+            return Err!(RPCRequest, BuildError)(
+                Errors.plugin("Failed to parse RPC request: " ~ e.msg, ErrorCode.InvalidMessage));
         }
     }
 }
@@ -105,11 +98,8 @@ struct RPCError {
             JSONValue data = "data" in json ? json["data"] : JSONValue(null);
             return Ok!(RPCError, BuildError)(RPCError(code, message, data));
         } catch (Exception e) {
-            auto err = new PluginError(
-                "Failed to parse RPC error: " ~ e.msg,
-                ErrorCode.InvalidMessage
-            );
-            return Err!(RPCError, BuildError)(err);
+            return Err!(RPCError, BuildError)(
+                Errors.plugin("Failed to parse RPC error: " ~ e.msg, ErrorCode.InvalidMessage));
         }
     }
 }
@@ -171,14 +161,10 @@ struct RPCResponse {
             resp.jsonrpc = json["jsonrpc"].str;
             resp.id = json["id"].integer;
             
-            if (resp.jsonrpc != JSONRPC_VERSION) {
-                auto err = new PluginError(
-                    "Invalid JSON-RPC version: " ~ resp.jsonrpc,
-                    ErrorCode.InvalidMessage
-                );
-                err.addSuggestion("Use JSON-RPC 2.0 protocol");
-                return Err!(RPCResponse, BuildError)(err);
-            }
+            if (resp.jsonrpc != JSONRPC_VERSION)
+                return Err!(RPCResponse, BuildError)(
+                    Errors.plugin("Invalid JSON-RPC version: " ~ resp.jsonrpc, ErrorCode.InvalidMessage)
+                        .withSuggestion("Use JSON-RPC 2.0 protocol"));
             
             if ("result" in json) {
                 resp.result = json["result"];
@@ -191,20 +177,14 @@ struct RPCResponse {
                 resp.error = new RPCError(rpcErr.code, rpcErr.message, rpcErr.data);
                 resp.result = JSONValue(null);
             } else {
-                auto err = new PluginError(
-                    "Response must have either 'result' or 'error' field",
-                    ErrorCode.InvalidMessage
-                );
-                return Err!(RPCResponse, BuildError)(err);
+                return Err!(RPCResponse, BuildError)(
+                    Errors.plugin("Response must have either 'result' or 'error' field", ErrorCode.InvalidMessage));
             }
             
             return Ok!(RPCResponse, BuildError)(resp);
         } catch (Exception e) {
-            auto err = new PluginError(
-                "Failed to parse RPC response: " ~ e.msg,
-                ErrorCode.InvalidMessage
-            );
-            return Err!(RPCResponse, BuildError)(err);
+            return Err!(RPCResponse, BuildError)(
+                Errors.plugin("Failed to parse RPC response: " ~ e.msg, ErrorCode.InvalidMessage));
         }
     }
 }
@@ -250,18 +230,14 @@ struct PluginInfo {
             if ("capabilities" in json) {
                 auto capsArray = json["capabilities"].array;
                 info.capabilities.length = capsArray.length;
-                foreach (i, cap; capsArray) {
+                foreach (i, cap; capsArray)
                     info.capabilities[i] = cap.str;
-                }
             }
             
             return Ok!(PluginInfo, BuildError)(info);
         } catch (Exception e) {
-            auto err = new PluginError(
-                "Failed to parse plugin info: " ~ e.msg,
-                ErrorCode.InvalidMessage
-            );
-            return Err!(PluginInfo, BuildError)(err);
+            return Err!(PluginInfo, BuildError)(
+                Errors.plugin("Failed to parse plugin info: " ~ e.msg, ErrorCode.InvalidMessage));
         }
     }
 }
@@ -298,28 +274,23 @@ struct PluginTarget {
             if ("sources" in json) {
                 auto sourcesArray = json["sources"].array;
                 target.sources.length = sourcesArray.length;
-                foreach (i, src; sourcesArray) {
+                foreach (i, src; sourcesArray)
                     target.sources[i] = src.str;
-                }
             }
             
             if ("deps" in json) {
                 auto depsArray = json["deps"].array;
                 target.deps.length = depsArray.length;
-                foreach (i, dep; depsArray) {
+                foreach (i, dep; depsArray)
                     target.deps[i] = dep.str;
-                }
             }
             
             target.config = "config" in json ? json["config"] : JSONValue(null);
             
             return Ok!(PluginTarget, BuildError)(target);
         } catch (Exception e) {
-            auto err = new PluginError(
-                "Failed to parse plugin target: " ~ e.msg,
-                ErrorCode.InvalidMessage
-            );
-            return Err!(PluginTarget, BuildError)(err);
+            return Err!(PluginTarget, BuildError)(
+                Errors.plugin("Failed to parse plugin target: " ~ e.msg, ErrorCode.InvalidMessage));
         }
     }
 }
@@ -388,17 +359,15 @@ struct HookResult {
             if ("artifacts" in json) {
                 auto artifactsArray = json["artifacts"].array;
                 result.artifacts.length = artifactsArray.length;
-                foreach (i, art; artifactsArray) {
+                foreach (i, art; artifactsArray)
                     result.artifacts[i] = art.str;
-                }
             }
             
             if ("logs" in json) {
                 auto logsArray = json["logs"].array;
                 result.logs.length = logsArray.length;
-                foreach (i, log; logsArray) {
+                foreach (i, log; logsArray)
                     result.logs[i] = log.str;
-                }
             }
             
             if ("modified_target" in json) {
@@ -412,11 +381,8 @@ struct HookResult {
             
             return Ok!(HookResult, BuildError)(result);
         } catch (Exception e) {
-            auto err = new PluginError(
-                "Failed to parse hook result: " ~ e.msg,
-                ErrorCode.InvalidMessage
-            );
-            return Err!(HookResult, BuildError)(err);
+            return Err!(HookResult, BuildError)(
+                Errors.plugin("Failed to parse hook result: " ~ e.msg, ErrorCode.InvalidMessage));
         }
     }
 }

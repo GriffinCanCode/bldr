@@ -74,15 +74,15 @@ struct AtomicTempDir
             }
         }
         
-        auto error = new IOError(
-            baseDir,
-            "Failed to create temporary directory after " ~ maxRetries.to!string ~ " attempts"
+        return Err!(AtomicTempDir, BuildError)(
+            Errors.io(baseDir, "Failed to create temporary directory after " ~ maxRetries.to!string ~ " attempts")
+                .withSuggestion("Check available disk space")
+                .withSuggestion("Check permissions on temporary directory: " ~ baseDir)
+                .withSuggestion("Check disk space with: df -h")
+                .withSuggestion("Check temp directory permissions with: ls -la " ~ baseDir)
+                .withLocation(__FILE__, __LINE__)
+                .build()
         );
-        error.addSuggestion("Check available disk space");
-        error.addSuggestion("Check permissions on temporary directory: " ~ baseDir);
-        error.addSuggestion("Check disk space with: df -h");
-        error.addSuggestion("Check temp directory permissions with: ls -la " ~ baseDir);
-        return Err!(AtomicTempDir, BuildError)(error);
     }
     
     /// Create in specific base directory
@@ -113,14 +113,14 @@ struct AtomicTempDir
         }
         catch (FileException e)
         {
-            auto error = new IOError(
-                baseDir,
-                "Failed to create base directory: " ~ e.msg
+            return Err!(AtomicTempDir, BuildError)(
+                Errors.io(baseDir, "Failed to create base directory: " ~ e.msg)
+                    .withSuggestion("Check permissions on parent directory")
+                    .withSuggestion("Check available disk space")
+                    .withSuggestion("Check directory permissions with: ls -la " ~ dirName(baseDir))
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
-            error.addSuggestion("Check permissions on parent directory");
-            error.addSuggestion("Check available disk space");
-            error.addSuggestion("Check directory permissions with: ls -la " ~ dirName(baseDir));
-            return Err!(AtomicTempDir, BuildError)(error);
         }
         
         immutable maxRetries = 10;
@@ -145,14 +145,14 @@ struct AtomicTempDir
             }
         }
         
-        auto error = new IOError(
-            baseDir,
-            "Failed to create temporary directory after " ~ maxRetries.to!string ~ " attempts"
+        return Err!(AtomicTempDir, BuildError)(
+            Errors.io(baseDir, "Failed to create temporary directory after " ~ maxRetries.to!string ~ " attempts")
+                .withSuggestion("Check available disk space in: " ~ baseDir)
+                .withSuggestion("Check permissions on base directory")
+                .withSuggestion("Check disk space with: df -h " ~ baseDir)
+                .withLocation(__FILE__, __LINE__)
+                .build()
         );
-        error.addSuggestion("Check available disk space in: " ~ baseDir);
-        error.addSuggestion("Check permissions on base directory");
-        error.addSuggestion("Check disk space with: df -h " ~ baseDir);
-        return Err!(AtomicTempDir, BuildError)(error);
     }
     
     /// Destructor: automatic cleanup

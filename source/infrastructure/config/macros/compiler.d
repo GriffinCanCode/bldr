@@ -85,8 +85,11 @@ class DCompiler
             if (!result.success)
             {
                 result.error = execResult.output;
-                auto error = new ParseError("Macro compilation failed: " ~ result.error, null);
-                return BuildResult!CompilationResult.err(error);
+                return BuildResult!CompilationResult.err(
+                    Errors.parse("", "Macro compilation failed: " ~ result.error)
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
+                );
             }
             
             return BuildResult!CompilationResult.ok(result);
@@ -95,8 +98,11 @@ class DCompiler
         {
             result.success = false;
             result.error = e.msg;
-            auto error = new ParseError("Macro compilation exception: " ~ e.msg, null);
-            return BuildResult!CompilationResult.err(error);
+            return BuildResult!CompilationResult.err(
+                Errors.parse("", "Macro compilation exception: " ~ e.msg)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
     }
     
@@ -105,8 +111,11 @@ class DCompiler
     {
         if (!exists(filePath))
         {
-            auto error = new ParseError("Macro file not found: " ~ filePath, null);
-            return BuildResult!CompilationResult.err(error);
+            return BuildResult!CompilationResult.err(
+                Errors.parse(filePath, "Macro file not found: " ~ filePath)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         
         auto source = std.file.readText(filePath);
@@ -154,8 +163,11 @@ class MacroExecutor
         {
             result.success = false;
             result.error = "Macro binary not found: " ~ binaryPath;
-            auto error = new ParseError(result.error, null);
-            return BuildResult!MacroResult.err(error);
+            return BuildResult!MacroResult.err(
+                Errors.parse(binaryPath, result.error)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         
         try
@@ -170,8 +182,11 @@ class MacroExecutor
             if (!result.success)
             {
                 result.error = execResult.output;
-                auto error = new ParseError("Macro execution failed: " ~ result.error, null);
-                return BuildResult!MacroResult.err(error);
+                return BuildResult!MacroResult.err(
+                    Errors.parse("", "Macro execution failed: " ~ result.error)
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
+                );
             }
             
             // Parse output as target definitions (JSON format)
@@ -183,8 +198,11 @@ class MacroExecutor
         {
             result.success = false;
             result.error = e.msg;
-            auto error = new ParseError("Macro execution exception: " ~ e.msg, null);
-            return BuildResult!MacroResult.err(error);
+            return BuildResult!MacroResult.err(
+                Errors.parse("", "Macro execution exception: " ~ e.msg)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
     }
     

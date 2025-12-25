@@ -89,11 +89,12 @@ struct DeterminismVerifier
         if (sorted1.length != sorted2.length)
         {
             return Err!(VerificationResult, BuildError)(
-                new SystemError(
-                    "Different number of output files: " ~ 
+                Errors.system("Different number of output files: " ~ 
                     sorted1.length.to!string ~ " vs " ~ sorted2.length.to!string,
-                    ErrorCode.ValidationFailed
-                ));
+                    ErrorCode.ValidationFailed)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         
         VerificationResult result;
@@ -142,7 +143,10 @@ struct DeterminismVerifier
         if (!exists(dir1) || !exists(dir2))
         {
             return Err!(VerificationResult, BuildError)(
-                new SystemError("Directory not found", ErrorCode.DirectoryNotFound));
+                Errors.system("Directory not found", ErrorCode.DirectoryNotFound)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         
         // Collect all files recursively

@@ -59,12 +59,12 @@ class LifecycleManager {
             }
             
             if (!hookResult.success) {
-                auto err = new PluginError(
-                    "Pre-build hook failed: " ~ plugin.name,
-                    ErrorCode.BuildFailed
+                return VoidBuildResult.err(
+                    Errors.plugin("Pre-build hook failed: " ~ plugin.name, ErrorCode.BuildFailed)
+                        .withContext("plugin", plugin.name)
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
                 );
-                err.addContext(ErrorContext("plugin", plugin.name));
-                return VoidBuildResult.err(err);
             }
             
             Logger.debugLog("Pre-build hook completed: " ~ plugin.name ~ " (" ~ 

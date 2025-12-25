@@ -70,10 +70,9 @@ final class AnalysisCache : IAnalysisCache
             catch (Exception e)
             {
                 missCount++;
-                auto error = new CacheError(
-                    "Failed to deserialize analysis: " ~ e.msg,
-                    ErrorCode.CacheLoadFailed
-                );
+                auto error = Errors.cache("Failed to deserialize analysis: " ~ e.msg, ErrorCode.CacheLoadFailed)
+                    .withLocation(__FILE__, __LINE__)
+                    .build();
                 return BuildResult!(FileAnalysis*).err(error);
             }
         }
@@ -99,10 +98,9 @@ final class AnalysisCache : IAnalysisCache
             }
             catch (Exception e)
             {
-                auto error = new CacheError(
-                    "Failed to cache analysis: " ~ e.msg,
-                    ErrorCode.CacheWriteFailed
-                );
+                auto error = Errors.cache("Failed to cache analysis: " ~ e.msg, ErrorCode.CacheWriteFailed)
+                    .withLocation(__FILE__, __LINE__)
+                    .build();
                 return VoidBuildResult.err(error);
             }
         }

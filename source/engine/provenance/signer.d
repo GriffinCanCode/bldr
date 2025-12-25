@@ -89,7 +89,9 @@ struct ProvenanceSigner
     {
         if (envelope.signatures.length == 0)
             return Err!(ProvenanceStatement, BuildError)(
-                new SystemError("No signatures in envelope", ErrorCode.ValidationFailed));
+                Errors.system("No signatures in envelope", ErrorCode.ValidationFailed)
+                    .withLocation(__FILE__, __LINE__)
+                    .build());
         
         // Decode payload
         ubyte[] payloadBytes;
@@ -97,7 +99,9 @@ struct ProvenanceSigner
             payloadBytes = Base64.decode(envelope.payload);
         catch (Exception e)
             return Err!(ProvenanceStatement, BuildError)(
-                new SystemError("Invalid payload encoding: " ~ e.msg, ErrorCode.ValidationFailed));
+                Errors.system("Invalid payload encoding: " ~ e.msg, ErrorCode.ValidationFailed)
+                    .withLocation(__FILE__, __LINE__)
+                    .build());
         
         // Verify at least one signature
         bool anyValid = false;
@@ -119,7 +123,9 @@ struct ProvenanceSigner
         
         if (!anyValid)
             return Err!(ProvenanceStatement, BuildError)(
-                new SystemError("Signature verification failed", ErrorCode.ValidationFailed));
+                Errors.system("Signature verification failed", ErrorCode.ValidationFailed)
+                    .withLocation(__FILE__, __LINE__)
+                    .build());
         
         // Parse statement
         auto stmtResult = deserializeStatement(cast(string) payloadBytes);
@@ -281,7 +287,9 @@ BuildResult!ProvenanceStatement deserializeStatement(string json) @system
     auto typeIdx = json.indexOf(`"_type"`);
     if (typeIdx == -1)
         return Err!(ProvenanceStatement, BuildError)(
-            new ParseError(json, "Missing _type field"));
+            Errors.parse(json, "Missing _type field")
+                .withLocation(__FILE__, __LINE__)
+                .build());
     
     stmt._type = INTOTO_STATEMENT_TYPE;
     stmt.predicateType = SLSA_PREDICATE_TYPE;

@@ -112,11 +112,8 @@ final class ArtifactStore
         }
         
         // Artifact not found
-        auto error = new CacheError(
-            "Artifact not found: " ~ spec.id.toString(),
-            ErrorCode.CacheNotFound
-        );
-        return Err!(InputArtifact, BuildError)(error);
+        return Err!(InputArtifact, BuildError)(
+            Errors.cache("Artifact not found: " ~ spec.id.toString(), ErrorCode.CacheNotFound));
     }
     
     /// Upload artifact
@@ -128,14 +125,9 @@ final class ArtifactStore
         auto actualHash = hasher.finish(32);
         
         if (actualHash[0 .. 32] != id.hash[0 .. 32])
-        {
-            auto error = new GenericError(
-                "Artifact hash mismatch: expected " ~ id.toString() ~ 
-                " but got " ~ toHexString(actualHash[0 .. 32]).toLower(),
-                ErrorCode.CacheCorrupted
-            );
-            return VoidBuildResult.err(error);
-        }
+            return VoidBuildResult.err(
+                Errors.generic("Artifact hash mismatch: expected " ~ id.toString() ~ 
+                    " but got " ~ toHexString(actualHash[0 .. 32]).toLower(), ErrorCode.CacheCorrupted));
         
         // Save to local cache
         try
@@ -351,10 +343,8 @@ final class ArtifactStore
             
             immutable statusCode = parts[1].to!int;
             if (statusCode == 404)
-            {
-                auto error = new CacheError("Artifact not found", ErrorCode.CacheNotFound);
-                return Err!(ubyte[], BuildError)(error);
-            }
+                return Err!(ubyte[], BuildError)(
+                    Errors.cache("Artifact not found", ErrorCode.CacheNotFound));
             else if (statusCode >= 400)
             {
                 auto error = new DistributedError(

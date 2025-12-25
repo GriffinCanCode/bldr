@@ -92,25 +92,15 @@ final class AzureVmProvider : CloudProvider
         auto result = execute(azArgs, env);
         
         if (result.status != 0)
-        {
-            auto error = new SystemError(
-                format("Failed to create Azure VM: %s", result.output),
-                ErrorCode.NetworkError
-            );
-            return Err!(WorkerId, BuildError)(error);
-        }
+            return Err!(WorkerId, BuildError)(
+                Errors.system(format("Failed to create Azure VM: %s", result.output), ErrorCode.NetworkError));
         
         // Parse VM ID from JSON output
         auto output = result.output;
         auto vmIdIdx = output.indexOf("\"id\":\"");
         if (vmIdIdx == -1)
-        {
-            auto error = new SystemError(
-                "Failed to parse VM ID from Azure response",
-                ErrorCode.NetworkError
-            );
-            return Err!(WorkerId, BuildError)(error);
-        }
+            return Err!(WorkerId, BuildError)(
+                Errors.system("Failed to parse VM ID from Azure response", ErrorCode.NetworkError));
         
         auto idStart = vmIdIdx + 6; // Length of "\"id\":\""
         auto idEnd = output.indexOf("\"", idStart);
@@ -150,13 +140,8 @@ final class AzureVmProvider : CloudProvider
         auto result = execute(azArgs, env);
         
         if (result.status != 0)
-        {
-            auto error = new SystemError(
-                format("Failed to delete Azure VM %s: %s", workerId.toString(), result.output),
-                ErrorCode.NetworkError
-            );
-            return VoidBuildResult.err(error);
-        }
+            return VoidBuildResult.err(
+                Errors.system(format("Failed to delete Azure VM %s: %s", workerId.toString(), result.output), ErrorCode.NetworkError));
         
         Logger.info("Deleted Azure VM: " ~ workerId.toString());
         return Ok!BuildError();
@@ -185,13 +170,8 @@ final class AzureVmProvider : CloudProvider
         auto result = execute(azArgs, env);
         
         if (result.status != 0)
-        {
-            auto error = new SystemError(
-                format("Failed to describe Azure VM %s: %s", workerId.toString(), result.output),
-                ErrorCode.NetworkError
-            );
-            return Err!(WorkerStatus, BuildError)(error);
-        }
+            return Err!(WorkerStatus, BuildError)(
+                Errors.system(format("Failed to describe Azure VM %s: %s", workerId.toString(), result.output), ErrorCode.NetworkError));
         
         // Parse JSON output
         WorkerStatus status;

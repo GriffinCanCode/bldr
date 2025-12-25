@@ -58,7 +58,10 @@ struct Version
         
         if (str.empty)
             return Err!(Version, BuildError)(
-                new SystemError("Empty version string", ErrorCode.InvalidInput));
+                Errors.system("Empty version string", ErrorCode.InvalidInput)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         
         Version ver;
         
@@ -76,19 +79,28 @@ struct Version
         {
             try { ver.major = parts[0].strip().to!uint; }
             catch (Exception) { return Err!(Version, BuildError)(
-                new SystemError("Invalid version format", ErrorCode.InvalidInput)); }
+                Errors.system("Invalid version format", ErrorCode.InvalidInput)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            ); }
         }
         if (parts.length >= 2)
         {
             try { ver.minor = parts[1].strip().to!uint; }
             catch (Exception) { return Err!(Version, BuildError)(
-                new SystemError("Invalid version format", ErrorCode.InvalidInput)); }
+                Errors.system("Invalid version format", ErrorCode.InvalidInput)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            ); }
         }
         if (parts.length >= 3)
         {
             try { ver.patch = parts[2].strip().to!uint; }
             catch (Exception) { return Err!(Version, BuildError)(
-                new SystemError("Invalid version format", ErrorCode.InvalidInput)); }
+                Errors.system("Invalid version format", ErrorCode.InvalidInput)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            ); }
         }
         
         return Ok!(Version, BuildError)(ver);
@@ -250,7 +262,10 @@ struct ToolchainRef
         
         if (str.empty)
             return Err!(ToolchainRef, BuildError)(
-                new SystemError("Empty toolchain reference", ErrorCode.InvalidInput));
+                Errors.system("Empty toolchain reference", ErrorCode.InvalidInput)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         
         ToolchainRef ref_;
         str = str.strip();

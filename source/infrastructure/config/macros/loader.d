@@ -49,28 +49,17 @@ final class MacroRegistry
     BuildResult!(Target[]) call(string name, string[] args) @trusted
     {
         if (name !in macros)
-        {
-            import infrastructure.errors.types.types : ParseError;
-            return typeof(return).err(new ParseError(
-                "",
-                "Unknown macro: " ~ name,
-                ErrorCode.InvalidConfiguration
-            ));
-        }
+            return typeof(return).err(
+                Errors.parse("", "Unknown macro: " ~ name, ErrorCode.InvalidConfiguration));
         
         try
         {
-            auto result = macros[name](args);
-            return typeof(return).ok(result);
+            return typeof(return).ok(macros[name](args));
         }
         catch (Exception e)
         {
-            import infrastructure.errors.types.types : ParseError;
-            return typeof(return).err(new ParseError(
-                "",
-                "Macro '" ~ name ~ "' failed: " ~ e.msg,
-                ErrorCode.MacroExpansionFailed
-            ));
+            return typeof(return).err(
+                Errors.parse("", "Macro '" ~ name ~ "' failed: " ~ e.msg, ErrorCode.MacroExpansionFailed));
         }
     }
     
@@ -100,14 +89,8 @@ struct MacroLoader
         import std.uuid : randomUUID;
         
         if (!exists(filename))
-        {
-            import infrastructure.errors.types.types : IOError;
-            return typeof(return).err(new IOError(
-                filename,
-                "Macro file not found: " ~ filename,
-                ErrorCode.FileNotFound
-            ));
-        }
+            return typeof(return).err(
+                Errors.io(filename, "Macro file not found: " ~ filename, ErrorCode.FileNotFound));
         
         Logger.info("Loading and compiling macros from: " ~ filename);
         
@@ -123,12 +106,8 @@ struct MacroLoader
         }
         catch (Exception e)
         {
-            import infrastructure.errors.types.types : IOError;
-            return typeof(return).err(new IOError(
-                dirName(sharedLibPath),
-                "Failed to create macro library directory: " ~ e.msg,
-                ErrorCode.FileWriteFailed
-            ));
+            return typeof(return).err(
+                Errors.io(dirName(sharedLibPath), "Failed to create macro library directory: " ~ e.msg, ErrorCode.FileWriteFailed));
         }
         
         // 3. Compile D source to shared library
@@ -154,13 +133,8 @@ struct MacroLoader
         // Build D compiler command (use dmd or ldc2)
         string compiler = findDCompiler();
         if (compiler.length == 0)
-        {
-            import infrastructure.errors.types.types : SystemError;
-            return VoidBuildResult.err(new SystemError(
-                "No D compiler found (dmd or ldc2 required for macro compilation)",
-                ErrorCode.CompilationFailed
-            ));
-        }
+            return VoidBuildResult.err(
+                Errors.system("No D compiler found (dmd or ldc2 required for macro compilation)", ErrorCode.CompilationFailed));
         
         string[] compilerArgs = [
             compiler,
@@ -176,14 +150,8 @@ struct MacroLoader
         
         auto result = execute(compilerArgs);
         if (result.status != 0)
-        {
-            import infrastructure.errors.types.types : compilationError;
             return VoidBuildResult.err(compilationError(
-                sourceFile,
-                "Macro compilation failed",
-                format("Compiler output:\n%s", result.output)
-            ));
-        }
+                sourceFile, "Macro compilation failed", format("Compiler output:\n%s", result.output)));
         
         return Ok!BuildError();
     }
@@ -215,26 +183,17 @@ struct MacroLoader
         import std.string : toStringz, fromStringz;
         
         if (!exists(libPath))
-        {
-            import infrastructure.errors.types.types : IOError;
-            return VoidBuildResult.err(new IOError(
-                libPath,
-                "Compiled macro library not found",
-                ErrorCode.FileNotFound
-            ));
-        }
+            return VoidBuildResult.err(
+                Errors.io(libPath, "Compiled macro library not found", ErrorCode.FileNotFound));
         
         // Load shared library
         void* handle = dlopen(toStringz(libPath), RTLD_LAZY | RTLD_LOCAL);
         if (handle is null)
         {
-            import infrastructure.errors.types.types : SystemError;
             import std.format : format;
             auto errorMsg = fromStringz(dlerror());
-            return VoidBuildResult.err(new SystemError(
-                format("Failed to load macro library: %s", errorMsg),
-                ErrorCode.MacroLoadFailed
-            ));
+            return VoidBuildResult.err(
+                Errors.system(format("Failed to load macro library: %s", errorMsg), ErrorCode.MacroLoadFailed));
         }
         
         // Look for registration function: extern(C) void registerMacros(MacroRegistry)
@@ -243,12 +202,9 @@ struct MacroLoader
         
         if (registerFunc is null)
         {
-            import infrastructure.errors.types.types : SystemError;
             dlclose(handle);
-            return VoidBuildResult.err(new SystemError(
-                "Macro library missing 'registerMacros' function",
-                ErrorCode.MacroExpansionFailed
-            ));
+            return VoidBuildResult.err(
+                Errors.system("Macro library missing 'registerMacros' function", ErrorCode.MacroExpansionFailed));
         }
         
         // Call registration function to register all macros
@@ -258,13 +214,10 @@ struct MacroLoader
         }
         catch (Exception e)
         {
-            import infrastructure.errors.types.types : SystemError;
             import std.format : format;
             dlclose(handle);
-            return VoidBuildResult.err(new SystemError(
-                format("Macro registration failed: %s", e.msg),
-                ErrorCode.MacroLoadFailed
-            ));
+            return VoidBuildResult.err(
+                Errors.system(format("Macro registration failed: %s", e.msg), ErrorCode.MacroLoadFailed));
         }
         
         // Keep library loaded (store handle for cleanup if needed)
@@ -280,14 +233,8 @@ struct MacroLoader
         import std.algorithm : filter, each;
         
         if (!exists(dir))
-        {
-            import infrastructure.errors.types.types : IOError;
-            return typeof(return).err(new IOError(
-                dir,
-                "Macro directory not found: " ~ dir,
-                ErrorCode.FileNotFound
-            ));
-        }
+            return typeof(return).err(
+                Errors.io(dir, "Macro directory not found: " ~ dir, ErrorCode.FileNotFound));
         
         try
         {
@@ -299,12 +246,8 @@ struct MacroLoader
         }
         catch (Exception e)
         {
-            import infrastructure.errors.types.types : ParseError;
-            return typeof(return).err(new ParseError(
-                dir,
-                "Failed to load macros from directory: " ~ e.msg,
-                ErrorCode.MacroLoadFailed
-            ));
+            return typeof(return).err(
+                Errors.parse(dir, "Failed to load macros from directory: " ~ e.msg, ErrorCode.MacroLoadFailed));
         }
     }
 }

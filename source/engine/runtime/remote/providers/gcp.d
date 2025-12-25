@@ -76,13 +76,8 @@ final class GcpComputeProvider : CloudProvider
         auto result = execute(gcloudArgs, env);
         
         if (result.status != 0)
-        {
-            auto error = new SystemError(
-                format("Failed to create GCP instance: %s", result.output),
-                ErrorCode.NetworkError
-            );
-            return Err!(WorkerId, BuildError)(error);
-        }
+            return Err!(WorkerId, BuildError)(
+                Errors.system(format("Failed to create GCP instance: %s", result.output), ErrorCode.NetworkError));
         
         // Convert string instance name to WorkerId by hashing
         import std.digest.murmurhash : MurmurHash3;
@@ -101,13 +96,8 @@ final class GcpComputeProvider : CloudProvider
         // Lookup actual instance name
         auto instanceNamePtr = workerId in instanceNameMap;
         if (instanceNamePtr is null)
-        {
-            auto error = new SystemError(
-                "Worker ID not found in instance map",
-                ErrorCode.WorkerFailed
-            );
-            return VoidBuildResult.err(error);
-        }
+            return VoidBuildResult.err(
+                Errors.system("Worker ID not found in instance map", ErrorCode.WorkerFailed));
         
         string instanceName = *instanceNamePtr;
         
@@ -127,13 +117,8 @@ final class GcpComputeProvider : CloudProvider
         auto result = execute(gcloudArgs, env);
         
         if (result.status != 0)
-        {
-            auto error = new SystemError(
-                format("Failed to delete GCP instance %s: %s", instanceName, result.output),
-                ErrorCode.NetworkError
-            );
-            return VoidBuildResult.err(error);
-        }
+            return VoidBuildResult.err(
+                Errors.system(format("Failed to delete GCP instance %s: %s", instanceName, result.output), ErrorCode.NetworkError));
         
         Logger.info("Deleted GCP instance: " ~ instanceName);
         instanceNameMap.remove(workerId);
@@ -145,13 +130,8 @@ final class GcpComputeProvider : CloudProvider
         // Lookup actual instance name
         auto instanceNamePtr = workerId in instanceNameMap;
         if (instanceNamePtr is null)
-        {
-            auto error = new SystemError(
-                "Worker ID not found in instance map",
-                ErrorCode.WorkerFailed
-            );
-            return Err!(WorkerStatus, BuildError)(error);
-        }
+            return Err!(WorkerStatus, BuildError)(
+                Errors.system("Worker ID not found in instance map", ErrorCode.WorkerFailed));
         
         string instanceName = *instanceNamePtr;
         
@@ -171,13 +151,8 @@ final class GcpComputeProvider : CloudProvider
         auto result = execute(gcloudArgs, env);
         
         if (result.status != 0)
-        {
-            auto error = new SystemError(
-                format("Failed to describe GCP instance %s: %s", instanceName, result.output),
-                ErrorCode.NetworkError
-            );
-            return Err!(WorkerStatus, BuildError)(error);
-        }
+            return Err!(WorkerStatus, BuildError)(
+                Errors.system(format("Failed to describe GCP instance %s: %s", instanceName, result.output), ErrorCode.NetworkError));
         
         // Parse JSON output
         WorkerStatus status;
@@ -190,13 +165,8 @@ final class GcpComputeProvider : CloudProvider
             auto json = parseJSON(result.output);
             
             if (json.type != JSONType.object)
-            {
-                auto error = new SystemError(
-                    "Invalid JSON response from GCP",
-                    ErrorCode.NetworkError
-                );
-                return Err!(WorkerStatus, BuildError)(error);
-            }
+                return Err!(WorkerStatus, BuildError)(
+                    Errors.system("Invalid JSON response from GCP", ErrorCode.NetworkError));
             
             // Extract status
             if ("status" in json)

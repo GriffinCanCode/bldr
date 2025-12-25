@@ -40,7 +40,10 @@ class LocalToolchainProvider : ToolchainProvider
         if (!exists(path))
         {
             return Err!(Toolchain[], BuildError)(
-                new SystemError("Toolchain path does not exist: " ~ path, ErrorCode.ToolNotFound));
+                Errors.system("Toolchain path does not exist: " ~ path, ErrorCode.ToolNotFound)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         
         // Detect toolchain from local path
@@ -48,7 +51,10 @@ class LocalToolchainProvider : ToolchainProvider
         if (tc.tools.empty)
         {
             return Err!(Toolchain[], BuildError)(
-                new SystemError("No tools found in path: " ~ path, ErrorCode.ToolNotFound));
+                Errors.system("No tools found in path: " ~ path, ErrorCode.ToolNotFound)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         
         return Ok!(Toolchain[], BuildError)([tc]);
@@ -154,8 +160,10 @@ class RepositoryToolchainProvider : ToolchainProvider
         auto registerResult = resolver.registerRule(rule);
         if (registerResult.isErr)
             return Err!(Toolchain[], BuildError)(
-                new SystemError("Failed to register repository: " ~ registerResult.unwrapErr().message(), 
-                    ErrorCode.RepositoryError));
+                Errors.system("Failed to register repository: " ~ registerResult.unwrapErr().message(), ErrorCode.RepositoryError)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         
         // Resolve repository (fetch if needed)
         auto resolveResult = resolver.resolve("@" ~ rule.name);
@@ -163,7 +171,10 @@ class RepositoryToolchainProvider : ToolchainProvider
         {
             auto err = resolveResult.unwrapErr();
             return Err!(Toolchain[], BuildError)(
-                new SystemError("Failed to fetch toolchain: " ~ err.message(), ErrorCode.RepositoryError));
+                Errors.system("Failed to fetch toolchain: " ~ err.message(), ErrorCode.RepositoryError)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         
         auto resolved = resolveResult.unwrap();
@@ -334,12 +345,18 @@ struct ToolchainManifest
         catch (JSONException e)
         {
             return Err!(ToolchainManifest, BuildError)(
-                new SystemError("Invalid toolchain manifest: " ~ e.msg, ErrorCode.InvalidConfiguration));
+                Errors.system("Invalid toolchain manifest: " ~ e.msg, ErrorCode.InvalidConfiguration)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         catch (Exception e)
         {
             return Err!(ToolchainManifest, BuildError)(
-                new SystemError("Failed to load manifest: " ~ e.msg, ErrorCode.FileNotFound));
+                Errors.system("Failed to load manifest: " ~ e.msg, ErrorCode.FileNotFound)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
     }
 }

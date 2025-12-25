@@ -113,14 +113,11 @@ class PluginLoader {
                 kill(pipes.pid);
                 wait(pipes.pid);
                 
-                auto err = new PluginError(
-                    "Plugin timed out after " ~ timeout.total!"seconds".to!string ~ " seconds",
-                    ErrorCode.PluginTimeout
-                );
-                err.addContext(ErrorContext("executing plugin", pluginPath));
-                err.addSuggestion("Check if the plugin is hanging");
-                err.addSuggestion("Increase timeout if the operation is expected to be slow");
-                return Err!(PluginExecution, BuildError)(err);
+                return Err!(PluginExecution, BuildError)(
+                    Errors.plugin("Plugin timed out after " ~ timeout.total!"seconds".to!string ~ " seconds", ErrorCode.PluginTimeout)
+                        .withContext("executing plugin", pluginPath)
+                        .withSuggestion("Check if the plugin is hanging")
+                        .withSuggestion("Increase timeout if the operation is expected to be slow"));
             }
             
             // Wait for process
@@ -128,21 +125,14 @@ class PluginLoader {
             
             // Check if we got a response
             if (responseLine.empty) {
-                auto err = new PluginError(
-                    "Plugin did not produce any output",
-                    ErrorCode.PluginCrashed
-                );
-                err.addContext(ErrorContext("executing plugin", pluginPath));
-                err.addContext(ErrorContext("exit code", exitCode.to!string));
-                
-                if (stderrLines.length > 0) {
-                    err.addContext(ErrorContext("stderr", stderrLines[0]));
-                    foreach (line; stderrLines) {
+                if (stderrLines.length > 0)
+                    foreach (line; stderrLines)
                         Logger.error("Plugin stderr: " ~ line);
-                    }
-                }
                 
-                return Err!(PluginExecution, BuildError)(err);
+                return Err!(PluginExecution, BuildError)(
+                    Errors.plugin("Plugin did not produce any output", ErrorCode.PluginCrashed)
+                        .withContext("executing plugin", pluginPath)
+                        .withContext("exit code", exitCode.to!string));
             }
             
             // Decode response
@@ -163,12 +153,9 @@ class PluginLoader {
             return Ok!(PluginExecution, BuildError)(execution);
             
         } catch (Exception e) {
-            auto err = new PluginError(
-                "Failed to execute plugin: " ~ e.msg,
-                ErrorCode.PluginError
-            );
-            err.addContext(ErrorContext("executing plugin", pluginPath));
-            return Err!(PluginExecution, BuildError)(err);
+            return Err!(PluginExecution, BuildError)(
+                Errors.plugin("Failed to execute plugin: " ~ e.msg, ErrorCode.PluginError)
+                    .withContext("executing plugin", pluginPath));
         }
     }
     
@@ -183,13 +170,9 @@ class PluginLoader {
         
         auto execution = execResult.unwrap();
         
-        if (execution.response.isError) {
-            auto err = new PluginError(
-                "Plugin returned error: " ~ execution.response.error.message,
-                ErrorCode.PluginError
-            );
-            return Err!(PluginInfo, BuildError)(err);
-        }
+        if (execution.response.isError)
+            return Err!(PluginInfo, BuildError)(
+                Errors.plugin("Plugin returned error: " ~ execution.response.error.message, ErrorCode.PluginError));
         
         return PluginInfo.fromJSON(execution.response.result);
     }
@@ -209,13 +192,9 @@ class PluginLoader {
         
         auto execution = execResult.unwrap();
         
-        if (execution.response.isError) {
-            auto err = new PluginError(
-                "Plugin hook failed: " ~ execution.response.error.message,
-                ErrorCode.BuildFailed
-            );
-            return Err!(HookResult, BuildError)(err);
-        }
+        if (execution.response.isError)
+            return Err!(HookResult, BuildError)(
+                Errors.plugin("Plugin hook failed: " ~ execution.response.error.message, ErrorCode.BuildFailed));
         
         return HookResult.fromJSON(execution.response.result);
     }
@@ -245,13 +224,9 @@ class PluginLoader {
         
         auto execution = execResult.unwrap();
         
-        if (execution.response.isError) {
-            auto err = new PluginError(
-                "Plugin hook failed: " ~ execution.response.error.message,
-                ErrorCode.BuildFailed
-            );
-            return Err!(HookResult, BuildError)(err);
-        }
+        if (execution.response.isError)
+            return Err!(HookResult, BuildError)(
+                Errors.plugin("Plugin hook failed: " ~ execution.response.error.message, ErrorCode.BuildFailed));
         
         return HookResult.fromJSON(execution.response.result);
     }

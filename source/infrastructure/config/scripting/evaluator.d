@@ -406,10 +406,13 @@ class Evaluator
         auto lookupResult = scope_.lookup(name);
         if (lookupResult.isErr)
         {
-            auto error = new ParseError("Undefined function '" ~ name ~ "'", null);
-            error.addSuggestion("Define function with 'fn " ~ name ~ "(...) { ... }'");
-            error.addSuggestion("Or use a built-in function: " ~ builtins.functionNames().join(", "));
-            return BuildResult!Value.err(error);
+            return BuildResult!Value.err(
+                Errors.parse("", "Undefined function '" ~ name ~ "'")
+                    .withSuggestion("Define function with 'fn " ~ name ~ "(...) { ... }'")
+                    .withSuggestion("Or use a built-in function: " ~ builtins.functionNames().join(", "))
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         
         auto fnValue = lookupResult.unwrap();
@@ -526,7 +529,11 @@ class Evaluator
                 return VoidBuildResult.err(iterResult.unwrapErr());
             
             if (!iterResult.unwrap().isArray())
-                return VoidBuildResult.err(new ParseError("For loop requires array", null));
+                return VoidBuildResult.err(
+                    Errors.parse("", "For loop requires array")
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
+                );
             
             scope_.enterScope();
             scope(exit) scope_.exitScope();
@@ -775,8 +782,11 @@ class Evaluator
     
     private BuildResult!Value err(string msg) @system
     {
-        auto error = new ParseError(msg, null);
-        return BuildResult!Value.err(error);
+        return BuildResult!Value.err(
+            Errors.parse("", msg)
+                .withLocation(__FILE__, __LINE__)
+                .build()
+        );
     }
 }
 

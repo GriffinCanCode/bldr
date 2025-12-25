@@ -159,12 +159,12 @@ struct QueryLexer
                     return scanNumber(true);
                 return ok(TokenType.Minus, "-", startLine, startCol);
             default:
-                auto error = new ParseError("query", 
-                    "Unexpected character '" ~ c ~ "' at column " ~ startCol.to!string, 
-                    ErrorCode.ParseFailed);
-                error.line = line;
-                error.column = startCol;
-                return BuildResult!Token.err(error);
+                return BuildResult!Token.err(
+                    Errors.parseAt("query", "Unexpected character '" ~ c ~ "' at column " ~ startCol.to!string,
+                        line, startCol, ErrorCode.ParseFailed)
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
+                );
         }
     }
     
@@ -213,11 +213,11 @@ struct QueryLexer
                 advance();
                 if (isAtEnd())
                 {
-                    auto error = new ParseError("query", 
-                        "Unterminated string", 
-                        ErrorCode.ParseFailed);
-                    error.line = startLine;
-                    return BuildResult!Token.err(error);
+                    return BuildResult!Token.err(
+                        Errors.parseAt("query", "Unterminated string", startLine, startCol, ErrorCode.ParseFailed)
+                            .withLocation(__FILE__, __LINE__)
+                            .build()
+                    );
                 }
                 
                 // Handle escape sequences
@@ -243,11 +243,11 @@ struct QueryLexer
         
         if (isAtEnd())
         {
-            auto error = new ParseError("query", 
-                "Unterminated string", 
-                ErrorCode.ParseFailed);
-            error.line = startLine;
-            return BuildResult!Token.err(error);
+            return BuildResult!Token.err(
+                Errors.parseAt("query", "Unterminated string", startLine, startCol, ErrorCode.ParseFailed)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         
         advance();  // Closing quote

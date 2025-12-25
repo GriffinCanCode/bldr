@@ -26,14 +26,10 @@ struct SemanticVersion {
         
         try {
             auto parts = ver.strip().split(".");
-            if (parts.length < 2 || parts.length > 3) {
-                auto err = new PluginError(
-                    "Invalid version format: " ~ ver,
-                    ErrorCode.InvalidFieldValue
-                );
-                err.addSuggestion("Use semantic versioning format: MAJOR.MINOR.PATCH");
-                return Err!(SemanticVersion, BuildError)(err);
-            }
+            if (parts.length < 2 || parts.length > 3)
+                return Err!(SemanticVersion, BuildError)(
+                    Errors.plugin("Invalid version format: " ~ ver, ErrorCode.InvalidFieldValue)
+                        .withSuggestion("Use semantic versioning format: MAJOR.MINOR.PATCH"));
             
             int major = parts[0].to!int;
             int minor = parts[1].to!int;
@@ -41,11 +37,8 @@ struct SemanticVersion {
             
             return Ok!(SemanticVersion, BuildError)(SemanticVersion(major, minor, patch));
         } catch (Exception e) {
-            auto err = new PluginError(
-                "Failed to parse version: " ~ ver ~ " - " ~ e.msg,
-                ErrorCode.InvalidFieldValue
-            );
-            return Err!(SemanticVersion, BuildError)(err);
+            return Err!(SemanticVersion, BuildError)(
+                Errors.plugin("Failed to parse version: " ~ ver ~ " - " ~ e.msg, ErrorCode.InvalidFieldValue));
         }
     }
     
@@ -101,21 +94,13 @@ class PluginValidator {
     /// Validate plugin info
     VoidBuildResult validate(PluginInfo info) @system {
         // Check required fields
-        if (info.name.empty) {
-            auto err = new PluginError(
-                "Plugin name is required",
-                ErrorCode.InvalidFieldValue
-            );
-            return VoidBuildResult.err(err);
-        }
+        if (info.name.empty)
+            return VoidBuildResult.err(
+                Errors.plugin("Plugin name is required", ErrorCode.InvalidFieldValue));
         
-        if (info.version_.empty) {
-            auto err = new PluginError(
-                "Plugin version is required",
-                ErrorCode.InvalidFieldValue
-            );
-            return VoidBuildResult.err(err);
-        }
+        if (info.version_.empty)
+            return VoidBuildResult.err(
+                Errors.plugin("Plugin version is required", ErrorCode.InvalidFieldValue));
         
         // Validate version format
         auto pluginVerResult = SemanticVersion.parse(info.version_);
@@ -157,15 +142,11 @@ class PluginValidator {
         auto minVer = minVerResult.unwrap();
         auto currentVer = currentVerResult.unwrap();
         
-        if (currentVer < minVer) {
-            auto err = new PluginError(
-                "Plugin requires Builder " ~ minVersion ~ " or higher (current: " ~ builderVersion ~ ")",
-                ErrorCode.IncompatibleVersion
-            );
-            err.addSuggestion("Upgrade Builder: brew upgrade builder");
-            err.addSuggestion("Or use an older version of the plugin");
-            return VoidBuildResult.err(err);
-        }
+        if (currentVer < minVer)
+            return VoidBuildResult.err(
+                Errors.plugin("Plugin requires Builder " ~ minVersion ~ " or higher (current: " ~ builderVersion ~ ")", ErrorCode.IncompatibleVersion)
+                    .withSuggestion("Upgrade Builder: brew upgrade builder")
+                    .withSuggestion("Or use an older version of the plugin"));
         
         return Ok!BuildError();
     }
@@ -192,35 +173,23 @@ class PluginValidator {
             }
         }
         
-        if (!valid) {
-            auto err = new PluginError(
-                "Unknown capability: " ~ capability,
-                ErrorCode.InvalidFieldValue
-            );
-            err.addSuggestion("Valid capabilities: " ~ validCapabilities.to!string);
-            return VoidBuildResult.err(err);
-        }
+        if (!valid)
+            return VoidBuildResult.err(
+                Errors.plugin("Unknown capability: " ~ capability, ErrorCode.InvalidFieldValue)
+                    .withSuggestion("Valid capabilities: " ~ validCapabilities.to!string));
         
         return Ok!BuildError();
     }
     
     /// Validate plugin executable
     static VoidBuildResult validateExecutable(string pluginPath) @system {
-        if (!exists(pluginPath)) {
-            auto err = new PluginError(
-                "Plugin executable not found: " ~ pluginPath,
-                ErrorCode.ToolNotFound
-            );
-            return VoidBuildResult.err(err);
-        }
+        if (!exists(pluginPath))
+            return VoidBuildResult.err(
+                Errors.plugin("Plugin executable not found: " ~ pluginPath, ErrorCode.ToolNotFound));
         
-        if (!isFile(pluginPath)) {
-            auto err = new PluginError(
-                "Plugin path is not a file: " ~ pluginPath,
-                ErrorCode.InvalidInput
-            );
-            return VoidBuildResult.err(err);
-        }
+        if (!isFile(pluginPath))
+            return VoidBuildResult.err(
+                Errors.plugin("Plugin path is not a file: " ~ pluginPath, ErrorCode.InvalidInput));
         
         // Check if executable
         version(Posix) {
@@ -229,14 +198,10 @@ class PluginValidator {
             
             stat_t statbuf;
             if (stat(pluginPath.toStringz(), &statbuf) == 0) {
-                if ((statbuf.st_mode & S_IXUSR) == 0) {
-                    auto err = new PluginError(
-                        "Plugin is not executable: " ~ pluginPath,
-                        ErrorCode.InvalidInput
-                    );
-                    err.addSuggestion("Make it executable: chmod +x " ~ pluginPath);
-                    return VoidBuildResult.err(err);
-                }
+                if ((statbuf.st_mode & S_IXUSR) == 0)
+                    return VoidBuildResult.err(
+                        Errors.plugin("Plugin is not executable: " ~ pluginPath, ErrorCode.InvalidInput)
+                            .withSuggestion("Make it executable: chmod +x " ~ pluginPath));
             }
         }
         

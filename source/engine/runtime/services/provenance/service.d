@@ -89,7 +89,9 @@ final class ProvenanceService : IProvenanceService
     {
         if (!_config.enabled)
             return Err!(BuildProvenance, BuildError)(
-                new SystemError("Provenance disabled", ErrorCode.BuildCancelled));
+                Errors.system("Provenance disabled", ErrorCode.BuildCancelled)
+                    .withLocation(__FILE__, __LINE__)
+                    .build());
         
         return collector.complete();
     }
@@ -131,7 +133,9 @@ final class NullProvenanceService : IProvenanceService
     BuildResult!BuildProvenance complete() @system
     {
         return Err!(BuildProvenance, BuildError)(
-            new SystemError("Provenance disabled", ErrorCode.BuildCancelled));
+            Errors.system("Provenance disabled", ErrorCode.BuildCancelled)
+                .withLocation(__FILE__, __LINE__)
+                .build());
     }
     
     bool isActive() const @system { return false; }

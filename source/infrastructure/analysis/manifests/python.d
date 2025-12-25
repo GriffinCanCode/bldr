@@ -143,7 +143,9 @@ final class PythonManifestParser : IManifestParser
         }
         catch (Exception e)
         {
-            auto error = new ParseError(filePath, "Parse error: " ~ e.msg, ErrorCode.ParseFailed);
+            auto error = Errors.parse(filePath, "Parse error: " ~ e.msg, ErrorCode.ParseFailed)
+                .withLocation(__FILE__, __LINE__)
+                .build();
             return BuildResult!ManifestInfo.err(error);
         }
     }

@@ -483,10 +483,11 @@ private ErrorCode toErrorCode(SecurityCode code) pure nothrow @safe @nogc
 /// Create a security error using proper SystemError type
 private SystemError securityError(string message, SecurityCode code = SecurityCode.Unknown) @system
 {
-    auto error = new SystemError(message, toErrorCode(code));
-    error.addSuggestion(ErrorSuggestion("Security validation failed"));
-    error.addSuggestion(ErrorSuggestion.fileCheck("Review command arguments and paths"));
-    return error;
+    return Errors.system(message, toErrorCode(code))
+        .withSuggestion("Security validation failed")
+        .withSuggestion("Review command arguments and paths")
+        .withLocation(__FILE__, __LINE__)
+        .build();
 }
 
 // Import for string conversion

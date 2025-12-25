@@ -58,8 +58,11 @@ final class Compressor
     {
         if (data.length == 0)
         {
-            auto error = new GenericError("Cannot compress empty data");
-            return Err!(CompressionResult, BuildError)(error);
+            return Err!(CompressionResult, BuildError)(
+                Errors.generic("Cannot compress empty data")
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         
         final switch (_algorithm)
@@ -78,8 +81,11 @@ final class Compressor
     {
         if (data.length == 0)
         {
-            auto error = new GenericError("Cannot decompress empty data");
-            return Err!(DecompressionResult, BuildError)(error);
+            return Err!(DecompressionResult, BuildError)(
+                Errors.generic("Cannot decompress empty data")
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
         
         final switch (algo)
@@ -272,8 +278,11 @@ final class Compressor
             
             if (result.status != 0 || !exists(outputPath))
             {
-                auto error = new GenericError("Zstd decompression failed");
-                return Err!(DecompressionResult, BuildError)(error);
+                return Err!(DecompressionResult, BuildError)(
+                    Errors.generic("Zstd decompression failed")
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
+                );
             }
             
             auto decompressed = cast(ubyte[])read(outputPath);
@@ -281,8 +290,11 @@ final class Compressor
         }
         catch (Exception e)
         {
-            auto error = new GenericError("Zstd decompression failed: " ~ e.msg);
-            return Err!(DecompressionResult, BuildError)(error);
+            return Err!(DecompressionResult, BuildError)(
+                Errors.generic("Zstd decompression failed: " ~ e.msg)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
     }
     
@@ -318,8 +330,11 @@ final class Compressor
             
             if (result.status != 0 || !exists(outputPath))
             {
-                auto error = new GenericError("LZ4 decompression failed");
-                return Err!(DecompressionResult, BuildError)(error);
+                return Err!(DecompressionResult, BuildError)(
+                    Errors.generic("LZ4 decompression failed")
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
+                );
             }
             
             auto decompressed = cast(ubyte[])read(outputPath);
@@ -327,8 +342,11 @@ final class Compressor
         }
         catch (Exception e)
         {
-            auto error = new GenericError("LZ4 decompression failed: " ~ e.msg);
-            return Err!(DecompressionResult, BuildError)(error);
+            return Err!(DecompressionResult, BuildError)(
+                Errors.generic("LZ4 decompression failed: " ~ e.msg)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         }
     }
 }

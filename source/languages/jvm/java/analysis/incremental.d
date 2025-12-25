@@ -38,8 +38,9 @@ final class JavaDependencyAnalyzer : BaseDependencyAnalyzer
         if (!exists(sourceFile) || !isFile(sourceFile))
         {
             return BuildResult!(string[]).err(
-                new GenericError("Source file not found: " ~ sourceFile,
-                             ErrorCode.FileNotFound)
+                Errors.generic("Source file not found: " ~ sourceFile, ErrorCode.FileNotFound)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
         }
         
@@ -72,9 +73,11 @@ final class JavaDependencyAnalyzer : BaseDependencyAnalyzer
         catch (Exception e)
         {
             return BuildResult!(string[]).err(
-                new GenericError("Failed to analyze Java dependencies for " ~ 
+                Errors.generic("Failed to analyze Java dependencies for " ~ 
                              sourceFile ~ ": " ~ e.msg,
                              ErrorCode.AnalysisFailed)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
         }
     }

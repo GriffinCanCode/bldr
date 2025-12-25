@@ -57,10 +57,9 @@ class DependencyAnalyzer
     {
         if (incrementalAnalyzer is null)
         {
-            auto error = new ConfigError(
-                "Incremental analyzer not injected - must be provided via constructor",
-                ErrorCode.InvalidConfiguration
-            );
+            auto error = Errors.config("Incremental analyzer not injected - must be provided via constructor", ErrorCode.InvalidConfiguration)
+                .withLocation(__FILE__, __LINE__)
+                .build();
             return VoidBuildResult.err(error);
         }
         return incrementalAnalyzer.initialize(config);

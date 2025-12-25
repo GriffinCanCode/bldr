@@ -46,10 +46,9 @@ final class RemoteServiceHealthMonitor
         {
             if (atomicLoad(running))
             {
-                auto error = new GenericError(
-                    "Health monitor already running",
-                    ErrorCode.InitializationFailed
-                );
+                auto error = Errors.generic("Health monitor already running", ErrorCode.InitializationFailed)
+                    .withLocation(__FILE__, __LINE__)
+                    .build();
                 return VoidBuildResult.err(error);
             }
             

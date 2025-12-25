@@ -20,13 +20,13 @@ struct RPCCodec {
             auto parsed = parseJSON(json);
             return RPCRequest.fromJSON(parsed);
         } catch (Exception e) {
-            auto err = new PluginError(
-                "Failed to decode JSON-RPC request: " ~ e.msg,
-                ErrorCode.InvalidMessage
+            return Err!(RPCRequest, BuildError)(
+                Errors.plugin("Failed to decode JSON-RPC request: " ~ e.msg, ErrorCode.InvalidMessage)
+                    .withContext("decoding request", "invalid JSON")
+                    .withSuggestion("Check that the JSON is well-formed")
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
-            err.addContext(ErrorContext("decoding request", "invalid JSON"));
-            err.addSuggestion("Check that the JSON is well-formed");
-            return Err!(RPCRequest, BuildError)(err);
         }
     }
     
@@ -41,13 +41,13 @@ struct RPCCodec {
             auto parsed = parseJSON(json);
             return RPCResponse.fromJSON(parsed);
         } catch (Exception e) {
-            auto err = new PluginError(
-                "Failed to decode JSON-RPC response: " ~ e.msg,
-                ErrorCode.InvalidMessage
+            return Err!(RPCResponse, BuildError)(
+                Errors.plugin("Failed to decode JSON-RPC response: " ~ e.msg, ErrorCode.InvalidMessage)
+                    .withContext("decoding response", "invalid JSON")
+                    .withSuggestion("Check that the JSON is well-formed")
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
-            err.addContext(ErrorContext("decoding response", "invalid JSON"));
-            err.addSuggestion("Check that the JSON is well-formed");
-            return Err!(RPCResponse, BuildError)(err);
         }
     }
     

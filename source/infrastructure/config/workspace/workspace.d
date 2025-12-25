@@ -523,14 +523,15 @@ struct WorkspaceParser
     private BuildResult!T error(T)(string message)
     {
         auto token = peek();
-        auto err = new ParseError(filePath, message, ErrorCode.ParseFailed);
-        err.line = token.line;
-        err.column = token.column;
-        ["Check the Builderspace file syntax",
-         "See docs/architecture/DSL.md for Builderspace syntax reference",
-         "Review examples in the examples/ directory",
-         "Ensure all braces, parentheses, and quotes are properly matched"].each!(s => err.addSuggestion(s));
-        return Err!(T, BuildError)(err);
+        return Err!(T, BuildError)(
+            Errors.parseAt(filePath, message, token.line, token.column)
+                .withSuggestion("Check the Builderspace file syntax")
+                .withSuggestion("See docs/architecture/DSL.md for Builderspace syntax reference")
+                .withSuggestion("Review examples in the examples/ directory")
+                .withSuggestion("Ensure all braces, parentheses, and quotes are properly matched")
+                .withLocation(__FILE__, __LINE__)
+                .build()
+        );
     }
 }
 
@@ -686,18 +687,25 @@ struct WorkspaceAnalyzer
     
     private VoidBuildResult error(string message)
     {
-        auto err = new ParseError(workspacePath, message, ErrorCode.InvalidBuildFile);
-        ["Verify the workspace configuration is valid",
-         "Check docs/architecture/DSL.md for valid workspace fields",
-         "Review Builderspace examples in the examples/ directory"].each!(s => err.addSuggestion(s));
-        return VoidBuildResult.err(err);
+        return VoidBuildResult.err(
+            Errors.parse(workspacePath, message, ErrorCode.InvalidBuildFile)
+                .withSuggestion("Verify the workspace configuration is valid")
+                .withSuggestion("Check docs/architecture/DSL.md for valid workspace fields")
+                .withSuggestion("Review Builderspace examples in the examples/ directory")
+                .withLocation(__FILE__, __LINE__)
+                .build()
+        );
     }
     
     /// Extract boolean from expression (handles bool literals and strings)
     private BuildResult!bool extractBool(const Expr expr)
     {
         return expr ? extractBoolFromLiteral((cast(LiteralExpr)expr).value) :
-            Err!(bool, BuildError)(new ParseError("Expected boolean literal", null));
+            Err!(bool, BuildError)(
+                Errors.parse("", "Expected boolean literal")
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
     }
     
     /// Extract boolean from literal
@@ -712,14 +720,22 @@ struct WorkspaceAnalyzer
             if (["false", "0", "no"].canFind(val)) return Ok!(bool, BuildError)(false);
         }
         
-        return Err!(bool, BuildError)(new ParseError("Expected boolean value", null));
+        return Err!(bool, BuildError)(
+            Errors.parse("", "Expected boolean value")
+                .withLocation(__FILE__, __LINE__)
+                .build()
+        );
     }
     
     /// Extract number from expression
     private BuildResult!long extractNumber(const Expr expr)
     {
         auto litExpr = cast(LiteralExpr)expr;
-        if (!litExpr) return Err!(long, BuildError)(new ParseError("Expected number literal", null));
+        if (!litExpr) return Err!(long, BuildError)(
+            Errors.parse("", "Expected number literal")
+                .withLocation(__FILE__, __LINE__)
+                .build()
+        );
         
         if (litExpr.value.kind == LiteralKind.Number)
             return Ok!(long, BuildError)(litExpr.value.asNumber());
@@ -727,10 +743,18 @@ struct WorkspaceAnalyzer
         if (litExpr.value.kind == LiteralKind.String)
         {
             try { return Ok!(long, BuildError)(litExpr.value.asString().to!long); }
-            catch (Exception) { return Err!(long, BuildError)(new ParseError("Invalid number format", null)); }
+            catch (Exception) { return Err!(long, BuildError)(
+                Errors.parse("", "Invalid number format")
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            ); }
         }
         
-        return Err!(long, BuildError)(new ParseError("Expected number value", null));
+        return Err!(long, BuildError)(
+            Errors.parse("", "Expected number value")
+                .withLocation(__FILE__, __LINE__)
+                .build()
+        );
     }
 }
 

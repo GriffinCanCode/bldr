@@ -26,12 +26,12 @@ class TemplateGenerator {
         
         // Check if directory exists
         if (exists(pluginDir)) {
-            auto err = new PluginError(
-                "Plugin directory already exists: " ~ pluginDir,
-                ErrorCode.InvalidInput
+            return VoidBuildResult.err(
+                Errors.plugin("Plugin directory already exists: " ~ pluginDir, ErrorCode.InvalidInput)
+                    .withSuggestion("Choose a different name or remove the existing directory")
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
-            err.addSuggestion("Choose a different name or remove the existing directory");
-            return VoidBuildResult.err(err);
         }
         
         // Create directory structure
@@ -62,11 +62,11 @@ class TemplateGenerator {
             
             return Ok!BuildError();
         } catch (Exception e) {
-            auto err = new PluginError(
-                "Failed to create plugin template: " ~ e.msg,
-                ErrorCode.FileWriteFailed
+            return VoidBuildResult.err(
+                Errors.plugin("Failed to create plugin template: " ~ e.msg, ErrorCode.FileWriteFailed)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
-            return VoidBuildResult.err(err);
         }
     }
     

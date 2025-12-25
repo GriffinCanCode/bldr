@@ -110,7 +110,10 @@ struct DeterminismEnforcer
     {
         if (!initialized)
             return Err!(DeterminismResult, BuildError)(
-                new SystemError("Enforcer not initialized", ErrorCode.NotInitialized));
+                Errors.system("Enforcer not initialized", ErrorCode.NotInitialized)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
+            );
         
         import std.datetime.stopwatch : StopWatch;
         auto sw = StopWatch();
@@ -141,12 +144,13 @@ struct DeterminismEnforcer
         // Check for violations
         if (config.strictMode && !result.deterministic)
         {
-            auto error = new SystemError(
-                "Build violated determinism: " ~ 
-                result.violations.length.to!string ~ " violations detected",
-                ErrorCode.BuildFailed
+            return Err!(DeterminismResult, BuildError)(
+                Errors.system("Build violated determinism: " ~ 
+                    result.violations.length.to!string ~ " violations detected",
+                    ErrorCode.BuildFailed)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
-            return Err!(DeterminismResult, BuildError)(error);
         }
         
         return Ok!(DeterminismResult, BuildError)(result);

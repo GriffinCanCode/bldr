@@ -100,9 +100,9 @@ class DependencyResolver
             }
             else
             {
-                auto error = new ParseError("",
-                    "External repository reference but no repositories defined: " ~ dep,
-                    ErrorCode.MissingDependency);
+                auto error = Errors.parse("", "External repository reference but no repositories defined: " ~ dep, ErrorCode.MissingDependency)
+                    .withLocation(__FILE__, __LINE__)
+                    .build();
                 return BuildResult!TargetId.err(error);
             }
         }

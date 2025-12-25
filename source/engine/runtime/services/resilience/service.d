@@ -121,7 +121,9 @@ final class ResilienceService : IResilienceService
         if (!enableCheckpoints)
         {
             return BuildResult!Checkpoint.err(
-                new SystemError("Checkpoints disabled", ErrorCode.UnknownError)
+                Errors.system("Checkpoints disabled", ErrorCode.UnknownError)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
         }
         
@@ -129,7 +131,9 @@ final class ResilienceService : IResilienceService
         if (loadResult.isErr)
         {
             return BuildResult!Checkpoint.err(
-                new SystemError(loadResult.unwrapErr(), ErrorCode.CacheLoadFailed)
+                Errors.system(loadResult.unwrapErr(), ErrorCode.CacheLoadFailed)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
         }
         return BuildResult!Checkpoint.ok(loadResult.unwrap());
@@ -140,7 +144,9 @@ final class ResilienceService : IResilienceService
         if (!enableCheckpoints)
         {
             return BuildResult!ResumePlan.err(
-                new SystemError("Checkpoints disabled", ErrorCode.UnknownError)
+                Errors.system("Checkpoints disabled", ErrorCode.UnknownError)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
         }
         
@@ -148,7 +154,9 @@ final class ResilienceService : IResilienceService
         if (checkpointResult.isErr)
         {
             return BuildResult!ResumePlan.err(
-                new SystemError(checkpointResult.unwrapErr(), ErrorCode.CacheLoadFailed)
+                Errors.system(checkpointResult.unwrapErr(), ErrorCode.CacheLoadFailed)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
         }
         
@@ -157,7 +165,9 @@ final class ResilienceService : IResilienceService
         if (planResult.isErr)
         {
             return BuildResult!ResumePlan.err(
-                new SystemError(planResult.unwrapErr(), ErrorCode.UnknownError)
+                Errors.system(planResult.unwrapErr(), ErrorCode.UnknownError)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
         }
         return BuildResult!ResumePlan.ok(planResult.unwrap());
@@ -185,7 +195,9 @@ final class NullResilienceService : IResilienceService
     
     this()
     {
-        nullError = new SystemError("Null resilience service", ErrorCode.UnknownError);
+        nullError = Errors.system("Null resilience service", ErrorCode.UnknownError)
+            .withLocation(__FILE__, __LINE__)
+            .build();
     }
     
     @trusted {

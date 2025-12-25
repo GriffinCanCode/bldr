@@ -99,7 +99,9 @@ final class SourceRepository
             catch (Exception e)
             {
                 return Err!(SourceRef, BuildError)(
-                    new IOError(path, "Failed to store source: " ~ e.msg, ErrorCode.FileReadFailed)
+                    Errors.io(path, "Failed to store source: " ~ e.msg, ErrorCode.FileReadFailed)
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
                 );
             }
         }
@@ -164,11 +166,9 @@ final class SourceRepository
             catch (Exception e)
             {
                 return VoidBuildResult.err(
-                    new IOError(
-                        targetPath,
-                        "Failed to materialize source: " ~ e.msg,
-                        ErrorCode.FileWriteFailed
-                    )
+                    Errors.io(targetPath, "Failed to materialize source: " ~ e.msg, ErrorCode.FileWriteFailed)
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
                 );
             }
         }
@@ -207,7 +207,9 @@ final class SourceRepository
             auto hashOpt = index.lookup(path);
             if (!hashOpt.found)
                 return Err!(SourceRef, BuildError)(
-                    new IOError(path, "Source not tracked", ErrorCode.CacheNotFound)
+                    Errors.io(path, "Source not tracked", ErrorCode.CacheNotFound)
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
                 );
             
             return Ok!(SourceRef, BuildError)(
@@ -225,7 +227,9 @@ final class SourceRepository
             {
                 if (!exists(path))
                     return Err!(bool, BuildError)(
-                        new IOError(path, "File not found", ErrorCode.FileNotFound)
+                        Errors.io(path, "File not found", ErrorCode.FileNotFound)
+                            .withLocation(__FILE__, __LINE__)
+                            .build()
                     );
                 
                 auto hashOpt = index.lookup(path);
@@ -238,7 +242,9 @@ final class SourceRepository
             catch (Exception e)
             {
                 return Err!(bool, BuildError)(
-                    new IOError(path, "Verification failed: " ~ e.msg, ErrorCode.FileReadFailed)
+                    Errors.io(path, "Verification failed: " ~ e.msg, ErrorCode.FileReadFailed)
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
                 );
             }
         }

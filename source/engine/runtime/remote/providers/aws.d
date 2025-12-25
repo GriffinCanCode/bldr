@@ -66,13 +66,8 @@ final class AwsEc2Provider : CloudProvider
         auto result = execute(awsArgs, env);
         
         if (result.status != 0)
-        {
-            auto error = new SystemError(
-                format("Failed to launch EC2 instance: %s", result.output),
-                ErrorCode.NetworkError
-            );
-            return Err!(WorkerId, BuildError)(error);
-        }
+            return Err!(WorkerId, BuildError)(
+                Errors.system(format("Failed to launch EC2 instance: %s", result.output), ErrorCode.NetworkError));
         
         // Parse instance ID from JSON output
         string instanceId;
@@ -83,43 +78,25 @@ final class AwsEc2Provider : CloudProvider
             
             // Navigate: {"Instances": [{"InstanceId": "i-xxx"}]}
             if (json.type != JSONType.object || "Instances" !in json)
-            {
-                auto error = new SystemError(
-                    "Invalid JSON response from AWS: missing 'Instances' field",
-                    ErrorCode.NetworkError
-                );
-                return Err!(WorkerId, BuildError)(error);
-            }
+                return Err!(WorkerId, BuildError)(
+                    Errors.system("Invalid JSON response from AWS: missing 'Instances' field", ErrorCode.NetworkError));
             
             auto instances = json["Instances"];
             if (instances.type != JSONType.array || instances.array.length == 0)
-            {
-                auto error = new SystemError(
-                    "Invalid JSON response from AWS: empty or invalid 'Instances' array",
-                    ErrorCode.NetworkError
-                );
-                return Err!(WorkerId, BuildError)(error);
-            }
+                return Err!(WorkerId, BuildError)(
+                    Errors.system("Invalid JSON response from AWS: empty or invalid 'Instances' array", ErrorCode.NetworkError));
             
             auto firstInstance = instances.array[0];
             if (firstInstance.type != JSONType.object || "InstanceId" !in firstInstance)
-            {
-                auto error = new SystemError(
-                    "Invalid JSON response from AWS: missing 'InstanceId' field",
-                    ErrorCode.NetworkError
-                );
-                return Err!(WorkerId, BuildError)(error);
-            }
+                return Err!(WorkerId, BuildError)(
+                    Errors.system("Invalid JSON response from AWS: missing 'InstanceId' field", ErrorCode.NetworkError));
             
             instanceId = firstInstance["InstanceId"].str;
         }
         catch (Exception e)
         {
-            auto error = new SystemError(
-                format("Failed to parse AWS JSON response: %s", e.msg),
-                ErrorCode.NetworkError
-            );
-            return Err!(WorkerId, BuildError)(error);
+            return Err!(WorkerId, BuildError)(
+                Errors.system(format("Failed to parse AWS JSON response: %s", e.msg), ErrorCode.NetworkError));
         }
         
         // Convert string instance ID to WorkerId by hashing
@@ -140,13 +117,8 @@ final class AwsEc2Provider : CloudProvider
         // Lookup actual instance ID
         auto instanceIdPtr = workerId in instanceIdMap;
         if (instanceIdPtr is null)
-        {
-            auto error = new SystemError(
-                "Worker ID not found in instance map",
-                ErrorCode.WorkerFailed
-            );
-            return VoidBuildResult.err(error);
-        }
+            return VoidBuildResult.err(
+                Errors.system("Worker ID not found in instance map", ErrorCode.WorkerFailed));
         
         string instanceId = *instanceIdPtr;
         
@@ -168,13 +140,8 @@ final class AwsEc2Provider : CloudProvider
         auto result = execute(awsArgs, env);
         
         if (result.status != 0)
-        {
-            auto error = new SystemError(
-                format("Failed to terminate EC2 instance %s: %s", instanceId, result.output),
-                ErrorCode.NetworkError
-            );
-            return VoidBuildResult.err(error);
-        }
+            return VoidBuildResult.err(
+                Errors.system(format("Failed to terminate EC2 instance %s: %s", instanceId, result.output), ErrorCode.NetworkError));
         
         Logger.info("Terminated EC2 instance: " ~ instanceId);
         instanceIdMap.remove(workerId);
@@ -186,13 +153,8 @@ final class AwsEc2Provider : CloudProvider
         // Lookup actual instance ID
         auto instanceIdPtr = workerId in instanceIdMap;
         if (instanceIdPtr is null)
-        {
-            auto error = new SystemError(
-                "Worker ID not found in instance map",
-                ErrorCode.WorkerFailed
-            );
-            return Err!(WorkerStatus, BuildError)(error);
-        }
+            return Err!(WorkerStatus, BuildError)(
+                Errors.system("Worker ID not found in instance map", ErrorCode.WorkerFailed));
         
         string instanceId = *instanceIdPtr;
         
@@ -215,13 +177,8 @@ final class AwsEc2Provider : CloudProvider
         auto result = execute(awsArgs, env);
         
         if (result.status != 0)
-        {
-            auto error = new SystemError(
-                format("Failed to describe EC2 instance %s: %s", instanceId, result.output),
-                ErrorCode.NetworkError
-            );
-            return Err!(WorkerStatus, BuildError)(error);
-        }
+            return Err!(WorkerStatus, BuildError)(
+                Errors.system(format("Failed to describe EC2 instance %s: %s", instanceId, result.output), ErrorCode.NetworkError));
         
         // Parse JSON output
         WorkerStatus status;
@@ -235,13 +192,8 @@ final class AwsEc2Provider : CloudProvider
             
             // Navigate: {"Reservations": [{"Instances": [{"State": {...}, ...}]}]}
             if (json.type != JSONType.object || "Reservations" !in json)
-            {
-                auto error = new SystemError(
-                    "Invalid JSON response from AWS: missing 'Reservations'",
-                    ErrorCode.NetworkError
-                );
-                return Err!(WorkerStatus, BuildError)(error);
-            }
+                return Err!(WorkerStatus, BuildError)(
+                    Errors.system("Invalid JSON response from AWS: missing 'Reservations'", ErrorCode.NetworkError));
             
             auto reservations = json["Reservations"];
             if (reservations.type != JSONType.array || reservations.array.length == 0)

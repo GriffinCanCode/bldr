@@ -52,12 +52,11 @@ final class FileChangeTracker : IFileChangeTracker
             }
             catch (Exception e)
             {
-                auto error = new IOError(
-                    path,
-                    "Failed to track file: " ~ e.msg,
-                    ErrorCode.FileReadFailed
+                return VoidBuildResult.err(
+                    Errors.io(path, "Failed to track file: " ~ e.msg, ErrorCode.FileReadFailed)
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
                 );
-                return VoidBuildResult.err(error);
             }
         }
     }
@@ -155,12 +154,11 @@ final class FileChangeTracker : IFileChangeTracker
             }
             catch (Exception e)
             {
-                auto error = new IOError(
-                    path,
-                    "Failed to check file change: " ~ e.msg,
-                    ErrorCode.FileReadFailed
+                return BuildResult!ChangeResult.err(
+                    Errors.io(path, "Failed to check file change: " ~ e.msg, ErrorCode.FileReadFailed)
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
                 );
-                return BuildResult!ChangeResult.err(error);
             }
         }
     }
@@ -190,12 +188,11 @@ final class FileChangeTracker : IFileChangeTracker
             auto state = path in states;
             if (state is null)
             {
-                auto error = new IOError(
-                    path,
-                    "File not tracked",
-                    ErrorCode.FileNotFound
+                return BuildResult!(FileState*).err(
+                    Errors.io(path, "File not tracked", ErrorCode.FileNotFound)
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
                 );
-                return BuildResult!(FileState*).err(error);
             }
             
             return BuildResult!(FileState*).ok(state);
@@ -210,12 +207,11 @@ final class FileChangeTracker : IFileChangeTracker
             auto state = path in states;
             if (state is null)
             {
-                auto error = new IOError(
-                    path,
-                    "File not tracked",
-                    ErrorCode.FileNotFound
+                return VoidBuildResult.err(
+                    Errors.io(path, "File not tracked", ErrorCode.FileNotFound)
+                        .withLocation(__FILE__, __LINE__)
+                        .build()
                 );
-                return VoidBuildResult.err(error);
             }
             
             state.contentHash = contentHash;

@@ -97,8 +97,9 @@ final class MavenManifestParser : IManifestParser
         catch (Exception e)
         {
             return BuildResult!ManifestInfo.err(
-                new ParseError(filePath, "Failed to parse pom.xml: " ~ e.msg,
-                             ErrorCode.InvalidConfiguration));
+                Errors.parse(filePath, "Failed to parse pom.xml: " ~ e.msg, ErrorCode.InvalidConfiguration)
+                    .withLocation(__FILE__, __LINE__)
+                    .build());
         }
     }
     
@@ -171,8 +172,9 @@ private:
         catch (Exception e)
         {
             return Err!(MavenProject, BuildError)(
-                new ParseError("", "Failed to parse Maven POM: " ~ e.msg,
-                             ErrorCode.InvalidConfiguration));
+                Errors.parse("", "Failed to parse Maven POM: " ~ e.msg, ErrorCode.InvalidConfiguration)
+                    .withLocation(__FILE__, __LINE__)
+                    .build());
         }
     }
     

@@ -99,21 +99,13 @@ spec:
             string errorOutput = pipes.stderr.byLine.map!(a => a.idup).join("\n");
             
             if (status != 0)
-            {
-                auto error = new SystemError(
-                    format("Failed to create Kubernetes pod: %s", errorOutput),
-                    ErrorCode.ProcessSpawnFailed
-                );
-                return Err!(WorkerId, BuildError)(error);
-            }
+                return Err!(WorkerId, BuildError)(
+                    Errors.system(format("Failed to create Kubernetes pod: %s", errorOutput), ErrorCode.ProcessSpawnFailed));
         }
         catch (Exception e)
         {
-            auto error = new SystemError(
-                format("Failed to execute kubectl: %s", e.msg),
-                ErrorCode.ProcessSpawnFailed
-            );
-            return Err!(WorkerId, BuildError)(error);
+            return Err!(WorkerId, BuildError)(
+                Errors.system(format("Failed to execute kubectl: %s", e.msg), ErrorCode.ProcessSpawnFailed));
         }
         
         // Convert string pod name to WorkerId by hashing
@@ -133,13 +125,8 @@ spec:
         // Lookup actual pod name
         auto podNamePtr = workerId in podNameMap;
         if (podNamePtr is null)
-        {
-            auto error = new SystemError(
-                "Worker ID not found in pod map",
-                ErrorCode.WorkerFailed
-            );
-            return VoidBuildResult.err(error);
-        }
+            return VoidBuildResult.err(
+                Errors.system("Worker ID not found in pod map", ErrorCode.WorkerFailed));
         
         string podName = *podNamePtr;
         
@@ -156,13 +143,8 @@ spec:
         auto result = execute(kubectlArgs);
         
         if (result.status != 0)
-        {
-            auto error = new SystemError(
-                format("Failed to delete Kubernetes pod %s: %s", podName, result.output),
-                ErrorCode.ProcessSpawnFailed
-            );
-            return VoidBuildResult.err(error);
-        }
+            return VoidBuildResult.err(
+                Errors.system(format("Failed to delete Kubernetes pod %s: %s", podName, result.output), ErrorCode.ProcessSpawnFailed));
         
         Logger.info("Deleted Kubernetes pod: " ~ podName);
         podNameMap.remove(workerId);
@@ -174,13 +156,8 @@ spec:
         // Lookup actual pod name
         auto podNamePtr = workerId in podNameMap;
         if (podNamePtr is null)
-        {
-            auto error = new SystemError(
-                "Worker ID not found in pod map",
-                ErrorCode.WorkerFailed
-            );
-            return Err!(WorkerStatus, BuildError)(error);
-        }
+            return Err!(WorkerStatus, BuildError)(
+                Errors.system("Worker ID not found in pod map", ErrorCode.WorkerFailed));
         
         string podName = *podNamePtr;
         
@@ -197,13 +174,8 @@ spec:
         auto result = execute(kubectlArgs);
         
         if (result.status != 0)
-        {
-            auto error = new SystemError(
-                format("Failed to get pod status for %s: %s", podName, result.output),
-                ErrorCode.ProcessSpawnFailed
-            );
-            return Err!(WorkerStatus, BuildError)(error);
-        }
+            return Err!(WorkerStatus, BuildError)(
+                Errors.system(format("Failed to get pod status for %s: %s", podName, result.output), ErrorCode.ProcessSpawnFailed));
         
         // Parse JSON output properly
         WorkerStatus status;
@@ -282,11 +254,8 @@ spec:
         }
         catch (JSONException e)
         {
-            auto error = new SystemError(
-                format("Failed to parse pod JSON: %s", e.msg),
-                ErrorCode.ParseFailed
-            );
-            return Err!(WorkerStatus, BuildError)(error);
+            return Err!(WorkerStatus, BuildError)(
+                Errors.system(format("Failed to parse pod JSON: %s", e.msg), ErrorCode.ParseFailed));
         }
         
         return Ok!(WorkerStatus, BuildError)(status);

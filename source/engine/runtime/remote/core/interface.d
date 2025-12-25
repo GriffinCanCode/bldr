@@ -88,11 +88,11 @@ final class NullRemoteExecutionService : IRemoteExecutionService
             string workDir
         )
         {
-            auto error = new GenericError(
-                "Remote execution not enabled",
-                ErrorCode.NotSupported
+            return Err!(RemoteExecutionResult, BuildError)(
+                Errors.generic("Remote execution not enabled", ErrorCode.NotSupported)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
-            return Err!(RemoteExecutionResult, BuildError)(error);
         }
         
         BuildResult!ExecuteResponse executeReapi(
@@ -100,11 +100,11 @@ final class NullRemoteExecutionService : IRemoteExecutionService
             bool skipCacheLookup = false
         )
         {
-            auto error = new GenericError(
-                "REAPI not enabled",
-                ErrorCode.NotSupported
+            return Err!(ExecuteResponse, BuildError)(
+                Errors.generic("REAPI not enabled", ErrorCode.NotSupported)
+                    .withLocation(__FILE__, __LINE__)
+                    .build()
             );
-            return Err!(ExecuteResponse, BuildError)(error);
         }
         
         ServiceStatus getStatus()
