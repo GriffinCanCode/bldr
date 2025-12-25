@@ -32,6 +32,11 @@ struct WatchModeConfig
 }
 
 /// Watch mode service - orchestrates file watching and incremental builds
+/// 
+/// Leverages incremental topological ordering for improved responsiveness:
+/// - Caches the build graph between builds when structure is unchanged
+/// - Uses incremental topo sort to avoid O(V+E) recomputation on each change
+/// - Only rebuilds affected targets in proper topological order
 final class WatchModeService
 {
     private string _workspaceRoot;
@@ -45,6 +50,12 @@ final class WatchModeService
     private SysTime _lastBuildTime;
     private bool _lastBuildSuccess;
     
+    // Incremental build optimization state
+    private BuildGraph _cachedGraph;              // Cached graph for incremental updates
+    private ulong _lastTopoVersion;               // Last seen topo cache version
+    private size_t _incrementalHits;              // Times incremental order was reused
+    private size_t _fullRebuilds;                 // Times full rebuild was needed
+    
     /// Create watch mode service
     this(string workspaceRoot, WatchModeConfig config) @system
     {
@@ -53,6 +64,8 @@ final class WatchModeService
         _buildNumber = 0;
         _isRunning = false;
         _lastBuildSuccess = true;
+        _incrementalHits = 0;
+        _fullRebuilds = 0;
     }
     
     /// Start watch mode
@@ -173,7 +186,7 @@ final class WatchModeService
         writeln();
     }
     
-    /// Perform a build
+    /// Perform a build with incremental topological order optimization
     private void performBuild(string target) @system
     {
         import std.datetime.stopwatch : StopWatch, AutoStart;
@@ -218,10 +231,46 @@ final class WatchModeService
             }
             auto graph = graphResult.unwrap();
             
+            // Track incremental optimization effectiveness
+            bool usedIncrementalOrder = false;
+            if (_cachedGraph !is null && graph.hasValidTopoCache)
+            {
+                auto currentVersion = graph.topoCacheVersion;
+                if (currentVersion == _lastTopoVersion && graph.nodes.length == _cachedGraph.nodes.length)
+                {
+                    usedIncrementalOrder = true;
+                    _incrementalHits++;
+                    Logger.debugLog("Using incremental topological order (version " ~ currentVersion.to!string ~ ")");
+                }
+                else
+                {
+                    _fullRebuilds++;
+                    Logger.debugLog("Full topological recomputation needed");
+                }
+                _lastTopoVersion = currentVersion;
+            }
+            else
+            {
+                _fullRebuilds++;
+                _lastTopoVersion = graph.topoCacheVersion;
+            }
+            
+            _cachedGraph = graph;
+            
             if (_watchConfig.showGraph)
             {
                 Logger.info("\nDependency Graph:");
                 graph.print();
+                
+                // Show incremental stats in verbose mode
+                if (_watchConfig.verbose)
+                {
+                    auto stats = graph.incrementalStats;
+                    Logger.debugLog("Incremental topo stats: cache_hits=" ~ stats.cacheHits.to!string ~
+                        ", incremental=" ~ stats.incrementalUpdates.to!string ~
+                        ", full=" ~ stats.fullRecomputations.to!string ~
+                        ", effectiveness=" ~ (stats.effectiveness * 100).to!string ~ "%");
+                }
             }
             
             // Execute build
@@ -232,9 +281,12 @@ final class WatchModeService
             sw.stop();
             _lastBuildTime = Clock.currTime();
             
-            // Print timing
+            // Print timing with incremental info
             auto elapsed = sw.peek();
-            Logger.info("Build time: " ~ elapsed.total!"msecs".to!string ~ "ms");
+            auto timingMsg = "Build time: " ~ elapsed.total!"msecs".to!string ~ "ms";
+            if (usedIncrementalOrder)
+                timingMsg ~= " (incremental order)";
+            Logger.info(timingMsg);
         }
         catch (Exception e)
         {
@@ -276,6 +328,9 @@ final class WatchModeService
 }
 
 /// Intelligent change detector that maps file changes to affected targets
+/// 
+/// Uses incremental topological ordering to efficiently determine rebuild scope
+/// and return affected targets in proper build order (leaves first).
 final class ChangeDetector
 {
     private WorkspaceConfig _config;
@@ -290,9 +345,10 @@ final class ChangeDetector
     }
     
     /// Determine which targets are affected by file changes
+    /// Returns targets in topological order (leaves first for proper rebuild)
     string[] getAffectedTargets(const string[] changedFiles) @system
     {
-        bool[string] affected;
+        bool[string] directlyAffected;
         
         // For each changed file, find targets that reference it
         foreach (changedFile; changedFiles)
@@ -310,40 +366,92 @@ final class ChangeDetector
                     if (sourcePath == normalizedPath || 
                         normalizedPath.startsWith(dirName(sourcePath)))
                     {
-                        affected[target.name] = true;
-                        
-                        // Also mark dependent targets
-                        markDependents(target.name, affected);
+                        directlyAffected[target.name] = true;
                         break;
                     }
                 }
             }
         }
         
-        return affected.keys.array;
-    }
-    
-    /// Recursively mark dependent targets as affected
-    private void markDependents(string targetId, ref bool[string] affected) @system
-    {
-        import infrastructure.config.schema.schema : TargetId;
-        auto node = _graph.getNode(TargetId(targetId));
-        if (node is null)
-            return;
+        // Use incremental topological ordering to get all affected nodes in order
+        // This leverages the cached topo order for O(affected) vs O(V+E)
+        string[] allAffected;
+        bool[string] seen;
         
-        foreach (dependentId; node.dependentIds)
+        foreach (targetName; directlyAffected.keys)
         {
-            auto depIdStr = dependentId.toString();
-            if (depIdStr !in affected)
+            auto targetId = TargetId(targetName);
+            auto affectedNodes = _graph.getAffectedNodes(targetId);
+            
+            foreach (node; affectedNodes)
             {
-                affected[depIdStr] = true;
-                markDependents(depIdStr, affected);
+                auto nodeId = node.id.toString();
+                if (nodeId !in seen)
+                {
+                    seen[nodeId] = true;
+                    allAffected ~= nodeId;
+                }
             }
         }
+        
+        return allAffected;
+    }
+    
+    /// Get affected nodes as BuildNode references (for direct execution)
+    /// Returns nodes in topological order (leaves first)
+    BuildNode[] getAffectedNodes(const string[] changedFiles) @system
+    {
+        bool[string] directlyAffected;
+        
+        foreach (changedFile; changedFiles)
+        {
+            auto normalizedPath = buildNormalizedPath(absolutePath(changedFile));
+            
+            foreach (target; _config.targets)
+            {
+                foreach (source; target.sources)
+                {
+                    auto sourcePath = buildNormalizedPath(absolutePath(source));
+                    if (sourcePath == normalizedPath || normalizedPath.startsWith(dirName(sourcePath)))
+                    {
+                        directlyAffected[target.name] = true;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // Collect all affected nodes using incremental topo order
+        BuildNode[] allAffected;
+        bool[string] seen;
+        
+        foreach (targetName; directlyAffected.keys)
+        {
+            auto targetId = TargetId(targetName);
+            auto affectedNodes = _graph.getAffectedNodes(targetId);
+            
+            foreach (node; affectedNodes)
+            {
+                auto nodeId = node.id.toString();
+                if (nodeId !in seen)
+                {
+                    seen[nodeId] = true;
+                    allAffected ~= node;
+                }
+            }
+        }
+        
+        return allAffected;
+    }
+    
+    /// Check if target A must be built before target B
+    bool mustPrecede(string a, string b) @system
+    {
+        return _graph.mustPrecede(TargetId(a), TargetId(b));
     }
 }
 
-/// Watch statistics tracker
+/// Watch statistics tracker with incremental optimization metrics
 struct WatchStats
 {
     size_t totalBuilds;
@@ -353,13 +461,25 @@ struct WatchStats
     Duration averageBuildTime;
     SysTime startTime;
     
+    // Incremental topological ordering stats
+    size_t incrementalHits;       // Times cached topo order was reused
+    size_t fullRecomputations;    // Times full topo sort was needed
+    
     /// Record a build
-    void recordBuild(bool success, Duration buildTime) @system
+    void recordBuild(bool success, Duration buildTime, bool usedIncrementalOrder = false) @system
     {
         totalBuilds++;
         if (success) successfulBuilds++; else failedBuilds++;
         totalBuildTime += buildTime;
         if (totalBuilds > 0) averageBuildTime = totalBuildTime / totalBuilds;
+        if (usedIncrementalOrder) incrementalHits++; else fullRecomputations++;
+    }
+    
+    /// Get incremental ordering effectiveness (0.0 - 1.0)
+    @property float incrementalEffectiveness() const pure @safe nothrow @nogc
+    {
+        auto total = incrementalHits + fullRecomputations;
+        return total == 0 ? 1.0f : cast(float)incrementalHits / cast(float)total;
     }
     
     /// Print statistics
@@ -370,6 +490,15 @@ struct WatchStats
         writeln("  Successful: " ~ successfulBuilds.to!string);
         writeln("  Failed: " ~ failedBuilds.to!string);
         writeln("  Average build time: " ~ averageBuildTime.total!"msecs".to!string ~ "ms");
+        
+        // Incremental optimization stats
+        if (incrementalHits + fullRecomputations > 0)
+        {
+            writeln("  Incremental topo hits: " ~ incrementalHits.to!string);
+            writeln("  Full recomputations: " ~ fullRecomputations.to!string);
+            auto pct = cast(int)(incrementalEffectiveness * 100);
+            writeln("  Incremental effectiveness: " ~ pct.to!string ~ "%");
+        }
         
         auto uptime = Clock.currTime() - startTime;
         writeln("  Uptime: " ~ uptime.total!"seconds".to!string ~ "s");

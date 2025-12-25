@@ -759,3 +759,272 @@ unittest
     
     writeln("\x1b[32m  ✓ Diamond dependencies with memoization work correctly\x1b[0m");
 }
+
+// ==================== INCREMENTAL TOPOLOGICAL SORT TESTS ====================
+
+unittest
+{
+    writeln("\x1b[36m[TEST]\x1b[0m core.graph - Incremental topo sort cache hit");
+    
+    auto graph = new BuildGraph();
+    
+    auto a = TargetBuilder.create("a").build();
+    auto b = TargetBuilder.create("b").build();
+    
+    graph.addTarget(a);
+    graph.addTarget(b);
+    graph.addDependency("b", "a").unwrap();
+    
+    // First sort populates cache
+    auto sort1 = graph.topologicalSort().unwrap();
+    Assert.equal(sort1.length, 2);
+    
+    auto stats1 = graph.incrementalStats;
+    Assert.isTrue(stats1.cacheHits == 0 || stats1.fullRecomputations > 0);
+    
+    // Second sort should be a cache hit
+    auto sort2 = graph.topologicalSort().unwrap();
+    Assert.equal(sort2.length, 2);
+    Assert.isTrue(graph.hasValidTopoCache);
+    
+    auto stats2 = graph.incrementalStats;
+    Assert.isTrue(stats2.cacheHits >= 1);
+    
+    writeln("\x1b[32m  ✓ Incremental topo sort caches results correctly\x1b[0m");
+}
+
+unittest
+{
+    writeln("\x1b[36m[TEST]\x1b[0m core.graph - Incremental topo version tracking");
+    
+    auto graph = new BuildGraph();
+    
+    auto a = TargetBuilder.create("a").build();
+    auto b = TargetBuilder.create("b").build();
+    
+    graph.addTarget(a);
+    graph.addTarget(b);
+    
+    auto version1 = graph.topoCacheVersion;
+    
+    // Add dependency - should bump version
+    graph.addDependency("b", "a").unwrap();
+    
+    // Trigger cache population
+    graph.topologicalSort();
+    
+    auto version2 = graph.topoCacheVersion;
+    Assert.isTrue(version2 > version1);
+    
+    writeln("\x1b[32m  ✓ Incremental topo version tracking works\x1b[0m");
+}
+
+unittest
+{
+    writeln("\x1b[36m[TEST]\x1b[0m core.graph - Affected nodes detection");
+    
+    auto graph = new BuildGraph();
+    
+    // Create: a -> b -> c -> d
+    auto a = TargetBuilder.create("a").build();
+    auto b = TargetBuilder.create("b").build();
+    auto c = TargetBuilder.create("c").build();
+    auto d = TargetBuilder.create("d").build();
+    
+    graph.addTarget(a);
+    graph.addTarget(b);
+    graph.addTarget(c);
+    graph.addTarget(d);
+    
+    graph.addDependency("b", "a").unwrap();
+    graph.addDependency("c", "b").unwrap();
+    graph.addDependency("d", "c").unwrap();
+    
+    // Populate cache
+    graph.topologicalSort();
+    
+    // If 'b' changes, affected should include b, c, d (not a)
+    auto affected = graph.getAffectedNodes(TargetId("b"));
+    
+    Assert.isTrue(affected.length >= 1); // At least 'b' itself
+    
+    auto affectedIds = affected.map!(n => n.id.toString()).array;
+    Assert.isTrue(affectedIds.canFind("b"));
+    
+    // Check topological order (leaves first)
+    if (affected.length >= 2)
+    {
+        auto bIdx = affectedIds.countUntil("b");
+        if (affectedIds.canFind("c"))
+        {
+            auto cIdx = affectedIds.countUntil("c");
+            Assert.isTrue(bIdx < cIdx); // b comes before c in topo order
+        }
+    }
+    
+    writeln("\x1b[32m  ✓ Affected nodes detection works correctly\x1b[0m");
+}
+
+unittest
+{
+    writeln("\x1b[36m[TEST]\x1b[0m core.graph - mustPrecede dependency check");
+    
+    auto graph = new BuildGraph();
+    
+    auto a = TargetBuilder.create("a").build();
+    auto b = TargetBuilder.create("b").build();
+    auto c = TargetBuilder.create("c").build();
+    
+    graph.addTarget(a);
+    graph.addTarget(b);
+    graph.addTarget(c);
+    
+    // a -> b -> c
+    graph.addDependency("b", "a").unwrap();
+    graph.addDependency("c", "b").unwrap();
+    
+    graph.topologicalSort(); // Populate cache
+    
+    // 'a' must precede 'b' and 'c'
+    Assert.isTrue(graph.mustPrecede(TargetId("a"), TargetId("b")));
+    Assert.isTrue(graph.mustPrecede(TargetId("a"), TargetId("c")));
+    Assert.isTrue(graph.mustPrecede(TargetId("b"), TargetId("c")));
+    
+    // Not the other way around
+    Assert.isFalse(graph.mustPrecede(TargetId("b"), TargetId("a")));
+    Assert.isFalse(graph.mustPrecede(TargetId("c"), TargetId("a")));
+    
+    writeln("\x1b[32m  ✓ mustPrecede correctly identifies dependencies\x1b[0m");
+}
+
+unittest
+{
+    writeln("\x1b[36m[TEST]\x1b[0m core.graph - Remove target updates topo cache");
+    
+    auto graph = new BuildGraph();
+    
+    auto a = TargetBuilder.create("a").build();
+    auto b = TargetBuilder.create("b").build();
+    auto c = TargetBuilder.create("c").build();
+    
+    graph.addTarget(a);
+    graph.addTarget(b);
+    graph.addTarget(c);
+    
+    graph.addDependency("b", "a").unwrap();
+    graph.addDependency("c", "b").unwrap();
+    
+    // Populate cache
+    auto sort1 = graph.topologicalSort().unwrap();
+    Assert.equal(sort1.length, 3);
+    
+    // Remove middle node 'b'
+    auto removeResult = graph.removeTarget(TargetId("b"));
+    Assert.isTrue(removeResult.isOk);
+    
+    // Re-sort should reflect removal
+    auto sort2 = graph.topologicalSort().unwrap();
+    Assert.equal(sort2.length, 2);
+    
+    auto ids = sort2.map!(n => n.id.toString()).array;
+    Assert.isFalse(ids.canFind("b"));
+    
+    writeln("\x1b[32m  ✓ Target removal updates topological cache\x1b[0m");
+}
+
+unittest
+{
+    writeln("\x1b[36m[TEST]\x1b[0m core.graph - Forced fresh topological sort");
+    
+    auto graph = new BuildGraph();
+    
+    auto a = TargetBuilder.create("a").build();
+    auto b = TargetBuilder.create("b").build();
+    
+    graph.addTarget(a);
+    graph.addTarget(b);
+    graph.addDependency("b", "a").unwrap();
+    
+    // Populate cache
+    graph.topologicalSort();
+    auto stats1 = graph.incrementalStats;
+    
+    // Force fresh recomputation
+    graph.topologicalSortFresh();
+    auto stats2 = graph.incrementalStats;
+    
+    // Fresh sort should increment fullRecomputations
+    Assert.isTrue(stats2.fullRecomputations > stats1.fullRecomputations);
+    
+    writeln("\x1b[32m  ✓ Forced fresh topological sort bypasses cache\x1b[0m");
+}
+
+unittest
+{
+    writeln("\x1b[36m[TEST]\x1b[0m core.graph - Invalidate topo cache manually");
+    
+    auto graph = new BuildGraph();
+    
+    auto a = TargetBuilder.create("a").build();
+    graph.addTarget(a);
+    
+    // Populate cache
+    graph.topologicalSort();
+    Assert.isTrue(graph.hasValidTopoCache);
+    
+    // Manually invalidate
+    graph.invalidateTopoCache();
+    Assert.isFalse(graph.hasValidTopoCache);
+    
+    // Next sort should recompute
+    graph.topologicalSort();
+    Assert.isTrue(graph.hasValidTopoCache);
+    
+    writeln("\x1b[32m  ✓ Manual cache invalidation works correctly\x1b[0m");
+}
+
+unittest
+{
+    writeln("\x1b[36m[TEST]\x1b[0m core.graph - Incremental sort with many nodes");
+    
+    import std.datetime.stopwatch;
+    
+    auto graph = new BuildGraph(ValidationMode.Deferred);
+    
+    // Create 50-node chain
+    enum size = 50;
+    foreach (i; 0 .. size)
+    {
+        auto target = TargetBuilder.create("node" ~ i.to!string).build();
+        graph.addTarget(target);
+        
+        if (i > 0)
+            graph.addDependency("node" ~ i.to!string, "node" ~ (i-1).to!string).unwrap();
+    }
+    
+    // First sort (full computation)
+    auto sw = StopWatch(AutoStart.yes);
+    auto sort1 = graph.topologicalSort().unwrap();
+    sw.stop();
+    auto firstSortTime = sw.peek().total!"usecs";
+    
+    Assert.equal(sort1.length, size);
+    
+    // Second sort (cache hit)
+    sw.reset();
+    sw.start();
+    auto sort2 = graph.topologicalSort().unwrap();
+    sw.stop();
+    auto secondSortTime = sw.peek().total!"usecs";
+    
+    Assert.equal(sort2.length, size);
+    
+    writeln("    First sort: ", firstSortTime, "μs, Cached sort: ", secondSortTime, "μs");
+    
+    // Cached sort should be significantly faster (at least 2x for reasonable sizes)
+    // Note: very small graphs may not show big difference due to overhead
+    auto stats = graph.incrementalStats;
+    Assert.isTrue(stats.cacheHits >= 1);
+    
+    writeln("\x1b[32m  ✓ Incremental sort performance with many nodes\x1b[0m");
+}

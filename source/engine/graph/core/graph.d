@@ -10,6 +10,7 @@ import core.memory : GC;
 import core.lifetime : emplace;
 import infrastructure.config.schema.schema;
 import infrastructure.errors;
+import engine.graph.core.incremental_topo;
 
 /// Arena allocator specialized for BuildNode instances
 /// Reduces GC pressure 10-100x during graph construction by:
@@ -397,6 +398,8 @@ final class BuildGraph
     private ValidationMode _validationMode;
     private bool _validated;
     private NodeArena* _arena;  // Optional arena for batch allocation
+    private IncrementalTopoOrder _incrementalTopo;  // Incremental topological ordering
+    private IncrementalTopoStats _topoStats;        // Statistics for incremental updates
     
     /// Create graph with specified validation mode
     /// expectedNodes: Hint for arena pre-allocation (0 = no arena, use GC)
@@ -404,6 +407,7 @@ final class BuildGraph
     {
         _validationMode = mode;
         _validated = false;
+        _incrementalTopo = IncrementalTopoOrder(this);
         
         if (expectedNodes > 0)
         {
@@ -488,6 +492,7 @@ final class BuildGraph
         }
         
         nodes[key] = createNode(id, target);
+        _incrementalTopo.notifyNodeAdded(id); // Notify incremental order
         return Ok!BuildError();
     }
     
@@ -509,6 +514,7 @@ final class BuildGraph
         }
         
         nodes[key] = createNode(id, target);
+        _incrementalTopo.notifyNodeAdded(id); // Notify incremental order
         return Ok!BuildError();
     }
     
@@ -574,6 +580,13 @@ final class BuildGraph
         // Invalidate depth cache for affected nodes
         invalidateDepthCascade(fromNode);
         
+        // Notify incremental topo order (may update incrementally)
+        auto topoResult = _incrementalTopo.notifyEdgeAdded(fromNode.id, toNode.id);
+        if (topoResult.isErr)
+            return Result!BuildError.err(topoResult.unwrapErr());
+        
+        _topoStats.totalEdgeNotifications++;
+        
         return Ok!BuildError();
     }
     
@@ -626,6 +639,13 @@ final class BuildGraph
         
         // Invalidate depth cache for affected nodes
         invalidateDepthCascade(fromNode);
+        
+        // Notify incremental topo order (may update incrementally)
+        auto topoResult = _incrementalTopo.notifyEdgeAdded(from, to);
+        if (topoResult.isErr)
+            return Result!BuildError.err(topoResult.unwrapErr());
+        
+        _topoStats.totalEdgeNotifications++;
         
         return Ok!BuildError();
     }
@@ -703,6 +723,11 @@ final class BuildGraph
     /// Get nodes in topological order (leaves first)
     /// Returns Result to handle cycles gracefully
     /// 
+    /// Uses incremental topological ordering for watch mode efficiency:
+    /// - O(1) cache hit when graph unchanged
+    /// - O(affected) incremental update on edge changes
+    /// - O(V+E) full recomputation only when necessary
+    /// 
     /// Safety: This function is @system because:
     /// 1. Nested function captures only local variables and graph
     /// 2. Associative array operations are bounds-checked
@@ -719,54 +744,33 @@ final class BuildGraph
     /// - Prevented by not exposing mutable access during traversal
     Result!(BuildNode[], BuildError) topologicalSort() @system
     {
-        BuildNode[] sorted;
-        bool[string] visited;
-        bool[string] visiting;
-        BuildError cycleError = null;
-        
-        void visit(BuildNode node)
+        // Try incremental cache first
+        auto cachedResult = _incrementalTopo.getOrder();
+        if (cachedResult.isOk)
         {
-            if (cycleError !is null)
-                return;
-            
-            auto nodeKey = node.id.toString();
-            if (nodeKey in visited)
-                return;
-            
-            if (nodeKey in visiting)
+            auto cached = cachedResult.unwrap();
+            // Validate cache matches current graph state
+            if (cached.length == nodes.length)
             {
-                auto error = new GraphError("Circular dependency detected in build graph involving target: " ~ node.id.toString(), ErrorCode.GraphCycle);
-                error.addContext(ErrorContext("topological sort", "cycle detected"));
-                error.addSuggestion("Run 'bldr graph' to visualize all dependencies");
-                error.addSuggestion("Trace the cycle by checking which targets depend on '" ~ node.id.toString() ~ "'");
-                error.addSuggestion("Break the cycle by removing or refactoring dependencies");
-                error.addSuggestion("Consider using lazy loading or interface-based design patterns");
-                cycleError = cast(BuildError) error;
-                return;
+                _topoStats.cacheHits++;
+                return cachedResult;
             }
-            
-            visiting[nodeKey] = true;
-            
-            foreach (depId; node.dependencyIds)
-            {
-                auto depKey = depId.toString();
-                if (depKey in nodes)
-                    visit(nodes[depKey]);
-            }
-            
-            visiting.remove(nodeKey);
-            visited[nodeKey] = true;
-            sorted ~= node;
+            // Cache stale (nodes added/removed), invalidate
+            _incrementalTopo.invalidate();
         }
         
-        foreach (node; nodes.values)
-        {
-            visit(node);
-            if (cycleError !is null)
-                return Result!(BuildNode[], BuildError).err(cycleError);
-        }
-        
-        return Result!(BuildNode[], BuildError).ok(sorted);
+        // Full recomputation (also updates incremental cache)
+        _topoStats.fullRecomputations++;
+        return _incrementalTopo.getOrder();
+    }
+    
+    /// Get topological order with forced full recomputation (bypasses cache)
+    /// Use when graph structure may have changed externally
+    Result!(BuildNode[], BuildError) topologicalSortFresh() @system
+    {
+        _incrementalTopo.invalidate();
+        _topoStats.fullRecomputations++;
+        return _incrementalTopo.getOrder();
     }
     
     /// Get all nodes that can be built in parallel (no deps or deps satisfied)
@@ -900,6 +904,87 @@ final class BuildGraph
         }
         
         return stats;
+    }
+    
+    /// Get incremental topological sort statistics
+    @property IncrementalTopoStats incrementalStats() const @system pure nothrow @nogc
+    {
+        return _topoStats;
+    }
+    
+    /// Check if topological order cache is valid
+    @property bool hasValidTopoCache() const @system nothrow
+    {
+        return _incrementalTopo.isValid;
+    }
+    
+    /// Get topological order cache version (for external coordination)
+    @property ulong topoCacheVersion() const @system nothrow
+    {
+        return _incrementalTopo.version_;
+    }
+    
+    /// Get nodes affected by a change to a specific target
+    /// Useful for watch mode to determine minimal rebuild scope
+    /// Returns nodes in topological order (leaves first for proper rebuild)
+    BuildNode[] getAffectedNodes(TargetId changedTarget) @system
+    {
+        return _incrementalTopo.getAffectedNodes(changedTarget);
+    }
+    
+    /// Check if target A must be built before target B
+    /// Returns true if B depends on A (directly or transitively)
+    bool mustPrecede(TargetId a, TargetId b) @system
+    {
+        return _incrementalTopo.mustPrecede(a, b);
+    }
+    
+    /// Remove a target from the graph
+    /// Returns: Ok on success, Err if target not found
+    Result!BuildError removeTarget(TargetId id) @system
+    {
+        auto key = id.toString();
+        if (key !in nodes)
+        {
+            auto error = new GraphError("Target not found: " ~ key, ErrorCode.NodeNotFound);
+            return Result!BuildError.err(cast(BuildError) error);
+        }
+        
+        auto node = nodes[key];
+        
+        // Remove from dependents of dependencies
+        foreach (depId; node.dependencyIds)
+        {
+            auto depKey = depId.toString();
+            if (depKey in nodes)
+            {
+                auto dep = nodes[depKey];
+                dep.dependentIds = dep.dependentIds.filter!(d => d != id).array;
+            }
+        }
+        
+        // Remove from dependencies of dependents
+        foreach (depId; node.dependentIds)
+        {
+            auto depKey = depId.toString();
+            if (depKey in nodes)
+            {
+                auto dep = nodes[depKey];
+                dep.dependencyIds = dep.dependencyIds.filter!(d => d != id).array;
+                invalidateDepthCascade(dep); // Invalidate depth for affected nodes
+            }
+        }
+        
+        nodes.remove(key);
+        _incrementalTopo.notifyNodeRemoved(id);
+        
+        return Ok!BuildError();
+    }
+    
+    /// Invalidate topological order cache (call when external changes occur)
+    void invalidateTopoCache() @system nothrow
+    {
+        _incrementalTopo.invalidate();
     }
     
     /// Calculate critical path cost for all nodes
