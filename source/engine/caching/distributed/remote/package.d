@@ -5,10 +5,15 @@ module engine.caching.distributed.remote;
 /// 
 /// Architecture:
 /// - Content-addressable storage (BLAKE3)
-/// - HTTP/1.1 transport (no external dependencies)
+/// - HTTP/1.1 transport (default, no external dependencies)
+/// - gRPC/HTTP2 transport (high-throughput, REAPI-compatible)
 /// - LRU eviction with configurable limits
 /// - Workspace isolation via HMAC
 /// - Connection pooling and retry logic
+/// 
+/// Transport Options:
+/// - HTTP/1.1: Default, wide compatibility, connection pooling
+/// - gRPC/HTTP2: Multiplexing, ByteStream, batch ops (BuildBuddy/BuildBarn/REAPI)
 /// 
 /// Production Features:
 /// - Connection Pool: Bounded thread pool (not thread-per-connection)
@@ -18,10 +23,21 @@ module engine.caching.distributed.remote;
 /// - Metrics: Prometheus endpoint (/metrics)
 /// - CDN: Cache headers and signed URLs
 /// - Health: /health endpoint
+/// - HTTP/2 Multiplexing: Concurrent artifact transfers via gRPC
 /// 
 /// Usage:
 /// ```d
-/// // Client
+/// // Unified Transport (auto-detects HTTP vs gRPC from URL)
+/// auto transport = ArtifactTransportFactory.fromUrl("grpc://cas:50051").unwrap();
+/// transport.put("hash123", data);
+/// auto blob = transport.get("hash123").unwrap();
+/// 
+/// // High-throughput gRPC with multiplexing
+/// import engine.distributed.protocol.grpc.cas;
+/// auto grpc = GrpcCasFactory.fromUrl("grpc://cas:50051").unwrap();
+/// auto results = grpc.multiplexedUpload(blobs, 10);  // 10 concurrent streams
+/// 
+/// // Legacy client (HTTP/1.1)
 /// auto config = RemoteCacheConfig.fromEnvironment();
 /// auto client = new RemoteCacheClient(config);
 /// auto result = client.get(contentHash);
@@ -29,19 +45,6 @@ module engine.caching.distributed.remote;
 /// // Server
 /// auto server = new CacheServer("0.0.0.0", 8080);
 /// server.start();
-/// 
-/// // Production Server (with thread pool tuning)
-/// auto tlsConfig = TlsConfig("cert.pem", "key.pem");
-/// auto cdnConfig = CdnConfig("cdn.example.com", "signing-key");
-/// auto prodServer = new CacheServer(
-///     "0.0.0.0", 8080, ".cache",
-///     "auth-token", 100_000_000_000,
-///     true, true, true,  // compression, rate limiting, metrics
-///     tlsConfig, cdnConfig,
-///     32,    // worker threads (0 = 2*CPUs)
-///     4096   // connection queue size
-/// );
-/// prodServer.start();
 /// ```
 
 public import engine.caching.distributed.remote.protocol;
@@ -54,5 +57,7 @@ public import engine.caching.distributed.remote.compress;
 public import engine.caching.distributed.remote.metrics;
 public import engine.caching.distributed.remote.tls;
 public import engine.caching.distributed.remote.cdn;
+public import engine.caching.distributed.remote.artifact;
+public import engine.caching.distributed.remote.unified;
 
 

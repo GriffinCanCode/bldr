@@ -49,6 +49,15 @@ Production-ready distributed caching system with enterprise features.
   - Purge API
 - **Implementation**: `cdn.d`
 
+### ✅ gRPC Native Transport (HTTP/2 Multiplexing)
+- **Protocol**: gRPC/HTTP2 for high-throughput artifact transfers
+- **Multiplexing**: Concurrent uploads/downloads via HTTP/2 streams
+- **REAPI Compatible**: Works with BuildBuddy, BuildBarn, Buildfarm
+- **ByteStream**: Large blob streaming for artifacts >4MB
+- **Batch Ops**: FindMissing, BatchUpdateBlobs, BatchReadBlobs
+- **Implementation**: `artifact.d` (interfaces), `unified.d` (factory)
+- **Protocol Impl**: `engine.distributed.protocol.grpc.cas` (SoC-compliant)
+
 ### ✅ Health Checks
 - **Endpoint**: `/health`
 - **Response**: JSON with uptime, storage, hit rate
@@ -279,15 +288,66 @@ For production enhancement:
 remote/
 ├── package.d       - Public API and documentation
 ├── protocol.d      - Wire protocol and config
-├── transport.d     - HTTP client with connection pooling
+├── transport.d     - HTTP/1.1 client with connection pooling
 ├── client.d        - High-level client interface
 ├── server.d        - Production HTTP server ⭐
-├── limiter.d       - Rate limiting (NEW) ⭐
-├── compress.d      - Compression (NEW) ⭐
-├── metrics.d       - Prometheus metrics (NEW) ⭐
-├── tls.d           - TLS support (NEW) ⭐
-├── cdn.d           - CDN integration (NEW) ⭐
+├── limiter.d       - Rate limiting ⭐
+├── compress.d      - Compression ⭐
+├── metrics.d       - Prometheus metrics ⭐
+├── tls.d           - TLS support ⭐
+├── cdn.d           - CDN integration ⭐
+├── artifact.d      - Transport interfaces (gRPC/HTTP) ⭐ NEW
+├── unified.d       - Unified transport factory ⭐ NEW
 └── README.md       - This file
+```
+
+## Transport Selection
+
+### HTTP/1.1 (Default)
+- Wide compatibility, no special requirements
+- Connection pooling for efficiency
+- Best for: Standard cache servers, CDNs
+
+### gRPC/HTTP2 (High Throughput)
+- HTTP/2 stream multiplexing for concurrent transfers
+- REAPI-compatible for remote execution backends
+- ByteStream for large artifacts
+- Best for: High-volume CI/CD, REAPI backends
+
+```d
+import engine.caching.distributed.remote;
+
+// Auto-detect transport from URL
+auto transport = ArtifactTransportFactory.fromUrl("grpc://cas.example.com:50051");
+
+// Explicit HTTP
+auto httpTransport = ArtifactTransportFactory.create(
+    ArtifactTransportConfig.http("https://cache.example.com:8080")
+);
+
+// Explicit gRPC with instance name
+auto grpcTransport = ArtifactTransportFactory.create(
+    ArtifactTransportConfig.grpc("grpcs://cas.example.com:443", "my-project")
+);
+
+// From existing RemoteCacheConfig
+auto config = RemoteCacheConfig.fromEnvironment();
+auto transport = ArtifactTransportFactory.fromCacheConfig(config);
+```
+
+### Multiplexed Transfers (gRPC only)
+```d
+import engine.distributed.protocol.grpc.cas;
+
+auto transport = GrpcCasFactory.fromUrl("grpc://cas:50051").unwrap();
+
+// Upload multiple blobs concurrently (10 HTTP/2 streams)
+BlobUpload[] uploads = [...];
+auto results = transport.multiplexedUpload(uploads, 10);
+
+// Download multiple blobs concurrently
+string[] digests = [...];
+auto blobs = transport.multiplexedDownload(digests, 10);
 ```
 
 ## Testing

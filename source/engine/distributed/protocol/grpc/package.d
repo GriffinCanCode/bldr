@@ -92,6 +92,7 @@ public import engine.distributed.protocol.grpc.server;
 public import engine.distributed.protocol.grpc.factory;
 public import engine.distributed.protocol.grpc.types;
 public import engine.distributed.protocol.grpc.bindings;
+public import engine.distributed.protocol.grpc.cas;
 
 // Re-export key types for convenience
 public import engine.distributed.protocol.grpc.transport : 
@@ -132,3 +133,7 @@ public import engine.distributed.protocol.grpc.factory :
     UnifiedTransportFactory,
     TransportStrategy,
     TransportPool;
+
+public import engine.distributed.protocol.grpc.cas :
+    GrpcCasTransport,
+    GrpcCasFactory;
