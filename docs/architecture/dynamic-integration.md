@@ -2,36 +2,31 @@
 
 ## Overview
 
-Dynamic build graphs are now fully integrated throughout Builder's architecture, providing seamless runtime dependency discovery across all major subsystems.
+Dynamic build graphs enable runtime dependency discovery, allowing actions to extend the build graph during execution. This is used for code generation, template expansion, and other scenarios where dependencies are discovered at build time.
 
 ## Integration Points
 
-### 1. Core Graph System ✅
+### Core Graph System
 
 **Files:**
-- `source/graph/discovery.d` - Discovery metadata and protocols
-- `source/graph/dynamic.d` - Dynamic graph extension
-- `source/graph/package.d` - Public API exports
+- `source/engine/graph/dynamic/discovery.d` - Discovery metadata and protocols
+- `source/engine/graph/dynamic/dynamic.d` - Dynamic graph extension
 
 **Features:**
 - Thread-safe graph extension
 - Discovery metadata types
 - Graph validation with cycle detection
 - Discovery patterns for common scenarios
-- Statistics and debugging support
 
-### 2. Execution Engine ✅
+### Execution Engine
 
 **Files:**
-- `source/runtime/core/engine/package.d` - Engine with dynamic graph support
-- `source/runtime/core/engine/coordinator.d` - Discovery-aware coordination
-- `source/runtime/core/engine/discovery.d` - Discovery execution
+- `source/engine/runtime/core/engine/` - Engine with dynamic graph support
 
 **Features:**
 - Optional dynamic graph mode (enabled by default)
 - Discovery phase integration
 - Automatic rescheduling of discovered nodes
-- Discovery statistics reporting
 - Wave-based execution with inline discovery
 
 **Usage:**
@@ -40,86 +35,20 @@ auto engine = new ExecutionEngine(
     graph,
     config,
     services...,
-    enableDynamicGraph: true  // Optional, defaults to true
+    enableDynamicGraph: true  // Optional, default true
 );
 ```
 
-### 3. Language Handlers ✅
+### Caching System
 
-#### Protobuf Handler
-
-**File:** `source/languages/compiled/protobuf/core/handler.d`
-
-**Features:**
-- Implements `DiscoverableAction` interface
-- Discovers generated source files
-- Creates compile targets automatically
-- Supports all protobuf output languages
-
-**Example:**
-```d
-// Generates .proto -> .cpp files
-// Automatically creates C++ compile target
-// Builds generated code
-```
-
-#### Template Handler
-
-**File:** `source/languages/custom/template/handler.d`
-
-**Features:**
-- Template expansion with variable substitution
-- Multi-language output discovery
-- Automatic target creation by file extension
-- Mustache-style template syntax
-
-**Example:**
-```d
-// Expands {{variables}} in templates
-// Discovers generated .cpp, .py, .js files
-// Creates compile targets for each language
-```
-
-### 4. CLI Integration ✅
-
-**File:** `source/cli/commands/discover.d`
-
-**Commands:**
-
-#### `bldr discover`
-Preview what will be discovered without building:
-```bash
-$ bldr discover
-Targets with discovery capability: 3
-  • my-proto (protobuf)
-    └─ Will discover: Generated source files + compile targets
-  • templates (custom)
-    └─ Will discover: Custom generated targets
-```
-
-#### `bldr discover --history`
-View discovery history from previous builds:
-```bash
-$ bldr discover --history
-Discovery #1:
-  Origin: my-proto
-  Time: 2024-01-15T10:30:00Z
-  Outputs discovered: 4
-  Targets created: 1
-```
-
-### 5. Caching System ✅
-
-**File:** `source/caching/targets/discovery.d`
+**File:** `source/engine/caching/targets/discovery.d`
 
 **Features:**
 - Caches discovery results
 - Skips discovery if inputs unchanged
 - Persistent discovery history
 - JSON serialization
-- Statistics tracking
 
-**Usage:**
 ```d
 auto cache = new DiscoveryCache(".builder-cache");
 if (cache.isCached(targetId, inputHashes)) {
@@ -127,89 +56,7 @@ if (cache.isCached(targetId, inputHashes)) {
 }
 ```
 
-### 6. Remote Execution ✅
-
-**File:** `source/runtime/remote/discovery.d`
-
-**Features:**
-- Remote discovery execution
-- Discovery metadata serialization
-- Network-efficient transmission
-- Distributed discovery coordination
-
-**Example:**
-```d
-auto remoteDiscovery = new RemoteDiscoveryExecutor();
-auto result = remoteDiscovery.executeRemoteDiscovery(
-    actionId,
-    command,
-    inputs,
-    workDir
-);
-```
-
-### 7. Watch Mode ✅
-
-**File:** `source/cli/watch/discovery.d`
-
-**Features:**
-- Tracks discovered file changes
-- Re-triggers discovery on input changes
-- Invalidates stale discoveries
-- Smart incremental discovery
-
-**Example:**
-```d
-auto watchMode = new WatchModeWithDiscovery(graph);
-watchMode.onFilesChanged(["message.proto"]);
-// Automatically re-runs discovery for affected targets
-```
-
-### 8. Testing ✅
-
-**File:** `tests/unit/graph/test_dynamic.d`
-
-**Coverage:**
-- Dynamic graph creation
-- Discovery recording and application
-- Concurrent discovery (thread safety)
-- Cycle detection with discovery
-- Discovery patterns
-- Target creation with language inference
-
-**Tests:**
-- 11 comprehensive test cases
-- Thread-safety verification
-- Edge case handling
-- Pattern validation
-
-### 9. Documentation ✅
-
-**Files:**
-- `docs/features/dynamic-graph.md` - Complete user guide (626 lines)
-- `docs/architecture/dynamic-integration.md` - This file
-- `examples/dynamic-discovery/` - Working examples
-
-**Coverage:**
-- Architecture overview
-- Usage guide for users
-- Implementation guide for developers
-- Patterns and best practices
-- Performance characteristics
-- Comparison with other build systems
-- Troubleshooting guide
-
-### 10. Examples ✅
-
-**Directory:** `examples/dynamic-discovery/`
-
-**Examples:**
-- Protobuf code generation
-- Template expansion
-- Multi-language generation
-- README with usage instructions
-
-## Architecture Diagram
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -235,26 +82,136 @@ watchMode.onFilesChanged(["message.proto"]);
 │  │ BuildGraph   │  │ Dynamic      │  │ Discovery      │        │
 │  │ (Static)     │  │ BuildGraph   │  │ Metadata       │        │
 │  │              │  │ (Runtime)    │  │                │        │
-│  └──────────────┘  └──────┬───────┘  └────────┬───────┘        │
-└─────────────────────────────┼──────────────────┼────────────────┘
-                             │                  │
-┌─────────────────────────────▼──────────────────▼────────────────┐
-│                   Language Handlers                              │
-│  ┌──────────────┐  ┌──────────────┐  ┌────────────────┐        │
-│  │ Protobuf     │  │ Template     │  │ Future:        │        │
-│  │ Handler      │  │ Handler      │  │ GraphQL, etc.  │        │
-│  │ +Discovery   │  │ +Discovery   │  │                │        │
 │  └──────────────┘  └──────────────┘  └────────────────┘        │
 └──────────────────────────────────────────────────────────────────┘
                              │
-┌─────────────────────────────▼────────────────────────────────────┐
-│                   Supporting Services                            │
-│  ┌──────────────┐  ┌──────────────┐  ┌────────────────┐        │
-│  │ Discovery    │  │ Remote       │  │ Watch          │        │
-│  │ Cache        │  │ Discovery    │  │ Discovery      │        │
-│  │              │  │              │  │ Tracker        │        │
-│  └──────────────┘  └──────────────┘  └────────────────┘        │
-└──────────────────────────────────────────────────────────────────┘
+┌────────────────────────────▼─────────────────────────────────────┐
+│                   Language Handlers                               │
+│  ┌──────────────┐  ┌──────────────┐  ┌────────────────┐         │
+│  │ Protobuf     │  │ Template     │  │ Others         │         │
+│  │ +Discovery   │  │ +Discovery   │  │                │         │
+│  └──────────────┘  └──────────────┘  └────────────────┘         │
+└───────────────────────────────────────────────────────────────────┘
+```
+
+## Core Types
+
+### DiscoveryMetadata
+
+```d
+struct DiscoveryMetadata
+{
+    TargetId originTarget;          // Target that performed discovery
+    string[] discoveredOutputs;     // Newly discovered output files
+    TargetId[] discoveredDependents; // New dependencies
+    Target[] newTargets;            // New targets to create
+    string[string] metadata;        // Additional metadata
+}
+```
+
+### DiscoveryStatus
+
+```d
+enum DiscoveryStatus
+{
+    None,       // No discovery expected
+    Pending,    // Discovery action not yet run
+    Discovered, // Discovery complete
+    Applied     // Discovery applied to graph
+}
+```
+
+### DynamicBuildGraph
+
+```d
+final class DynamicBuildGraph
+{
+    // Create dynamic graph wrapping static base graph
+    this(BuildGraph baseGraph);
+    
+    // Access underlying graph
+    @property BuildGraph graph();
+    
+    // Mark node as having discovery capability
+    void markDiscoverable(TargetId id);
+    
+    // Check if node has discovery capability
+    bool isDiscoverable(TargetId id);
+    
+    // Record discovery from an action
+    void recordDiscovery(DiscoveryMetadata discovery);
+    
+    // Apply pending discoveries and get newly scheduled nodes
+    BuildResult!(BuildNode[]) applyDiscoveries();
+    
+    // Check for pending discoveries
+    bool hasPendingDiscoveries();
+}
+```
+
+### GraphExtension
+
+Thread-safe graph mutation manager:
+
+```d
+final class GraphExtension
+{
+    // Record discovery metadata for processing
+    void recordDiscovery(DiscoveryMetadata discovery);
+    
+    // Apply pending discoveries to graph
+    BuildResult!(BuildNode[]) applyDiscoveries();
+    
+    // Get statistics
+    auto getStats();
+}
+```
+
+## Discovery Patterns
+
+### Code Generation (Protobuf, etc.)
+
+```d
+static DiscoveryMetadata codeGeneration(
+    TargetId originTarget,
+    string[] generatedFiles,
+    string targetNamePrefix = "generated"
+);
+```
+
+Creates compile targets for generated source files, grouping by language.
+
+### Library Discovery
+
+```d
+static DiscoveryMetadata libraryDiscovery(
+    TargetId originTarget,
+    string[] libraryPaths
+);
+```
+
+Discovers shared libraries for linking.
+
+### Test Discovery
+
+```d
+static DiscoveryMetadata testDiscovery(
+    TargetId originTarget,
+    string[] testFiles
+);
+```
+
+Discovers test files and creates test targets.
+
+### Builder Pattern
+
+```d
+auto builder = DiscoveryBuilder.forTarget(originTarget);
+builder = builder.addOutputs(generatedFiles);
+builder = builder.addTargets(newTargets);
+builder = builder.addDependents(dependentIds);
+builder = builder.withMetadata("type", "codegen");
+auto discovery = builder.build();
 ```
 
 ## Data Flow
@@ -293,94 +250,82 @@ watchMode.onFilesChanged(["message.proto"]);
    Schedule Discovered Nodes
        ↓
    Build in Topological Order
-       ↓
-   Report Statistics
    ```
 
-## Performance Impact
+## Target Creation
 
-### Overhead Analysis
+Language inference from file extensions:
 
-| Component | Overhead | Impact |
-|-----------|----------|--------|
-| Discovery execution | ~2-3ms per discovery | Low |
-| Graph extension | O(V+E) one-time | Negligible |
-| Scheduling integration | O(1) per node | Minimal |
-| Caching | Negative (speeds up) | Beneficial |
-| **Total** | **~5%** | **Low** |
+```d
+static Target createDiscoveredTarget(
+    string name,
+    string[] sources,
+    TargetId[] deps,
+    string outputPath = ""
+);
+```
+
+| Extension | Language | Default Type |
+|-----------|----------|--------------|
+| `.d` | D | Library |
+| `.cpp`, `.cc`, `.cxx` | C++ | Library |
+| `.c` | C | Library |
+| `.go` | Go | Library |
+| `.rs` | Rust | Library |
+| `.py` | Python | Library |
+| `.ts` | TypeScript | Library |
+| `.js` | JavaScript | Library |
+| `.java` | Java | Library |
+| Other | - | Custom |
+
+## Performance
+
+| Component | Overhead |
+|-----------|----------|
+| Discovery execution | ~2-3ms per discovery |
+| Graph extension | O(V+E) one-time |
+| Scheduling integration | O(1) per node |
+| Caching | Negative (speeds up) |
 
 ### Optimization Techniques
 
-1. **Lazy Discovery**: Only runs when targets are actually built
-2. **Cached Results**: Discovery results cached across builds
-3. **Parallel Execution**: Discovery doesn't block other tasks
-4. **Batched Application**: Multiple discoveries applied at once
-5. **Incremental Updates**: Only affected portions re-discovered
+- **Lazy Discovery**: Only runs when targets are built
+- **Cached Results**: Discovery results cached across builds
+- **Parallel Execution**: Discovery doesn't block other tasks
+- **Batched Application**: Multiple discoveries applied at once
+- **Incremental Updates**: Only affected portions re-discovered
 
 ## Design Principles
 
-### 1. Opt-In with Smart Defaults
+### Opt-In with Smart Defaults
 
-Dynamic graphs enabled by default but can be disabled:
+Dynamic graphs enabled by default:
 ```d
 auto engine = new ExecutionEngine(..., enableDynamicGraph: false);
 ```
 
-### 2. Backward Compatibility
+### Backward Compatibility
 
-All existing functionality works unchanged:
 - Existing language handlers work without modification
 - Discovery is purely additive
-- No breaking changes to APIs
+- No breaking API changes
 
-### 3. Type Safety
-
-Strong typing throughout:
-- `DiscoveryMetadata` struct
-- `DiscoveryResult` with error handling
-- `TargetId` for type-safe identifiers
-
-### 4. Thread Safety
+### Thread Safety
 
 All discovery operations are thread-safe:
 - Mutex-protected graph extension
 - Atomic discovery recording
 - Lock-free scheduling
 
-### 5. Composability
+### Composability
 
-Discovery integrates with all features:
-- ✅ Caching
-- ✅ Remote execution
-- ✅ Watch mode
-- ✅ Distributed builds
-- ✅ Observability/telemetry
+Discovery integrates with:
+- Caching
+- Remote execution
+- Watch mode
+- Observability/telemetry
 
-## Future Enhancements
-
-### Planned Features
-
-1. **Multi-Phase Discovery**
-   - Allow discovered targets to discover more targets
-   - Useful for nested code generation
-
-2. **Cross-Language Discovery**
-   - Automatically infer dependencies across languages
-   - Example: Python imports generated protobuf
-
-3. **Discovery Visualization**
-   - `bldr graph --show-discovery-flow`
-   - Animated graph showing discovery over time
-
-4. **Discovery Profiling**
-   - Track discovery performance
-   - Identify slow discovery actions
-
-5. **Smart Discovery Caching**
-   - Content-based caching
-   - Share discoveries across machines
-
-## Comparison to Other Systems
+## Comparison
 
 ### vs Bazel
 
@@ -388,8 +333,7 @@ Discovery integrates with all features:
 |---------|-------|---------|
 | Dynamic deps | Yes (2-phase) | Yes (inline) |
 | Complexity | High | Low |
-| Performance | Excellent | Very Good |
-| Ease of use | Medium | High |
+| Performance | Excellent | Good |
 
 ### vs Buck2
 
@@ -405,65 +349,12 @@ Discovery integrates with all features:
 |---------|-------|---------|
 | Dynamic deps | Limited (restat) | Full |
 | New targets | No | Yes |
-| Flexibility | Low | High |
 
-## Success Metrics
+## Source Files
 
-### Before Dynamic Graphs
-
-**Protobuf workflow:**
-1. Write `.proto` files
-2. Run `protoc` manually
-3. Update Builderfile with generated files
-4. Build
-
-**Problems:**
-- Manual, error-prone
-- Breaks on file renames
-- Requires Builderfile updates
-
-### After Dynamic Graphs
-
-**Protobuf workflow:**
-1. Write `.proto` files
-2. Run `bldr build`
-
-**Benefits:**
-- ✅ Automatic
-- ✅ Correct
-- ✅ Fast (cached)
-- ✅ No manual steps
-
-### Adoption
-
-**Supported scenarios:**
-- Protocol Buffers (protobuf, gRPC)
-- Template expansion (mustache, jinja)
-- Schema code generation (GraphQL, OpenAPI)
-- Test generation
-- Dynamic libraries
-
-**Future scenarios:**
-- Build script dependencies
-- Plugin-generated targets
-- Platform-specific compilation
-- AI-generated code
-
-## Summary
-
-Dynamic build graphs are now a **first-class feature** of Builder, fully integrated across:
-
-✅ **Core** - Graph system with thread-safe extension  
-✅ **Engine** - Discovery-aware execution  
-✅ **Handlers** - Protobuf, templates, extensible  
-✅ **CLI** - `discover` command and history  
-✅ **Caching** - Fast incremental discovery  
-✅ **Remote** - Distributed discovery execution  
-✅ **Watch** - Smart incremental re-discovery  
-✅ **Tests** - Comprehensive coverage  
-✅ **Docs** - Complete user and developer guides  
-✅ **Examples** - Working demonstrations  
-
-**Result:** Elegant, performant solution that's more ergonomic than workarounds and matches the sophistication of Bazel/Buck2 while maintaining Builder's simplicity.
-
-
+| Component | File |
+|-----------|------|
+| Discovery Metadata | `source/engine/graph/dynamic/discovery.d` |
+| Dynamic Graph | `source/engine/graph/dynamic/dynamic.d` |
+| Discovery Cache | `source/engine/caching/targets/discovery.d` |
+| Build Graph | `source/engine/graph/core/graph.d` |
