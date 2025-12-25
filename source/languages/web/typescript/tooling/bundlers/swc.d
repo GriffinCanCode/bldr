@@ -12,8 +12,10 @@ import std.array;
 import std.conv;
 import std.string;
 import std.json;
+import core.time : MonoTime;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.logging.logger;
+import engine.workers.integration : TypeScriptWorkerIntegration, TSWorkerCompileOptions, shouldUsePersistentWorker;
 
 /// SWC - ultra-fast Rust-based TypeScript compiler
 class SWCBundler : TSBundler
@@ -49,12 +51,64 @@ class SWCBundler : TSBundler
         string outputDir = config.outDir.empty ? workspace.options.outputDir : config.outDir;
         mkdirRecurse(outputDir);
         
-        // Compile each source file
+        // Try persistent worker first (warm V8/Node, 10x+ faster)
+        if (shouldUsePersistentWorker("ts-swc"))
+        {
+            TSWorkerCompileOptions workerOpts;
+            workerOpts.target = targetToString(config.target);
+            workerOpts.module_ = moduleTypeToString(config.moduleFormat);
+            workerOpts.sourceMap = config.sourceMap;
+            workerOpts.strict = config.strict;
+            
+            auto workerResult = TypeScriptWorkerIntegration.compileWithSWC(
+                sources.dup,
+                outputDir,
+                workerOpts,
+                true
+            );
+            
+            if (workerResult.isOk)
+            {
+                auto r = workerResult.unwrap();
+                if (r.success)
+                {
+                    Logger.info("  [Warm SWC worker] Compiled " ~ sources.length.to!string ~ 
+                               " files in " ~ r.executionTimeMs.to!string ~ "ms" ~
+                               " (speedup: " ~ r.estimatedSpeedup().to!string ~ "x)");
+                    
+                    result.success = true;
+                    result.outputs = collectOutputs(sources, outputDir);
+                    result.outputHash = FastHash.hashFiles(result.outputs);
+                    
+                    if (config.declaration && config.mode == TSBuildMode.Library)
+                        result.declarations = generateDeclarationsWithTSC(sources, config, outputDir, workspace.root);
+                    
+                    return result;
+                }
+                result.error = r.output;
+                return result;
+            }
+            Logger.debugLog("SWC persistent worker unavailable, using direct compilation");
+        }
+        
+        // Fallback: Direct compilation
+        return compileDirectFallback(sources, config, outputDir, workspace.root);
+    }
+    
+    /// Direct SWC compilation (fallback path)
+    private TSCompileResult compileDirectFallback(
+        const(string[]) sources,
+        TSConfig config,
+        string outputDir,
+        string workspaceRoot
+    )
+    {
+        TSCompileResult result;
         string[] outputs;
         
         foreach (source; sources)
         {
-            string output = compileSingle(source, config, outputDir, workspace.root);
+            string output = compileSingle(source, config, outputDir, workspaceRoot);
             if (output.empty)
             {
                 result.error = "Failed to compile: " ~ source;
@@ -67,14 +121,24 @@ class SWCBundler : TSBundler
         result.outputs = outputs;
         result.outputHash = FastHash.hashFiles(outputs);
         
-        // Note: SWC doesn't generate declaration files
-        // For libraries, recommend using tsc with --emitDeclarationOnly
         if (config.declaration && config.mode == TSBuildMode.Library)
-        {
-            result.declarations = generateDeclarationsWithTSC(sources, config, outputDir, workspace.root);
-        }
+            result.declarations = generateDeclarationsWithTSC(sources, config, outputDir, workspaceRoot);
         
         return result;
+    }
+    
+    /// Collect output files
+    private string[] collectOutputs(const(string[]) sources, string outputDir)
+    {
+        string[] outputs;
+        foreach (source; sources)
+        {
+            string baseName = source.baseName.stripExtension;
+            string outputFile = buildPath(outputDir, baseName ~ ".js");
+            if (exists(outputFile))
+                outputs ~= outputFile;
+        }
+        return outputs;
     }
     
     bool isAvailable()

@@ -9,6 +9,7 @@ import std.array;
 import std.string;
 import std.regex;
 import std.conv;
+import core.time : MonoTime;
 import languages.jvm.java.tooling.builders.base;
 import languages.jvm.java.core.config;
 import languages.jvm.java.tooling.detection;
@@ -17,6 +18,7 @@ import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.logging.logger;
 import engine.caching.actions.action : ActionCache, ActionId, ActionType;
+import engine.workers.integration : JavaWorkerIntegration, shouldUsePersistentWorker;
 
 /// Standard JAR builder with action-level caching for per-file compilation
 class JARBuilder : JavaBuilder
@@ -136,27 +138,55 @@ class JARBuilder : JavaBuilder
         if (config.modules.enabled && !config.modules.modulePath.empty)
             metadata["modulePath"] = config.modules.modulePath.join(pathSeparator);
         
-        // Compile per-file with action caching if enabled
+        // Build compiler options for persistent worker
+        string[] options = buildCompilerOptions(config, target, classpath);
+        
+        // Try persistent worker for batch compilation (much faster for JVM)
+        if (shouldUsePersistentWorker("jvm-javac"))
+        {
+            auto workerResult = JavaWorkerIntegration.compile(
+                sources.dup,
+                outputDir,
+                classpath.empty ? [] : [classpath],
+                options,
+                true  // usePersistentWorker
+            );
+            
+            if (workerResult.isOk)
+            {
+                auto r = workerResult.unwrap();
+                if (r.success)
+                {
+                    Logger.info("  [Warm worker] Compiled " ~ sources.length.to!string ~ 
+                               " files in " ~ r.executionTimeMs.to!string ~ "ms" ~
+                               " (speedup: " ~ r.estimatedSpeedup().to!string ~ "x)");
+                    return true;
+                }
+                // Worker compiled but failed - report error
+                result.error = r.output;
+                return false;
+            }
+            // Worker unavailable, fall through to direct compilation
+            Logger.debugLog("Persistent worker unavailable, using direct javac");
+        }
+        
+        // Fallback: Compile per-file with action caching
         bool allSuccess = true;
         bool hasActionCache = actionCache !is null;
         
         foreach (source; sources)
         {
-            // Generate output class file path
             string sourceBase = baseName(source, ".java");
             string expectedClass = buildPath(outputDir, sourceBase ~ ".class");
             
-            // Create action ID for this compilation
             ActionId actionId;
             actionId.targetId = target.name;
             actionId.type = ActionType.Compile;
             actionId.subId = source;
             actionId.inputHash = FastHash.hashFile(source);
             
-            // Check if compilation is cached
             if (hasActionCache && actionCache.isCached(actionId, [source], metadata))
             {
-                // Verify output exists
                 if (exists(expectedClass))
                 {
                     Logger.debugLog("  [Cached] " ~ source);
@@ -164,63 +194,14 @@ class JARBuilder : JavaBuilder
                 }
             }
             
-            // Compile this source file
-            string[] cmd = [javacCmd, "-d", outputDir];
-            
-            // Add source/target version
-            if (config.sourceVersion.major > 0)
-                cmd ~= ["-source", config.sourceVersion.toString()];
-            if (config.targetVersion.major > 0)
-                cmd ~= ["-target", config.targetVersion.toString()];
-            
-            // Add encoding
-            cmd ~= ["-encoding", config.encoding];
-            
-            // Add warnings
-            if (config.warnings)
-                cmd ~= "-Xlint:all";
-            if (config.warningsAsErrors)
-                cmd ~= "-Werror";
-            if (config.deprecation)
-                cmd ~= "-Xlint:deprecation";
-            
-            // Add preview features
-            if (config.enablePreview)
-                cmd ~= "--enable-preview";
-            
-            // Add classpath
-            if (!classpath.empty)
-                cmd ~= ["-cp", classpath];
-            
-            // Add module path if using modules
-            if (config.modules.enabled && !config.modules.modulePath.empty)
-            {
-                cmd ~= ["--module-path", config.modules.modulePath.join(pathSeparator)];
-            }
-            
-            // Add annotation processor options
-            if (config.processors.enabled)
-            {
-                if (!config.processors.processorPath.empty)
-                    cmd ~= ["--processor-path", config.processors.processorPath.join(pathSeparator)];
-                if (!config.processors.processors.empty)
-                    cmd ~= ["-processor", config.processors.processors.join(",")];
-            }
-            
-            // Add compiler flags
-            cmd ~= config.compilerFlags;
-            cmd ~= target.flags;
-            
-            // Add this source file
-            cmd ~= source;
+            // Direct compilation
+            string[] cmd = [javacCmd, "-d", outputDir] ~ options ~ [source];
             
             Logger.debugLog("Compiling: " ~ source);
             
             auto compileRes = execute(cmd);
-            
             bool success = compileRes.status == 0;
             
-            // Record action result in cache
             if (hasActionCache)
             {
                 string[] outputs = exists(expectedClass) ? [expectedClass] : [];
@@ -234,12 +215,56 @@ class JARBuilder : JavaBuilder
                 break;
             }
             
-            // Capture warnings
             if (!compileRes.output.empty)
                 result.warnings ~= compileRes.output.splitLines;
         }
         
         return allSuccess;
+    }
+    
+    /// Build compiler options from config
+    private string[] buildCompilerOptions(
+        const JavaConfig config,
+        const Target target,
+        string classpath
+    )
+    {
+        string[] opts;
+        
+        if (config.sourceVersion.major > 0)
+            opts ~= ["-source", config.sourceVersion.toString()];
+        if (config.targetVersion.major > 0)
+            opts ~= ["-target", config.targetVersion.toString()];
+        
+        opts ~= ["-encoding", config.encoding];
+        
+        if (config.warnings)
+            opts ~= "-Xlint:all";
+        if (config.warningsAsErrors)
+            opts ~= "-Werror";
+        if (config.deprecation)
+            opts ~= "-Xlint:deprecation";
+        if (config.enablePreview)
+            opts ~= "--enable-preview";
+        
+        if (!classpath.empty)
+            opts ~= ["-cp", classpath];
+        
+        if (config.modules.enabled && !config.modules.modulePath.empty)
+            opts ~= ["--module-path", config.modules.modulePath.join(pathSeparator)];
+        
+        if (config.processors.enabled)
+        {
+            if (!config.processors.processorPath.empty)
+                opts ~= ["--processor-path", config.processors.processorPath.join(pathSeparator)];
+            if (!config.processors.processors.empty)
+                opts ~= ["-processor", config.processors.processors.join(",")];
+        }
+        
+        opts ~= config.compilerFlags;
+        opts ~= target.flags;
+        
+        return opts;
     }
     
     protected bool createJAR(

@@ -9,14 +9,17 @@ import core.thread : Thread;
 import core.atomic;
 import engine.workers.protocol;
 import engine.workers.pool;
+import engine.workers.pool.memory : MemoryPressure, WorkerMemory;
+import engine.workers.pool.recycler : WarmthLevel;
 import infrastructure.utils.logging.logger;
 
 /// Worker Health Monitor
 /// 
 /// Monitors persistent worker health and handles recovery:
 /// - Detects dead/unresponsive workers
-/// - Automatic restart of failed workers
-/// - Memory usage monitoring
+/// - Memory pressure monitoring (via WorkerMemoryMonitor - SOC)
+/// - Warmth-aware health assessment (via WorkerRecycler - SOC)
+/// - Automatic restart on failures or OOM risk
 /// - Performance degradation detection
 /// - Alerting and metrics collection
 
@@ -25,6 +28,7 @@ enum WorkerHealthStatus
 {
     Healthy,      /// Worker responding normally
     Degraded,     /// Worker slow but functioning
+    MemoryHigh,   /// Memory pressure detected
     Unresponsive, /// Worker not responding to pings
     Dead,         /// Worker process died
     Recovered     /// Worker was restarted successfully
@@ -37,6 +41,8 @@ struct HealthCheckResult
     WorkerHealthStatus status;
     Duration responseTime;
     size_t memoryUsageBytes;
+    MemoryPressure memoryPressure;
+    WarmthLevel warmth;
     uint consecutiveFailures;
     string lastError;
     MonoTime checkTime;
@@ -44,6 +50,11 @@ struct HealthCheckResult
     bool isHealthy() const pure nothrow @safe @nogc
     {
         return status == WorkerHealthStatus.Healthy || status == WorkerHealthStatus.Recovered;
+    }
+    
+    bool isMemoryHealthy() const pure nothrow @safe @nogc
+    {
+        return memoryPressure <= MemoryPressure.Elevated;
     }
 }
 
@@ -56,7 +67,9 @@ struct HealthMonitorConfig
     Duration slowResponseThreshold = seconds(2);
     size_t maxMemoryBytes = 4UL * 1024 * 1024 * 1024;  // 4GB
     bool autoRestart = true;
+    bool autoRestartOnOOM = true;  /// Restart workers at OOM risk
     bool enableAlerts = true;
+    bool preferWarmRestart = true; /// Try to keep warm workers alive
 }
 
 /// Alert for worker health issues
@@ -127,7 +140,7 @@ final class WorkerHealthMonitor
         Logger.info("Worker health monitor stopped");
     }
     
-    /// Get health status summary
+    /// Get health status summary (includes memory and warmth stats)
     HealthSummary getSummary() @trusted
     {
         HealthSummary summary;
@@ -145,9 +158,27 @@ final class WorkerHealthMonitor
                 case WorkerHealthStatus.Degraded:
                     summary.degradedWorkers++;
                     break;
+                case WorkerHealthStatus.MemoryHigh:
+                    summary.memoryHighWorkers++;
+                    break;
                 case WorkerHealthStatus.Unresponsive:
                 case WorkerHealthStatus.Dead:
                     summary.unhealthyWorkers++;
+                    break;
+            }
+            
+            // Track warmth distribution
+            final switch (result.warmth)
+            {
+                case WarmthLevel.Cold:
+                case WarmthLevel.Warming:
+                    summary.coldWorkers++;
+                    break;
+                case WarmthLevel.Warm:
+                    summary.warmWorkers++;
+                    break;
+                case WarmthLevel.Hot:
+                    summary.hotWorkers++;
                     break;
             }
             
@@ -216,12 +247,26 @@ final class WorkerHealthMonitor
         }
     }
     
-    /// Check health of a single worker
+    /// Check health of a single worker (integrates memory monitor)
     private HealthCheckResult checkWorkerHealth(WorkerId workerId) @trusted
     {
         HealthCheckResult result;
         result.workerId = workerId;
         result.checkTime = MonoTime.currTime;
+        
+        // Get memory metrics from pool's memory monitor (SOC)
+        auto memMonitor = pool.getMemoryMonitor();
+        if (memMonitor !is null)
+        {
+            auto memMetrics = memMonitor.getMetrics(workerId);
+            result.memoryUsageBytes = memMetrics.heapUsedBytes;
+            result.memoryPressure = memMetrics.pressure;
+        }
+        
+        // Get warmth from pool's recycler (SOC)
+        auto recycler = pool.getRecycler();
+        if (recycler !is null)
+            result.warmth = recycler.getWarmth(workerId);
         
         auto startTime = MonoTime.currTime;
         
@@ -247,8 +292,15 @@ final class WorkerHealthMonitor
         
         auto response = pingResult.unwrap();
         
+        // Check memory pressure first (highest priority health concern)
+        if (result.memoryPressure >= MemoryPressure.High)
+        {
+            result.status = WorkerHealthStatus.MemoryHigh;
+            result.lastError = "Memory pressure: " ~ result.memoryPressure.to!string ~ 
+                              " (" ~ (result.memoryUsageBytes / 1024 / 1024).to!string ~ "MB)";
+        }
         // Check response time
-        if (result.responseTime > config.slowResponseThreshold)
+        else if (result.responseTime > config.slowResponseThreshold)
         {
             result.status = WorkerHealthStatus.Degraded;
             result.lastError = "Slow response: " ~ result.responseTime.total!"msecs".to!string ~ "ms";
@@ -266,12 +318,34 @@ final class WorkerHealthMonitor
         return result;
     }
     
-    /// Handle an unhealthy worker
+    /// Handle an unhealthy worker (memory-aware)
     private void handleUnhealthyWorker(WorkerId workerId, HealthCheckResult result) @trusted
     {
         auto idStr = workerId.toString();
         
-        // Increment consecutive failures
+        // Memory issues are handled specially - immediate restart if critical
+        if (result.status == WorkerHealthStatus.MemoryHigh && config.autoRestartOnOOM)
+        {
+            // For warm/hot workers, try to be less aggressive
+            if (config.preferWarmRestart && result.warmth >= WarmthLevel.Warm &&
+                result.memoryPressure != MemoryPressure.Critical)
+            {
+                Logger.warning("Worker " ~ idStr ~ " has high memory but is " ~ 
+                              result.warmth.to!string ~ ", deferring restart");
+                sendAlert(workerId, result.status, AlertSeverity.Warning,
+                         "Memory high on " ~ result.warmth.to!string ~ " worker: " ~ result.lastError);
+                return;
+            }
+            
+            Logger.warning("Worker " ~ idStr ~ " OOM risk, triggering immediate restart");
+            atomicOp!"+="(_totalFailures, 1);
+            sendAlert(workerId, result.status, AlertSeverity.Critical,
+                     "OOM restart triggered: " ~ result.lastError);
+            restartWorker(workerId);
+            return;
+        }
+        
+        // Standard failure handling
         if (idStr !in consecutiveFailures)
             consecutiveFailures[idStr] = 0;
         consecutiveFailures[idStr]++;
@@ -279,36 +353,20 @@ final class WorkerHealthMonitor
         result.consecutiveFailures = consecutiveFailures[idStr];
         atomicOp!"+="(_totalFailures, 1);
         
-        // Send alert
-        if (config.enableAlerts && alertHandler !is null)
-        {
-            HealthAlert alert;
-            alert.workerId = workerId;
-            alert.status = result.status;
-            alert.timestamp = MonoTime.currTime;
-            
-            if (result.consecutiveFailures >= config.maxConsecutiveFailures)
-            {
-                alert.severity = AlertSeverity.Critical;
-                alert.message = "Worker " ~ idStr ~ " failed " ~ 
-                               result.consecutiveFailures.to!string ~ 
-                               " consecutive health checks: " ~ result.lastError;
-            }
-            else
-            {
-                alert.severity = AlertSeverity.Warning;
-                alert.message = "Worker " ~ idStr ~ " health check failed: " ~ result.lastError;
-            }
-            
-            try
-            {
-                alertHandler(alert);
-            }
-            catch (Exception e)
-            {
-                Logger.error("Alert handler failed: " ~ e.msg);
-            }
-        }
+        // Determine alert severity
+        AlertSeverity severity;
+        if (result.consecutiveFailures >= config.maxConsecutiveFailures)
+            severity = AlertSeverity.Critical;
+        else if (result.status == WorkerHealthStatus.Dead)
+            severity = AlertSeverity.Error;
+        else
+            severity = AlertSeverity.Warning;
+        
+        string msg = "Worker " ~ idStr ~ 
+                    (result.consecutiveFailures > 1 ? " failed " ~ result.consecutiveFailures.to!string ~ "x: " : ": ") ~
+                    result.lastError;
+        
+        sendAlert(workerId, result.status, severity, msg);
         
         // Auto-restart if configured and threshold exceeded
         if (config.autoRestart && result.consecutiveFailures >= config.maxConsecutiveFailures)
@@ -316,6 +374,24 @@ final class WorkerHealthMonitor
             Logger.warning("Worker " ~ idStr ~ " exceeded failure threshold, triggering restart");
             restartWorker(workerId);
         }
+    }
+    
+    /// Send health alert
+    private void sendAlert(WorkerId workerId, WorkerHealthStatus status, 
+                          AlertSeverity severity, string message) @trusted
+    {
+        if (!config.enableAlerts || alertHandler is null)
+            return;
+        
+        HealthAlert alert;
+        alert.workerId = workerId;
+        alert.status = status;
+        alert.severity = severity;
+        alert.message = message;
+        alert.timestamp = MonoTime.currTime;
+        
+        try { alertHandler(alert); }
+        catch (Exception e) { Logger.error("Alert handler failed: " ~ e.msg); }
     }
     
     /// Restart a worker
@@ -367,12 +443,19 @@ struct HealthSummary
     size_t totalWorkers;
     size_t healthyWorkers;
     size_t degradedWorkers;
+    size_t memoryHighWorkers;
     size_t unhealthyWorkers;
     long totalResponseTimeMs;
     long avgResponseTimeMs;
     size_t totalHealthChecks;
     size_t totalFailures;
     size_t totalRestarts;
+    size_t oomRestarts;
+    
+    // Warmth distribution
+    size_t coldWorkers;
+    size_t warmWorkers;
+    size_t hotWorkers;
     
     /// Calculate health percentage
     float healthPercentage() const pure nothrow @safe
@@ -385,7 +468,15 @@ struct HealthSummary
     /// Check if system is healthy overall
     bool isSystemHealthy() const pure nothrow @safe
     {
-        return unhealthyWorkers == 0 && degradedWorkers <= totalWorkers / 4;
+        return unhealthyWorkers == 0 && memoryHighWorkers == 0 && 
+               degradedWorkers <= totalWorkers / 4;
+    }
+    
+    /// Estimated warmth benefit (higher = more JIT optimization)
+    float warmthFactor() const pure nothrow @safe
+    {
+        if (totalWorkers == 0) return 1.0f;
+        return (coldWorkers * 1.0f + warmWorkers * 10.0f + hotWorkers * 20.0f) / totalWorkers;
     }
 }
 

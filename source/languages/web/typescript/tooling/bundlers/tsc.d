@@ -11,9 +11,11 @@ import std.algorithm;
 import std.array;
 import std.conv;
 import std.string;
+import core.time : MonoTime;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.logging.logger;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
+import engine.workers.integration : TypeScriptWorkerIntegration, TSWorkerCompileOptions, shouldUsePersistentWorker;
 
 /// Official TypeScript compiler (tsc) with per-file action caching
 class TSCBundler : TSBundler
@@ -64,30 +66,82 @@ class TSCBundler : TSBundler
         // Add tsconfig as input if it exists
         string[] inputFiles = sources.dup;
         if (!config.tsconfig.empty && exists(config.tsconfig))
-        {
             inputFiles ~= config.tsconfig;
+        
+        // Try persistent worker first (warm V8 instance, 10-40x faster)
+        if (shouldUsePersistentWorker("ts-tsc"))
+        {
+            TSWorkerCompileOptions workerOpts;
+            workerOpts.target = targetToString(config.target);
+            workerOpts.module_ = moduleToString(config.moduleFormat);
+            workerOpts.sourceMap = config.sourceMap;
+            workerOpts.declaration = config.declaration;
+            workerOpts.strict = config.strict;
+            
+            auto workerResult = TypeScriptWorkerIntegration.compile(
+                sources.dup,
+                outputDir,
+                workerOpts,
+                true
+            );
+            
+            if (workerResult.isOk)
+            {
+                auto r = workerResult.unwrap();
+                if (r.success)
+                {
+                    Logger.info("  [Warm worker] Compiled " ~ sources.length.to!string ~ 
+                               " files in " ~ r.executionTimeMs.to!string ~ "ms" ~
+                               " (speedup: " ~ r.estimatedSpeedup().to!string ~ "x)");
+                    
+                    result.success = true;
+                    result.outputs = collectOutputs(sources, config, outputDir);
+                    if (config.declaration)
+                        result.declarations = collectDeclarations(sources, config, outputDir);
+                    result.outputHash = FastHash.hashFiles(result.outputs);
+                    return result;
+                }
+                // Worker compiled but had errors
+                result.error = r.output;
+                result.hadTypeErrors = r.hasErrors();
+                return result;
+            }
+            Logger.debugLog("Persistent worker unavailable, using direct tsc");
         }
         
-        // Step 1: Type checking action (fast, can be cached separately)
+        // Fallback: Direct compilation with caching
+        return compileDirectWithCache(sources, config, target, workspace, outputDir, inputFiles, metadata);
+    }
+    
+    /// Direct tsc compilation with action caching (fallback path)
+    private TSCompileResult compileDirectWithCache(
+        const(string[]) sources,
+        TSConfig config,
+        in Target target,
+        in WorkspaceConfig workspace,
+        string outputDir,
+        string[] inputFiles,
+        string[string] metadata
+    )
+    {
+        TSCompileResult result;
+        
+        // Step 1: Type checking action
         ActionId typeCheckId;
         typeCheckId.targetId = target.name;
-        typeCheckId.type = ActionType.Custom;  // Using Custom for type checking
+        typeCheckId.type = ActionType.Custom;
         typeCheckId.subId = "typecheck";
         typeCheckId.inputHash = FastHash.hashStrings(inputFiles);
         
-        // Check if type checking is cached
         bool typeCheckCached = actionCache.isCached(typeCheckId, inputFiles, metadata);
         
         if (!typeCheckCached)
         {
             Logger.debugLog("  [Type checking] " ~ target.name);
             
-            // Run type check (fast, no emit)
             string[] checkCmd = ["tsc", "--noEmit"];
             if (!config.tsconfig.empty && exists(config.tsconfig))
-            {
                 checkCmd ~= ["--project", config.tsconfig];
-            }
             else
             {
                 checkCmd ~= buildCompilerOptions(config, outputDir);
@@ -95,31 +149,20 @@ class TSCBundler : TSBundler
             }
             
             auto checkRes = execute(checkCmd, null, Config.none, size_t.max, workspace.root);
-            
             bool typeCheckSuccess = (checkRes.status == 0);
             
             if (!typeCheckSuccess)
             {
-                // Parse type errors but don't fail yet
                 TypeCheckResult checkResult;
                 parseTypeScriptOutput(checkRes.output, checkResult);
                 result.hadTypeErrors = true;
                 result.typeErrors = checkResult.errors;
             }
             
-            // Update type check cache
-            actionCache.update(
-                typeCheckId,
-                inputFiles,
-                [],  // Type checking produces no outputs
-                metadata,
-                typeCheckSuccess
-            );
+            actionCache.update(typeCheckId, inputFiles, [], metadata, typeCheckSuccess);
         }
         else
-        {
             Logger.debugLog("  [Cached] Type checking: " ~ target.name);
-        }
         
         // Step 2: Compilation action
         ActionId compileId;
@@ -128,69 +171,42 @@ class TSCBundler : TSBundler
         compileId.subId = "tsc_emit";
         compileId.inputHash = FastHash.hashStrings(inputFiles);
         
-        // Determine expected outputs
         string[] expectedOutputs = collectOutputs(sources, config, outputDir);
         if (config.declaration)
-        {
             expectedOutputs ~= collectDeclarations(sources, config, outputDir);
-        }
         
-        // Check if compilation is cached
         if (actionCache.isCached(compileId, inputFiles, metadata))
         {
-            // Verify outputs exist
-            bool allExist = true;
-            foreach (output; expectedOutputs)
-            {
-                if (!exists(output))
-                {
-                    allExist = false;
-                    break;
-                }
-            }
-            
+            bool allExist = expectedOutputs.all!(o => exists(o));
             if (allExist)
             {
                 Logger.debugLog("  [Cached] TSC compilation: " ~ target.name);
                 result.success = true;
                 result.outputs = collectOutputs(sources, config, outputDir);
                 if (config.declaration)
-                {
                     result.declarations = collectDeclarations(sources, config, outputDir);
-                }
                 result.outputHash = FastHash.hashFiles(result.outputs);
                 return result;
             }
         }
         
-        // Build tsc command for actual compilation
+        // Build and execute tsc command
         string[] cmd = ["tsc"];
-        
-        // Use tsconfig if specified
         if (!config.tsconfig.empty && exists(config.tsconfig))
         {
             cmd ~= ["--project", config.tsconfig];
-            
-            // Override output directory if specified
             if (!config.outDir.empty)
-            {
                 cmd ~= ["--outDir", config.outDir];
-            }
         }
         else
         {
-            // Build inline configuration
             cmd ~= buildCompilerOptions(config, outputDir);
-            
-            // Add source files
             cmd ~= sources;
         }
         
         Logger.debugLog("Compiling with tsc: " ~ cmd.join(" "));
         
-        // Execute tsc
         auto res = execute(cmd, null, Config.none, size_t.max, workspace.root);
-        
         bool success = (res.status == 0);
         
         if (!success)
@@ -198,45 +214,24 @@ class TSCBundler : TSBundler
             result.error = "TypeScript compilation failed:\n" ~ res.output;
             result.hadTypeErrors = true;
             
-            // Parse errors
             TypeCheckResult checkResult;
             parseTypeScriptOutput(res.output, checkResult);
             result.typeErrors = checkResult.errors;
             
-            // Update cache with failure
-            actionCache.update(
-                compileId,
-                inputFiles,
-                [],
-                metadata,
-                false
-            );
-            
+            actionCache.update(compileId, inputFiles, [], metadata, false);
             return result;
         }
         
         Logger.debugLog("TypeScript compilation successful");
         
-        // Collect outputs
         result.outputs = collectOutputs(sources, config, outputDir);
-        
-        // Collect declaration files if generated
         if (config.declaration)
-        {
             result.declarations = collectDeclarations(sources, config, outputDir);
-        }
         
         result.success = true;
         result.outputHash = FastHash.hashFiles(result.outputs);
         
-        // Update cache with success
-        actionCache.update(
-            compileId,
-            inputFiles,
-            result.outputs ~ result.declarations,
-            metadata,
-            true
-        );
+        actionCache.update(compileId, inputFiles, result.outputs ~ result.declarations, metadata, true);
         
         return result;
     }

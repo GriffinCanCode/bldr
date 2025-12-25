@@ -9,6 +9,7 @@ import core.atomic;
 import core.thread : Thread;
 import engine.workers.protocol;
 import engine.workers.pool;
+import engine.workers.pool.recycler : WarmthLevel;
 import engine.workers.jvm;
 import engine.workers.typescript;
 import infrastructure.errors;
@@ -47,7 +48,7 @@ enum WorkerServiceStatus
     Stopping
 }
 
-/// Service metrics
+/// Service metrics (extended with recycling and memory stats)
 struct WorkerServiceMetrics
 {
     size_t totalCompilations;
@@ -57,6 +58,15 @@ struct WorkerServiceMetrics
     float averageSpeedupFactor;
     WorkerPoolStats poolStats;
     MonoTime lastUpdated;
+    
+    // Recycling stats
+    size_t warmWorkers;
+    size_t hotWorkers;
+    float warmthSpeedup;
+    
+    // Memory stats
+    size_t workersAtOOMRisk;
+    size_t oomRestarts;
     
     /// Estimate total time saved
     Duration estimateSavedTime(size_t compilations, Duration avgColdStart, Duration avgWarmStart) const pure @safe
@@ -262,11 +272,31 @@ final class PersistentWorkerService
         return status;
     }
     
-    /// Get service metrics
+    /// Get service metrics (includes recycler and memory stats)
     WorkerServiceMetrics getMetrics() @trusted
     {
         metrics.poolStats = pool.getStats();
         metrics.lastUpdated = MonoTime.currTime;
+        
+        // Get recycler stats
+        auto recycler = pool.getRecycler();
+        if (recycler !is null)
+        {
+            auto rStats = recycler.getStats();
+            metrics.warmWorkers = rStats.byLevel.get(WarmthLevel.Warm, 0);
+            metrics.hotWorkers = rStats.byLevel.get(WarmthLevel.Hot, 0);
+            metrics.warmthSpeedup = recycler.estimatedSpeedup();
+        }
+        
+        // Get memory stats
+        auto memMonitor = pool.getMemoryMonitor();
+        if (memMonitor !is null)
+        {
+            auto mStats = memMonitor.getStats();
+            metrics.workersAtOOMRisk = mStats.atRisk + mStats.critical;
+            metrics.oomRestarts = mStats.oomDetections;
+        }
+        
         return metrics;
     }
     
