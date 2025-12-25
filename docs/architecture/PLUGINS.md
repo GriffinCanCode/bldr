@@ -1,106 +1,63 @@
 # Builder Plugin Architecture
 
-**Date:** November 2, 2025  
-**Version:** 1.0  
-**Status:** Design Complete, Implementation In Progress
+**Status:** Implemented  
+**Version:** 1.0
 
 ---
 
-## Executive Summary
+## Overview
 
-Builder's plugin system follows the **UNIX philosophy**: plugins are **standalone executables** that communicate with Builder via a **JSON-RPC protocol over stdin/stdout**. This design is superior to traditional dynamic library approaches for:
+Builder's plugin system uses **process-based plugins** that communicate via **JSON-RPC 2.0 over stdin/stdout**. Plugins are standalone executables, providing:
 
-- **Language Agnostic**: Plugins can be written in any language
-- **Zero Coupling**: Plugins and Builder are completely isolated
-- **Fault Isolation**: Plugin crashes don't affect Builder
-- **Simple Distribution**: Each plugin is a separate Homebrew formula
-- **No ABI Issues**: No shared library compatibility problems
-- **Easy Testing**: Plugins are just executables with stdin/stdout
+- **Language agnostic**: Write plugins in any language
+- **Process isolation**: Plugin crashes don't affect Builder
+- **Simple distribution**: Each plugin is a separate executable
+- **No ABI issues**: Protocol-based, version-independent communication
 
 ---
 
-## Architecture Philosophy
+## Architecture
 
-### Why Process-Based Plugins?
+### Module Structure
 
-Traditional plugin systems use dynamic libraries (.so/.dylib/.dll), which have significant drawbacks:
+```
+source/infrastructure/plugins/
+├── discovery/
+│   ├── scanner.d       # Plugin discovery
+│   └── validator.d     # Plugin validation
+├── protocol/
+│   ├── codec.d         # JSON-RPC encoding/decoding
+│   └── types.d         # Protocol types (RPCRequest, RPCResponse)
+├── manager/
+│   ├── registry.d      # Plugin registry
+│   ├── loader.d        # Plugin process execution
+│   └── lifecycle.d     # Hook execution with circuit breaker
+└── sdk/
+    └── templates.d     # Plugin template generator
+```
 
-| Aspect | Dynamic Libraries | Process-Based (Builder) |
-|--------|-------------------|------------------------|
-| **Language** | Must match host (D) | Any language |
-| **Isolation** | Shared address space | Complete isolation |
-| **Crashes** | Crash entire app | Isolated, recoverable |
-| **ABI Compatibility** | Fragile, version-locked | Protocol-based, stable |
-| **Distribution** | Complex (binary compat) | Simple (executables) |
-| **Testing** | Requires host app | Standalone, simple |
-| **Updates** | Must match Builder version | Independent updates |
-| **Security** | Full process access | Sandboxable |
+### Plugin Discovery
 
-**Verdict**: Process-based plugins are **objectively superior** for Builder's use case.
+Plugins are discovered by name prefix `builder-plugin-*` in:
 
----
+1. `~/.builder/plugins/`
+2. `/usr/local/bin/`
+3. `/opt/homebrew/bin/`
+4. `$PATH` directories
 
-## Plugin Discovery
+Discovery queries each plugin for metadata:
 
-### Naming Convention
-
-Plugins are discovered by name prefix:
 ```bash
-builder-plugin-docker   # Docker integration plugin
-builder-plugin-sonar    # SonarQube plugin  
-builder-plugin-notify   # Notification plugin
+echo '{"jsonrpc":"2.0","id":1,"method":"plugin.info"}' | builder-plugin-docker
 ```
 
-### Discovery Algorithm
-
-```d
-// plugins/discovery/scanner.d
-1. Scan directories in order:
-   - ~/.builder/plugins/
-   - /usr/local/bin/
-   - $PATH directories
-
-2. Find executables matching: builder-plugin-*
-
-3. Query each plugin for metadata:
-   echo '{"jsonrpc":"2.0","id":1,"method":"plugin.info"}' | builder-plugin-foo
-
-4. Cache discovered plugins in ~/.builder/cache/plugins.json
-```
-
-### Plugin Metadata
-
-Each plugin must respond to `plugin.info`:
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "result": {
-    "name": "docker",
-    "version": "1.0.0",
-    "author": "Griffin",
-    "description": "Docker container build integration",
-    "homepage": "https://github.com/builder-plugins/docker",
-    "capabilities": [
-      "build.pre_hook",
-      "build.post_hook",
-      "target.custom_type",
-      "artifact.processor"
-    ],
-    "minBuilderVersion": "1.0.0",
-    "license": "MIT"
-  }
-}
-```
+Results are cached in `.builder-cache/plugins.json`.
 
 ---
 
-## Plugin Protocol
+## Protocol
 
-### JSON-RPC 2.0 over stdin/stdout
-
-All plugin communication uses [JSON-RPC 2.0](https://www.jsonrpc.org/specification):
+### JSON-RPC 2.0
 
 **Request (Builder → Plugin):**
 ```json
@@ -117,10 +74,7 @@ All plugin communication uses [JSON-RPC 2.0](https://www.jsonrpc.org/specificati
     },
     "workspace": {
       "root": "/path/to/project",
-      "cache_dir": ".builder-cache"
-    },
-    "env": {
-      "BUILDER_VERSION": "1.0.0"
+      "cacheDir": ".builder-cache"
     }
   }
 }
@@ -133,9 +87,7 @@ All plugin communication uses [JSON-RPC 2.0](https://www.jsonrpc.org/specificati
   "id": 42,
   "result": {
     "success": true,
-    "modified_target": null,
-    "artifacts": [],
-    "logs": ["Docker image pulled: python:3.11-slim"]
+    "logs": ["Pre-build completed"]
   }
 }
 ```
@@ -147,29 +99,27 @@ All plugin communication uses [JSON-RPC 2.0](https://www.jsonrpc.org/specificati
   "id": 42,
   "error": {
     "code": -32000,
-    "message": "Docker daemon not running",
-    "data": {
-      "suggestion": "Start Docker Desktop or run: sudo dockerd"
-    }
+    "message": "Docker daemon not running"
   }
 }
 ```
 
-### Standard Error Codes
+### Error Codes
 
 ```d
-enum PluginErrorCode {
+enum RPCErrorCode {
     ParseError       = -32700,
     InvalidRequest   = -32600,
     MethodNotFound   = -32601,
     InvalidParams    = -32602,
     InternalError    = -32603,
     
-    // Custom errors (Builder-specific)
+    // Builder-specific
     ToolNotFound     = -32000,
     InvalidConfig    = -32001,
     BuildFailed      = -32002,
-    Timeout          = -32003
+    Timeout          = -32003,
+    PluginCrashed    = -32004
 }
 ```
 
@@ -177,451 +127,97 @@ enum PluginErrorCode {
 
 ## Plugin Capabilities
 
-### 1. Build Lifecycle Hooks
+### Build Lifecycle Hooks
 
 ```json
 // Pre-build hook
-{
-  "method": "build.pre_hook",
-  "params": {
-    "target": {...},
-    "workspace": {...}
-  }
-}
+{"method": "build.pre_hook", "params": {"target": {...}, "workspace": {...}}}
 
-// Post-build hook
-{
-  "method": "build.post_hook",
-  "params": {
-    "target": {...},
-    "outputs": ["bin/app"],
-    "success": true,
-    "duration_ms": 1234
-  }
-}
+// Post-build hook  
+{"method": "build.post_hook", "params": {"target": {...}, "outputs": ["bin/app"], "success": true, "durationMs": 1234}}
 ```
 
-### 2. Custom Target Types
+### Custom Target Types
+
+Plugins can handle custom target types:
 
 ```json
-// Handler for custom target type
-{
-  "method": "target.build",
-  "params": {
-    "target": {
-      "name": "//app:container",
-      "type": "docker_image",  // Custom type
-      "config": {
-        "image": "myapp:latest",
-        "dockerfile": "Dockerfile"
-      }
-    }
-  }
-}
+{"method": "target.build", "params": {"target": {"type": "docker_image", "config": {...}}}}
 ```
 
-### 3. Artifact Processing
+### Artifact Processing
 
 ```json
-// Process build artifacts
+{"method": "artifact.process", "params": {"artifacts": [{"path": "bin/app", "type": "executable"}]}}
+```
+
+---
+
+## Health Tracking and Circuit Breaker
+
+The `LifecycleManager` tracks plugin health with circuit breaker pattern:
+
+**States:**
+- `Healthy` - Normal operation
+- `Degraded` - Some failures but still usable
+- `Unhealthy` - Circuit open, requests blocked
+- `Recovering` - Testing if plugin recovered
+
+**Circuit Breaker:**
+- Opens after 3 consecutive failures
+- Resets after 30 seconds
+- Half-open state allows limited test requests
+
+**Fail Modes:**
+- `Required` - Failure stops the build
+- `Optional` - Log warning and continue
+- `Silent` - Ignore failures silently
+
+**Hot Reload:**
+Plugin executables are monitored for changes. When modified, the plugin is automatically reloaded and its circuit breaker reset.
+
+---
+
+## Plugin Metadata
+
+Each plugin must respond to `plugin.info`:
+
+```json
 {
-  "method": "artifact.process",
-  "params": {
-    "artifacts": [
-      {"path": "bin/app", "type": "executable"},
-      {"path": "lib/libcore.a", "type": "static_library"}
-    ],
-    "config": {
-      "upload_to_registry": true
-    }
-  }
-}
-```
-
-### 4. Custom Commands
-
-Plugins can add new CLI commands:
-
-```bash
-builder docker build    # Handled by builder-plugin-docker
-builder sonar analyze   # Handled by builder-plugin-sonar
-```
-
----
-
-## Implementation
-
-### Core Modules
-
-```
-source/infrastructure/plugins/
-├── discovery/
-│   ├── scanner.d       # Plugin discovery and caching
-│   ├── validator.d     # Plugin validation and security
-│   └── package.d
-├── protocol/
-│   ├── codec.d         # Serialization/deserialization
-│   ├── types.d         # Protocol message types
-│   └── package.d
-├── manager/
-│   ├── registry.d      # Plugin registry
-│   ├── loader.d        # Plugin loading and execution
-│   ├── lifecycle.d     # Hook lifecycle management with circuit breaker
-│   └── package.d
-├── sdk/
-│   └── templates.d     # Plugin template generator
-└── package.d
-```
-
-### Key Type Signatures
-
-```d
-// plugins/protocol/types.d
-struct PluginRequest {
-    string jsonrpc = "2.0";
-    long id;
-    string method;
-    JSONValue params;
-}
-
-struct PluginResponse {
-    string jsonrpc = "2.0";
-    long id;
-    JSONValue result;
-    PluginError* error;
-}
-
-struct PluginError {
-    int code;
-    string message;
-    JSONValue data;
-}
-
-// plugins/discovery/scanner.d
-struct PluginInfo {
-    string name;
-    string version_;
-    string author;
-    string description;
-    string homepage;
-    string[] capabilities;
-    string minBuilderVersion;
-    string license;
-}
-
-// plugins/manager/registry.d
-interface IPluginRegistry {
-    Result!(PluginInfo[], BuildError) discover();
-    Result!(Plugin, BuildError) load(string name);
-    Result!(void, BuildError) register(PluginInfo info);
-    bool has(string name);
-    PluginInfo[] list();
-}
-```
-
----
-
-## Homebrew Distribution
-
-### Tap Structure
-
-```
-homebrew-builder-plugins/
-├── README.md
-├── Formula/
-│   ├── builder-plugin-docker.rb
-│   ├── builder-plugin-sonar.rb
-│   ├── builder-plugin-notify.rb
-│   ├── builder-plugin-s3.rb
-│   └── builder-plugin-grafana.rb
-└── .github/
-    └── workflows/
-        └── ci.yml
-```
-
-### Plugin Formula Template
-
-```ruby
-class BuilderPluginDocker < Formula
-  desc "Docker integration plugin for Builder"
-  homepage "https://github.com/builder-plugins/docker"
-  url "https://github.com/builder-plugins/docker/archive/v1.0.0.tar.gz"
-  sha256 "..."
-  license "MIT"
-
-  depends_on "builder"  # Ensure Builder is installed
-
-  def install
-    bin.install "builder-plugin-docker"
-  end
-
-  test do
-    # Test plugin responds to info request
-    output = pipe_output("#{bin}/builder-plugin-docker", 
-      '{"jsonrpc":"2.0","id":1,"method":"plugin.info"}')
-    assert_match "docker", output
-  end
-end
-```
-
-### Installation
-
-```bash
-# Add plugin tap
-brew tap builder/plugins
-
-# Install specific plugins
-brew install builder-plugin-docker
-brew install builder-plugin-sonar
-
-# List available plugins
-brew search builder-plugin-
-
-# Update plugins
-brew upgrade builder-plugin-docker
-```
-
-### Version Management
-
-```bash
-# Install specific version
-brew install builder-plugin-docker@1.0.0
-
-# Pin version
-brew pin builder-plugin-docker
-
-# Unpin and upgrade
-brew unpin builder-plugin-docker
-brew upgrade builder-plugin-docker
-```
-
----
-
-## Plugin SDK
-
-### Template Generator
-
-```bash
-builder plugin create my-plugin --language=d
-# Creates:
-# my-plugin/
-# ├── source/
-# │   └── app.d          # Main plugin entry point
-# ├── dub.json           # D package configuration
-# ├── README.md
-# ├── LICENSE
-# └── .github/
-#     └── workflows/
-#         └── ci.yml     # GitHub Actions CI
-```
-
-### D Plugin Template
-
-```d
-// source/app.d
-import std.stdio;
-import std.json;
-import core.stdc.stdlib : exit;
-
-struct PluginInfo {
-    string name = "my-plugin";
-    string version_ = "1.0.0";
-    string author = "Griffin";
-    string description = "My awesome Builder plugin";
-    string homepage = "https://github.com/GriffinCanCode/builder-plugin-my-plugin";
-    string[] capabilities = ["build.pre_hook", "build.post_hook"];
-    string minBuilderVersion = "1.0.0";
-    string license = "MIT";
-}
-
-void main(string[] args) {
-    // Read JSON-RPC request from stdin
-    string line;
-    while ((line = readln()) !is null) {
-        try {
-            auto request = parseJSON(line);
-            auto response = handleRequest(request);
-            writeln(response.toJSON());
-        } catch (Exception e) {
-            writeError(e.msg);
-        }
-    }
-}
-
-JSONValue handleRequest(JSONValue request) {
-    string method = request["method"].str;
-    
-    switch (method) {
-        case "plugin.info":
-            return handleInfo();
-        case "build.pre_hook":
-            return handlePreHook(request["params"]);
-        case "build.post_hook":
-            return handlePostHook(request["params"]);
-        default:
-            return errorResponse(-32601, "Method not found: " ~ method);
-    }
-}
-
-JSONValue handleInfo() {
-    auto info = PluginInfo();
-    return JSONValue([
-        "jsonrpc": "2.0",
-        "id": 1,
-        "result": info.toJSON()
-    ]);
-}
-
-JSONValue handlePreHook(JSONValue params) {
-    // Your pre-build logic here
-    return JSONValue([
-        "jsonrpc": "2.0",
-        "id": params["id"].integer,
-        "result": JSONValue([
-            "success": true,
-            "logs": ["Pre-build hook executed"]
-        ])
-    ]);
-}
-
-JSONValue handlePostHook(JSONValue params) {
-    // Your post-build logic here
-    return JSONValue([
-        "jsonrpc": "2.0",
-        "id": params["id"].integer,
-        "result": JSONValue([
-            "success": true,
-            "logs": ["Post-build hook executed"]
-        ])
-    ]);
-}
-
-JSONValue errorResponse(int code, string message) {
-    return JSONValue([
-        "jsonrpc": "2.0",
-        "error": JSONValue([
-            "code": code,
-            "message": message
-        ])
-    ]);
-}
-```
-
-### Python Plugin Template
-
-```python
-#!/usr/bin/env python3
-import json
-import sys
-
-PLUGIN_INFO = {
-    "name": "my-plugin",
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "name": "docker",
     "version": "1.0.0",
     "author": "Griffin",
-    "description": "My awesome Builder plugin",
-    "homepage": "https://github.com/GriffinCanCode/builder-plugin-my-plugin",
-    "capabilities": ["build.pre_hook", "build.post_hook"],
+    "description": "Docker container build integration",
+    "homepage": "https://github.com/builder-plugins/docker",
+    "capabilities": ["build.pre_hook", "build.post_hook", "target.custom_type"],
     "minBuilderVersion": "1.0.0",
     "license": "MIT"
+  }
 }
-
-def handle_request(request):
-    method = request["method"]
-    
-    if method == "plugin.info":
-        return success_response(request["id"], PLUGIN_INFO)
-    elif method == "build.pre_hook":
-        return handle_pre_hook(request)
-    elif method == "build.post_hook":
-        return handle_post_hook(request)
-    else:
-        return error_response(-32601, f"Method not found: {method}")
-
-def handle_pre_hook(request):
-    # Your pre-build logic here
-    return success_response(request["id"], {
-        "success": True,
-        "logs": ["Pre-build hook executed"]
-    })
-
-def handle_post_hook(request):
-    # Your post-build logic here
-    return success_response(request["id"], {
-        "success": True,
-        "logs": ["Post-build hook executed"]
-    })
-
-def success_response(req_id, result):
-    return {
-        "jsonrpc": "2.0",
-        "id": req_id,
-        "result": result
-    }
-
-def error_response(code, message):
-    return {
-        "jsonrpc": "2.0",
-        "error": {
-            "code": code,
-            "message": message
-        }
-    }
-
-def main():
-    for line in sys.stdin:
-        try:
-            request = json.loads(line)
-            response = handle_request(request)
-            print(json.dumps(response))
-            sys.stdout.flush()
-        except Exception as e:
-            print(json.dumps(error_response(-32603, str(e))))
-            sys.stdout.flush()
-
-if __name__ == "__main__":
-    main()
 ```
 
 ---
 
-## CLI Integration
-
-### Plugin Command
+## CLI Commands
 
 ```bash
 # List installed plugins
 builder plugin list
-# Output:
-# docker (1.0.0) - Docker integration
-# sonar (2.1.0) - SonarQube analysis
-# notify (1.2.0) - Build notifications
 
 # Show plugin info
 builder plugin info docker
-# Output:
-# Name:         docker
-# Version:      1.0.0
-# Author:       Griffin
-# Description:  Docker container build integration
-# Homepage:     https://github.com/builder-plugins/docker
-# Capabilities: build.pre_hook, build.post_hook, target.custom_type
-# License:      MIT
 
-# Install plugin (delegates to Homebrew)
+# Install plugin (via Homebrew)
 builder plugin install docker
-# Runs: brew install builder-plugin-docker
 
 # Uninstall plugin
 builder plugin uninstall docker
-# Runs: brew uninstall builder-plugin-docker
 
-# Update all plugins
-builder plugin update
-# Runs: brew upgrade builder-plugin-*
-
-# Validate plugin
+# Validate plugin responds correctly
 builder plugin validate docker
-# Checks: executable exists, responds to plugin.info, version compatibility
 
 # Create new plugin from template
 builder plugin create my-plugin --language=d
@@ -639,25 +235,15 @@ workspace("myproject") {
     plugins: [
         {
             name: "docker";
-            version: ">=1.0.0";
             config: {
                 registry: "docker.io";
-                push_on_success: true;
-            };
-        },
-        {
-            name: "sonar";
-            enabled: true;
-            config: {
-                server_url: "https://sonar.company.com";
-                token: "${SONAR_TOKEN}";
             };
         }
     ];
 }
 ```
 
-### Per-Target Plugin Configuration
+### Per-Target Configuration
 
 ```d
 // Builderfile
@@ -668,11 +254,6 @@ target("app") {
     plugins: {
         docker: {
             image: "myapp:latest";
-            dockerfile: "Dockerfile.app";
-        };
-        notify: {
-            channels: ["#builds"];
-            on_failure_only: true;
         };
     };
 }
@@ -680,270 +261,170 @@ target("app") {
 
 ---
 
-## Security Considerations
+## Writing a Plugin
 
-### Current: Trust-Based
-
-In v1.0, plugins run with **full process privileges**. Users must trust plugins they install.
-
-**Mitigation:**
-- Official plugins are reviewed and signed
-- Community plugins are clearly marked
-- Plugin source code is open for inspection
-- Homebrew provides provenance (git commits, checksums)
-
-### Future: Sandboxing (v2.0)
+### D Plugin Template
 
 ```d
-// Future: Plugin sandbox configuration
-workspace("myproject") {
-    plugins: [
-        {
-            name: "docker";
-            sandbox: {
-                network: true;         // Allow network access
-                filesystem: {
-                    read: ["src/", "Dockerfile"];
-                    write: [".docker/"];
-                };
-                env: ["DOCKER_HOST"];  // Allowed env vars
-            };
+import std.stdio;
+import std.json;
+
+void main() {
+    foreach (line; stdin.byLine) {
+        try {
+            auto request = parseJSON(line);
+            auto response = handleRequest(request);
+            writeln(response.toString());
+            stdout.flush();
+        } catch (Exception e) {
+            writeln(`{"jsonrpc":"2.0","error":{"code":-32603,"message":"` ~ e.msg ~ `"}}`);
+            stdout.flush();
         }
-    ];
+    }
+}
+
+JSONValue handleRequest(JSONValue request) {
+    string method = request["method"].str;
+    long id = request["id"].integer;
+    
+    switch (method) {
+        case "plugin.info":
+            return JSONValue([
+                "jsonrpc": "2.0",
+                "id": id,
+                "result": JSONValue([
+                    "name": "my-plugin",
+                    "version": "1.0.0",
+                    "capabilities": JSONValue(["build.pre_hook"])
+                ])
+            ]);
+        case "build.pre_hook":
+            // Plugin logic here
+            return JSONValue([
+                "jsonrpc": "2.0",
+                "id": id,
+                "result": JSONValue(["success": true, "logs": JSONValue(["Done"])])
+            ]);
+        default:
+            return JSONValue([
+                "jsonrpc": "2.0",
+                "error": JSONValue(["code": -32601, "message": "Method not found"])
+            ]);
+    }
 }
 ```
 
-**Sandboxing Technologies:**
-- **Linux**: seccomp-bpf + namespaces
-- **macOS**: sandbox-exec
-- **Windows**: Job objects + AppContainer
+### Python Plugin Template
+
+```python
+#!/usr/bin/env python3
+import json
+import sys
+
+PLUGIN_INFO = {
+    "name": "my-plugin",
+    "version": "1.0.0",
+    "capabilities": ["build.pre_hook", "build.post_hook"]
+}
+
+def handle_request(request):
+    method = request["method"]
+    req_id = request.get("id", 0)
+    
+    if method == "plugin.info":
+        return {"jsonrpc": "2.0", "id": req_id, "result": PLUGIN_INFO}
+    elif method == "build.pre_hook":
+        return {"jsonrpc": "2.0", "id": req_id, "result": {"success": True}}
+    else:
+        return {"jsonrpc": "2.0", "error": {"code": -32601, "message": f"Unknown: {method}"}}
+
+if __name__ == "__main__":
+    for line in sys.stdin:
+        try:
+            request = json.loads(line)
+            response = handle_request(request)
+            print(json.dumps(response))
+            sys.stdout.flush()
+        except Exception as e:
+            print(json.dumps({"jsonrpc": "2.0", "error": {"code": -32603, "message": str(e)}}))
+            sys.stdout.flush()
+```
+
+---
+
+## Homebrew Distribution
+
+### Formula Template
+
+```ruby
+class BuilderPluginDocker < Formula
+  desc "Docker integration plugin for Builder"
+  homepage "https://github.com/builder-plugins/docker"
+  url "https://github.com/builder-plugins/docker/archive/v1.0.0.tar.gz"
+  sha256 "..."
+  license "MIT"
+
+  depends_on "builder"
+
+  def install
+    bin.install "builder-plugin-docker"
+  end
+
+  test do
+    output = pipe_output("#{bin}/builder-plugin-docker", 
+      '{"jsonrpc":"2.0","id":1,"method":"plugin.info"}')
+    assert_match "docker", output
+  end
+end
+```
+
+### Installation
+
+```bash
+brew tap builder/plugins
+brew install builder-plugin-docker
+```
 
 ---
 
 ## Performance
 
-### Plugin Overhead
-
-| Operation | Overhead | Mitigation |
-|-----------|----------|-----------|
-| Discovery | ~5-10ms | Cached in ~/.builder/cache/plugins.json |
-| Load | ~20-50ms | Lazy loading, load only when needed |
-| RPC Call | ~1-5ms | Batching, async execution |
-
-### Optimization Strategies
-
-1. **Lazy Loading**: Load plugins only when their capabilities are needed
-2. **Caching**: Cache plugin discovery results
-3. **Batching**: Batch multiple RPC calls into one invocation
-4. **Async**: Run plugins concurrently where possible
-5. **Keep-Alive**: Reuse plugin processes for multiple calls (future)
+| Operation | Typical Time | Notes |
+|-----------|--------------|-------|
+| Discovery | ~5-10ms | Cached after first scan |
+| Load | ~20-50ms | Process spawn + info query |
+| RPC Call | ~1-5ms | JSON encode/decode + stdin/stdout |
 
 ---
 
-## Testing
+## Security
 
-### Unit Tests
+### Current Model
 
+Plugins run with full process privileges. Users should:
+- Only install plugins from trusted sources
+- Review plugin source code
+- Use Homebrew checksums for verification
+
+### Future Sandboxing
+
+Planned sandbox configuration:
 ```d
-// tests/unit/plugins/protocol.d
-unittest {
-    // Test JSON-RPC encoding
-    auto req = PluginRequest(1, "plugin.info", JSONValue(null));
-    auto json = encodeRequest(req);
-    auto decoded = decodeRequest(json);
-    assert(decoded.id == 1);
-    assert(decoded.method == "plugin.info");
-}
-
-// tests/unit/plugins/discovery.d
-unittest {
-    // Test plugin discovery
-    auto scanner = new PluginScanner();
-    auto plugins = scanner.discover(["/test/plugins"]);
-    assert(plugins.length > 0);
-}
-```
-
-### Integration Tests
-
-```bash
-# tests/integration/plugins/test-docker-plugin.sh
-#!/bin/bash
-
-# Test plugin responds to info
-echo '{"jsonrpc":"2.0","id":1,"method":"plugin.info"}' | \
-  builder-plugin-docker | \
-  jq -e '.result.name == "docker"'
-
-# Test pre-hook
-echo '{"jsonrpc":"2.0","id":2,"method":"build.pre_hook","params":{}}' | \
-  builder-plugin-docker | \
-  jq -e '.result.success == true'
-```
-
-### Mock Plugin for Testing
-
-```bash
-#!/bin/bash
-# tests/fixtures/plugins/builder-plugin-mock
-
-while read -r line; do
-  method=$(echo "$line" | jq -r '.method')
-  id=$(echo "$line" | jq -r '.id')
-  
-  case "$method" in
-    "plugin.info")
-      echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"name\":\"mock\",\"version\":\"1.0.0\"}}"
-      ;;
-    *)
-      echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"success\":true}}"
-      ;;
-  esac
-done
+plugins: [
+    {
+        name: "docker";
+        sandbox: {
+            network: true;
+            filesystem: {read: ["src/"], write: [".docker/"]};
+        };
+    }
+]
 ```
 
 ---
 
-## Example Plugins
+## Related Documentation
 
-### 1. Docker Plugin
-
-**Features:**
-- Build Docker images as target types
-- Push to registry on success
-- Multi-stage builds
-- BuildKit integration
-
-```bash
-bldr build //app:container --plugin docker
-```
-
-### 2. SonarQube Plugin
-
-**Features:**
-- Code quality analysis
-- Security scanning
-- Technical debt tracking
-- PR decoration
-
-```bash
-bldr build //app:main --plugin sonar
-```
-
-### 3. Notification Plugin
-
-**Features:**
-- Slack/Discord notifications
-- Email alerts
-- Build status updates
-- Custom webhooks
-
-```bash
-bldr build //app:main --plugin notify
-```
-
-### 4. S3 Upload Plugin
-
-**Features:**
-- Upload artifacts to S3
-- CloudFront invalidation
-- Versioned artifacts
-- Access control
-
-```bash
-bldr build //app:release --plugin s3
-```
-
-### 5. Grafana Plugin
-
-**Features:**
-- Send build metrics to Grafana
-- Custom dashboards
-- Performance tracking
-- Historical trends
-
-```bash
-bldr build //app:main --plugin grafana
-```
-
----
-
-## Roadmap
-
-### Phase 1: Core Infrastructure (Weeks 1-2)
-- [x] Design plugin protocol
-- [ ] Implement JSON-RPC codec
-- [ ] Create plugin discovery system
-- [ ] Build plugin registry
-- [ ] Add CLI commands
-
-### Phase 2: SDK & Templates (Weeks 3-4)
-- [ ] Plugin template generator
-- [ ] D SDK library
-- [ ] Python SDK library
-- [ ] Documentation
-- [ ] Example plugins
-
-### Phase 3: Homebrew Integration (Week 5)
-- [ ] Create homebrew-builder-plugins tap
-- [ ] Write formula templates
-- [ ] Setup CI/CD for plugins
-- [ ] Publishing workflow
-
-### Phase 4: Official Plugins (Weeks 6-8)
-- [ ] Docker plugin
-- [ ] Notification plugin
-- [ ] S3 upload plugin
-- [ ] Grafana plugin
-
-### Phase 5: Advanced Features (Future)
-- [ ] Plugin sandboxing
-- [ ] Keep-alive mode (persistent plugins)
-- [ ] Plugin marketplace
-- [ ] Signed plugins
-- [ ] Plugin dependencies
-
----
-
-## Comparison with Other Build Systems
-
-| Feature | Builder | Bazel | Gradle | Buck2 |
-|---------|---------|-------|--------|-------|
-| Plugin Model | Process-based | Starlark rules | JVM plugins | Starlark rules |
-| Language | Any | Starlark only | JVM only | Starlark only |
-| Isolation | Full process | None | ClassLoader | None |
-| Distribution | Homebrew | Bazel registry | Maven Central | GitHub |
-| ABI Stability | N/A (protocol) | Fragile | JVM stable | Rust ABI |
-| Testing | Standalone | Requires Bazel | Requires Gradle | Requires Buck2 |
-
-**Verdict**: Builder's process-based approach is **more flexible and more maintainable** than competitors.
-
----
-
-## FAQ
-
-**Q: Why not use shared libraries like traditional plugin systems?**  
-A: Shared libraries have ABI compatibility issues, require matching the host language (D), and crash the entire process on failure. Process-based plugins are isolated, language-agnostic, and more robust.
-
-**Q: Isn't JSON-RPC slow?**  
-A: For typical plugin operations (a few per build), the overhead is negligible (1-5ms). We can optimize with batching and keep-alive mode if needed.
-
-**Q: Can plugins modify Builder's behavior?**  
-A: Yes, through well-defined hooks. Plugins can run before/after builds, add custom target types, process artifacts, and extend CLI commands.
-
-**Q: How do I write a plugin?**  
-A: Use `bldr plugin create my-plugin` to generate a template, implement the JSON-RPC handlers, and build/test. See the SDK section above.
-
-**Q: Are plugins secure?**  
-A: In v1.0, plugins run with full privileges (like any CLI tool). Future versions will add sandboxing. Only install plugins you trust.
-
-**Q: Can plugins depend on other plugins?**  
-A: Not in v1.0. Future versions may add plugin dependency resolution.
-
----
-
-**Document Version:** 1.0  
-**Last Updated:** November 2, 2025  
-**Next Review:** December 1, 2025  
-**Status:** Design Complete, Implementation In Progress
-
+- [Plugin SDK](../../source/infrastructure/plugins/sdk/)
+- [Protocol Types](../../source/infrastructure/plugins/protocol/types.d)
+- [Lifecycle Manager](../../source/infrastructure/plugins/manager/lifecycle.d)

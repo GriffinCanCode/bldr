@@ -1,325 +1,360 @@
 # Tree-sitter Integration Architecture
 
-## Executive Summary
+**Status:** Implemented  
+**Version:** 1.0
 
-Extend AST-level incremental compilation from C++ to 20+ languages using tree-sitter, replacing fragile regex-based parsing with production-grade incremental parsing infrastructure.
+---
 
-## Current State Analysis
+## Overview
 
-### Strengths
-1. **Excellent Foundation**: Robust `IASTParser` interface with registry pattern
-2. **Symbol Tracking**: Comprehensive `ASTSymbol`/`FileAST` data structures
-3. **Incremental Engine**: Sophisticated `ASTIncrementalEngine` with hybrid fallback
-4. **Working C++ Implementation**: Proves concept value (80% rebuild time reduction)
+Builder uses tree-sitter for AST parsing across 25+ programming languages. This provides:
 
-### Limitations
-1. **Single Language**: Only C++ has AST parsing (regex-based)
-2. **Fragile Parsing**: Regex patterns miss edge cases, can't handle complex syntax
-3. **Not Incremental**: Reparses entire file on change
-4. **No Semantic Info**: Can't resolve types/symbols across files
+- **Grammar-based parsing** instead of regex heuristics
+- **Incremental parsing** for watch mode (10-100x faster re-parse)
+- **Error tolerance** for partially valid code
+- **Symbol-level incremental compilation** across all supported languages
 
-### Innovation Assessment vs Industry
+---
 
-**What we did exceptionally well:**
-- Symbol-level granularity tracking (unique in build systems)
-- Hybrid engine with automatic fallback
-- Clean separation: parsing → caching → incremental engine
-- Action-based architecture integrates seamlessly
-
-**Where we can improve:**
-- Parser quality (regex → proper grammar-based parsing)
-- Language coverage (1 → 20+ languages)
-- Incremental parsing (reparse only changed portions)
-
-## Proposed Solution: Tree-sitter Integration
-
-### Why Tree-sitter?
-
-**Industry Standard:**
-- Powers GitHub syntax highlighting for 150+ languages
-- Used by: Neovim, Emacs, Helix, Zed editor
-- Battle-tested on millions of repos
-
-**Technical Superiority:**
-1. **Incremental**: Reparse only changed portions (10-100x faster)
-2. **Error-tolerant**: Handles malformed code gracefully
-3. **Precise**: Grammar-based, not regex heuristics
-4. **Fast**: Written in C, optimized for performance
-5. **Universal**: 150+ language grammars available
-
-**vs Alternatives:**
-- ANTLR: Slower, more complex, requires grammar generation
-- LSP: Heavy dependency, process overhead, not all languages supported
-- Clang LibTooling: C++ only, complex API
-- **Tree-sitter**: Perfect balance of speed, accuracy, coverage
-
-### Architecture Design
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                  AST Parser Registry                     │
-│  (Existing - no changes needed)                          │
-└────────────────┬────────────────────────────────────────┘
-                 │
-        ┌────────┴──────────┐
-        │                   │
-┌───────▼────────┐  ┌──────▼────────────┐
-│   Regex-based  │  │  Tree-sitter      │
-│   Parsers      │  │  Universal Parser │ ← NEW
-│   (C++)        │  │  (20+ languages)  │
-└────────────────┘  └──────┬────────────┘
-                           │
-              ┌────────────┴────────────┐
-              │                         │
-        ┌─────▼──────┐           ┌─────▼──────┐
-        │ Language   │           │ Language   │
-        │ Config     │    ...    │ Config     │
-        │ (Python)   │           │ (Java)     │
-        └────────────┘           └────────────┘
+source/infrastructure/parsing/treesitter/
+├── bindings.d       # C API bindings
+├── config.d         # Language configurations
+├── parser.d         # TreeSitterParser class
+├── registry.d       # Grammar registry
+├── loader.d         # Grammar loading
+├── deps.d           # Dependency extraction
+├── incremental.d    # Parse tree caching
+├── adapter.d        # Integration with AST registry
+└── grammars/        # Per-language grammar modules
+    ├── python.d
+    ├── java.d
+    ├── typescript.d
+    ├── javascript.d
+    ├── go.d
+    ├── rust.d
+    ├── c.d
+    ├── cpp.d
+    ├── csharp.d
+    ├── kotlin.d
+    ├── swift.d
+    ├── ruby.d
+    ├── php.d
+    ├── lua.d
+    ├── perl.d
+    ├── r.d
+    ├── haskell.d
+    ├── ocaml.d
+    ├── scala.d
+    ├── nim.d
+    ├── zig.d
+    ├── elixir.d
+    ├── elm.d
+    ├── fsharp.d
+    ├── css.d
+    └── protobuf.d
 ```
 
-### Implementation Strategy
+---
 
-#### Phase 1: Core Infrastructure (PRIORITY)
+## Components
 
-**1.1 Tree-sitter C API Bindings** (`infrastructure/parsing/treesitter/bindings.d`)
+### C API Bindings (`bindings.d`)
+
+Minimal tree-sitter C API surface:
+
 ```d
-// Minimal C API surface - only what we need
 extern(C) struct TSParser;
 extern(C) struct TSTree;
 extern(C) struct TSNode;
 extern(C) struct TSLanguage;
 
-extern(C) @system nothrow @nogc {
-    TSParser* ts_parser_new();
-    void ts_parser_set_language(TSParser*, const TSLanguage*);
-    TSTree* ts_parser_parse_string(TSParser*, const TSTree*, const char*, uint);
-    TSNode ts_tree_root_node(const TSTree*);
-    // ... 15-20 more functions
-}
+extern(C) @system nothrow @nogc:
+TSParser* ts_parser_new();
+void ts_parser_delete(TSParser*);
+bool ts_parser_set_language(TSParser*, const(TSLanguage)*);
+TSTree* ts_parser_parse_string(TSParser*, const(TSTree)*, const(char)*, uint);
+TSNode ts_tree_root_node(const(TSTree)*);
+void ts_tree_edit(TSTree*, const(TSInputEdit)*);
+// ...
 ```
 
-**1.2 Language Configuration** (`infrastructure/parsing/treesitter/config.d`)
+RAII wrappers provided for memory safety:
+- `Parser` - wraps `TSParser*`
+- `Tree` - wraps `TSTree*`
+
+### Language Configuration (`config.d`)
+
+Each language has a configuration mapping tree-sitter node types to Builder symbols:
+
 ```d
-struct TreeSitterLanguageConfig {
-    string name;
-    SymbolType[string] nodeTypeMap;  // "class_declaration" -> SymbolType.Class
-    string[] publicModifiers;         // ["public", "export"]
-    string[] importPatterns;          // Node types for imports
+struct LanguageConfig {
+    string languageId;           // "python"
+    string displayName;          // "Python"
+    string[] extensions;         // [".py"]
     
-    // Language-specific extraction rules
-    SymbolExtractor extractor;
+    SymbolConfig symbols;        // Node type → SymbolType mapping
+    VisibilityConfig visibility; // Public/private patterns
+    DependencyConfig dependencies; // Import extraction
+}
+
+struct SymbolConfig {
+    // Maps tree-sitter node types to Builder symbol types
+    // e.g., "class_definition" → SymbolType.Class
+    SymbolType[string] nodeTypeMap;
+    string[] nameNodes;          // Nodes containing symbol name
 }
 ```
 
-**1.3 Universal Parser** (`infrastructure/parsing/treesitter/parser.d`)
+Built-in configurations for: Python, Java, TypeScript, JavaScript, Go, Rust, C, C++, C#, Kotlin, Swift, Ruby, PHP, Lua, Perl, R, Haskell, OCaml, Scala, Nim, Zig, Elixir, Elm, F#, CSS, Protobuf.
+
+### Universal Parser (`parser.d`)
+
 ```d
 final class TreeSitterParser : BaseASTParser {
-    private TSParser* parser;
     private const(TSLanguage)* grammar;
-    private TreeSitterLanguageConfig config;
+    private LanguageConfig config;
+    private bool incrementalEnabled;
     
-    override Result!(FileAST, BuildError) parseFile(string path) {
-        // 1. Load existing tree from cache if available
-        // 2. Parse incrementally
-        // 3. Extract symbols using language config
-        // 4. Return FileAST
-    }
+    /// Parse file (full parse)
+    override BuildResult!FileAST parseFile(string filePath) @system;
+    
+    /// Parse with incremental edits (watch mode)
+    BuildResult!FileAST parseContentWithEdits(
+        string content,
+        string filePath,
+        const TextEdit[] edits
+    ) @system;
 }
 ```
 
-#### Phase 2: Language Configurations (EXTENSIBLE)
+The parser:
+1. Creates a tree-sitter parser with the language grammar
+2. Parses source to tree-sitter AST
+3. Traverses nodes to extract symbols
+4. Maps to Builder's `FileAST` format
 
-Create JSON/D configs for each language:
+### Incremental Cache (`incremental.d`)
 
-```json
-// languages/configs/python.json
-{
-    "name": "python",
-    "grammar": "python",
-    "extensions": [".py"],
-    "nodeTypes": {
-        "class_definition": "Class",
-        "function_definition": "Function",
-        "import_statement": "import"
-    },
-    "publicPatterns": ["^[^_].*"],  // Not starting with _
-    "dependencyNodes": ["import_statement", "import_from_statement"]
-}
-```
-
-Priority languages (by impact):
-1. **Python** - Most requested, huge ecosystem
-2. **Java** - Large codebases benefit most
-3. **TypeScript** - Web ecosystem
-4. **Go** - Growing adoption
-5. **Rust** - Modern compiled language
-6. **JavaScript, C#, Kotlin, Swift, Ruby** - Next tier
-
-#### Phase 3: Integration
-
-**3.1 Registry Integration** (Modify existing `initializeASTParsers`)
 ```d
-void initializeASTParsers() @system {
+final class IncrementalTreeCache {
+    /// Get or parse tree for file
+    BuildResult!CachedTree parseIncremental(
+        string filePath,
+        string content,
+        string languageId,
+        const TextEdit[] edits
+    ) @system;
+    
+    /// Register grammar for language
+    void registerGrammar(string languageId, const(TSLanguage)* grammar);
+    
+    /// Invalidate cache for file
+    void invalidate(string filePath);
+}
+```
+
+When edits are provided:
+1. Retrieves cached tree if available
+2. Applies edits to tree using `ts_tree_edit()`
+3. Re-parses incrementally (only changed portions)
+4. Caches result
+
+### Registry (`registry.d`)
+
+```d
+final class TreeSitterRegistry {
+    /// Get language grammar
+    const(TSLanguage)* getGrammar(string languageId) @system;
+    
+    /// Check if language supported
+    bool hasLanguage(string languageId);
+    
+    /// List all supported languages
+    string[] supportedLanguages();
+}
+```
+
+Grammars are lazily loaded on first use.
+
+---
+
+## Symbol Extraction
+
+### Process
+
+1. Parse source with tree-sitter
+2. Walk AST nodes
+3. For each node type in config:
+   - Extract symbol name
+   - Determine visibility (public/private)
+   - Extract dependencies/imports
+4. Build `FileAST` with symbols
+
+### Example: Python
+
+```python
+class MyClass:
+    def method(self):
+        pass
+
+def top_level():
+    pass
+```
+
+Extracted symbols:
+- `MyClass` (Class, public)
+- `method` (Function, private - nested)
+- `top_level` (Function, public)
+
+### Visibility Rules
+
+Languages define visibility via:
+- **Modifiers**: `public`, `private`, `export`
+- **Name patterns**: `_private` (Python), `lowerCase` (Go)
+- **Position**: Top-level vs nested
+
+---
+
+## Dependency Extraction
+
+The `deps.d` module extracts imports:
+
+```d
+struct DependencyExtractor {
+    string[] extractDependencies(TSNode root, string languageId) @system;
+}
+```
+
+Language-specific patterns:
+- **Python**: `import X`, `from X import Y`
+- **Java**: `import pkg.Class`
+- **TypeScript**: `import { X } from 'Y'`
+- **Go**: `import "pkg"`
+
+---
+
+## Integration
+
+### With AST Parser Registry
+
+```d
+void registerTreeSitterParsers() @system {
     auto registry = ASTParserRegistry.instance();
+    auto tsRegistry = TreeSitterRegistry.instance();
     
-    // Existing regex parser
-    registry.registerParser(new CppASTParser());
-    
-    // Tree-sitter parsers
-    foreach (config; loadTreeSitterConfigs()) {
-        registry.registerParser(new TreeSitterParser(config));
+    foreach (lang; tsRegistry.supportedLanguages()) {
+        auto config = getLanguageConfig(lang);
+        auto grammar = tsRegistry.getGrammar(lang);
+        registry.registerParser(new TreeSitterParser(grammar, config));
     }
 }
 ```
 
-**3.2 Incremental Tree Caching** (`engine/caching/incremental/tree_cache.d`)
+### With Watch Mode
+
 ```d
-// Cache parsed trees for incremental reparsing
-final class TreeCache {
-    private TSTree*[string] trees;  // file -> tree
-    
-    TSTree* getOrNull(string file);
-    void update(string file, TSTree* tree);
-}
+// On file change
+auto edits = calculateTextEdits(oldContent, newContent);
+auto result = parser.parseContentWithEdits(newContent, path, edits);
 ```
 
-### Key Design Principles
+---
 
-1. **Zero Breaking Changes**: Existing AST infrastructure unchanged
-2. **Opt-in**: Regex parsers coexist with tree-sitter
-3. **Fail-safe**: Fallback to file-level on parse error
-4. **Lazy Loading**: Load grammar on first use
-5. **Memory Safe**: Proper RAII for C resources
+## Performance
 
-### Performance Characteristics
+### Parse Speed
 
-**Memory Overhead:**
-- Grammar: ~1-5 MB per language (loaded once)
-- Tree: ~50 bytes per node (~10-50 KB per file)
-- Total: <100 MB for large monorepo
+| Operation | Speed |
+|-----------|-------|
+| Initial parse | 500-1000 LOC/ms |
+| Incremental | 10-100x faster (changed portions only) |
 
-**Parse Speed:**
-- Initial: 500-1000 LOC/ms (faster than regex!)
-- Incremental: 10-100x faster (only changed portions)
+### Memory
 
-**Expected Impact:**
-- File-level incremental: 2-5x speedup
-- AST-level incremental: 10-50x speedup on small changes
+| Component | Size |
+|-----------|------|
+| Grammar | ~1-5 MB per language |
+| Parse tree | ~50 bytes per node |
+| Typical file | 10-50 KB tree |
 
-### Implementation Plan (Phased)
+### Incremental Benefit
 
-**Week 1: Core** (Files: 4, Lines: ~800)
-- [ ] C API bindings (`bindings.d`)
-- [ ] Language config structure (`config.d`)
-- [ ] Universal parser base (`parser.d`)
-- [ ] Tree cache (`tree_cache.d`)
+For a small edit in a 10,000 line file:
+- **Full parse**: ~10ms
+- **Incremental**: <1ms
 
-**Week 2: Priority Languages** (Files: 6, Lines: ~400)
-- [ ] Python config + grammar integration
-- [ ] Java config
-- [ ] TypeScript config
-- [ ] Tests for each
+---
 
-**Week 3: Integration** (Files: 3, Lines: ~200)
-- [ ] Registry integration
-- [ ] Incremental engine updates
-- [ ] Documentation
+## Adding a New Language
 
-**Week 4: Remaining Languages** (Files: 15, Lines: ~1000)
-- [ ] 15 more language configs
-- [ ] Comprehensive tests
-- [ ] Performance benchmarks
+1. **Add grammar module** in `grammars/`:
 
-### Testing Strategy
+```d
+// grammars/newlang.d
+module infrastructure.parsing.treesitter.grammars.newlang;
 
-1. **Unit Tests**: Parse known code snippets, verify symbols
-2. **Real-world Tests**: Parse Builder's own codebase
-3. **Performance Tests**: Compare incremental vs full parse
-4. **Fuzzing**: Random edits, ensure no crashes
-
-### Extensibility
-
-**Adding new language** (15 minutes):
-1. Create config JSON (10 lines)
-2. Map node types to `SymbolType`
-3. Add to registry
-4. Test with sample code
-
-**vs current approach** (2-3 hours):
-- Write 200+ lines of D code
-- Handle all edge cases manually
-- Debug regex patterns
-
-### Risk Mitigation
-
-1. **C Dependency**: Tree-sitter is small (~100 KB), widely available
-2. **Grammar Quality**: Use official grammars (battle-tested)
-3. **Breaking Changes**: Isolated behind `IASTParser` interface
-4. **Performance**: Cache parsed trees, lazy load grammars
-
-### Success Metrics
-
-- [ ] 20+ languages with AST support (vs 1 currently)
-- [ ] <5ms incremental parse for typical edit
-- [ ] 90%+ symbol extraction accuracy
-- [ ] Zero breaking changes to existing API
-- [ ] <15 min to add new language
-
-## Comparison with Industry
-
-**Bazel/Buck2**: File-level only, no AST granularity
-**Gradle**: Bytecode-level (JVM), single language
-**Ninja**: No dependency tracking
-**CMake**: No incremental at all
-
-**Our approach**: Symbol-level granularity across 20+ languages
-→ **Genuinely innovative** - no other build system does this
-
-## Why This is Superior to "Standard Method"
-
-**Standard**: Language-specific parsers (Clang for C++, javac for Java)
-- Requires per-language integration
-- Complex APIs
-- Heavy dependencies
-- Inconsistent interfaces
-
-**Our approach**: Universal tree-sitter + thin config layer
-- Single integration point
-- Consistent interface
-- Minimal dependency
-- Extensible by users
-
-**Root cause solved**: Need accurate AST for any language
-**Real constraint**: Parse speed + accuracy trade-off
-**Optimization point**: Incremental parsing (biggest impact)
-**Unconventional insight**: Language configs > language-specific code
-
-This isn't just "adding tree-sitter" - it's creating a **universal AST abstraction layer** that makes Builder the first build system with cross-language symbol-level incremental compilation.
-
-## Files to Create
-
-```
-source/infrastructure/parsing/
-├── treesitter/
-│   ├── package.d
-│   ├── bindings.d      (C API)
-│   ├── config.d        (Language configs)
-│   ├── parser.d        (Universal parser)
-│   ├── registry.d      (Config registry)
-│   └── README.md
-└── configs/
-    ├── python.json
-    ├── java.json
-    ├── typescript.json
-    └── ... (15 more)
+extern(C) const(TSLanguage)* tree_sitter_newlang() @system nothrow @nogc;
 ```
 
-## Next Steps
+2. **Add configuration** in `config.d`:
 
-1. **Research**: Identify exact tree-sitter API surface needed
-2. **Prototype**: Python parser + 100 LOC test
-3. **Validate**: Parse Builder's Python files
-4. **Scale**: Add remaining languages
-5. **Optimize**: Profile and optimize hot paths
+```d
+LanguageConfig newlangConfig = {
+    languageId: "newlang",
+    displayName: "NewLang",
+    extensions: [".nl"],
+    symbols: SymbolConfig(
+        ["function_definition": SymbolType.Function,
+         "class_definition": SymbolType.Class]
+    )
+};
+```
 
+3. **Register grammar** in `registry.d`
+
+4. **Build and link** the grammar shared library
+
+---
+
+## Supported Languages
+
+| Language | Extensions | Status |
+|----------|------------|--------|
+| Python | `.py` | ✅ |
+| Java | `.java` | ✅ |
+| TypeScript | `.ts`, `.tsx` | ✅ |
+| JavaScript | `.js`, `.jsx` | ✅ |
+| Go | `.go` | ✅ |
+| Rust | `.rs` | ✅ |
+| C | `.c`, `.h` | ✅ |
+| C++ | `.cpp`, `.hpp`, `.cc` | ✅ |
+| C# | `.cs` | ✅ |
+| Kotlin | `.kt` | ✅ |
+| Swift | `.swift` | ✅ |
+| Ruby | `.rb` | ✅ |
+| PHP | `.php` | ✅ |
+| Lua | `.lua` | ✅ |
+| Perl | `.pl`, `.pm` | ✅ |
+| R | `.R`, `.r` | ✅ |
+| Haskell | `.hs` | ✅ |
+| OCaml | `.ml` | ✅ |
+| Scala | `.scala` | ✅ |
+| Nim | `.nim` | ✅ |
+| Zig | `.zig` | ✅ |
+| Elixir | `.ex`, `.exs` | ✅ |
+| Elm | `.elm` | ✅ |
+| F# | `.fs` | ✅ |
+| CSS | `.css` | ✅ |
+| Protobuf | `.proto` | ✅ |
+
+---
+
+## Related Documentation
+
+- [Tree-sitter README](../../source/infrastructure/parsing/treesitter/README.md)
+- [Parser Implementation](../../source/infrastructure/parsing/treesitter/parser.d)
+- [Grammar Modules](../../source/infrastructure/parsing/treesitter/grammars/)
+- [Incremental Compilation](incremental-design.md)
