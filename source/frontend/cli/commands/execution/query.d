@@ -24,10 +24,11 @@ import infrastructure.errors;
 /// - Set operations: expr1 + expr2 (union), expr1 & expr2 (intersect), expr1 - expr2 (except)
 /// - siblings(expr), buildfiles(pattern) - utility queries
 /// - Output formats: --format=pretty|list|json|dot
+/// - Optimization: --no-optimize to disable predicate pushdown
 struct QueryCommand
 {
-    /// Execute a query with optional format
-    static void execute(string queryExpression, string outputFormat = "pretty")
+    /// Execute a query with optional format and optimization
+    static void execute(string queryExpression, string outputFormat = "pretty", bool optimize = true)
     {
         if (queryExpression.length == 0)
         {
@@ -70,8 +71,11 @@ struct QueryCommand
         }
         auto graph = graphResult.unwrap();
         
-        // Execute query using new bldrquery engine
-        auto queryResult = executeQuery(queryExpression, graph);
+        // Execute query with optimization (predicate pushdown) by default
+        auto queryResult = optimize
+            ? executeQueryOptimized(queryExpression, graph)
+            : executeQuery(queryExpression, graph);
+        
         if (queryResult.isErr)
         {
             Logger.error("Query error");

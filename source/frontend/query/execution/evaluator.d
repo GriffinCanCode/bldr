@@ -369,3 +369,271 @@ Result!(BuildNode[], string) executeQuery(string queryString, BuildGraph graph) 
     return evaluator.evaluate(astResult.unwrap());
 }
 
+/// Execute query with optimization (predicate pushdown)
+Result!(BuildNode[], string) executeQueryOptimized(string queryString, BuildGraph graph) @system
+{
+    import frontend.query.parsing.lexer : QueryLexer;
+    import frontend.query.parsing.parser : QueryParser;
+    import frontend.query.execution.planner : QueryPlanner;
+    
+    auto lexer = QueryLexer(queryString);
+    auto tokensResult = lexer.tokenize();
+    if (tokensResult.isErr)
+        return Result!(BuildNode[], string).err("Lexer error: " ~ tokensResult.unwrapErr().message());
+    
+    auto parser = QueryParser(tokensResult.unwrap());
+    auto astResult = parser.parse();
+    if (astResult.isErr)
+        return Result!(BuildNode[], string).err("Parser error: " ~ astResult.unwrapErr());
+    
+    // Plan and optimize
+    auto planner = QueryPlanner();
+    auto plan = planner.plan(astResult.unwrap());
+    
+    // Use optimized evaluator with predicate pushdown
+    auto evaluator = new OptimizedQueryEvaluator(graph, plan);
+    return evaluator.evaluate(plan.optimizedExpr !is null ? plan.optimizedExpr : plan.originalExpr);
+}
+
+/// Optimized query evaluator with predicate pushdown
+/// 
+/// Applies extracted predicates during traversal to reduce
+/// the number of nodes loaded and processed
+final class OptimizedQueryEvaluator : QueryVisitor
+{
+    private BuildGraph graph;
+    private BuildNode[] currentResult;
+    private BuildNode[][string] variables;
+    private Predicate[] pushedPredicates;
+    
+    this(BuildGraph graph, QueryPlan plan) pure nothrow @safe
+    {
+        this.graph = graph;
+        this.pushedPredicates = plan.pushedPredicates;
+    }
+    
+    Result!(BuildNode[], string) evaluate(QueryExpr expr) @system
+    {
+        try
+        {
+            currentResult = [];
+            expr.accept(this);
+            return Result!(BuildNode[], string).ok(currentResult);
+        }
+        catch (Exception e)
+        {
+            return Result!(BuildNode[], string).err(e.msg);
+        }
+    }
+    
+    override void visit(TargetPattern node) @system
+    {
+        if (node.pattern in variables)
+        {
+            currentResult = variables[node.pattern];
+            return;
+        }
+        
+        // Apply predicate pushdown during pattern matching
+        if (pushedPredicates.length > 0)
+            currentResult = matchPatternWithPredicates(graph, node.pattern, pushedPredicates);
+        else
+            currentResult = matchPattern(graph, node.pattern);
+    }
+    
+    override void visit(DepsExpr node) @system
+    {
+        node.inner.accept(this);
+        auto targets = currentResult;
+        
+        // Optimized: apply predicates during BFS traversal
+        if (node.depth == 1)
+        {
+            currentResult = getDirectDependenciesFiltered(targets, pushedPredicates);
+        }
+        else if (pushedPredicates.length > 0)
+        {
+            currentResult = bfsWithPredicates(graph, targets, pushedPredicates, node.depth);
+            currentResult = except(currentResult, targets);
+        }
+        else
+        {
+            currentResult = bfs(graph, targets, node.depth);
+            currentResult = except(currentResult, targets);
+        }
+    }
+    
+    override void visit(RdepsExpr node) @system
+    {
+        node.inner.accept(this);
+        auto targets = currentResult;
+        
+        // Optimized: apply predicates during reverse BFS
+        if (pushedPredicates.length > 0)
+        {
+            currentResult = reverseBfsWithPredicates(graph, targets, pushedPredicates, node.depth);
+            currentResult = except(currentResult, targets);
+        }
+        else
+        {
+            currentResult = reverseBfs(graph, targets, node.depth);
+            currentResult = except(currentResult, targets);
+        }
+    }
+    
+    // Delegate remaining visitors to standard implementation
+    override void visit(AllPathsExpr node) @system
+    {
+        node.from.accept(this);
+        auto fromTargets = currentResult;
+        node.to.accept(this);
+        auto toTargets = currentResult;
+        
+        bool[BuildNode] allPathNodes;
+        foreach (from; fromTargets)
+        {
+            foreach (to; toTargets)
+            {
+                if (from is null || to is null || from is to) continue;
+                foreach (pathNode; allPaths(graph, from, to))
+                    allPathNodes[pathNode] = true;
+            }
+        }
+        currentResult = allPathNodes.keys;
+    }
+    
+    override void visit(SomePathExpr node) @system
+    {
+        node.from.accept(this);
+        auto fromTargets = currentResult;
+        node.to.accept(this);
+        auto toTargets = currentResult;
+        
+        foreach (from; fromTargets)
+        {
+            foreach (to; toTargets)
+            {
+                if (from is null || to is null || from is to) continue;
+                auto path = somePath(graph, from, to);
+                if (!path.empty) { currentResult = path; return; }
+            }
+        }
+        currentResult = [];
+    }
+    
+    override void visit(ShortestPathExpr node) @system
+    {
+        node.from.accept(this);
+        auto fromTargets = currentResult;
+        node.to.accept(this);
+        auto toTargets = currentResult;
+        
+        BuildNode[] shortestFound;
+        foreach (from; fromTargets)
+        {
+            foreach (to; toTargets)
+            {
+                if (from is null || to is null || from is to) continue;
+                auto path = shortestPath(graph, from, to);
+                if (!path.empty && (shortestFound.empty || path.length < shortestFound.length))
+                    shortestFound = path;
+            }
+        }
+        currentResult = shortestFound;
+    }
+    
+    // Filter expressions are already pushed, just evaluate inner
+    override void visit(KindExpr node) @system   { node.inner.accept(this); }
+    override void visit(AttrExpr node) @system   { node.inner.accept(this); }
+    override void visit(FilterExpr node) @system { node.inner.accept(this); }
+    
+    override void visit(SiblingsExpr node) @system
+    {
+        node.inner.accept(this);
+        currentResult = getSiblings(graph, currentResult);
+    }
+    
+    override void visit(BuildFilesExpr node) @system
+    {
+        BuildNode[] result;
+        string searchPath = node.pattern;
+        if (searchPath.startsWith("//")) searchPath = searchPath[2 .. $];
+        
+        foreach (graphNode; graph.nodes.values)
+        {
+            if (graphNode is null) continue;
+            string targetId = graphNode.idString;
+            if (targetId.startsWith("//"))
+            {
+                auto colonPos = targetId.indexOf(':');
+                if (colonPos != -1)
+                {
+                    string targetDir = targetId[2 .. colonPos];
+                    if (searchPath == "..." || targetDir.startsWith(searchPath))
+                        result ~= graphNode;
+                }
+            }
+        }
+        currentResult = result;
+    }
+    
+    override void visit(UnionExpr node) @system
+    {
+        node.left.accept(this);
+        auto leftResult = currentResult;
+        node.right.accept(this);
+        currentResult = union_(leftResult, currentResult);
+    }
+    
+    override void visit(IntersectExpr node) @system
+    {
+        node.left.accept(this);
+        auto leftResult = currentResult;
+        node.right.accept(this);
+        currentResult = intersect(leftResult, currentResult);
+    }
+    
+    override void visit(ExceptExpr node) @system
+    {
+        node.left.accept(this);
+        auto leftResult = currentResult;
+        node.right.accept(this);
+        currentResult = except(leftResult, currentResult);
+    }
+    
+    override void visit(LetExpr node) @system
+    {
+        node.value.accept(this);
+        variables[node.variable] = currentResult;
+        node.body.accept(this);
+        variables.remove(node.variable);
+    }
+    
+    /// Get direct dependencies with predicate filtering
+    private BuildNode[] getDirectDependenciesFiltered(BuildNode[] targets, Predicate[] predicates) @system
+    {
+        bool[BuildNode] result;
+        
+        foreach (target; targets)
+        {
+            if (target is null) continue;
+            
+            foreach (depId; target.dependencyIds)
+            {
+                auto depKey = depId.toString();
+                if (depKey !in graph.nodes) continue;
+                
+                auto dep = graph.nodes[depKey];
+                if (predicates.all!(p => p.matches(dep)))
+                    result[dep] = true;
+            }
+        }
+        
+        return result.keys;
+    }
+}
+
+// Import Predicate and planner functions at module scope
+import frontend.query.execution.planner : Predicate, QueryPlan,
+    bfsWithPredicates, reverseBfsWithPredicates, matchPatternWithPredicates;
+

@@ -38,6 +38,12 @@ module frontend.query;
 ///     writeln(formatter.formatResults(result.unwrap(), query));
 /// }
 /// ```
+/// 
+/// Optimized Execution (with predicate pushdown):
+/// ```d
+/// // Filters like kind/attr/filter are pushed down to traversal
+/// auto result = executeQueryOptimized("kind(library, deps(//...))", graph);
+/// ```
 
 // Export submodules
 public import frontend.query.parsing;
