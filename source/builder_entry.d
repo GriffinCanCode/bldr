@@ -86,6 +86,7 @@ int runBuilder(string[] args)
     
     auto helpInfo = getopt(
         args,
+        std.getopt.config.passThrough,  // Allow subcommand-specific flags
         "verbose|v", "Enable verbose output", &verbose,
         "graph|g", "Show dependency graph", &showGraph,
         "mode|m", "CLI mode: auto, interactive, plain, verbose, quiet", &mode,
@@ -230,6 +231,9 @@ int runBuilder(string[] args)
                 break;
             case "plugin":
                 PluginCommand.execute(args[1 .. $]);
+                break;
+            case "explore":
+                exploreCommand(args[2 .. $]);
                 break;
             case "help":
                 auto helpCommand = args.length > 2 ? args[2] : "";
@@ -660,5 +664,30 @@ void watchCommand(
     in bool remoteExecution = false) @system
 {
     WatchCommand.execute(target, clearScreen, showGraph, modeStr, verbose, debounceMs);
+}
+
+/// Explore command handler - interactive dependency graph TUI
+void exploreCommand(string[] args) @system
+{
+    string target;
+    bool criticalPath = false;
+    bool nonInteractive = false;
+    string cacheDir = ".builder-cache";
+    
+    // Parse args
+    foreach (arg; args)
+    {
+        if (arg == "--critical") criticalPath = true;
+        else if (arg == "--non-interactive") nonInteractive = true;
+        else if (arg.startsWith("--cache=")) cacheDir = arg[8 .. $];
+        else if (arg == "--help" || arg == "-h")
+        {
+            ExplorerCommand.showHelp();
+            return;
+        }
+        else if (!arg.startsWith("-")) target = arg;
+    }
+    
+    ExplorerCommand.execute(target, criticalPath, nonInteractive, cacheDir);
 }
 

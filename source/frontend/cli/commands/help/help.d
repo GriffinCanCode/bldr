@@ -6,6 +6,7 @@ import infrastructure.utils.logging.logger;
 import frontend.cli.control.terminal;
 import frontend.cli.display.format;
 import frontend.cli.commands.extensions.watch : WatchCommand;
+import frontend.cli.commands.extensions.explorer : ExplorerCommand;
 import languages.registry : LanguageCategory, getLanguageCategoryList;
 
 /// Help command - provides detailed documentation for bldr commands
@@ -70,6 +71,7 @@ struct HelpCommand
         printCommand("build", "[target]", "Build all targets or a specific target");
         printCommand("test", "[target]", "Run test targets with reporting");
         printCommand("watch", "[target]", "Watch for changes and rebuild automatically");
+        printCommand("explore", "[target]", "Interactive dependency graph TUI explorer");
         printCommand("resume", "", "Resume a failed build from checkpoint");
         printCommand("clean", "", "Remove build artifacts and cache");
         printCommand("graph", "[target]", "Visualize dependency graph");
@@ -123,6 +125,7 @@ struct HelpCommand
         printSectionHeader("EXAMPLES");
         printExample("bldr build", "Auto-detect and build all targets");
         printExample("bldr build --watch", "Watch mode - rebuild on file changes");
+        printExample("bldr explore", "Interactive dependency graph explorer");
         printExample("bldr init", "Create Builderfile from project structure");
         printExample("bldr build //path/to:target", "Build specific target");
         printExample("bldr graph", "Show complete dependency graph");
@@ -299,6 +302,9 @@ struct HelpCommand
                 break;
             case "watch":
                 WatchCommand.showHelp();
+                break;
+            case "explore":
+                ExplorerCommand.showHelp();
                 break;
             case "resume":
                 showResumeHelp();
