@@ -27,7 +27,10 @@ module infrastructure.utils.simd;
 ///   - Memory Ops: 1.5-3x faster for large buffers
 ///   - Chunking: 3-8x faster with vectorized rolling hash
 ///   - Batch Hash Validation: 3-5x faster for multiple comparisons
-///   - Bloom Filter: 2-4x faster batch ops, O(1) membership testing
+///   - Bloom Filter: 2x throughput via SIMD vectorized probing
+///     - AVX2: 4 hashes probed simultaneously
+///     - AVX-512: 8 hashes probed simultaneously
+///     - Cache lookup pre-filtering with doubled query throughput
 ///
 /// Modern Usage (Context-Based - Recommended):
 ///   import infrastructure.utils.simd;

@@ -3,6 +3,7 @@
  */
 
 #include "bloom.h"
+#include "bloom_simd.h"
 #include "cpu_detect.h"
 #include <string.h>
 #include <stdlib.h>
@@ -204,81 +205,24 @@ bool bloom_may_contain(const bloom_filter_t* filter, const uint8_t* data, size_t
     return bloom_may_contain_hashes(filter, h1, h2);
 }
 
-/* === Batch Operations (SIMD-accelerated) === */
+/* === Batch Operations (SIMD-accelerated via bloom_simd.c) === */
 
 void bloom_insert_batch(bloom_filter_t* filter, const uint64_t* hashes, size_t count) {
     if (!filter || !hashes) return;
     
-    /* Process individually for now - SIMD version would batch bit-setting */
-    for (size_t i = 0; i < count; i++) {
+    /* Insert individually - writes are harder to parallelize safely */
+    for (size_t i = 0; i < count; i++)
         bloom_insert_hash(filter, hashes[i]);
-    }
 }
 
 uint64_t bloom_may_contain_batch(const bloom_filter_t* filter, const uint64_t* hashes, size_t count) {
-    if (!filter || !hashes || count == 0) return 0;
-    if (count > 64) count = 64;
-    
-    uint64_t result = 0;
-    
-#if defined(__AVX2__)
-    simd_level_t level = cpu_get_simd_level();
-    if (level >= SIMD_LEVEL_AVX2 && count >= 4) {
-        /* Process 4 hashes at a time with AVX2 */
-        size_t i = 0;
-        for (; i + 4 <= count; i += 4) {
-            bool r0 = bloom_may_contain_hash(filter, hashes[i]);
-            bool r1 = bloom_may_contain_hash(filter, hashes[i+1]);
-            bool r2 = bloom_may_contain_hash(filter, hashes[i+2]);
-            bool r3 = bloom_may_contain_hash(filter, hashes[i+3]);
-            
-            if (r0) result |= (1ULL << i);
-            if (r1) result |= (1ULL << (i+1));
-            if (r2) result |= (1ULL << (i+2));
-            if (r3) result |= (1ULL << (i+3));
-        }
-        /* Handle remainder */
-        for (; i < count; i++) {
-            if (bloom_may_contain_hash(filter, hashes[i]))
-                result |= (1ULL << i);
-        }
-        return result;
-    }
-#endif
-    
-    /* Scalar fallback */
-    for (size_t i = 0; i < count; i++) {
-        if (bloom_may_contain_hash(filter, hashes[i]))
-            result |= (1ULL << i);
-    }
-    return result;
+    /* Dispatch to SIMD-optimized probing (bloom_simd.c) */
+    return bloom_probe_simd_batch(filter, hashes, count);
 }
 
 size_t bloom_count_matches(const bloom_filter_t* filter, const uint64_t* hashes, size_t count) {
-    if (!filter || !hashes) return 0;
-    
-    size_t matches = 0;
-    
-    /* Process in batches of 64 */
-    for (size_t i = 0; i < count; i += 64) {
-        size_t batch_size = count - i;
-        if (batch_size > 64) batch_size = 64;
-        
-        uint64_t mask = bloom_may_contain_batch(filter, hashes + i, batch_size);
-        
-        /* Population count using SIMD if available */
-#if defined(__AVX2__) || defined(__POPCNT__)
-        matches += __builtin_popcountll(mask);
-#else
-        /* Portable popcount */
-        while (mask) {
-            matches += mask & 1;
-            mask >>= 1;
-        }
-#endif
-    }
-    
-    return matches;
+    /* Dispatch to SIMD-optimized counting (bloom_simd.c) */
+    return bloom_count_matches_simd(filter, hashes, count);
 }
 
 /* === Statistics === */

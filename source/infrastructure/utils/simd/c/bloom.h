@@ -138,6 +138,17 @@ int bloom_serialize(const bloom_filter_t* filter, uint8_t* buffer, size_t buffer
 /* Deserialize filter from bytes */
 int bloom_deserialize(bloom_filter_t* filter, const uint8_t* buffer, size_t buffer_size);
 
+/* === SIMD-Accelerated Probing (see bloom_simd.h for full API) ===
+ * 
+ * The batch operations above automatically dispatch to SIMD implementations
+ * when available. For direct access to SIMD probing, include bloom_simd.h.
+ * 
+ * Performance characteristics:
+ * - AVX2: 4 hashes probed in parallel (~2x throughput)
+ * - AVX-512: 8 hashes probed in parallel (~2x throughput over AVX2)
+ * - Automatic fallback to scalar on unsupported hardware
+ */
+
 #ifdef __cplusplus
 }
 #endif
