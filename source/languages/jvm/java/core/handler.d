@@ -97,8 +97,8 @@ class JavaHandler : BaseLanguageHandler
     {
         LanguageBuildResult result;
         
-        // Use build tool if configured
-        if (javaConfig.buildTool != JavaBuildTool.Direct && javaConfig.buildTool != JavaBuildTool.None)
+        // Use build tool if explicitly configured (Maven or Gradle only)
+        if (javaConfig.buildTool == JavaBuildTool.Maven || javaConfig.buildTool == JavaBuildTool.Gradle)
         {
             return buildWithBuildTool(target, config, javaConfig);
         }
@@ -293,8 +293,9 @@ class JavaHandler : BaseLanguageHandler
             case JavaBuildTool.Direct:
             case JavaBuildTool.Ant:
             case JavaBuildTool.None:
-                // Fall back to direct compilation
-                return buildExecutable(target, config, javaConfig);
+                // Should not reach here - these are handled by buildExecutable directly
+                result.error = "Unexpected build tool mode: " ~ javaConfig.buildTool.to!string;
+                return result;
         }
         
         // Find output artifacts

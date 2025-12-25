@@ -32,8 +32,8 @@ echo -e "${CYAN}║              BUILDER EXAMPLES TEST SUITE                    
 echo -e "${CYAN}╚════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
-# Check if builder binary exists
-if [ ! -f "${PROJECT_ROOT}/bin/builder" ]; then
+# Check if bldr binary exists
+if [ ! -f "${PROJECT_ROOT}/bin/bldr" ]; then
     echo -e "${YELLOW}[WARNING]${NC} Builder binary not found. Building..."
     (cd "${PROJECT_ROOT}" && make) || {
         echo -e "${RED}[ERROR]${NC} Failed to build Builder"
@@ -41,7 +41,7 @@ if [ ! -f "${PROJECT_ROOT}/bin/builder" ]; then
     }
 fi
 
-BUILDER="${PROJECT_ROOT}/bin/builder"
+BUILDER="${PROJECT_ROOT}/bin/bldr"
 
 # Function to test an example
 test_example() {
