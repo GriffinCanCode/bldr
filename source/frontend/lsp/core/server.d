@@ -8,6 +8,8 @@ import std.algorithm;
 import std.array;
 import std.exception;
 import frontend.lsp.core.protocol;
+import frontend.lsp.core.transport;
+import frontend.lsp.core.dispatch;
 import frontend.lsp.workspace.workspace;
 import frontend.lsp.providers.completion;
 import frontend.lsp.providers.hover;
@@ -18,8 +20,8 @@ import frontend.lsp.providers.symbols;
 import frontend.lsp.providers.graph;
 import infrastructure.utils.logging.logger;
 
-/// LSP Server implementation
-/// Handles JSON-RPC 2.0 protocol over stdio
+/// LSP Server implementation with async message loop
+/// Handles JSON-RPC 2.0 protocol over stdio using async transport
 class LSPServer
 {
     private WorkspaceManager workspace;
@@ -30,212 +32,66 @@ class LSPServer
     private RenameProvider renameProvider;
     private SymbolsProvider symbolsProvider;
     private GraphProvider graphProvider;
-    private bool running;
     private string rootUri;
     
-    this()
+    // Async infrastructure
+    private AsyncTransport transport;
+    private MessageDispatcher dispatcher;
+    private AsyncMessageLoop messageLoop;
+    
+    @system this()
     {
         Logger.info("Builder LSP Server starting...");
+        transport = new AsyncTransport();
+        dispatcher = new MessageDispatcher();
+        messageLoop = new AsyncMessageLoop(transport, dispatcher);
+        registerHandlers();
     }
     
-    /// Start the LSP server (stdio transport)
-    void start()
+    /// Start the LSP server (async message loop)
+    @system void start()
     {
-        running = true;
-        
-        while (running)
-        {
-            try
-            {
-                auto message = readMessage();
-                if (message.length == 0)
-                    break;
-                
-                handleMessage(message);
-            }
-            catch (Exception e)
-            {
-                Logger.error("Error handling message: " ~ e.msg);
-                // Continue running even on error
-            }
-        }
-        
+        messageLoop.run();
         Logger.info("Builder LSP Server stopped");
     }
     
-    /// Read JSON-RPC message from stdin
-    private string readMessage()
+    /// Start server in background thread
+    @system void startAsync() { messageLoop.runAsync(); }
+    
+    /// Stop server
+    @system void stop() { messageLoop.stop(); }
+    
+    /// Send notification to client
+    @system void notify(string method, JSONValue params) { messageLoop.notify(method, params); }
+    
+    /// Register all request/notification handlers
+    private void registerHandlers() @system
     {
-        // Read headers
-        int contentLength = 0;
-        string line;
+        // Requests
+        dispatcher.onRequest("initialize", (p) => handleInitialize(p));
+        dispatcher.onRequest("shutdown", (_) => handleShutdown());
+        dispatcher.onRequest("textDocument/completion", (p) => handleCompletion(p));
+        dispatcher.onRequest("textDocument/hover", (p) => handleHover(p));
+        dispatcher.onRequest("textDocument/definition", (p) => handleDefinition(p));
+        dispatcher.onRequest("textDocument/references", (p) => handleReferences(p));
+        dispatcher.onRequest("textDocument/rename", (p) => handleRename(p));
+        dispatcher.onRequest("textDocument/documentSymbol", (p) => handleDocumentSymbol(p));
+        dispatcher.onRequest("workspace/executeCommand", (p) => handleExecuteCommand(p));
         
-        while ((line = readln()) !is null)
-        {
-            line = line.strip();
-            if (line.length == 0)
-                break; // End of headers
-            
-            if (line.startsWith("Content-Length: "))
-            {
-                contentLength = line["Content-Length: ".length .. $].strip().to!int;
-            }
-        }
-        
-        if (contentLength == 0)
-            return "";
-        
-        // Read content
-        char[] buffer = new char[contentLength];
-        stdin.rawRead(buffer);
-        
-        return cast(string)buffer;
+        // Notifications
+        dispatcher.onNotification("initialized", (_) { Logger.info("Client initialized"); });
+        dispatcher.onNotification("exit", (_) { stop(); });
+        dispatcher.onNotification("textDocument/didOpen", (p) => handleDidOpen(p));
+        dispatcher.onNotification("textDocument/didChange", (p) => handleDidChange(p));
+        dispatcher.onNotification("textDocument/didClose", (p) => handleDidClose(p));
+        dispatcher.onNotification("textDocument/didSave", (p) => handleDidSave(p));
     }
     
-    /// Write JSON-RPC message to stdout
-    private void writeMessage(string content)
+    /// Handle didSave notification
+    private void handleDidSave(JSONValue params) @system
     {
-        auto output_ = stdout.lockingTextWriter();
-        output_.put("Content-Length: ");
-        output_.put(content.length.to!string);
-        output_.put("\r\n\r\n");
-        output_.put(content);
-        stdout.flush();
-    }
-    
-    /// Handle incoming JSON-RPC message
-    private void handleMessage(string content)
-    {
-        auto json = parseJSON(content);
-        
-        // Check if it's a request or notification
-        if ("id" in json)
-        {
-            // Request - needs response
-            handleRequest(json);
-        }
-        else
-        {
-            // Notification - no response
-            handleNotification(json);
-        }
-    }
-    
-    /// Handle JSON-RPC request
-    private void handleRequest(JSONValue json)
-    {
-        auto method = json["method"].str;
-        auto id = json["id"];
-        
-        Logger.debugLog("Request: " ~ method);
-        
-        try
-        {
-            JSONValue result;
-            
-            switch (method)
-            {
-                case "initialize":
-                    result = handleInitialize(json["params"]);
-                    break;
-                
-                case "shutdown":
-                    result = handleShutdown();
-                    break;
-                
-                case "textDocument/completion":
-                    result = handleCompletion(json["params"]);
-                    break;
-                
-                case "textDocument/hover":
-                    result = handleHover(json["params"]);
-                    break;
-                
-                case "textDocument/definition":
-                    result = handleDefinition(json["params"]);
-                    break;
-                
-                case "textDocument/references":
-                    result = handleReferences(json["params"]);
-                    break;
-                
-                case "textDocument/rename":
-                    result = handleRename(json["params"]);
-                    break;
-                
-                case "textDocument/documentSymbol":
-                    result = handleDocumentSymbol(json["params"]);
-                    break;
-                
-                case "workspace/executeCommand":
-                    result = handleExecuteCommand(json["params"]);
-                    break;
-                
-                default:
-                    Logger.warning("Unhandled request: " ~ method);
-                    sendError(id, -32601, "Method not found: " ~ method);
-                    return;
-            }
-            
-            sendResponse(id, result);
-        }
-        catch (Exception e)
-        {
-            Logger.error("Error handling request: " ~ e.msg);
-            sendError(id, -32603, "Internal error: " ~ e.msg);
-        }
-    }
-    
-    /// Handle JSON-RPC notification
-    private void handleNotification(JSONValue json)
-    {
-        auto method = json["method"].str;
-        
-        Logger.debugLog("Notification: " ~ method);
-        
-        try
-        {
-            switch (method)
-            {
-                case "initialized":
-                    // Client initialized
-                    Logger.info("Client initialized");
-                    break;
-                
-                case "exit":
-                    running = false;
-                    break;
-                
-                case "textDocument/didOpen":
-                    handleDidOpen(json["params"]);
-                    break;
-                
-                case "textDocument/didChange":
-                    handleDidChange(json["params"]);
-                    break;
-                
-                case "textDocument/didClose":
-                    handleDidClose(json["params"]);
-                    break;
-                
-                case "textDocument/didSave":
-                    // Refresh diagnostics on save
-                    if ("params" in json && "textDocument" in json["params"])
-                    {
-                        auto uri = json["params"]["textDocument"]["uri"].str;
-                        publishDiagnostics(uri);
-                    }
-                    break;
-                
-                default:
-                    Logger.debugLog("Unhandled notification: " ~ method);
-                    break;
-            }
-        }
-        catch (Exception e)
-        {
-            Logger.error("Error handling notification: " ~ e.msg);
-        }
+        if ("textDocument" in params)
+            publishDiagnostics(params["textDocument"]["uri"].str);
     }
     
     /// Initialize LSP server
@@ -451,53 +307,21 @@ class LSPServer
     }
     
     /// Publish diagnostics for a document
-    private void publishDiagnostics(string uri)
+    private void publishDiagnostics(string uri) @system
     {
+        if (workspace is null) return;
+        
         auto diagnostics = workspace.getDiagnostics(uri);
         
-        JSONValue notification;
-        notification["jsonrpc"] = "2.0";
-        notification["method"] = "textDocument/publishDiagnostics";
-        
-        JSONValue paramsJson;
-        paramsJson["uri"] = uri;
+        JSONValue params;
+        params["uri"] = uri;
         
         JSONValue[] diagsJson;
         foreach (diag; diagnostics)
-        {
             diagsJson ~= diag.toJSON();
-        }
-        paramsJson["diagnostics"] = JSONValue(diagsJson);
+        params["diagnostics"] = JSONValue(diagsJson);
         
-        notification["params"] = paramsJson;
-        
-        writeMessage(notification.toString());
-    }
-    
-    /// Send JSON-RPC response
-    private void sendResponse(JSONValue id, JSONValue result)
-    {
-        JSONValue response;
-        response["jsonrpc"] = "2.0";
-        response["id"] = id;
-        response["result"] = result;
-        
-        writeMessage(response.toString());
-    }
-    
-    /// Send JSON-RPC error
-    private void sendError(JSONValue id, int code, string message)
-    {
-        JSONValue response;
-        response["jsonrpc"] = "2.0";
-        response["id"] = id;
-        
-        JSONValue error;
-        error["code"] = code;
-        error["message"] = message;
-        response["error"] = error;
-        
-        writeMessage(response.toString());
+        notify("textDocument/publishDiagnostics", params);
     }
     
     /// Convert file:// URI to filesystem path

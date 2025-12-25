@@ -4,13 +4,20 @@ summary: "Language Server Protocol - IDE integration for Builder files"
 definition: |
   Builder includes a built-in Language Server Protocol (LSP) implementation to provide
   IDE features like autocompletion, diagnostics, and go-to-definition for Builder files
-  (.builder, .bldr).
+  (.builder, .bldr). Uses async message loop for non-blocking IO.
 
 key_points:
   - "Standard LSP: Works with VSCode, Neovim, Emacs, etc."
   - "Autocompletion: Suggests targets, dependencies, and config options"
   - "Diagnostics: Real-time error checking and linting"
   - "Go-to-definition: Jump to target definitions"
+  - "Async Transport: Non-blocking message queue with dedicated IO threads"
+
+architecture:
+  - "transport.d: Async message queue, StdioReader/Writer threads"
+  - "dispatch.d: Message routing and handler registration"
+  - "server.d: LSP orchestration and feature handlers"
+  - "protocol.d: LSP types (Position, Range, Diagnostic, etc.)"
 
 usage_examples:
   - description: "VSCode Configuration"

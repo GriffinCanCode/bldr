@@ -7,7 +7,9 @@ This directory contains the complete Language Server Protocol implementation for
 ```
 lsp/
 ├── core/              # Core LSP server and protocol
-│   ├── server.d       # LSP server implementation (JSON-RPC 2.0)
+│   ├── server.d       # LSP server with async message loop
+│   ├── transport.d    # Async message queue and stdio threads
+│   ├── dispatch.d     # Message routing and handler registration
 │   ├── protocol.d     # LSP protocol types and structures
 │   ├── main.d         # Entry point for standalone server
 │   └── package.d      # Module barrel export
@@ -35,13 +37,36 @@ lsp/
 
 ### Core Module (`frontend.lsp.core`)
 
-The core module handles the fundamental LSP server infrastructure:
+The core module handles the fundamental LSP server infrastructure using an async message loop:
 
-- **server.d**: Implements the LSP server using JSON-RPC 2.0 protocol over stdin/stdout
-  - Message parsing and routing
-  - Request/response handling
-  - Notification processing
-  - Lifecycle management (initialize, shutdown, exit)
+```
+┌─────────────┐    ┌──────────────┐    ┌───────────────┐    ┌────────────────┐
+│ StdioReader │───>│ MessageQueue │───>│ AsyncMsgLoop  │───>│ MessageDispatch│
+│   (thread)  │    │  (bounded)   │    │  (consumer)   │    │   (routing)    │
+└─────────────┘    └──────────────┘    └───────────────┘    └────────────────┘
+                                               │
+                                               v
+                                       ┌─────────────┐
+                                       │ StdioWriter │
+                                       │ (responses) │
+                                       └─────────────┘
+```
+
+- **transport.d**: Async message queue and stdio threading
+  - `MessageQueue`: Bounded, thread-safe queue with condition variables
+  - `StdioReader`: Background thread reading JSON-RPC from stdin
+  - `StdioWriter`: Thread-safe mutex-protected stdout writes
+  - `AsyncTransport`: Combines reader, writer, and queue
+
+- **dispatch.d**: Message routing and handler registration
+  - `MessageDispatcher`: Routes messages to registered handlers
+  - `AsyncMessageLoop`: Consumer loop processing queued messages
+  - Separates routing from business logic for testability
+
+- **server.d**: LSP server orchestration
+  - Handler registration for requests and notifications
+  - Provider coordination and lifecycle management
+  - Uses async infrastructure for non-blocking operation
 
 - **protocol.d**: Defines all LSP protocol types
   - Position, Range, Location
@@ -114,7 +139,12 @@ import frontend.lsp;
 void main()
 {
     auto server = new LSPServer();
-    server.start();  // Runs until shutdown
+    server.start();  // Async message loop runs until shutdown
+    
+    // Or start in background for embedding
+    // server.startAsync();
+    // ... do other work ...
+    // server.stop();
 }
 ```
 

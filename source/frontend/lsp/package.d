@@ -7,10 +7,19 @@
  * 
  * ## Architecture
  * 
- * The LSP implementation is organized into three main modules:
+ * The LSP implementation uses an async message loop for non-blocking IO:
+ * 
+ * ```
+ * StdioReader -> MessageQueue -> AsyncMessageLoop -> MessageDispatcher -> Handlers
+ *                                       |
+ *                                       v
+ *                                  StdioWriter
+ * ```
  * 
  * ### Core (`frontend.lsp.core`)
- * - **server**: LSP server implementation (JSON-RPC 2.0 protocol)
+ * - **transport**: Async message queue, StdioReader/Writer threads
+ * - **dispatch**: Message routing and handler registration
+ * - **server**: LSP server orchestration (JSON-RPC 2.0 protocol)
  * - **protocol**: LSP protocol types and structures
  * - **main**: Entry point for the standalone LSP server binary
  * 
@@ -39,7 +48,7 @@
  * void main()
  * {
  *     auto server = new LSPServer();
- *     server.start();
+ *     server.start();  // Async message loop
  * }
  * ```
  */
