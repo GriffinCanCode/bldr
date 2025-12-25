@@ -61,7 +61,7 @@ enum SandboxErrorKind
 }
 
 /// Create sandbox error with kind classification
-BuildError sandboxError(SandboxErrorKind kind, string msg) @safe
+BuildError sandboxError(SandboxErrorKind kind, string msg) @trusted
 {
     import std.conv : to;
     return Errors.system(msg, ErrorCode.SandboxError)

@@ -23,7 +23,7 @@ struct SBPLGenerator
     private string[] rules;
     
     /// Generate complete SBPL profile from spec
-    static string generate(const ref SandboxSpec spec) @safe
+    static string generate(const ref SandboxSpec spec) @trusted
     {
         SBPLGenerator gen;
         gen.spec = cast(SandboxSpec) spec;

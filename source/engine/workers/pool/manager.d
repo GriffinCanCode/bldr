@@ -47,7 +47,7 @@ struct WorkerPoolStats
     size_t totalFailures;
     
     /// Calculate speedup from warm workers vs cold starts
-    float estimatedSpeedup(string workerType, long coldStartMs) const pure nothrow @safe
+    float estimatedSpeedup(string workerType, long coldStartMs) const pure @safe
     {
         auto avgMs = avgExecutionTimeMs.get(workerType, 0);
         return avgMs > 0 && coldStartMs > 0 ? cast(float)coldStartMs / avgMs : 1.0f;

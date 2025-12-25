@@ -29,13 +29,13 @@ interface IWorkerTransport
 }
 
 /// Worker-specific error type
-class WorkerError : BuildError
+class WorkerError : BaseBuildError
 {
     WorkerErrorCode workerCode;
     
-    this(string msg, WorkerErrorCode code = WorkerErrorCode.Unknown) @safe
+    this(string msg, WorkerErrorCode code = WorkerErrorCode.Unknown) @trusted
     {
-        super(msg, ErrorCode.BuildFailed);
+        super(ErrorCode.BuildFailed, msg);
         this.workerCode = code;
     }
 }
@@ -71,7 +71,7 @@ final class StdioWorkerTransport : IWorkerTransport
         synchronized (mutex)
         {
             if (!connected)
-                return Err!WorkerError(new WorkerError("Transport not connected", WorkerErrorCode.IOError));
+                return Result!WorkerError.err(new WorkerError("Transport not connected", WorkerErrorCode.IOError));
             
             try
             {
@@ -79,12 +79,12 @@ final class StdioWorkerTransport : IWorkerTransport
                 pipes.stdin.writeln(json);
                 pipes.stdin.flush();
                 Logger.debugLog("Sent request " ~ request.requestId.to!string ~ " to worker");
-                return Ok!WorkerError();
+                return Result!WorkerError.ok();
             }
             catch (Exception e)
             {
                 connected = false;
-                return Err!WorkerError(new WorkerError("Send failed: " ~ e.msg, WorkerErrorCode.IOError));
+                return Result!WorkerError.err(new WorkerError("Send failed: " ~ e.msg, WorkerErrorCode.IOError));
             }
         }
     }

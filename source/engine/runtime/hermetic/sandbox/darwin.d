@@ -10,6 +10,8 @@ import std.conv : to;
 import std.uuid : randomUUID;
 import std.datetime : Duration, msecs;
 import core.time : MonoTime;
+import core.stdc.config : c_long;
+import core.sys.posix.sys.time : timeval;
 
 import engine.runtime.hermetic.core.spec;
 import engine.runtime.hermetic.core.executor : Output;
@@ -157,7 +159,7 @@ final class DarwinSandbox : ISandbox
     }
     
     const(SandboxSpec) spec() @safe const pure nothrow => _spec;
-    IsolationLevel isolation() @safe const pure nothrow => IsolationLevel.Filesystem;
+    IsolationLevel isolation() @safe const pure nothrow => IsolationLevel.Partial;
     SandboxMetrics metrics() @safe const => _metrics;
     
     void cleanup() @system nothrow
@@ -196,13 +198,35 @@ private bool waitWithTimeout(Pid pid, Duration timeout) @system
     return true; // Timed out
 }
 
+/// Extended rusage struct with all fields (D runtime only exposes timeval fields)
+private extern(C) struct rusage_ext {
+    timeval ru_utime;
+    timeval ru_stime;
+    c_long ru_maxrss;
+    c_long ru_ixrss;
+    c_long ru_idrss;
+    c_long ru_isrss;
+    c_long ru_minflt;
+    c_long ru_majflt;
+    c_long ru_nswap;
+    c_long ru_inblock;
+    c_long ru_oublock;
+    c_long ru_msgsnd;
+    c_long ru_msgrcv;
+    c_long ru_nsignals;
+    c_long ru_nvcsw;
+    c_long ru_nivcsw;
+}
+
+pragma(mangle, "getrusage") private extern(C) int getrusage_c(int, void*) nothrow @nogc;
+
 /// Collect resource usage metrics via getrusage
 private void collectRusageMetrics(ref SandboxMetrics metrics) @system nothrow
 {
-    import core.sys.posix.sys.resource : getrusage, rusage, RUSAGE_CHILDREN;
+    import core.sys.posix.sys.resource : RUSAGE_CHILDREN;
     
-    rusage usage;
-    if (getrusage(RUSAGE_CHILDREN, &usage) == 0)
+    rusage_ext usage;
+    if (getrusage_c(RUSAGE_CHILDREN, &usage) == 0)
     {
         metrics.userTime = msecs(usage.ru_utime.tv_sec * 1000 + usage.ru_utime.tv_usec / 1000);
         metrics.systemTime = msecs(usage.ru_stime.tv_sec * 1000 + usage.ru_stime.tv_usec / 1000);

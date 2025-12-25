@@ -385,7 +385,7 @@ final class PersistentWorkerService
             if (stats.totalFailures > stats.totalStartups / 4)
             {
                 status = WorkerServiceStatus.Degraded;
-                Logger.warn("Worker service degraded: high failure rate");
+                Logger.warning("Worker service degraded: high failure rate");
             }
             else if (status == WorkerServiceStatus.Degraded)
             {

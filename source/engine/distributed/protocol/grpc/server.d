@@ -159,12 +159,7 @@ final class GrpcServer {
     }
     
     private void handleConnection(Socket client) @trusted {
-        scope(exit) {
-            try {
-                client.shutdown(SocketShutdown.BOTH);
-                client.close();
-            } catch (Exception) {}
-        }
+        scope(exit) safeCloseClient(client);
         
         // Set timeouts
         client.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, 30.seconds);
@@ -481,6 +476,14 @@ struct GrpcServerBuilder {
             server.registerService(h);
         return server;
     }
+}
+
+/// Helper to safely close client socket (avoids catch inside scope)
+private void safeCloseClient(Socket client) nothrow @trusted {
+    try {
+        client.shutdown(SocketShutdown.BOTH);
+        client.close();
+    } catch (Exception) {}
 }
 
 /**

@@ -172,7 +172,7 @@ struct H2Settings {
  */
 struct HpackEncoder {
     /// Static table entries (RFC 7541 Appendix A)
-    private static immutable string[][2] staticTable = [
+    private static immutable string[2][] staticTable = [
         [":authority", ""],
         [":method", "GET"],
         [":method", "POST"],
@@ -458,7 +458,7 @@ final class H2Connection {
     }
     
     /// Connect to server
-    Result!(void, string) connect(string host, ushort port, Duration timeout = 30.seconds) @trusted {
+    Result!string connect(string host, ushort port, Duration timeout = 30.seconds) @trusted {
         try {
             socket = new TcpSocket();
             socket.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, timeout);
@@ -474,15 +474,15 @@ final class H2Connection {
             // Receive peer SETTINGS
             auto settingsResult = receiveFrame();
             if (settingsResult.isErr)
-                return Err!(void, string)(settingsResult.unwrapErr());
+                return Result!string.err(settingsResult.unwrapErr());
             
             // Send SETTINGS ACK
             sendSettingsAck();
             
             connected = true;
-            return Ok!(void, string)();
+            return Result!string.ok();
         } catch (Exception e) {
-            return Err!(void, string)("Connection failed: " ~ e.msg);
+            return Result!string.err("Connection failed: " ~ e.msg);
         }
     }
     
@@ -526,14 +526,14 @@ final class H2Connection {
     }
     
     /// Send HEADERS frame
-    Result!(void, string) sendHeaders(
+    Result!string sendHeaders(
         uint streamId, 
         const ubyte[] headerBlock, 
         bool endStream = false
     ) @trusted {
         synchronized (mutex) {
             if (streamId !in streams)
-                return Err!(void, string)("Stream not found");
+                return Result!string.err("Stream not found");
             
             auto flags = FrameFlags.EndHeaders;
             if (endStream)
@@ -554,26 +554,26 @@ final class H2Connection {
                     ? StreamState.HalfClosedLocal 
                     : StreamState.Open;
                 
-                return Ok!(void, string)();
+                return Result!string.ok();
             } catch (Exception e) {
-                return Err!(void, string)("Failed to send headers: " ~ e.msg);
+                return Result!string.err("Failed to send headers: " ~ e.msg);
             }
         }
     }
     
     /// Send DATA frame
-    Result!(void, string) sendData(
+    Result!string sendData(
         uint streamId, 
         const ubyte[] data, 
         bool endStream = false
     ) @trusted {
         synchronized (mutex) {
             if (streamId !in streams)
-                return Err!(void, string)("Stream not found");
+                return Result!string.err("Stream not found");
             
             auto stream = &streams[streamId];
             if (!stream.canSend)
-                return Err!(void, string)("Stream not in sendable state");
+                return Result!string.err("Stream not in sendable state");
             
             // Respect flow control
             auto toSend = min(data.length, stream.sendWindow, connectionWindow);
@@ -602,9 +602,9 @@ final class H2Connection {
                         ? StreamState.Closed 
                         : StreamState.HalfClosedLocal;
                 
-                return Ok!(void, string)();
+                return Result!string.ok();
             } catch (Exception e) {
-                return Err!(void, string)("Failed to send data: " ~ e.msg);
+                return Result!string.err("Failed to send data: " ~ e.msg);
             }
         }
     }

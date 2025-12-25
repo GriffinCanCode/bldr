@@ -415,13 +415,13 @@ console.error('TypeScript persistent worker ready');
         
         auto sendResult = transport.sendRequest(pingRequest);
         if (sendResult.isErr)
-            return Err!WorkerError(sendResult.unwrapErr());
+            return Result!WorkerError.err(sendResult.unwrapErr());
         
         auto recvResult = transport.receiveResponse(timeout);
         if (recvResult.isErr)
-            return Err!WorkerError(recvResult.unwrapErr());
+            return Result!WorkerError.err(recvResult.unwrapErr());
         
-        return Ok!WorkerError();
+        return Result!WorkerError.ok();
     }
 }
 
