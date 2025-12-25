@@ -12,6 +12,7 @@ import engine.graph : BuildGraph, BuildNode, BuildStatus;
 import infrastructure.config.schema.schema : TargetId;
 import engine.runtime.services.speculation.service;
 import engine.runtime.services.speculation.engine : SpeculativeEngine, EngineConfig, EngineStats, SpeculativeResult;
+import engine.runtime.services.speculation.speculator : CacheHitSpeculator = SpeculativeExecutor, SpeculatorStats, createSpeculator;
 import engine.runtime.services.scheduling : ISchedulingService, NodeBuildResult;
 import infrastructure.utils.logging.logger;
 
@@ -28,6 +29,9 @@ final class SpeculationExecutor
     // Speculative engine for background execution
     private SpeculativeEngine _engine;
     private bool _engineStarted;
+    
+    // Cache-hit-based speculator (economics integration)
+    private CacheHitSpeculator _cacheHitSpeculator;
     
     // Statistics
     private shared size_t _speculativeHits;     // Speculation validated and used
@@ -97,6 +101,31 @@ final class SpeculationExecutor
         }
     }
     
+    /// Initialize cache-hit-based speculator (uses economics module)
+    /// threshold: minimum cache hit probability to speculate (default 85%)
+    void initializeCacheHitSpeculator(float threshold = 0.85f) @trusted
+    {
+        if (_cacheHitSpeculator !is null) return;
+        
+        import engine.economics.estimator : ExecutionHistory, CostEstimator;
+        auto history = new ExecutionHistory();
+        auto estimator = new CostEstimator(history);
+        _cacheHitSpeculator = new CacheHitSpeculator(estimator, threshold);
+        
+        Logger.debugLog("Speculation: initialized cache-hit speculator (threshold=" ~ 
+                       (cast(int)(threshold * 100)).to!string ~ "%)");
+    }
+    
+    /// Get cache-hit speculator for external decision queries
+    @property CacheHitSpeculator cacheHitSpeculator() @safe nothrow => _cacheHitSpeculator;
+    
+    /// Check if a node should be speculatively executed based on cache hit probability
+    bool shouldSpeculateCacheHit(BuildNode node) @system
+    {
+        if (_cacheHitSpeculator is null) return false;
+        return _cacheHitSpeculator.shouldSpeculate(node);
+    }
+    
     /// Start speculative execution for critical path targets
     /// Call once after analyzing the graph
     void beginSpeculation() @trusted
@@ -133,6 +162,33 @@ final class SpeculationExecutor
             // Start engine-based prediction speculation
             if (_engine !is null)
                 _engine.beginSpeculation();
+        }
+        
+        // Also consider cache-hit-based speculation (complementary strategy)
+        // Targets with high cache hit probability can start before deps complete
+        if (_cacheHitSpeculator !is null)
+        {
+            auto nodes = _graph.nodes.values.filter!(n => n.status == BuildStatus.Pending).array;
+            auto cacheHitCandidates = _cacheHitSpeculator.getCandidates(nodes, 4);
+            
+            if (cacheHitCandidates.length > 0)
+            {
+                Logger.debugLog("Speculation: " ~ cacheHitCandidates.length.to!string ~ 
+                               " cache-hit candidates");
+                
+                foreach (candidateId; cacheHitCandidates)
+                {
+                    auto nodePtr = candidateId.toString() in _graph.nodes;
+                    if (nodePtr is null) continue;
+                    
+                    // Register with confirm/abort callbacks
+                    _cacheHitSpeculator.executeSpeculatively(
+                        *nodePtr,
+                        () @system { atomicOp!"+="(_speculativeHits, 1); },
+                        () @system { atomicOp!"+="(_speculativeMisses, 1); }
+                    );
+                }
+            }
         }
     }
     
@@ -254,6 +310,9 @@ final class SpeculationExecutor
         
         if (_engine !is null)
             _engine.clearResults();
+        
+        if (_cacheHitSpeculator !is null)
+            _cacheHitSpeculator.abortAll("build_failure");
     }
     
     /// Get speculation statistics
@@ -283,6 +342,16 @@ final class SpeculationExecutor
             stats.engineActiveWorkers = engineStats.activeWorkers;
         }
         
+        // Merge cache-hit speculator stats
+        if (_cacheHitSpeculator !is null)
+        {
+            auto cacheStats = _cacheHitSpeculator.getStats();
+            stats.cacheHitSpeculations = cacheStats.started;
+            stats.cacheHitConfirmed = cacheStats.confirmed;
+            stats.cacheHitAborted = cacheStats.aborted;
+            stats.cacheHitThreshold = cacheStats.threshold;
+        }
+        
         return stats;
     }
     
@@ -292,12 +361,16 @@ final class SpeculationExecutor
         // Stop engine first
         stopEngine();
         
+        // Abort any active cache-hit speculations
+        if (_cacheHitSpeculator !is null)
+            _cacheHitSpeculator.abortAll("shutdown");
+        
         if (_speculation !is null)
         {
             _speculation.shutdown();
             
             auto stats = getStats();
-            if (stats.totalSpeculated > 0)
+            if (stats.totalSpeculated > 0 || stats.cacheHitSpeculations > 0)
             {
                 Logger.info("Speculation Summary:");
                 Logger.info("  Speculated: " ~ stats.totalSpeculated.to!string);
@@ -306,8 +379,13 @@ final class SpeculationExecutor
                 Logger.info("  Time saved: " ~ stats.timeSaved.total!"msecs".to!string ~ "ms");
                 
                 if (stats.enginePendingTasks > 0 || stats.engineActiveWorkers > 0)
-                {
                     Logger.info("  Engine pending: " ~ stats.enginePendingTasks.to!string);
+                
+                // Log cache-hit speculator stats
+                if (stats.cacheHitSpeculations > 0)
+                {
+                    Logger.info("  Cache-hit speculations: " ~ stats.cacheHitSpeculations.to!string ~ 
+                               " (" ~ (cast(int)(stats.cacheHitConfirmRate * 100)).to!string ~ "% confirmed)");
                 }
             }
         }
@@ -338,6 +416,12 @@ struct SpeculationExecutorStats
     size_t enginePendingTasks;
     size_t engineActiveWorkers;
     
+    // Cache-hit speculator stats
+    size_t cacheHitSpeculations;
+    size_t cacheHitConfirmed;
+    size_t cacheHitAborted;
+    float cacheHitThreshold;
+    
     @property float hitRate() const pure nothrow @nogc @safe
     {
         auto total = hits + misses;
@@ -350,13 +434,19 @@ struct SpeculationExecutorStats
         return total == 0 ? 0.0f : cast(float)(hits) / cast(float)total;
     }
     
+    @property float cacheHitConfirmRate() const pure nothrow @nogc @safe
+    {
+        auto total = cacheHitConfirmed + cacheHitAborted;
+        return total == 0 ? 0.0f : cast(float)cacheHitConfirmed / cast(float)total;
+    }
+    
     string format() const @safe
     {
         import std.format : format;
         return format(
-            "Speculation: %d total, %d hits (%.1f%%), %d aborted, saved %dms",
+            "Speculation: %d total, %d hits (%.1f%%), %d aborted, saved %dms; CacheHit: %d (%.1f%% confirmed)",
             totalSpeculated, hits, hitRate * 100, aborted, 
-            timeSaved.total!"msecs"
+            timeSaved.total!"msecs", cacheHitSpeculations, cacheHitConfirmRate * 100
         );
     }
 }

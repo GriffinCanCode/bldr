@@ -174,3 +174,12 @@ public import engine.runtime.services.speculation.engine :
     EngineConfig,
     EngineStats,
     createSpeculativeEngine;
+
+// Cache-hit-based speculator (economics integration)
+public import engine.runtime.services.speculation.speculator :
+    SpeculativeExecutor,
+    SpeculatorStats,
+    SpeculationDecision,
+    ConfirmCallback,
+    AbortCallback,
+    createSpeculator;
