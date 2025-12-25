@@ -1,105 +1,102 @@
-# Speculative Execution for Critical Path Optimization
+# Speculative Execution for Large Monorepo Optimization
 
-This module implements speculative execution to accelerate builds by pre-executing targets on the critical path before their dependencies complete.
+This module implements **probability-based speculative execution** - a differentiating feature for large monorepos that predicts and pre-builds targets likely to be needed based on historical change patterns.
 
-## Overview
+## Why Speculative Execution?
 
-Traditional build systems wait for all dependencies to complete before starting a target. This module breaks that constraint by:
+Traditional build systems wait for explicit dependencies to complete before starting work. In large monorepos with thousands of targets, this creates bottlenecks on the critical path.
 
-1. **Identifying the critical path** - The longest weighted path through the build graph
-2. **Speculatively starting targets** - Begin execution before all inputs are ready
-3. **Tracking input hashes** - Detect if inputs change during speculation
-4. **Aborting invalid work** - Cancel speculation if inputs change
+Speculative execution breaks this constraint by:
+1. **Predicting** which targets are likely to need rebuilding
+2. **Pre-building** those targets on background workers
+3. **Validating** results before use (abort if inputs changed)
+4. **Learning** from past builds to improve predictions
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│               SpeculationService                         │
-│                                                          │
-│  ┌──────────────────┐    ┌───────────────────────┐      │
-│  │ ProfileGuided    │    │ SpeculativeTask      │      │
-│  │ Scheduler        │───▶│ - inputHashes        │      │
-│  │ - criticalPath   │    │ - status (atomic)    │      │
-│  │ - economics      │    │ - resultHash         │      │
-│  └──────────────────┘    └───────────────────────┘      │
-│           │                        │                    │
-│           ▼                        ▼                    │
-│  ┌──────────────────┐    ┌───────────────────────┐      │
-│  │ SpeculationPolicy│    │ InputValidator       │      │
-│  │ - maxConcurrent  │    │ - hashTracking       │      │
-│  │ - minCostMs      │    │ - abortOnChange      │      │
-│  │ - confidence     │    └───────────────────────┘      │
-│  └──────────────────┘                                   │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         SpeculationExecutor                              │
+│                                                                          │
+│  ┌────────────────────┐    ┌────────────────────┐    ┌───────────────┐ │
+│  │ SpeculationService │───▶│ SpeculativeEngine  │───▶│  Background   │ │
+│  │   - Policy         │    │   - Task Queue     │    │   Workers     │ │
+│  │   - Candidates     │    │   - Results Cache  │    │   (N threads) │ │
+│  │   - Abort logic    │    │   - Input Tracking │    └───────────────┘ │
+│  └─────────┬──────────┘    └─────────┬──────────┘                      │
+│            │                         │                                  │
+│  ┌─────────▼──────────┐    ┌─────────▼──────────┐                      │
+│  │  ChangePredictor   │    │   HistoryTracker   │                      │
+│  │  ┌───────────────┐ │    │  ┌───────────────┐ │                      │
+│  │  │Bayesian Model │ │    │  │ Persistence   │ │                      │
+│  │  │ - Prior       │ │    │  │ - JSON store  │ │                      │
+│  │  │ - Likelihood  │ │    │  │ - Sessions    │ │                      │
+│  │  │ - Posterior   │ │    │  │ - Accuracy    │ │                      │
+│  │  └───────────────┘ │    │  └───────────────┘ │                      │
+│  │  ┌───────────────┐ │    │  ┌───────────────┐ │                      │
+│  │  │Co-change      │ │    │  │ Correlations  │ │                      │
+│  │  │ Matrix        │ │◀───│──│ Analysis      │ │                      │
+│  │  └───────────────┘ │    │  └───────────────┘ │                      │
+│  │  ┌───────────────┐ │    │                    │                      │
+│  │  │Time Patterns  │ │    │                    │                      │
+│  │  │ (24h buckets) │ │    │                    │                      │
+│  │  └───────────────┘ │    │                    │                      │
+│  └────────────────────┘    └────────────────────┘                      │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Key Components
+## Components
 
-### SpeculationPolicy
+### ChangePredictor (`predictor.d`)
 
-Controls when and how aggressively to speculate:
+Bayesian model that predicts probability of targets needing rebuild.
 
-```d
-// Conservative: minimal risk
-auto policy = SpeculationPolicy.conservative();
-// maxConcurrent = 2, minCostMs = 2000, confidence = 0.9
+**Signals used:**
+- **Historical frequency**: How often has this target needed rebuilding?
+- **Recency decay**: Recent changes are more predictive (exponential decay)
+- **Co-change correlation**: If file A changes, file B often needs rebuild
+- **Time patterns**: Adapt to developer schedules (24-hour buckets)
 
-// Balanced: moderate speculation
-auto policy = SpeculationPolicy.balanced();
-// maxConcurrent = 4, minCostMs = 500, confidence = 0.7
-
-// Aggressive: maximize speculation
-auto policy = SpeculationPolicy.aggressive();
-// maxConcurrent = 8, minCostMs = 200, confidence = 0.5
+**Bayesian update formula:**
+```
+P(rebuild|signal) ∝ P(signal|rebuild) × P(rebuild)
 ```
 
-### SpeculativeTask
+### HistoryTracker (`history.d`)
 
-Tracks a single speculative execution:
+Persists learned patterns between build sessions.
 
-- **inputHashes**: Hash of all inputs at speculation start
-- **status**: Atomic status (Pending → Running → Completed/Aborted)
-- **confidence**: Probability estimate that speculation will be valid
-- **resultHash**: Hash of output if completed successfully
+**Tracked data:**
+- Per-target change statistics (EWMA smoothed)
+- Co-change relationships (sparse matrix)
+- Time-of-day patterns (24 hourly buckets)
+- Prediction accuracy (for feedback)
 
-### SpeculationStats
+**Persistence:** JSON file in `.builder-cache/speculation/history.json`
 
-Measures speculation effectiveness:
+### SpeculativeEngine (`engine.d`)
 
-- **effectiveness**: Ratio of successful speculations (0.0 - 1.0)
-- **roi**: Return on investment (timeSaved / timeWasted)
-- **aborted**: Count of speculations cancelled due to input changes
+Background execution engine with dedicated worker threads.
+
+**Features:**
+- Priority queue based on prediction confidence
+- Input hash tracking for validation
+- Automatic abort on input changes
+- Result caching until consumed
+
+### SpeculationService (`service.d`)
+
+Integration point with the build system.
+
+**Candidate selection combines:**
+1. Critical path cost (from economics module)
+2. Fan-out score (nodes with many dependents)
+3. Change probability (from predictor)
+4. Cache hit probability (avoid redundant work)
 
 ## Usage
 
-### Basic Usage
-
-```d
-import engine.runtime.services.speculation;
-
-// Create speculation service
-auto speculation = createSpeculationService(graph, executionHistory);
-speculation.setPolicy(SpeculationPolicy.balanced());
-
-// Start speculation during build
-speculation.analyzeGraph(graph);
-speculation.beginSpeculation();
-
-// Check for valid speculative results before executing
-if (auto result = speculation.getValidResult(targetId))
-    useSpeculativeResult(result);
-else
-    executeNormally(targetId);
-
-// Notify when inputs change
-speculation.notifyInputChanged(path, newHash);
-
-// Cleanup
-speculation.shutdown();
-```
-
-### With SpeculationExecutor
+### Basic (Critical Path Only)
 
 ```d
 import engine.runtime.services.speculation;
@@ -107,75 +104,201 @@ import engine.runtime.services.speculation;
 auto executor = createSpeculationExecutor(graph, scheduling);
 executor.beginSpeculation();
 
-// During normal build loop
+// Build loop
 foreach (node; readyNodes)
 {
-    // Try speculation first
     if (auto result = executor.tryGetSpeculativeResult(node.id))
-    {
-        // Use speculative result
         applyResult(result.get());
-    }
     else
-    {
-        // Execute normally
-        execute(node);
-    }
+        buildNormally(node);
 }
 
-// Print statistics
-auto stats = executor.getStats();
-writefln("Speculation: %d hits, %d misses, %.1f%% hit rate",
-    stats.hits, stats.misses, stats.hitRate * 100);
+executor.shutdown();
 ```
 
-## Economics Integration
+### Predictive Mode (Recommended)
 
-Speculation decisions use the existing economics module:
+```d
+import engine.runtime.services.speculation;
 
-1. **Cost Estimation**: Only speculate on expensive targets (> minCostMs)
-2. **Cache Hit Probability**: Avoid speculation when cache hit is likely
-3. **Critical Path Cost**: Prioritize targets that would delay the build most
-4. **Budget Fraction**: Limit total speculation to fraction of build budget
+// Create with predictive engine
+auto executor = createPredictiveSpeculationExecutor(
+    graph, 
+    scheduling,
+    SpeculationPolicy.aggressive(),
+    ".builder-cache/speculation"
+);
 
-## Abort Semantics
+// Set executor for background workers
+executor.setNodeExecutor((node) @system {
+    return buildAndReturnHash(node);
+});
 
-Speculation is invalidated when:
+// Start background speculation
+executor.startEngine();
+executor.beginSpeculation();
 
-1. **Input file changes**: Source file modified during speculation
-2. **Dependency changes**: Upstream output differs from expected
-3. **Build failure**: Any non-speculative build fails (abort all)
+// Build loop with speculation
+foreach (node; topologicalOrder)
+{
+    executor.notifyBuildStarting(node.id);
+    
+    if (auto spec = executor.tryGetSpeculativeResult(node.id))
+    {
+        // Use speculative result
+        applyResult(spec.get());
+        continue;
+    }
+    
+    // Build normally
+    buildNormally(node);
+}
 
-Invalid speculation results are discarded, not cached.
+// Saves learned patterns for next session
+executor.shutdown();
+```
+
+### Watch Mode Integration
+
+```d
+// In watch mode, record file changes for learning
+watchService.onFileChanged = (path) {
+    auto affectedTargets = findAffectedTargets(path);
+    foreach (target; affectedTargets)
+        speculation.recordChange(target);
+};
+
+// Record co-change relationships
+watchService.onMultipleFilesChanged = (paths) {
+    auto targets = paths.map!(p => findTarget(p)).array;
+    foreach (i, source; targets)
+        foreach (target; targets[i+1 .. $])
+            speculation.recordCoChange(source, target);
+};
+```
+
+## Policies
+
+### Conservative
+```d
+auto policy = SpeculationPolicy.conservative();
+// maxConcurrent = 2
+// minCostMs = 2000 (only expensive targets)
+// confidenceThreshold = 0.9 (high confidence required)
+// budgetFraction = 0.1 (10% of build budget)
+```
+
+### Balanced (Default)
+```d
+auto policy = SpeculationPolicy.balanced();
+// maxConcurrent = 4
+// minCostMs = 500
+// confidenceThreshold = 0.7
+// budgetFraction = 0.2 (20% of build budget)
+```
+
+### Aggressive
+```d
+auto policy = SpeculationPolicy.aggressive();
+// maxConcurrent = 8
+// minCostMs = 200 (even cheap targets)
+// confidenceThreshold = 0.5 (lower threshold)
+// budgetFraction = 0.4 (40% of build budget)
+```
 
 ## Performance Characteristics
 
-| Scenario | Benefit |
-|----------|---------|
-| Long critical path | 10-30% build time reduction |
-| High cache hit rate | Minimal benefit (speculation redundant) |
-| Frequent input changes | Negative (wasted work) |
-| Expensive targets | High benefit per speculation |
-| Cheap targets | Not worth overhead |
+| Scenario | Expected Improvement |
+|----------|---------------------|
+| Large monorepo (1000+ targets) | 20-40% faster incremental |
+| High change frequency | 30-50% faster critical path |
+| Predictable patterns | Better accuracy over time |
+| Cold start (no history) | Falls back to critical path |
+| Random changes | Minimal benefit |
 
 ## Configuration
 
 Environment variables:
 
-- `BUILDER_SPECULATION_ENABLED=0|1` - Enable/disable speculation
-- `BUILDER_SPECULATION_POLICY=conservative|balanced|aggressive` - Policy preset
+| Variable | Values | Description |
+|----------|--------|-------------|
+| `BUILDER_SPECULATION_ENABLED` | `0`, `1` | Enable/disable speculation |
+| `BUILDER_SPECULATION_POLICY` | `conservative`, `balanced`, `aggressive` | Policy preset |
+| `BUILDER_SPECULATION_WORKERS` | `1-16` | Background worker count |
+| `BUILDER_SPECULATION_CACHE` | path | Cache directory |
+
+## Monitoring
+
+### Statistics
+
+```d
+auto stats = executor.getStats();
+writefln("Speculation: %d total, %d hits (%.1f%%), saved %dms",
+    stats.totalSpeculated,
+    stats.hits,
+    stats.hitRate * 100,
+    stats.timeSaved.total!"msecs"
+);
+
+// Predictor accuracy
+auto predStats = predictor.getStats();
+writefln("Predictor: %d targets, %.1f%% accuracy",
+    predStats.trackedTargets,
+    predStats.averageAccuracy * 100
+);
+```
+
+### Logging
+
+Speculation logs at `debugLog` level. Enable with:
+```bash
+BUILDER_LOG_LEVEL=debug bldr build
+```
+
+## Implementation Details
+
+### Input Validation
+
+Before using speculative results:
+1. Snapshot input hashes at speculation start
+2. Track file changes during speculation
+3. Validate hashes before using result
+4. Discard if any input changed
+
+### Abort Semantics
+
+When `notifyInputChanged` is called:
+1. Check all in-progress speculations
+2. Mark affected tasks as aborted
+3. Remove from results cache
+4. Don't cache aborted results
+
+### Thread Safety
+
+- `SpeculationService`: Protected by mutex
+- `SpeculativeEngine`: Lock-free queues + mutex for results
+- `ChangePredictor`: Protected by mutex
+- Atomic counters for statistics
 
 ## Testing
 
 ```bash
+# Run unit tests
+cd source/engine/runtime/services/speculation
+dmd -unittest -run predictor.d
+dmd -unittest -run history.d
+dmd -unittest -run engine.d
+dmd -unittest -run service.d
+dmd -unittest -run executor.d
+
+# Integration tests
 cd tests/unit/services
-ldc2 -unittest -I ../../../source speculation.d
-./speculation
+dmd -unittest -I ../../../source speculation_test.d
 ```
 
 ## See Also
 
-- `engine.economics` - Cost estimation and build economics
-- `engine.distributed.coordinator.profile` - Profile-guided scheduling
-- `engine.graph.core.incremental_topo` - Critical path calculation
-
+- `engine.economics` - Cost estimation for candidate scoring
+- `engine.distributed.coordinator.profile` - Critical path analysis
+- `engine.caching.incremental` - Dependency tracking for validation
+- `engine.runtime.watchmode` - File change detection integration

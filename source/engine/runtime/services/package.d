@@ -65,14 +65,38 @@ public import engine.runtime.services.provenance :
     ProvenanceService,
     NullProvenanceService;
 
-// Speculation service
+// Speculation service (with predictive execution for large monorepos)
 public import engine.runtime.services.speculation :
+    // Core service
     ISpeculationService,
     SpeculationService,
     SpeculationPolicy,
     SpeculativeTask,
     SpeculativeStatus,
     SpeculationStats,
+    createSpeculationService,
+    // Executor
     SpeculationExecutor,
     SpeculationExecutorStats,
-    createSpeculationExecutor;
+    createSpeculationExecutor,
+    createPredictiveSpeculationExecutor,
+    // Predictor
+    ChangePredictor,
+    ChangeProbability,
+    PredictorConfig,
+    PredictorState,
+    PredictorStats,
+    // History
+    HistoryTracker,
+    HistoryConfig,
+    HistoryStats,
+    ChangeEvent,
+    ChangeType,
+    ChangeCorrelation,
+    BuildSession,
+    // Engine
+    SpeculativeEngine,
+    SpeculativeResult,
+    EngineConfig,
+    EngineStats,
+    createSpeculativeEngine;

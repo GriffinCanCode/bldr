@@ -11,11 +11,13 @@ import core.thread : Thread;
 import engine.graph : BuildGraph, BuildNode, BuildStatus;
 import infrastructure.config.schema.schema : TargetId;
 import engine.runtime.services.speculation.service;
+import engine.runtime.services.speculation.engine : SpeculativeEngine, EngineConfig, EngineStats, SpeculativeResult;
 import engine.runtime.services.scheduling : ISchedulingService, NodeBuildResult;
 import infrastructure.utils.logging.logger;
 
 /// Speculation executor - coordinates speculative execution during builds
 /// Wraps the regular execution flow and adds speculation capabilities
+/// Integrates with SpeculativeEngine for background async execution
 final class SpeculationExecutor
 {
     private ISpeculationService _speculation;
@@ -23,10 +25,18 @@ final class SpeculationExecutor
     private BuildGraph _graph;
     private bool _enabled;
     
+    // Speculative engine for background execution
+    private SpeculativeEngine _engine;
+    private bool _engineStarted;
+    
     // Statistics
     private shared size_t _speculativeHits;     // Speculation validated and used
     private shared size_t _speculativeMisses;   // Speculation attempted but not useful
     private shared Duration _totalTimeSaved;
+    
+    // Executor delegate for building nodes
+    alias NodeExecutor = string delegate(BuildNode node) @system;
+    private NodeExecutor _nodeExecutor;
     
     this(ISpeculationService speculation, ISchedulingService scheduling, BuildGraph graph) @trusted
     {
@@ -41,6 +51,51 @@ final class SpeculationExecutor
     /// Enable/disable speculation
     @property void enabled(bool value) @safe nothrow @nogc { _enabled = value; }
     @property bool enabled() const @safe nothrow @nogc => _enabled;
+    
+    /// Set the node executor for speculative builds
+    void setNodeExecutor(NodeExecutor executor) @safe nothrow
+    {
+        _nodeExecutor = executor;
+    }
+    
+    /// Initialize the speculative engine with background workers
+    void initializeEngine(EngineConfig config = EngineConfig.init) @trusted
+    {
+        if (_engine !is null)
+            return;
+        
+        import engine.runtime.services.speculation.engine : createSpeculativeEngine;
+        _engine = createSpeculativeEngine(_graph, ".builder-cache/speculation", config);
+        
+        if (_nodeExecutor !is null)
+            _engine.setExecutor(_nodeExecutor);
+        
+        Logger.debugLog("Speculation: initialized engine with " ~ 
+                       config.workerCount.to!string ~ " workers");
+    }
+    
+    /// Start the speculative engine workers
+    void startEngine() @trusted
+    {
+        if (_engine is null)
+            initializeEngine();
+        
+        if (!_engineStarted)
+        {
+            _engine.start();
+            _engineStarted = true;
+        }
+    }
+    
+    /// Stop the speculative engine
+    void stopEngine() @trusted
+    {
+        if (_engine !is null && _engineStarted)
+        {
+            _engine.stop();
+            _engineStarted = false;
+        }
+    }
     
     /// Start speculative execution for critical path targets
     /// Call once after analyzing the graph
@@ -58,12 +113,26 @@ final class SpeculationExecutor
         {
             Logger.info("Speculation: starting " ~ candidates.length.to!string ~ " candidates");
             
+            // Start engine if available
+            if (_engine !is null && !_engineStarted)
+                startEngine();
+            
             foreach (candidate; candidates)
             {
                 auto task = _speculation.speculate(candidate);
                 if (task !is null)
+                {
                     startSpeculativeExecution(task);
+                    
+                    // Also queue in engine for background execution
+                    if (_engine !is null)
+                        _engine.queueSpeculation(candidate);
+                }
             }
+            
+            // Start engine-based prediction speculation
+            if (_engine !is null)
+                _engine.beginSpeculation();
         }
     }
     
@@ -72,7 +141,35 @@ final class SpeculationExecutor
     /// Returns: NodeBuildResult if speculation valid, null otherwise
     Nullable!NodeBuildResult tryGetSpeculativeResult(TargetId targetId) @trusted
     {
-        if (!_enabled || _speculation is null)
+        if (!_enabled)
+            return Nullable!NodeBuildResult.init;
+        
+        // First, try engine results (newer, more sophisticated)
+        if (_engine !is null)
+        {
+            auto engineResult = _engine.tryGetResult(targetId);
+            if (!engineResult.isNull)
+            {
+                auto result = engineResult.get();
+                if (result.isValid)
+                {
+                    atomicOp!"+="(_speculativeHits, 1);
+                    
+                    NodeBuildResult buildResult;
+                    buildResult.targetId = targetId.toString();
+                    buildResult.success = true;
+                    buildResult.cached = true;
+                    
+                    Logger.debugLog("Speculation: engine hit for " ~ targetId.toString() ~ 
+                                   " (saved " ~ result.executionTime.total!"msecs".to!string ~ "ms)");
+                    
+                    return Nullable!NodeBuildResult(buildResult);
+                }
+            }
+        }
+        
+        // Fall back to service-based results
+        if (_speculation is null)
             return Nullable!NodeBuildResult.init;
         
         auto result = _speculation.getValidResult(targetId);
@@ -144,6 +241,9 @@ final class SpeculationExecutor
     {
         if (_speculation !is null)
             _speculation.notifyInputChanged(path, newHash);
+        
+        if (_engine !is null)
+            _engine.notifyInputChanged(path, newHash);
     }
     
     /// Abort all speculation (e.g., on build failure)
@@ -151,6 +251,9 @@ final class SpeculationExecutor
     {
         if (_speculation !is null)
             _speculation.abortAll();
+        
+        if (_engine !is null)
+            _engine.clearResults();
     }
     
     /// Get speculation statistics
@@ -170,12 +273,25 @@ final class SpeculationExecutor
             stats.timeWasted = specStats.timeWasted;
         }
         
+        // Merge engine stats
+        if (_engine !is null)
+        {
+            auto engineStats = _engine.getStats();
+            stats.totalSpeculated += engineStats.tasksCompleted;
+            stats.aborted += engineStats.tasksAborted;
+            stats.enginePendingTasks = engineStats.pendingTasks;
+            stats.engineActiveWorkers = engineStats.activeWorkers;
+        }
+        
         return stats;
     }
     
     /// Shutdown and log final statistics
     void shutdown() @trusted
     {
+        // Stop engine first
+        stopEngine();
+        
         if (_speculation !is null)
         {
             _speculation.shutdown();
@@ -188,6 +304,11 @@ final class SpeculationExecutor
                 Logger.info("  Hits: " ~ stats.hits.to!string);
                 Logger.info("  Aborted: " ~ stats.aborted.to!string);
                 Logger.info("  Time saved: " ~ stats.timeSaved.total!"msecs".to!string ~ "ms");
+                
+                if (stats.enginePendingTasks > 0 || stats.engineActiveWorkers > 0)
+                {
+                    Logger.info("  Engine pending: " ~ stats.enginePendingTasks.to!string);
+                }
             }
         }
     }
@@ -213,10 +334,30 @@ struct SpeculationExecutorStats
     Duration timeSaved;
     Duration timeWasted;
     
+    // Engine-specific stats
+    size_t enginePendingTasks;
+    size_t engineActiveWorkers;
+    
     @property float hitRate() const pure nothrow @nogc
     {
         auto total = hits + misses;
         return total == 0 ? 0.0f : cast(float)hits / cast(float)total;
+    }
+    
+    @property float successRate() const pure nothrow @nogc
+    {
+        auto total = totalSpeculated;
+        return total == 0 ? 0.0f : cast(float)(hits) / cast(float)total;
+    }
+    
+    string format() const @safe
+    {
+        import std.format : format;
+        return format(
+            "Speculation: %d total, %d hits (%.1f%%), %d aborted, saved %dms",
+            totalSpeculated, hits, hitRate * 100, aborted, 
+            timeSaved.total!"msecs"
+        );
     }
 }
 
@@ -234,6 +375,27 @@ SpeculationExecutor createSpeculationExecutor(
     speculation.setPolicy(policy);
     
     return new SpeculationExecutor(speculation, scheduling, graph);
+}
+
+/// Create speculation executor with predictive engine
+SpeculationExecutor createPredictiveSpeculationExecutor(
+    BuildGraph graph,
+    ISchedulingService scheduling,
+    SpeculationPolicy policy = SpeculationPolicy.init,
+    string cacheDir = ".builder-cache/speculation") @trusted
+{
+    import engine.economics.estimator : ExecutionHistory, CostEstimator;
+    
+    auto history = new ExecutionHistory();
+    auto estimator = new CostEstimator(history);
+    auto speculation = new SpeculationService(estimator, graph);
+    speculation.setPolicy(policy);
+    speculation.initializePredictive(cacheDir);
+    
+    auto executor = new SpeculationExecutor(speculation, scheduling, graph);
+    executor.initializeEngine(EngineConfig.init);
+    
+    return executor;
 }
 
 unittest

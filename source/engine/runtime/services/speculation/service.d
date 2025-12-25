@@ -2,7 +2,7 @@ module engine.runtime.services.speculation.service;
 
 import std.algorithm : map, filter, sort, sum, max, min, canFind;
 import std.array : array, assocArray;
-import std.datetime : Duration, msecs, seconds;
+import std.datetime : Duration, msecs, seconds, Clock;
 import std.conv : to;
 import std.typecons : Nullable, nullable;
 import core.atomic;
@@ -16,6 +16,10 @@ import engine.distributed.coordinator.profile : ProfileGuidedScheduler, ActionPr
 import infrastructure.errors;
 import infrastructure.utils.logging.logger;
 import infrastructure.utils.concurrency.priority : Priority;
+
+// Integration with new components
+import engine.runtime.services.speculation.predictor : ChangePredictor, ChangeProbability;
+import engine.runtime.services.speculation.history : HistoryTracker, ChangeType;
 
 /// Speculation policy configuration
 /// Controls the aggressiveness and budget for speculative execution
@@ -224,6 +228,8 @@ interface ISpeculationService
 
 /// Speculative execution service
 /// Manages critical path speculation with abort semantics
+/// Integrates with ChangePredictor for probability-based candidate selection
+/// and HistoryTracker for learning from past patterns
 final class SpeculationService : ISpeculationService
 {
     private ProfileGuidedScheduler _profiler;
@@ -245,6 +251,11 @@ final class SpeculationService : ISpeculationService
     // Hash tracking for abort detection
     private string[string] _currentHashes;  // path -> current hash
     
+    // New components for probability-based speculation
+    private ChangePredictor _predictor;
+    private HistoryTracker _history;
+    private bool _usePredictiveMode;
+    
     this(CostEstimator estimator, BuildGraph graph = null) @trusted
     {
         _estimator = estimator;
@@ -256,6 +267,40 @@ final class SpeculationService : ISpeculationService
         if (graph !is null)
             _profiler = new ProfileGuidedScheduler(estimator, graph);
     }
+    
+    /// Initialize with predictive components for change-probability-based speculation
+    void initializePredictive(string cacheDir = ".builder-cache/speculation") @trusted
+    {
+        synchronized (_mutex)
+        {
+            import engine.runtime.services.speculation.predictor : PredictorConfig;
+            import engine.runtime.services.speculation.history : HistoryConfig;
+            
+            _history = new HistoryTracker(cacheDir);
+            _predictor = new ChangePredictor();
+            
+            // Load historical patterns into predictor
+            _predictor.importState(_history.getPredictorState());
+            
+            _usePredictiveMode = true;
+            Logger.debugLog("Speculation: initialized predictive mode");
+        }
+    }
+    
+    /// Get the change predictor (for external use)
+    ChangePredictor getPredictor() @trusted
+    {
+        synchronized (_mutex) { return _predictor; }
+    }
+    
+    /// Get the history tracker (for external use)
+    HistoryTracker getHistory() @trusted
+    {
+        synchronized (_mutex) { return _history; }
+    }
+    
+    /// Check if predictive mode is enabled
+    @property bool isPredictiveMode() const @safe nothrow => _usePredictiveMode;
     
     void setPolicy(SpeculationPolicy policy) @trusted
     {
@@ -418,6 +463,17 @@ final class SpeculationService : ISpeculationService
                     _stats.timeSaved += task.actualDuration;
                     Logger.success("Speculation: promoted " ~ key ~ 
                                   " (saved " ~ task.actualDuration.total!"msecs".to!string ~ "ms)");
+                    
+                    // Record successful speculation in history
+                    if (_history !is null)
+                    {
+                        _history.recordChange(targetId, ChangeType.SourceModified,
+                                            [], task.actualDuration, true, true);
+                    }
+                    
+                    // Update predictor with successful speculation
+                    if (_predictor !is null)
+                        _predictor.recordChange(targetId);
                 }
                 atomicOp!"-="(_activeCount, 1);
             }
@@ -455,7 +511,42 @@ final class SpeculationService : ISpeculationService
     void shutdown() @trusted
     {
         abortAll();
+        
+        // Save predictor state to history for persistence
+        synchronized (_mutex)
+        {
+            if (_history !is null && _predictor !is null)
+            {
+                _history.updatePredictorState(_predictor.exportState());
+                _history.flush();
+                Logger.debugLog("Speculation: saved predictor state");
+            }
+        }
+        
         Logger.debugLog("Speculation: shutdown, stats: " ~ formatStats(_stats));
+    }
+    
+    /// Record a change event (for learning)
+    void recordChange(TargetId targetId) @trusted
+    {
+        synchronized (_mutex)
+        {
+            if (_predictor !is null)
+                _predictor.recordChange(targetId);
+            
+            if (_history !is null)
+                _history.recordChange(targetId, ChangeType.SourceModified);
+        }
+    }
+    
+    /// Record that a target was rebuilt but didn't actually change
+    void recordNoChange(TargetId targetId) @trusted
+    {
+        synchronized (_mutex)
+        {
+            if (_predictor !is null)
+                _predictor.recordNoChange(targetId);
+        }
     }
     
 private:
@@ -465,12 +556,21 @@ private:
         TargetId targetId;
         size_t score;
         string reason;
+        float changeProbability;  // From predictor (0.0 - 1.0)
     }
     
-    /// Compute speculation candidates from critical path analysis
+    /// Compute speculation candidates using both critical path and change probability
     SpeculationCandidate[] computeCandidates() @trusted
     {
         SpeculationCandidate[] candidates;
+        
+        // Get change predictions if available
+        ChangeProbability[string] predictions;
+        if (_usePredictiveMode && _predictor !is null)
+        {
+            foreach (pred; _predictor.predict())
+                predictions[pred.targetId.toString()] = pred;
+        }
         
         foreach (key, node; _graph.nodes)
         {
@@ -485,15 +585,16 @@ private:
             // Calculate speculation score
             size_t score = 0;
             string reason;
+            float changeProbability = 0.0f;
             
-            // Critical path contribution
+            // Factor 1: Critical path contribution
             if (_policy.enableCriticalPath && profile.criticalPathCost > 0)
             {
                 score += profile.criticalPathCost;
                 reason = "critical_path";
             }
             
-            // Fan-out contribution (high dependent count)
+            // Factor 2: Fan-out contribution (high dependent count)
             if (_policy.enableFanOut && profile.dependentCount > 2)
             {
                 score += profile.dependentCount * 100;
@@ -501,15 +602,38 @@ private:
                 reason ~= "fan_out";
             }
             
+            // Factor 3: Change probability from predictor (NEW)
+            if (auto predPtr = key in predictions)
+            {
+                auto pred = *predPtr;
+                changeProbability = pred.probability;
+                
+                // Boost score based on change probability
+                // High change probability = more valuable to speculate
+                auto probabilityBoost = cast(size_t)(pred.score * 1000);
+                score += probabilityBoost;
+                
+                if (pred.probability > 0.5f)
+                {
+                    if (reason.length > 0) reason ~= "+";
+                    reason ~= "high_change_prob(" ~ 
+                             (cast(int)(pred.probability * 100)).to!string ~ "%)";
+                }
+            }
+            
             // Penalize low confidence (high cache hit probability)
             if (profile.cacheHitProbability > _policy.confidenceThreshold)
             {
-                // Likely cache hit, don't speculate
-                continue;
+                // Unless predictor says it's likely to change
+                if (changeProbability < 0.6f)
+                    continue;
+                
+                // High change probability overrides cache hit expectation
+                reason ~= "+override_cache";
             }
             
             if (score > 0)
-                candidates ~= SpeculationCandidate(node.id, score, reason);
+                candidates ~= SpeculationCandidate(node.id, score, reason, changeProbability);
         }
         
         // Sort by score descending
