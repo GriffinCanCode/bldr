@@ -271,6 +271,15 @@ struct HermeticExecutor
     version(Windows)
     {
         /// Execute using Windows job objects
+        /// 
+        /// Provides process-level isolation with:
+        /// - JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE (guaranteed cleanup)
+        /// - BREAKAWAY_OK disabled (no process escape)
+        /// - Memory/CPU/process limits
+        /// - UI restrictions (clipboard, desktop isolation)
+        /// - CPU rate limiting (Windows 8+)
+        /// 
+        /// Note: Does not provide filesystem/network isolation like Linux namespaces
         private BuildResult!Output executeWindows(string[] command, string workingDir) @system
         {
             auto sandboxResult = WindowsSandbox.create(spec, workDir);
@@ -279,6 +288,8 @@ struct HermeticExecutor
                     new SystemError(sandboxResult.unwrapErr(), ErrorCode.SandboxError));
             
             auto sandbox = sandboxResult.unwrap();
+            scope(exit) sandbox.cleanup();
+            
             auto execResult = sandbox.execute(command, workingDir);
             
             if (execResult.isErr)
@@ -290,7 +301,8 @@ struct HermeticExecutor
             output.stdout = winOutput.stdout;
             output.stderr = winOutput.stderr;
             output.exitCode = winOutput.exitCode;
-            output.hermetic = false;  // Windows implementation is partial
+            // Windows provides process isolation but not filesystem/network isolation
+            output.hermetic = false;
             
             return BuildResult!Output.ok(output);
         }

@@ -119,10 +119,19 @@ final class WindowsMonitor : BaseMonitor
     }
     
     /// Set job object limits based on ResourceLimits
+    /// 
+    /// Security: BREAKAWAY_OK is intentionally NOT set to prevent process escape.
+    /// KILL_ON_JOB_CLOSE ensures all processes are terminated on cleanup.
     private void setJobLimits() @trusted
     {
         JOBOBJECT_EXTENDED_LIMIT_INFORMATION extInfo;
         extInfo.BasicLimitInformation.LimitFlags = 0;
+        
+        // === CRITICAL: Kill all processes when job handle is closed ===
+        extInfo.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        
+        // === SECURITY: Do NOT set BREAKAWAY_OK or SILENT_BREAKAWAY_OK ===
+        // This prevents child processes from escaping the job object
         
         // Set memory limit
         if (limits.maxMemoryBytes > 0)
@@ -144,9 +153,6 @@ final class WindowsMonitor : BaseMonitor
             extInfo.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_PROCESS_TIME;
             extInfo.BasicLimitInformation.PerProcessUserTimeLimit = msToFileTime(limits.maxCpuTimeMs);
         }
-        
-        // Kill all processes when job handle is closed
-        extInfo.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
         
         // Apply limits
         SetInformationJobObject(
