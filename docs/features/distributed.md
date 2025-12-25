@@ -181,7 +181,7 @@ interface ArtifactTransport
 
 ### 5. **Adaptive Work Stealing**
 
-Workers use multiple strategies based on system load:
+Workers use multiple strategies based on system load, with **automatic threshold tuning**:
 
 ```d
 enum StealStrategy
@@ -204,6 +204,92 @@ StealStrategy selectStrategy(SystemMetrics metrics)
     else
         return StealStrategy.Random;
 }
+```
+
+### Adaptive Threshold Tuning
+
+Work-stealing thresholds are automatically tuned based on observed performance metrics
+using EWMA (Exponentially Weighted Moving Average):
+
+```d
+// Enable adaptive threshold tuning
+StealConfig config;
+config.enableAdaptive = true;
+config.adaptiveConfig.lowSuccessThreshold = 0.20;   // Below 20% success, increase minLocalQueue
+config.adaptiveConfig.highLatencyThresholdUs = 50_000;  // Above 50ms, increase timeout
+config.adaptiveConfig.evaluationWindow = 50;        // Samples before adjustment
+
+auto engine = new StealEngine(selfId, peers, config);
+
+// Monitor adaptive state at runtime
+auto state = engine.getAdaptiveState();
+writeln("minLocalQueue: ", state.minLocalQueue);
+writeln("stealTimeout: ", state.stealTimeout.total!"msecs", "ms");
+
+auto stats = engine.getAdaptiveStats();
+writeln("Success rate: ", stats.successRate * 100, "%");
+writeln("Avg latency: ", stats.avgLatencyUs / 1000, "ms");
+```
+
+**What gets tuned:**
+- **minLocalQueue**: Increases when success rate < 20%, decreases when > 60%
+- **stealTimeout**: Scales with observed network latency
+- **retryBackoff**: Adjusts alongside timeout
+- **stealThreshold**: Adjusts based on network error and timeout rates
+
+**Key features:**
+- Cooldown period prevents oscillation
+- Bounded adjustments (configurable min/max limits)
+- History tracking for debugging
+- Callback support for monitoring
+
+### 6. **Affinity-Based Worker Routing**
+
+Builder uses **consistent hashing** (Jump Hash) to route actions to workers based on language/toolchain affinity. Workers assigned to the same language build warm caches, significantly improving performance:
+
+```d
+/// Affinity key combines language and toolchain
+struct AffinityKey
+{
+    string language;   // e.g., "Rust", "D", "TypeScript"
+    string toolchain;  // e.g., "rustc-1.75", "dmd", "tsc-5.0"
+}
+
+/// Select worker using consistent hashing
+auto affinity = AffinityKey("Rust", "rustc-1.75");
+auto workerResult = registry.selectWorkerWithAffinity(affinity, capabilities);
+
+// Or auto-extract affinity from action command
+auto workerResult = registry.selectWorkerForAction(actionRequest);
+```
+
+**Key benefits:**
+- **Cache locality**: Workers build warm caches for their assigned languages/toolchains
+- **Minimal disruption**: Adding/removing workers only affects ~1/n of assignments
+- **Load awareness**: Falls back to load-based routing when affinity workers are overloaded
+- **Deterministic**: Same affinity always routes to same worker (when healthy)
+
+**Affinity extraction from commands:**
+```d
+// Automatically detected:
+"dmd -O main.d"      → AffinityKey("D", "dmd")
+"cargo build"        → AffinityKey("Rust", "")
+"tsc --build"        → AffinityKey("TypeScript", "")
+"go build ./..."     → AffinityKey("Go", "")
+
+// Or explicit via environment:
+env["BLDR_LANGUAGE"] = "OCaml";
+env["BLDR_TOOLCHAIN"] = "ocamlopt";
+```
+
+**Configuration:**
+```d
+CoordinatorConfig config;
+config.enableAffinityRouting = true;  // Default: enabled
+
+// Or via RemoteServiceConfig
+RemoteServiceConfig remoteConfig;
+remoteConfig.enableAffinityRouting = true;
 ```
 
 ---
@@ -316,8 +402,8 @@ final class DistributedScheduler
         // 2. Compute priority (critical path heuristic)
         auto priority = analyzer.computePriority(action);
         
-        // 3. Select worker (least loaded, capability-aware)
-        auto workerResult = registry.selectWorker(action.capabilities);
+        // 3. Select worker (affinity-based with load fallback)
+        auto workerResult = registry.selectWorkerForAction(action);
         if (workerResult.isErr)
             return workerResult.mapErr();
         
@@ -1010,10 +1096,11 @@ bldr build --distributed --local-workers 4
 - [ ] Resource monitoring
 
 ### Phase 3: Work Stealing (1 week)
-- [ ] Worker-to-worker protocol
-- [ ] Steal strategies
-- [ ] Adaptive selection
-- [ ] Performance tuning
+- [x] Worker-to-worker protocol
+- [x] Steal strategies
+- [x] Adaptive selection
+- [x] Adaptive threshold tuning (EWMA-based)
+- [x] Performance tuning
 
 ### Phase 4: Health & Recovery (1 week)
 - [ ] Heartbeat monitoring

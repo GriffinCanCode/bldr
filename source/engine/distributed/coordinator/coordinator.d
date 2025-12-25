@@ -12,6 +12,7 @@ import engine.graph : BuildGraph;
 import engine.distributed.protocol.protocol;
 import engine.distributed.protocol.messages;
 import engine.distributed.coordinator.registry;
+import engine.distributed.coordinator.hash : AffinityKey, extractAffinity;
 import engine.distributed.coordinator.scheduler;
 import engine.distributed.coordinator.profile : ProfileGuidedScheduler, createProfiledScheduler;
 import engine.distributed.coordinator.health;
@@ -42,6 +43,10 @@ struct CoordinatorConfig
     
     /// Enable adaptive work-stealing thresholds (auto-tune based on success rates)
     bool enableAdaptiveStealThresholds = true;
+    
+    /// Enable consistent hashing for affinity-based worker assignment
+    /// Workers assigned to same language/toolchain build warm caches
+    bool enableAffinityRouting = true;
 }
 
 /// Build coordinator (manages distributed build execution)
@@ -71,7 +76,7 @@ final class Coordinator
     {
         this.graph = graph;
         this.config = config;
-        this.registry = new WorkerRegistry(config.workerTimeout);
+        this.registry = new WorkerRegistry(config.workerTimeout, config.enableAffinityRouting);
         this.scheduler = new DistributedScheduler(graph, registry);
         
         // Enable profile-guided scheduling for critical-path optimization
@@ -159,17 +164,28 @@ final class Coordinator
         Logger.info("Coordinator stopped");
     }
     
-    /// Select best worker considering load and work-stealing
-    private Result!(WorkerId, DistributedError) selectBestWorker(Capabilities caps) @trusted
+    /// Select best worker considering affinity, load, and work-stealing
+    private Result!(WorkerId, DistributedError) selectBestWorker(ActionRequest request) @trusted
     {
-        auto workerResult = registry.selectWorker(caps);
-        if (workerResult.isErr || !config.enableWorkStealing || peerRegistry is null) return workerResult;
+        // Use affinity-based selection when enabled
+        auto workerResult = config.enableAffinityRouting && request !is null
+            ? registry.selectWorkerForAction(request)
+            : registry.selectWorker(request !is null ? request.capabilities : Capabilities.init);
+        
+        if (workerResult.isErr || !config.enableWorkStealing || peerRegistry is null) 
+            return workerResult;
         
         auto workerId = workerResult.unwrap();
         auto peerResult = peerRegistry.getPeer(workerId);
         
-        if (peerResult.isOk && atomicLoad(peerResult.unwrap().loadFactor) > 0.8)
+        // Only redirect if worker is heavily loaded AND we have less loaded peers
+        if (peerResult.isOk && atomicLoad(peerResult.unwrap().loadFactor) > 0.85)
         {
+            // When affinity routing is enabled, prefer affinity workers even under load
+            // unless they're critically overloaded (>0.95)
+            if (config.enableAffinityRouting && atomicLoad(peerResult.unwrap().loadFactor) < 0.95)
+                return workerResult;
+            
             foreach (p; peerRegistry.getAlivePeers())
             {
                 if (atomicLoad(p.loadFactor) < 0.5 && registry.getWorker(p.id).isOk)
@@ -181,6 +197,12 @@ final class Coordinator
         }
         
         return workerResult;
+    }
+    
+    /// Legacy overload for backward compatibility
+    private Result!(WorkerId, DistributedError) selectBestWorker(Capabilities caps) @trusted
+    {
+        return selectBestWorker(null);
     }
     
     /// Schedule build action
@@ -220,7 +242,8 @@ final class Coordinator
             if (actionResult.isErr) break;
             
             auto request = actionResult.unwrap();
-            auto workerResult = selectBestWorker(request.capabilities);
+            // Use affinity-aware worker selection
+            auto workerResult = selectBestWorker(request);
             if (workerResult.isErr)
             {
                 scheduler.schedule(request);
@@ -356,6 +379,7 @@ final class Coordinator
         size_t executingActions;
         size_t completedActions;
         size_t failedActions;
+        bool affinityRoutingEnabled;
     }
     
     CoordinatorStats getStats() @trusted
@@ -363,6 +387,7 @@ final class Coordinator
         CoordinatorStats stats;
         stats.workerCount = registry.count();
         stats.healthyWorkerCount = registry.healthyCount();
+        stats.affinityRoutingEnabled = config.enableAffinityRouting;
         
         auto schedulerStats = scheduler.getStats();
         stats.pendingActions = schedulerStats.pending + schedulerStats.ready;
@@ -372,6 +397,9 @@ final class Coordinator
         
         return stats;
     }
+    
+    /// Check if affinity routing is enabled
+    bool isAffinityRoutingEnabled() const @safe nothrow @nogc => config.enableAffinityRouting;
 }
 
 

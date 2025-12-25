@@ -114,6 +114,10 @@ struct RemoteServiceConfig
     
     // Enable adaptive work-stealing thresholds (auto-tune based on success rates)
     bool enableAdaptiveStealThresholds = true;
+    
+    // Enable consistent hashing for affinity-based worker assignment
+    // Workers assigned to same language/toolchain build warm caches
+    bool enableAffinityRouting = true;
 }
 
 /// Remote execution service
@@ -176,10 +180,10 @@ final class RemoteExecutionService : IRemoteExecutionService
     /// Initialize service components
     private void initializeComponents() @trusted
     {
-        // Worker registry
-        this.registry = new WorkerRegistry(config.poolConfig.workerStartTimeout);
+        // Worker registry with affinity routing support
+        this.registry = new WorkerRegistry(config.poolConfig.workerStartTimeout, config.enableAffinityRouting);
         
-        // Coordinator with profile-guided scheduling and adaptive thresholds
+        // Coordinator with profile-guided scheduling, adaptive thresholds, and affinity routing
         CoordinatorConfig coordConfig;
         coordConfig.host = config.coordinatorHost;
         coordConfig.port = config.coordinatorPort;
@@ -188,8 +192,12 @@ final class RemoteExecutionService : IRemoteExecutionService
         coordConfig.enableProfileGuidedScheduling = config.enableProfileGuidedScheduling;
         coordConfig.executionHistory = config.executionHistory;  // Share economics history
         coordConfig.enableAdaptiveStealThresholds = config.enableAdaptiveStealThresholds;
+        coordConfig.enableAffinityRouting = config.enableAffinityRouting;
         
         this.coordinator = new Coordinator(graph, coordConfig);
+        
+        if (config.enableAffinityRouting)
+            Logger.info("Affinity-based worker routing enabled (consistent hashing)");
         
         // Worker provisioner (SRP: separated from pool management)
         CloudProvider provider = createProvider(config.poolConfig);

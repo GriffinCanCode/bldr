@@ -5,6 +5,7 @@ import std.datetime;
 import std.conv;
 import core.thread;
 import engine.distributed.coordinator.registry;
+import engine.distributed.coordinator.hash : AffinityKey, extractAffinity;
 import engine.distributed.protocol.protocol;
 import tests.harness;
 
@@ -480,5 +481,234 @@ unittest
     {
         writeln("\x1b[33m  ⚠ Concurrent test failed: ", e.msg, "\x1b[0m");
     }
+}
+
+// ==================== AFFINITY-BASED SELECTION TESTS ====================
+
+@system unittest
+{
+    writeln("\x1b[36m[TEST]\x1b[0m Distributed Registry - Affinity routing enabled by default");
+    
+    auto registry = new WorkerRegistry();
+    
+    Assert.isTrue(registry.isAffinityRoutingEnabled());
+    
+    writeln("\x1b[32m  ✓ Affinity routing enabled by default\x1b[0m");
+}
+
+@system unittest
+{
+    writeln("\x1b[36m[TEST]\x1b[0m Distributed Registry - Affinity routing can be disabled");
+    
+    auto registry = new WorkerRegistry(15.seconds, false);
+    
+    Assert.isFalse(registry.isAffinityRoutingEnabled());
+    
+    writeln("\x1b[32m  ✓ Affinity routing can be disabled\x1b[0m");
+}
+
+@system unittest
+{
+    writeln("\x1b[36m[TEST]\x1b[0m Distributed Registry - Affinity-based worker selection consistency");
+    
+    auto registry = new WorkerRegistry();
+    
+    // Register multiple workers
+    foreach (i; 1 .. 6)
+        registry.register("worker" ~ i.to!string ~ ":9000");
+    
+    auto affinity = AffinityKey("Rust", "rustc-1.75");
+    Capabilities caps;
+    
+    // Select with affinity multiple times - should be consistent
+    auto result1 = registry.selectWorkerWithAffinity(affinity, caps);
+    auto result2 = registry.selectWorkerWithAffinity(affinity, caps);
+    auto result3 = registry.selectWorkerWithAffinity(affinity, caps);
+    
+    Assert.isTrue(result1.isOk);
+    Assert.isTrue(result2.isOk);
+    Assert.isTrue(result3.isOk);
+    
+    Assert.equal(result1.unwrap().value, result2.unwrap().value);
+    Assert.equal(result2.unwrap().value, result3.unwrap().value);
+    
+    writeln("\x1b[32m  ✓ Affinity-based selection is consistent\x1b[0m");
+}
+
+@system unittest
+{
+    writeln("\x1b[36m[TEST]\x1b[0m Distributed Registry - Different affinities may select different workers");
+    
+    auto registry = new WorkerRegistry();
+    
+    // Register many workers to increase probability of different selection
+    foreach (i; 1 .. 21)
+        registry.register("worker" ~ i.to!string ~ ":9000");
+    
+    Capabilities caps;
+    
+    // Different languages should potentially map to different workers
+    auto rustAffinity = AffinityKey("Rust", "");
+    auto dAffinity = AffinityKey("D", "");
+    auto goAffinity = AffinityKey("Go", "");
+    
+    auto rustResult = registry.selectWorkerWithAffinity(rustAffinity, caps);
+    auto dResult = registry.selectWorkerWithAffinity(dAffinity, caps);
+    auto goResult = registry.selectWorkerWithAffinity(goAffinity, caps);
+    
+    Assert.isTrue(rustResult.isOk);
+    Assert.isTrue(dResult.isOk);
+    Assert.isTrue(goResult.isOk);
+    
+    // Note: with consistent hashing, different keys usually map to different workers
+    // but it's not guaranteed (hash collisions possible)
+    writeln("\x1b[32m  ✓ Different affinities select workers (may differ)\x1b[0m");
+}
+
+@system unittest
+{
+    writeln("\x1b[36m[TEST]\x1b[0m Distributed Registry - Affinity selection fallback when worker overloaded");
+    
+    auto registry = new WorkerRegistry();
+    
+    // Register workers
+    auto result1 = registry.register("worker1:9000");
+    auto result2 = registry.register("worker2:9000");
+    
+    Assert.isTrue(result1.isOk);
+    Assert.isTrue(result2.isOk);
+    
+    auto id1 = result1.unwrap();
+    auto id2 = result2.unwrap();
+    
+    // Make worker1 heavily loaded
+    HeartBeat hb1;
+    hb1.worker = id1;
+    hb1.state = WorkerState.Executing;
+    hb1.metrics.queueDepth = 100;  // Very high load
+    hb1.metrics.cpuUsage = 0.95;
+    registry.updateHeartbeat(id1, hb1);
+    
+    // Keep worker2 lightly loaded
+    HeartBeat hb2;
+    hb2.worker = id2;
+    hb2.state = WorkerState.Idle;
+    hb2.metrics.queueDepth = 1;
+    hb2.metrics.cpuUsage = 0.1;
+    registry.updateHeartbeat(id2, hb2);
+    
+    // Selection should work and pick a worker (fallback mechanism)
+    Capabilities caps;
+    auto result = registry.selectWorkerWithAffinity(AffinityKey("Python", ""), caps);
+    Assert.isTrue(result.isOk);
+    
+    writeln("\x1b[32m  ✓ Affinity selection with fallback works\x1b[0m");
+}
+
+@system unittest
+{
+    writeln("\x1b[36m[TEST]\x1b[0m Distributed Registry - Select worker for action request");
+    
+    import std.datetime : msecs;
+    
+    auto registry = new WorkerRegistry();
+    
+    // Register workers
+    foreach (i; 1 .. 6)
+        registry.register("worker" ~ i.to!string ~ ":9000");
+    
+    // Create an action request with a D command
+    ubyte[32] hash;
+    auto actionId = ActionId(hash);
+    
+    string[string] env;
+    auto request = new ActionRequest(
+        actionId,
+        "dmd -O main.d",  // D command - should extract D affinity
+        env,
+        [],
+        [],
+        Capabilities.init,
+        Priority.Normal,
+        100.msecs
+    );
+    
+    auto result1 = registry.selectWorkerForAction(request);
+    auto result2 = registry.selectWorkerForAction(request);
+    
+    Assert.isTrue(result1.isOk);
+    Assert.isTrue(result2.isOk);
+    
+    // Same command should route to same worker
+    Assert.equal(result1.unwrap().value, result2.unwrap().value);
+    
+    writeln("\x1b[32m  ✓ Select worker for action request works\x1b[0m");
+}
+
+@system unittest
+{
+    writeln("\x1b[36m[TEST]\x1b[0m Distributed Registry - Affinity selector compaction");
+    
+    auto registry = new WorkerRegistry();
+    
+    // Register and unregister workers
+    WorkerId[] ids;
+    foreach (i; 1 .. 11)
+    {
+        auto result = registry.register("worker" ~ i.to!string ~ ":9000");
+        if (result.isOk)
+            ids ~= result.unwrap();
+    }
+    
+    // Unregister half
+    foreach (i; 0 .. 5)
+        registry.unregister(ids[i]);
+    
+    // Compact
+    registry.compactAffinitySelector();
+    
+    // Selection should still work
+    Capabilities caps;
+    auto result = registry.selectWorkerWithAffinity(AffinityKey("Java", ""), caps);
+    Assert.isTrue(result.isOk);
+    
+    writeln("\x1b[32m  ✓ Affinity selector compaction works\x1b[0m");
+}
+
+@system unittest
+{
+    writeln("\x1b[36m[TEST]\x1b[0m Distributed Registry - Disabled affinity falls back to load-based");
+    
+    auto registry = new WorkerRegistry(15.seconds, false);  // Affinity disabled
+    
+    // Register workers
+    auto result1 = registry.register("worker1:9000");
+    auto result2 = registry.register("worker2:9000");
+    
+    auto id1 = result1.unwrap();
+    auto id2 = result2.unwrap();
+    
+    // Set different loads
+    HeartBeat hb1;
+    hb1.worker = id1;
+    hb1.state = WorkerState.Executing;
+    hb1.metrics.queueDepth = 10;
+    hb1.metrics.cpuUsage = 0.8;
+    registry.updateHeartbeat(id1, hb1);
+    
+    HeartBeat hb2;
+    hb2.worker = id2;
+    hb2.state = WorkerState.Idle;
+    hb2.metrics.queueDepth = 1;
+    hb2.metrics.cpuUsage = 0.1;
+    registry.updateHeartbeat(id2, hb2);
+    
+    // Should fall back to load-based selection (pick worker2)
+    Capabilities caps;
+    auto result = registry.selectWorkerWithAffinity(AffinityKey("Rust", ""), caps);
+    Assert.isTrue(result.isOk);
+    Assert.equal(result.unwrap().value, id2.value);
+    
+    writeln("\x1b[32m  ✓ Disabled affinity falls back to load-based\x1b[0m");
 }
 
