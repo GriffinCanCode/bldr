@@ -58,6 +58,7 @@ Security and compliance features:
 
 - **`audit.d`**: Audit logging for sandbox violations (filesystem, network, process creation)
 - **`timeout.d`**: Timeout enforcement to prevent hanging builds
+- **`seccomp.d`**: Seccomp-BPF syscall filtering (Linux only)
 
 ## Usage
 
@@ -145,11 +146,28 @@ auto spec = builder.build().unwrap();
 
 ## Platform Support
 
-| Platform | Isolation | Resource Limits | Network Isolation | Status |
-|----------|-----------|-----------------|-------------------|--------|
-| Linux    | Namespaces + cgroups v2 | ✅ Memory, CPU, Processes | ✅ Full | Production |
-| macOS    | sandbox-exec (SBPL) | ⚠️ Via rusage | ✅ Full | Production |
-| Windows  | Job Objects | ✅ Memory, CPU, Processes | ❌ Partial | Beta |
+| Platform | Isolation | Resource Limits | Network Isolation | Syscall Filter | Status |
+|----------|-----------|-----------------|-------------------|----------------|--------|
+| Linux    | Namespaces + cgroups v2 | ✅ Memory, CPU, Processes | ✅ Full | ✅ seccomp-BPF | Production |
+| macOS    | sandbox-exec (SBPL) | ⚠️ Via rusage | ✅ Full | ❌ N/A | Production |
+| Windows  | Job Objects | ✅ Memory, CPU, Processes | ❌ Partial | ❌ N/A | Beta |
+
+### Seccomp-BPF Filtering (Linux)
+
+On Linux, the sandbox includes seccomp-BPF syscall filtering to prevent sandbox escapes:
+
+| Category | Blocked Syscalls | Risk Mitigated |
+|----------|------------------|----------------|
+| Process manipulation | `ptrace`, `process_vm_readv/writev` | Escape via debugging |
+| Mount operations | `mount`, `umount2`, `pivot_root` | Filesystem namespace escape |
+| Execution domain | `personality` | Bypass ASLR, change ABI |
+| Namespace escape | `setns`, `unshare` | Namespace juggling attacks |
+| Kernel modules | `init_module`, `finit_module`, `delete_module` | Kernel compromise |
+| System control | `reboot`, `kexec_load` | Full system access |
+| Clock manipulation | `clock_settime`, `settimeofday` | Break determinism |
+| BPF manipulation | `bpf` | Modify/bypass our filter |
+
+Violations result in immediate `SIGKILL` - the process is terminated without the ability to catch the signal.
 
 ## Design Principles
 

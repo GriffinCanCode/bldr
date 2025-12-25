@@ -1,20 +1,29 @@
 topic: linux-support
 category: concepts
-summary: "Linux Support - Building on Linux"
+summary: "Linux Support - Building on Linux with namespace isolation and seccomp-BPF"
 definition: |
   Specifics of running Builder on Linux. The primary development platform.
-  Uses namespaces for sandboxing.
+  Uses namespaces for sandboxing and seccomp-BPF for syscall filtering.
 
 key_points:
   - "Performance: Best performance on Linux"
-  - "Sandboxing: Robust namespace isolation"
+  - "Sandboxing: Robust namespace isolation (mount, PID, network, IPC, UTS, user)"
+  - "Seccomp-BPF: Syscall filtering blocks sandbox escape attempts"
+  - "Cgroups v2: Resource limits (memory, CPU, processes)"
   - "Docker: Native docker support"
 
-usage_examples:
-  - description: "Primary platform"
+sandbox_layers:
+  namespaces: "Filesystem, process, network, IPC isolation"
+  cgroups: "Memory, CPU, I/O limits and accounting"
+  seccomp: "Blocks ptrace, mount, personality, setns, kernel modules, clock manipulation"
 
-related: [platforms, hermetic-sandbox, performance]
+usage_examples:
+  - description: "Primary platform - strongest sandbox isolation"
+
+related: [platforms, hermetic, security, performance]
 
 next_steps: |
   - Use for CI/CD runners
+  - See 'bldr explain hermetic' for sandbox details
+  - See 'bldr explain security' for seccomp syscall blocklist
 

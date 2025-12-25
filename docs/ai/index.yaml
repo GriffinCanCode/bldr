@@ -129,6 +129,11 @@ concepts:
     file: "concepts/languages/go-support.yaml"
     summary: "Go Support - Building Go code"
 
+  graph-persistence:
+    file: "concepts/core/graph-persistence.yaml"
+    summary: "SQLite-backed graph storage for crash safety and efficient queries"
+    keywords: ["sqlite", "wal", "crash", "recovery", "query", "transitive"]
+
   grpc-transport:
     file: "concepts/reference/grpc-transport.yaml"
     summary: "gRPC Transport - HTTP/2 streaming for remote execution with REAPI compatibility"
@@ -336,6 +341,10 @@ concepts:
 
 
 aliases:
+  graph-db: "graph-persistence"
+  graph-sqlite: "graph-persistence"
+  graph-wal: "graph-persistence"
+  crash-recovery: "graph-persistence"
   verbose: "verbose-output"
   debug: "verbose-output"
   logging: "verbose-output"
@@ -355,6 +364,10 @@ aliases:
   incremental-compilation: "incremental-compilation"
   sandbox: "hermetic"
   isolation: "hermetic"
+  seccomp: "hermetic"
+  seccomp-bpf: "hermetic"
+  syscall-filter: "hermetic"
+  ptrace: "security"
   builderspace: "workspace"
   config: "workspace"
   build-file: "builderfile"

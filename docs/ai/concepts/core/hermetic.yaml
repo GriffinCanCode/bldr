@@ -30,9 +30,26 @@ vs_non_hermetic:
     - "Identical results everywhere"
 
 implementation:
-  linux: "User namespaces, mount namespaces, PID namespaces"
-  macos: "sandbox-exec with custom profile"
+  linux: |
+    User namespaces, mount namespaces, PID namespaces, cgroups v2,
+    and seccomp-BPF syscall filtering (blocks ptrace, mount, personality, etc.)
+  macos: "sandbox-exec with custom profile (SBPL)"
   windows: "Job objects and restricted tokens"
+
+seccomp_filtering:
+  description: |
+    Linux builds use seccomp-BPF to block dangerous syscalls that could escape
+    the sandbox or compromise build determinism.
+  blocked_syscalls:
+    - "ptrace, process_vm_readv/writev: Process debugging/manipulation"
+    - "mount, umount2, pivot_root: Filesystem namespace escape"
+    - "personality: Execution domain manipulation (bypass ASLR)"
+    - "setns, unshare: Namespace juggling attacks"
+    - "init_module, finit_module, delete_module: Kernel module loading"
+    - "reboot, kexec_load: System control"
+    - "clock_settime, settimeofday: Time manipulation (non-determinism)"
+    - "bpf: BPF manipulation (could modify our filter)"
+  enforcement: "SIGKILL on violation - immediate termination"
 
 key_points:
   - "Enforces explicit dependencies"

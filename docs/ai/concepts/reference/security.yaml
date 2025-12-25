@@ -9,9 +9,21 @@ definition: |
 key_points:
   - "Artifact integrity: BLAKE3 hashing for all inputs/outputs"
   - "Sandboxing: Prevents malicious build scripts from affecting host"
+  - "Seccomp-BPF: Syscall filtering blocks ptrace, mount, personality escapes (Linux)"
   - "Lockfiles: Pins dependency versions and hashes"
   - "Provenance: SLSA v1.0 signed attestations"
   - "Vulnerability scanning: Can integrate with scanners"
+
+syscall_filtering:
+  description: "Linux sandbox includes seccomp-BPF to block dangerous syscalls"
+  blocked_categories:
+    - "Process manipulation (ptrace, process_vm_*)"
+    - "Mount operations (mount, umount2, pivot_root)"
+    - "Namespace escape (setns, unshare)"
+    - "Kernel modules (init_module, delete_module)"
+    - "System control (reboot, kexec_load)"
+    - "Clock manipulation (clock_settime, settimeofday)"
+  policy: "Strict by default - violations cause immediate SIGKILL"
 
 provenance_support:
   - "SLSA L1: Provenance exists (automatic)"

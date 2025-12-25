@@ -16,6 +16,7 @@ import std.algorithm : map;
 import std.array : array;
 import core.stdc.errno : errno, ENOENT;
 import engine.runtime.hermetic.core.spec;
+import engine.runtime.hermetic.security.seccomp;
 import infrastructure.errors;
 
 /// Linux namespace-based sandbox implementation
@@ -299,6 +300,15 @@ private extern(C) int childEntrypoint(void* arg) @system nothrow
         
         // Build environment
         auto env = buildEnvironment(args.spec);
+        
+        // Install seccomp-bpf filter (must be done before exec)
+        // This blocks dangerous syscalls like ptrace, mount, personality, etc.
+        if (installSeccompFilter(SeccompPolicy.strict()) != 0)
+        {
+            import core.stdc.stdio : fprintf, stderr;
+            fprintf(stderr, "seccomp filter installation failed\n".ptr);
+            return 1;
+        }
         
         // Prepare argv and envp
         const(char)*[] argv = new const(char)*[args.command.length + 1];

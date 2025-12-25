@@ -207,11 +207,14 @@ foreach (source; target.sources) {
 3. **TOCTOU Attacks**: ✅ Prevented by atomic temp dirs
 4. **Path Traversal**: ✅ Prevented by glob validation framework
 5. **Dependency Confusion**: 🔄 Framework designed, integration needed
+6. **Sandbox Escape**: ✅ Seccomp-BPF blocks ptrace, mount, personality, setns (Linux)
+7. **Kernel Module Loading**: ✅ Seccomp-BPF blocks init_module, delete_module (Linux)
+8. **Clock Manipulation**: ✅ Seccomp-BPF blocks clock_settime for determinism (Linux)
 
 ### Remaining Risks
 
 1. **Supply Chain**: Dependency downloads not fully validated
-2. **Privilege Escalation**: Limited mitigation for setuid scenarios
+2. **Privilege Escalation**: Limited mitigation for setuid scenarios (seccomp helps on Linux)
 3. **Side Channels**: No timing attack prevention in general code
 4. **DoS**: Limited rate limiting on expensive operations
 
@@ -284,13 +287,21 @@ bldr build  # Should detect tampering
 
 ## Future Work
 
+### Implemented Security Features
+
+1. **Seccomp-BPF Filtering** (Linux): Syscall filtering blocks dangerous operations
+   - Blocks: `ptrace`, `mount`, `personality`, `setns`, `unshare`, `init_module`, `bpf`
+   - Prevents sandbox escapes from malicious build rules
+   - Enforces determinism by blocking clock manipulation
+
 ### Planned Enhancements
 
-1. **Sandboxing**: Container-based build isolation
+1. ~~**Sandboxing**: Container-based build isolation~~ ✅ Namespaces + seccomp-BPF implemented
 2. **SBOM Generation**: Software Bill of Materials for supply chain
 3. **Code Signing**: Binary artifact signatures
 4. **Network Policies**: Restrict external connections during builds
 5. **Audit Logs**: Centralized security event logging
+6. **SELinux/AppArmor**: MAC policies for additional defense in depth
 
 ### Research Areas
 

@@ -135,6 +135,8 @@ User Namespace (CLONE_NEWUSER)
                           └─ Isolated shared memory
                              └─ UTS Namespace (CLONE_NEWUTS)
                                 └─ Custom hostname
+                                   └─ Seccomp-BPF Filter
+                                      └─ Blocks dangerous syscalls
 ```
 
 #### Mount Strategy
@@ -170,6 +172,25 @@ Example mount table inside sandbox:
 ├── pids.max            # Process limit (128 default)
 └── io.max              # I/O bandwidth limits (future)
 ```
+
+#### Seccomp-BPF Syscall Filtering
+
+The sandbox installs a seccomp-BPF filter before executing the build command,
+blocking dangerous syscalls that could escape isolation:
+
+| Category | Blocked Syscalls | Attack Prevented |
+|----------|------------------|------------------|
+| Process manipulation | `ptrace`, `process_vm_readv/writev` | Debug/trace escape |
+| Mount operations | `mount`, `umount2`, `pivot_root` | Filesystem namespace escape |
+| Execution domain | `personality` | Bypass ASLR, change ABI |
+| Namespace escape | `setns`, `unshare` | Join other namespaces |
+| Kernel modules | `init_module`, `finit_module`, `delete_module` | Kernel compromise |
+| System control | `reboot`, `kexec_load` | Full system takeover |
+| Clock manipulation | `clock_settime`, `settimeofday` | Non-determinism |
+| BPF manipulation | `bpf` | Modify our seccomp filter |
+
+Violations trigger immediate `SIGKILL` - the process is terminated without
+the ability to catch the signal or clean up.
 
 ### macOS: Sandbox Profile Language
 
@@ -341,9 +362,11 @@ Build: 1000 TypeScript files (complex)
 | Filesystem read | Mount namespace (read-only) | **High** (kernel-enforced) |
 | Filesystem write | Mount namespace (restricted) | **High** (kernel-enforced) |
 | Resource exhaustion | Cgroups limits | **Medium** (configurable limits) |
-| Privilege escalation | User namespace | **High** (no real root access) |
-| Process escape | PID namespace | **High** (isolated process tree) |
+| Privilege escalation | User namespace + seccomp | **High** (no real root + blocked syscalls) |
+| Process escape | PID namespace + seccomp | **High** (isolated + ptrace blocked) |
 | IPC attacks | IPC namespace | **Medium** (no host IPC) |
+| Namespace juggling | Seccomp (setns/unshare blocked) | **High** (syscall blocked) |
+| Kernel module loading | Seccomp (init_module blocked) | **High** (syscall blocked) |
 | Timing attacks | Not mitigated | **Low** (future: deterministic execution) |
 
 ### Limitations
@@ -353,13 +376,16 @@ Build: 1000 TypeScript files (complex)
 3. **Metadata leakage**: File sizes, timestamps visible
 4. **Resource scheduling**: No guarantees on CPU/memory scheduling fairness
 
+### Implemented Security Features
+
+1. **Seccomp-BPF**: ✅ Syscall filtering blocks ptrace, mount, personality, setns, kernel modules, etc.
+
 ### Future Security Enhancements
 
-1. **Seccomp-BPF**: Syscall filtering for additional hardening
-2. **SELinux/AppArmor**: MAC policies for defense in depth
-3. **Cryptographic verification**: Sign and verify all inputs
-4. **Deterministic execution**: Ensure bit-for-bit reproducibility
-5. **Hardware isolation**: SGX/TrustZone for sensitive builds
+1. **SELinux/AppArmor**: MAC policies for defense in depth
+2. **Cryptographic verification**: Sign and verify all inputs
+3. **Deterministic execution**: Ensure bit-for-bit reproducibility
+4. **Hardware isolation**: SGX/TrustZone for sensitive builds
 
 ## Testing Strategy
 
@@ -424,7 +450,7 @@ void testDeterminism(string[] command, PathSet inputs)
 1. **Windows support**: Implement job objects + AppContainer
 2. **Namespace pooling**: Reuse namespaces for faster builds
 3. **Profile caching**: Cache SBPL profiles on macOS
-4. **Seccomp filtering**: Add syscall filtering for hardening
+4. ~~**Seccomp filtering**~~: ✅ Implemented - syscall filtering now active
 
 ### Medium-term (3-6 releases)
 

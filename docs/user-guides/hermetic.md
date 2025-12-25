@@ -95,7 +95,13 @@ If hermetic builds fail:
 
 **Requirements:**
 - Kernel 3.8+ (for user namespaces)
+- Kernel 3.5+ (for seccomp-BPF)
 - `/proc/self/ns/user` must exist
+
+**Security layers:**
+- Namespace isolation (mount, PID, network, IPC, UTS, user)
+- Cgroups v2 resource limits
+- Seccomp-BPF syscall filtering (blocks ptrace, mount, personality, etc.)
 
 **Enable unprivileged user namespaces:**
 ```bash
@@ -108,6 +114,7 @@ echo 'kernel.unprivileged_userns_clone = 1' | sudo tee -a /etc/sysctl.conf
 **Common issues:**
 - **"Operation not permitted"**: User namespaces disabled
 - **"No space left on device"**: Too many mount points (increase `fs.mount-max`)
+- **"seccomp filter installation failed"**: Kernel doesn't support seccomp (rare)
 
 ### macOS
 
