@@ -124,6 +124,90 @@ Tests for gRPC transport layer and protobuf codec:
 
 **Test Count**: 40 unit tests
 
+### `scheduler.d` - Coordinator Scheduler Tests
+Tests for distributed scheduler with lock striping:
+- **Creation**: Scheduler initialization, shutdown
+- **Scheduling**: Action scheduling, duplicate handling, multiple actions
+- **Priority**: Priority ordering, critical-first dequeue
+- **Dequeue**: Empty queue handling, state transitions
+- **Assignment**: Worker assignment, non-existent action handling
+- **Completion**: Action completion, stats update
+- **Failure Handling**: Retry logic, permanent failure after max retries
+- **Worker Failure**: Action reassignment on worker failure
+- **Stats**: Accuracy verification across states
+- **Concurrency**: Parallel scheduling, parallel dequeue
+- **Sharding**: Distribution across 32 shards
+
+**Test Count**: 18 unit tests
+
+### `sandbox.d` - Worker Sandbox Tests
+Tests for isolated execution environment:
+- **Factory**: Hermetic and non-hermetic sandbox creation
+- **NoSandbox**: Prepare, execute simple commands, environment variables, failing commands
+- **ExecutionOutput**: Structure, empty output handling
+- **Environment**: Work directory setup
+- **Capabilities**: Default values, network, resource limits, path restrictions
+- **Input Artifacts**: Structure validation
+- **Timeout**: Configuration and enforcement
+- **Output Specs**: File and directory specifications
+- **Concurrency**: Parallel preparation and execution
+
+**Test Count**: 20 unit tests
+
+### `integration.d` - End-to-End Integration Tests
+Tests for complete distributed system workflows:
+- **Coordinator Lifecycle**: Creation, config defaults
+- **Worker Registration Flow**: Registration, heartbeat updates
+- **Action Execution Flow**: Schedule → dequeue → assign → complete
+- **Multi-Worker**: Distribution across worker pool
+- **Load Balancing**: Load-based worker selection
+- **Artifact Storage Flow**: Put and get operations
+- **Health Check Flow**: Timeout detection, recovery
+- **Retry Flow**: Failure and retry mechanics
+- **Concurrency**: Parallel scheduling and completion
+- **Full Simulation**: Complete build workflow simulation
+
+**Test Count**: 14 unit tests
+
+### `chaos.d` - Chaos/Fault Injection Tests
+Tests for system resilience under failure conditions:
+- **Worker Failure Injection**: Random failures, all workers fail
+- **Action Failure Injection**: Random failures, cascading failures
+- **Heartbeat Failures**: Timeout during execution, intermittent heartbeats
+- **Storage Failures**: Memory pressure, concurrent eviction
+- **Race Conditions**: Concurrent schedule/complete, registration/selection
+- **Network Partition**: Simulated datacenter partition
+- **Stress Tests**: High action churn, worker state thrashing
+
+**Test Count**: 14 unit tests
+
+### `performance.d` - Performance Regression Tests
+Benchmark tests with throughput and latency assertions:
+- **Scheduling Performance**: Throughput (>5000/sec), concurrent scheduling
+- **Worker Registry**: Registration, selection, heartbeat update throughput
+- **Storage Performance**: Put and get throughput
+- **Concurrent Performance**: Parallel scheduling and dequeue
+- **Latency Tests**: Scheduling latency (<1ms avg), selection latency (<500µs)
+- **Memory Efficiency**: Storage eviction under pressure
+- **Scalability**: Linear scaling verification (100→10000 actions)
+
+**Test Count**: 12 unit tests
+
+### `reapi.d` - REAPI v2 Compatibility Tests
+Tests for Bazel Remote Execution API compatibility:
+- **Digest**: Creation, hash string, equality
+- **Adapter**: Creation with SHA256/BLAKE3, capabilities/platform conversion, priority conversion
+- **Hash Translator**: ActionId ↔ Digest conversion
+- **Codec**: Varint encoding, digest/action result/execute response encoding
+- **Server Capabilities**: Build capabilities, supported digest functions, compressors
+- **Status**: OK and error status handling
+- **Client/Server**: Creation, handler registration, capabilities endpoint
+- **Action Conversion**: Request/result bidirectional conversion
+- **Wire Format**: Tag creation, execute request encoding
+- **Error Handling**: Null requests, invalid digests, unknown endpoints
+
+**Test Count**: 33 unit tests
+
 ## Running Tests
 
 ### Run All Distributed Tests
@@ -140,6 +224,12 @@ dub test -- tests.unit.core.distributed.steal
 dub test -- tests.unit.core.distributed.storage
 dub test -- tests.unit.core.distributed.memory
 dub test -- tests.unit.core.distributed.grpc
+dub test -- tests.unit.core.distributed.scheduler
+dub test -- tests.unit.core.distributed.sandbox
+dub test -- tests.unit.core.distributed.integration
+dub test -- tests.unit.core.distributed.chaos
+dub test -- tests.unit.core.distributed.performance
+dub test -- tests.unit.core.distributed.reapi
 ```
 
 ## Test Coverage
@@ -153,7 +243,13 @@ dub test -- tests.unit.core.distributed.grpc
 | Storage | 16 | Content-addressable storage, eviction |
 | Memory | 22 | Arenas, object pools, buffers |
 | gRPC | 40 | Transport, codec, server, config |
-| **Total** | **151** | Comprehensive distributed system coverage |
+| Scheduler | 18 | Distributed scheduler, sharding, priorities |
+| Sandbox | 20 | Execution isolation, capabilities |
+| Integration | 14 | End-to-end workflows, multi-worker |
+| Chaos | 14 | Fault injection, resilience |
+| Performance | 12 | Throughput, latency, scalability |
+| REAPI | 33 | Bazel Remote Execution API compatibility |
+| **Total** | **262** | Comprehensive distributed system coverage |
 
 ## Test Patterns
 
@@ -206,14 +302,14 @@ These tests run as part of the Builder test suite:
 ## Future Test Additions
 
 Planned test expansions:
-- [ ] Coordinator scheduler tests
-- [ ] Worker sandbox tests
+- [x] Coordinator scheduler tests
+- [x] Worker sandbox tests
 - [x] Protocol transport tests (gRPC)
-- [ ] End-to-end integration tests
-- [ ] Chaos/fault injection tests
-- [ ] Performance regression tests
+- [x] End-to-end integration tests
+- [x] Chaos/fault injection tests
+- [x] Performance regression tests
 - [x] gRPC streaming tests (pure D implementation)
-- [ ] REAPI compatibility tests
+- [x] REAPI compatibility tests
 
 ## Contributing
 
