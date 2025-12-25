@@ -6,11 +6,12 @@ definition: |
   to run on a separate fleet of worker machines.
 
 key_points:
-  - "REAPI: Standard Remote Execution API support"
+  - "REAPI v2: Full Bazel Remote Execution API wire compatibility"
   - "Inputs: Transfers only necessary inputs to worker"
   - "Outputs: Downloads results from worker"
   - "Platform properties: Select workers by OS/arch"
   - "Transport options: HTTP/1.1 (lightweight) or gRPC (full REAPI compat)"
+  - "Hash translation: Automatic BLAKE3 ↔ SHA256 mapping for REAPI servers"
   - "Streaming: gRPC enables progress streaming during execution"
 
 transport_options:
@@ -24,6 +25,11 @@ transport_options:
     - "Automatic retry with backoff"
     - "Deadline propagation"
     - "Works with Buildbarn, Buildfarm, etc."
+  reapi_v2:
+    - "Wire-compatible REAPI v2 protocol adapter"
+    - "Connect to BuildBuddy, BuildBarn, Google RBE"
+    - "No gRPC library dependency required"
+    - "Full CAS/ActionCache/Execution services"
 
 usage_examples:
   - description: "Basic gRPC configuration"
@@ -43,10 +49,11 @@ usage_examples:
         transport: grpc
         enable_reapi: true
 
-related: [distributed, remote-cache, hermetic, grpc-transport]
+related: [distributed, remote-cache, hermetic, grpc-transport, reapi-v2]
 
 next_steps: |
   - Requires a compatible backend (Buildbarn, Buildfarm, etc.)
-  - Use gRPC transport for standard REAPI endpoints
+  - Use REAPI v2 adapter for standard REAPI endpoints
+  - Use gRPC transport for streaming support
   - Use HTTP transport for Builder-native clusters
 

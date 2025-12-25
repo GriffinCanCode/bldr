@@ -1,0 +1,73 @@
+topic: reapi-v2
+category: concepts
+summary: "REAPI v2 Compatibility - Bazel Remote Execution API wire compatibility"
+definition: |
+  The REAPI v2 compatibility layer enables Builder to integrate with existing
+  remote execution infrastructure. It provides wire-format compatibility with
+  Bazel's Remote Execution API v2 (build.bazel.remote.execution.v2).
+
+key_points:
+  - "Wire compatibility: Binary-compatible with REAPI protobuf messages"
+  - "Hash translation: Bidirectional BLAKE3 ↔ SHA256 mapping"
+  - "Client mode: Connect to BuildBuddy, BuildBarn, Google RBE"
+  - "Server mode: Expose Builder as REAPI endpoint for Bazel clients"
+  - "No gRPC dependency: Pure binary protocol implementation"
+  - "Full service parity: Execution, ActionCache, CAS, Capabilities"
+
+services:
+  execution:
+    - "Execute actions remotely via long-running operations"
+    - "Operation status polling and cancellation"
+  action_cache:
+    - "Get/update cached action results"
+    - "Digest-based lookup"
+  cas:
+    - "FindMissingBlobs, BatchRead, BatchUpdate"
+    - "Single blob upload/download"
+    - "Directory tree retrieval"
+  capabilities:
+    - "Server capability reporting"
+    - "Supported hash functions, compressors"
+
+usage_examples:
+  - description: "Connect to REAPI server (client mode)"
+    code: |
+      import engine.distributed.protocol.reapi_v2;
+      
+      auto client = new ReapiV2Client("buildbarn.example.com:8980");
+      auto result = client.execute(actionRequest);
+  - description: "Expose Builder as REAPI endpoint (server mode)"
+    code: |
+      auto services = new ReapiServiceBundle(executeDelegate);
+      auto router = ReapiRouter(services);
+      auto response = router.route("POST", "/v2/default/actions:execute", body);
+  - description: "Hash translation"
+    code: |
+      auto translator = new HashTranslator();
+      translator.registerContent(fileBytes);  // Computes BLAKE3 + SHA256
+      auto digest = translator.actionIdToDigest(actionId, size);
+
+endpoints:
+  - "POST /v2/{instance}/actions:execute"
+  - "GET/PUT /v2/{instance}/actionResults/{hash}/{size}"
+  - "POST /v2/{instance}/blobs:findMissing"
+  - "GET/PUT /v2/{instance}/blobs/{hash}/{size}"
+  - "GET /v2/{instance}/capabilities"
+
+compatible_backends:
+  - "BuildBuddy"
+  - "BuildBarn"
+  - "BuildGrid"
+  - "Buildfarm"
+  - "Google Remote Build Execution"
+  - "Engflow"
+
+related: [distributed, remote-execution, grpc-transport, remote-cache, blake3]
+
+location: "source/engine/distributed/protocol/reapi_v2/"
+
+next_steps: |
+  - Use ReapiV2Client to connect to existing REAPI infrastructure
+  - Use ReapiServiceBundle to expose Builder as REAPI server
+  - Register content with HashTranslator for BLAKE3/SHA256 mapping
+

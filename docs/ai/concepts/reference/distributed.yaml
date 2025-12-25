@@ -9,9 +9,10 @@ key_points:
   - "Remote execution: Run compilers/tests on remote workers"
   - "Scalability: Scale from one to hundreds of cores"
   - "Transparency: Works without code changes"
-  - "Protocol: Uses standard Remote Execution API (REAPI)"
-  - "Transport: Supports HTTP/1.1 (default) or gRPC/HTTP2"
-  - "gRPC benefits: Streaming, automatic retry, deadline propagation"
+  - "REAPI v2: Wire-compatible with Bazel Remote Execution API"
+  - "Transport: Supports HTTP/1.1 (default), gRPC, or REAPI v2"
+  - "Integration: Works with BuildBuddy, BuildBarn, Google RBE"
+  - "Hash translation: Automatic BLAKE3 ↔ SHA256 for REAPI servers"
 
 usage_examples:
   - description: "Configure remote execution with HTTP (default)"
@@ -32,10 +33,11 @@ usage_examples:
           key: "/path/to/client.key"
           ca: "/path/to/ca.crt"
 
-related: [remote-cache, hermetic, action-cache, grpc-transport]
+related: [remote-cache, hermetic, action-cache, grpc-transport, reapi-v2]
 
 next_steps: |
   - Set up a REAPI-compatible build farm
   - Configure remote endpoint in builder.yml
-  - Use gRPC for Bazel REAPI interoperability
+  - Use REAPI v2 adapter for BuildBuddy/BuildBarn integration
+  - Use gRPC for streaming and deadline propagation
 

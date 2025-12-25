@@ -42,6 +42,7 @@ The distributed build system enables massive speedups by executing build actions
 5. **Transport** - Network communication layer
 6. **Sandbox** - Isolated execution environment
 7. **Store** - Content-addressable artifact storage
+8. **REAPI v2** - Bazel Remote Execution API wire compatibility
 
 ## Key Features
 
@@ -318,6 +319,12 @@ source/core/distributed/
 │   ├── protocol.d   - Core protocol types
 │   ├── messages.d   - Message serialization
 │   ├── transport.d  - Network transport
+│   ├── reapi_v2/    - REAPI v2 compatibility layer
+│   │   ├── types.d      - REAPI type definitions
+│   │   ├── codec.d      - Protobuf wire format
+│   │   ├── adapter.d    - Type translation
+│   │   ├── services.d   - Service implementations
+│   │   └── hash.d       - BLAKE3 ↔ SHA256 mapping
 │   └── package.d    - Protocol API
 ├── coordinator/
 │   ├── coordinator.d - Coordinator implementation
@@ -397,7 +404,14 @@ dub run --config=benchmark
 - [x] Load-aware victim selection
 - [x] Exponential backoff and retry logic
 
-### Phase 5: Production (Future)
+### Phase 5: REAPI Integration (Done)
+- [x] REAPI v2 wire-format compatibility
+- [x] Hash translation (BLAKE3 ↔ SHA256)
+- [x] CAS/ActionCache/Execution services
+- [x] Client mode (connect to BuildBuddy, BuildBarn, etc.)
+- [x] Server mode (expose Builder as REAPI endpoint)
+
+### Phase 6: Production (Future)
 - [ ] Docker images
 - [ ] Kubernetes operator
 - [ ] Monitoring & metrics

@@ -234,6 +234,11 @@ concepts:
     file: "concepts/reference/remote-execution.yaml"
     summary: "Remote Execution - Running actions on a cluster"
 
+  reapi-v2:
+    file: "concepts/reference/reapi-v2.yaml"
+    summary: "REAPI v2 - Bazel Remote Execution API wire compatibility"
+    keywords: ["bazel", "buildbarn", "buildbuddy", "remote", "reapi"]
+
   repository-rules:
     file: "concepts/ecosystem/repository-rules.yaml"
     summary: "Repository Rules - External dependency logic"
