@@ -577,6 +577,7 @@ unittest
 unittest
 {
     import std.stdio;
+    import std.algorithm : canFind, startsWith;
     writeln("\x1b[36m[TEST]\x1b[0m speculation.predictor - Co-change correlation");
     
     auto predictor = new ChangePredictor();

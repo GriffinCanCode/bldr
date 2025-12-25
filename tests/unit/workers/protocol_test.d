@@ -3,6 +3,7 @@ module tests.unit.workers.protocol_test;
 import std.stdio : writeln;
 import std.conv : to;
 import std.json : parseJSON, JSONValue;
+import std.range : empty;
 import engine.workers.protocol.types;
 
 /// Test WorkRequest JSON serialization

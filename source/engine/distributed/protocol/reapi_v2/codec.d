@@ -1201,7 +1201,7 @@ struct ReapiV2Codec {
     // =========================================================================
     
     /// Make field tag (field_number << 3 | wire_type)
-    package static ubyte makeTag(uint fieldNumber, WireType wireType) pure nothrow @safe @nogc =>
+    static ubyte makeTag(uint fieldNumber, WireType wireType) pure nothrow @safe @nogc =>
         cast(ubyte)((fieldNumber << 3) | wireType);
     
     /// Encode unsigned varint (base-128)

@@ -338,13 +338,13 @@ struct SpeculationExecutorStats
     size_t enginePendingTasks;
     size_t engineActiveWorkers;
     
-    @property float hitRate() const pure nothrow @nogc
+    @property float hitRate() const pure nothrow @nogc @safe
     {
         auto total = hits + misses;
         return total == 0 ? 0.0f : cast(float)hits / cast(float)total;
     }
     
-    @property float successRate() const pure nothrow @nogc
+    @property float successRate() const pure nothrow @nogc @safe
     {
         auto total = totalSpeculated;
         return total == 0 ? 0.0f : cast(float)(hits) / cast(float)total;

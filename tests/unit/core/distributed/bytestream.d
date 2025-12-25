@@ -3,6 +3,7 @@ module tests.unit.core.distributed.bytestream;
 import std.stdio;
 import std.datetime;
 import std.conv;
+import std.string : indexOf;
 import std.algorithm : map, equal;
 import std.array : array;
 import engine.distributed.protocol.reapi_v2.stream;
