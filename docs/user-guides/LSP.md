@@ -10,8 +10,9 @@ The Builder LSP provides rich language features for Builderfile configuration fi
 - ✅ **Real-time Diagnostics** - Parse errors and validation warnings as you type
 - ✅ **Go to Definition** - Jump to target definitions instantly (F12)
 - ✅ **Hover Documentation** - Rich documentation on hover
-- ✅ **Find All References** - Find where targets are used (Shift+F12)
-- ✅ **Rename Refactoring** - Rename targets across all files (F2)
+- ✅ **Find All References** - Find where targets are used across workspace (Shift+F12)
+- ✅ **Rename Refactoring** - Rename targets across all files in workspace (F2)
+- ✅ **Workspace Symbols** - Quick search for any target (Ctrl+T / Cmd+T)
 - ✅ **CodeLens** - Inline dependency counts and impact analysis above each target
 - ✅ **Impact Analysis** - Severity visualization with estimated rebuild times
 
@@ -202,7 +203,26 @@ Rename targets across all Builderfiles:
 1. Place cursor on target name
 2. Press F2 (or right-click → Rename Symbol)
 3. Enter new name
-4. All references are updated automatically
+4. All references across the entire workspace are updated automatically
+
+### Workspace Symbol Search (Ctrl+T)
+
+Quickly find any target in your workspace:
+
+1. Press Ctrl+T (or Cmd+T on macOS)
+2. Type part of the target name
+3. Select from fuzzy-matched results
+4. Jump directly to the target definition
+
+```
+Type: "app" → Finds: my-app, webapp, app-server, ...
+Type: "lib" → Finds: mylib, core-lib, utils-lib, ...
+```
+
+Results are sorted by relevance:
+- Exact prefix matches appear first
+- Shorter names ranked higher for same match quality
+- Container shows the relative path to the Builderfile
 
 ### CodeLens (Inline Dependency Visualization)
 
@@ -373,11 +393,13 @@ Typical memory usage: 5-15 MB per workspace
 
 Current version limitations:
 
-1. **Single-file parsing**: Doesn't yet understand cross-file dependencies
-2. **No workspace symbols**: Ctrl+T symbol search not yet implemented
-3. **Basic rename**: Renames in current file only (workspace rename coming soon)
+1. **Dynamic workspace updates**: Files created externally require LSP restart to be indexed
+2. **Complex expressions**: Some advanced Builderfile expressions may not be fully analyzed
 
-These will be addressed in future releases!
+✅ **Recently addressed:**
+- Workspace symbol search (Ctrl+T) - now implemented
+- Cross-file references and navigation - now works workspace-wide
+- Workspace rename refactoring - now renames across all Builderfiles
 
 ## Building from Source
 

@@ -4,6 +4,16 @@
 
 ### Added
 
+- **LSP Workspace Symbol Search** (`workspace/symbol`) - Ctrl+T now searches all targets across the workspace:
+  - Fuzzy matching by target name
+  - Results sorted by relevance (exact prefix matches first)
+  - Shows file location as container name for easy navigation
+
+- **LSP Cross-File Workspace Scanning** - On initialization, LSP now indexes all Builderfiles in the workspace:
+  - Scans `Builderfile`, `Builderspace`, `*.builder`, `*.builderfile` files
+  - Enables workspace-wide go-to-definition, find references, and rename
+  - Rename refactoring now works across all files in workspace
+
 - **Deterministic Lockfile Generation** - Reproducible builds through unified lockfile generation for all supported package managers:
   - **npm/yarn/pnpm**: Generates `package-lock.json`, `yarn.lock`, or `pnpm-lock.yaml`
   - **Cargo**: Generates `Cargo.lock` for Rust projects

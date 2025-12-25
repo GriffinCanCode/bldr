@@ -461,6 +461,9 @@ struct ServerCapabilities
         // Document symbols
         json["documentSymbolProvider"] = true;
         
+        // Workspace symbols (Ctrl+T search)
+        json["workspaceSymbolProvider"] = true;
+        
         // CodeLens - inline dependency visualization
         JSONValue codeLensProvider;
         codeLensProvider["resolveProvider"] = true;
@@ -516,6 +519,51 @@ struct InitializeResult
         serverInfo["version"] = "1.0.0";
         json["serverInfo"] = serverInfo;
         
+        return json;
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Workspace Symbol Protocol Structures
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Symbol kind (LSP standard - shared by workspace/document symbols)
+enum LSPSymbolKind : uint
+{
+    File = 1, Module = 2, Namespace = 3, Package = 4, Class = 5,
+    Method = 6, Property = 7, Field = 8, Constructor = 9, Enum = 10,
+    Interface = 11, Function = 12, Variable = 13, Constant = 14, String = 15,
+    Number = 16, Boolean = 17, Array = 18, Object = 19, Key = 20, Null = 21,
+    EnumMember = 22, Struct = 23, Event = 24, Operator = 25, TypeParameter = 26
+}
+
+/// Workspace symbol params for workspace/symbol request
+struct WorkspaceSymbolParams
+{
+    string query;
+
+    static WorkspaceSymbolParams fromJSON(JSONValue json)
+    {
+        return WorkspaceSymbolParams(json["query"].str);
+    }
+}
+
+/// Symbol information for workspace symbols (flat, unlike DocumentSymbol)
+struct SymbolInformation
+{
+    string name;
+    LSPSymbolKind kind;
+    Location location;
+    string containerName;
+
+    JSONValue toJSON() const
+    {
+        JSONValue json;
+        json["name"] = name;
+        json["kind"] = cast(uint)kind;
+        json["location"] = location.toJSON();
+        if (containerName.length > 0)
+            json["containerName"] = containerName;
         return json;
     }
 }

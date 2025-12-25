@@ -5,7 +5,10 @@ import std.path;
 import std.string;
 import std.algorithm;
 import std.array;
+import std.conv : to;
 import std.datetime;
+import std.range : empty;
+import std.uni : toLower;
 import frontend.lsp.core.protocol;
 import frontend.lsp.workspace.index;
 import frontend.lsp.workspace.analysis;
@@ -40,6 +43,76 @@ class WorkspaceManager
         this.rootUri = rootUri;
         this.index = Index();
         this.analyzer = LSPSemanticAnalyzer(&this.index);
+        
+        // Scan workspace for all Builderfiles on initialization
+        scanWorkspace();
+    }
+    
+    /// Scan workspace for all Builderfiles and index them
+    void scanWorkspace()
+    {
+        string root = uriToPath(rootUri);
+        if (root.length == 0 || !exists(root) || !isDir(root))
+        {
+            Logger.warning("Cannot scan workspace: invalid root " ~ root);
+            return;
+        }
+        
+        Logger.info("Scanning workspace for Builderfiles: " ~ root);
+        size_t fileCount = 0;
+        
+        try
+        {
+            foreach (entry; dirEntries(root, SpanMode.depth))
+            {
+                if (!entry.isFile) continue;
+                
+                string name = baseName(entry.name);
+                if (name == "Builderfile" || name == "Builderspace" || 
+                    name.endsWith(".builder") || name.endsWith(".builderfile"))
+                {
+                    indexFileFromDisk(entry.name);
+                    fileCount++;
+                }
+            }
+        }
+        catch (FileException e)
+        {
+            Logger.warning("Error scanning workspace: " ~ e.msg);
+        }
+        
+        Logger.info("Indexed " ~ fileCount.to!string ~ " Builderfile(s), " ~ 
+                   index.getAllTargetNames().length.to!string ~ " target(s)");
+    }
+    
+    /// Index a file from disk (not currently open in editor)
+    private void indexFileFromDisk(string filePath)
+    {
+        string uri = pathToUri(filePath);
+        
+        // Skip if already open (editor version takes precedence)
+        if (uri in documents) return;
+        
+        try
+        {
+            string content = readText(filePath);
+            
+            // Parse using unified parser
+            import infrastructure.config.parsing.unified : parse;
+            string rootPath = uriToPath(rootUri);
+            auto parseResult = parse(content, filePath, rootPath, null);
+            
+            if (parseResult.isOk)
+            {
+                auto ast = parseResult.unwrap();
+                index.indexDocument(uri, ast);
+                Logger.debugLog("Indexed: " ~ filePath);
+            }
+        }
+        catch (Exception e)
+        {
+            Logger.debugLog("Failed to index " ~ filePath ~ ": " ~ e.msg);
+        }
     }
     
     /// Get index for direct access
@@ -199,6 +272,48 @@ class WorkspaceManager
             }
         }
         return dependents;
+    }
+    
+    /// Search workspace symbols by query (for Ctrl+T / workspace/symbol)
+    SymbolInformation[] searchWorkspaceSymbols(string query) const
+    {
+        SymbolInformation[] results;
+        string lowerQuery = query.toLower();
+        
+        foreach (name; index.getAllTargetNames())
+        {
+            // Fuzzy match: query substring in name (case-insensitive)
+            if (query.length == 0 || name.toLower().canFind(lowerQuery))
+            {
+                auto sym = index.getSymbol(name);
+                if (sym is null) continue;
+                
+                SymbolInformation info;
+                info.name = name;
+                info.kind = LSPSymbolKind.Class;  // Targets are like classes
+                info.location = Location(sym.uri, sym.range);
+                
+                // Container is the relative path from workspace root
+                string path = uriToPath(sym.uri);
+                string rootPath = uriToPath(rootUri);
+                if (path.startsWith(rootPath))
+                    info.containerName = path[rootPath.length .. $].stripLeft("/");
+                else
+                    info.containerName = baseName(path);
+                
+                results ~= info;
+            }
+        }
+        
+        // Sort by relevance: exact prefix matches first, then by name length
+        results.sort!((a, b) {
+            bool aPrefix = a.name.toLower().startsWith(lowerQuery);
+            bool bPrefix = b.name.toLower().startsWith(lowerQuery);
+            if (aPrefix != bPrefix) return aPrefix > bPrefix;
+            return a.name.length < b.name.length;
+        });
+        
+        return results;
     }
     
     private string normalizeDep(string dep) const

@@ -79,6 +79,7 @@ class LSPServer
         dispatcher.onRequest("textDocument/references", (p) => handleReferences(p));
         dispatcher.onRequest("textDocument/rename", (p) => handleRename(p));
         dispatcher.onRequest("textDocument/documentSymbol", (p) => handleDocumentSymbol(p));
+        dispatcher.onRequest("workspace/symbol", (p) => handleWorkspaceSymbol(p));
         dispatcher.onRequest("textDocument/codeLens", (p) => handleCodeLens(p));
         dispatcher.onRequest("codeLens/resolve", (p) => handleCodeLensResolve(p));
         dispatcher.onRequest("workspace/executeCommand", (p) => handleExecuteCommand(p));
@@ -236,6 +237,19 @@ class LSPServer
         
         JSONValue[] symbolsJson;
         foreach (sym; symbols)
+            symbolsJson ~= sym.toJSON();
+        
+        return JSONValue(symbolsJson);
+    }
+    
+    /// Handle workspace symbol request (Ctrl+T search)
+    private JSONValue handleWorkspaceSymbol(JSONValue params)
+    {
+        auto wsParams = WorkspaceSymbolParams.fromJSON(params);
+        auto symbols = workspace.searchWorkspaceSymbols(wsParams.query);
+        
+        JSONValue[] symbolsJson;
+        foreach (ref sym; symbols)
             symbolsJson ~= sym.toJSON();
         
         return JSONValue(symbolsJson);
