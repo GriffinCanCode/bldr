@@ -189,6 +189,41 @@ struct RPCResponse {
     }
 }
 
+/// Plugin dependency for inter-plugin dependencies
+struct PluginDependency {
+    string name;
+    string versionRange;  // e.g., ">=1.0.0 <2.0.0"
+    bool optional;
+    
+    JSONValue toJSON() const pure @safe {
+        JSONValue json = parseJSON("{}");
+        json["name"] = name;
+        json["versionRange"] = versionRange;
+        json["optional"] = optional;
+        return json;
+    }
+    
+    static BuildResult!PluginDependency fromJSON(JSONValue json) @system {
+        try {
+            PluginDependency dep;
+            dep.name = json["name"].str;
+            dep.versionRange = "versionRange" in json ? json["versionRange"].str : ">=0.0.0";
+            dep.optional = "optional" in json ? json["optional"].boolean : false;
+            return Ok!(PluginDependency, BuildError)(dep);
+        } catch (Exception e) {
+            return Err!(PluginDependency, BuildError)(
+                Errors.plugin("Failed to parse plugin dependency: " ~ e.msg, ErrorCode.InvalidMessage));
+        }
+    }
+}
+
+/// Plugin fail mode for graceful degradation
+enum PluginFailMode {
+    Required,   /// Fail build if plugin fails
+    Optional,   /// Log warning and continue if plugin fails
+    Silent      /// Silently ignore plugin failures
+}
+
 /// Plugin metadata structure
 struct PluginInfo {
     string name;
@@ -198,7 +233,10 @@ struct PluginInfo {
     string homepage;
     string[] capabilities;
     string minBuilderVersion;
+    string maxBuilderVersion;  // Optional max version constraint
     string license;
+    PluginDependency[] dependencies;
+    PluginFailMode failMode = PluginFailMode.Required;
     
     /// Convert to JSON
     JSONValue toJSON() const pure @safe {
@@ -210,7 +248,17 @@ struct PluginInfo {
         json["homepage"] = homepage;
         json["capabilities"] = JSONValue(capabilities);
         json["minBuilderVersion"] = minBuilderVersion;
+        if (maxBuilderVersion.length > 0)
+            json["maxBuilderVersion"] = maxBuilderVersion;
         json["license"] = license;
+        json["failMode"] = failMode.to!string;
+        
+        JSONValue[] depsJson;
+        foreach (dep; dependencies)
+            depsJson ~= dep.toJSON();
+        if (depsJson.length > 0)
+            json["dependencies"] = JSONValue(depsJson);
+        
         return json;
     }
     
@@ -220,11 +268,12 @@ struct PluginInfo {
             PluginInfo info;
             info.name = json["name"].str;
             info.version_ = json["version"].str;
-            info.author = json["author"].str;
-            info.description = json["description"].str;
-            info.homepage = json["homepage"].str;
-            info.minBuilderVersion = json["minBuilderVersion"].str;
-            info.license = json["license"].str;
+            info.author = "author" in json ? json["author"].str : "";
+            info.description = "description" in json ? json["description"].str : "";
+            info.homepage = "homepage" in json ? json["homepage"].str : "";
+            info.minBuilderVersion = "minBuilderVersion" in json ? json["minBuilderVersion"].str : "";
+            info.maxBuilderVersion = "maxBuilderVersion" in json ? json["maxBuilderVersion"].str : "";
+            info.license = "license" in json ? json["license"].str : "";
             
             // Parse capabilities array
             if ("capabilities" in json) {
@@ -232,6 +281,26 @@ struct PluginInfo {
                 info.capabilities.length = capsArray.length;
                 foreach (i, cap; capsArray)
                     info.capabilities[i] = cap.str;
+            }
+            
+            // Parse dependencies
+            if ("dependencies" in json) {
+                auto depsArray = json["dependencies"].array;
+                foreach (depJson; depsArray) {
+                    auto depResult = PluginDependency.fromJSON(depJson);
+                    if (depResult.isOk)
+                        info.dependencies ~= depResult.unwrap();
+                }
+            }
+            
+            // Parse fail mode
+            if ("failMode" in json) {
+                auto modeStr = json["failMode"].str;
+                switch (modeStr) {
+                    case "Optional": info.failMode = PluginFailMode.Optional; break;
+                    case "Silent": info.failMode = PluginFailMode.Silent; break;
+                    default: info.failMode = PluginFailMode.Required;
+                }
             }
             
             return Ok!(PluginInfo, BuildError)(info);
