@@ -11,10 +11,10 @@ interface IASTParser
 {
     /// Parse a source file and extract its AST representation
     /// Returns FileAST with all symbols and their metadata
-    Result!(FileAST, BuildError) parseFile(string filePath) @system;
+    BuildResult!FileAST parseFile(string filePath) @system;
     
     /// Parse source code content (without file IO)
-    Result!(FileAST, BuildError) parseContent(string content, string filePath) @system;
+    BuildResult!FileAST parseContent(string content, string filePath) @system;
     
     /// Get the file extensions this parser handles
     string[] supportedExtensions() @safe const;
@@ -115,7 +115,7 @@ final class ASTParserRegistry
     }
     
     /// Get parser for a file
-    Result!(IASTParser, BuildError) getParser(string filePath) @system
+    BuildResult!IASTParser getParser(string filePath) @system
     {
         import std.path : extension;
         
@@ -124,12 +124,12 @@ final class ASTParserRegistry
         
         if (parser is null)
         {
-            return Result!(IASTParser, BuildError).err(
+            return BuildResult!IASTParser.err(
                 new GenericError("No AST parser registered for: " ~ ext,
                                ErrorCode.UnsupportedLanguage));
         }
         
-        return Result!(IASTParser, BuildError).ok(*parser);
+        return BuildResult!IASTParser.ok(*parser);
     }
     
     /// Check if we can parse a file

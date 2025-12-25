@@ -38,7 +38,7 @@ BuildError fromException(Exception e, ErrorCode code = ErrorCode.InternalError)
 }
 
 /// Convert LanguageBuildResult to Result type with typed suggestions
-Result!(string, BuildError) toResult(LanguageBuildResult buildResult, string targetId = "")
+BuildResult!string toResult(LanguageBuildResult buildResult, string targetId = "")
 {
     import infrastructure.errors.types.context : ErrorSuggestion;
     
@@ -61,7 +61,7 @@ Result!(string, BuildError) toResult(LanguageBuildResult buildResult, string tar
 }
 
 /// Convert Result back to LanguageBuildResult (for gradual migration)
-LanguageBuildResult fromResult(Result!(string, BuildError) result)
+LanguageBuildResult fromResult(BuildResult!string result)
 {
     LanguageBuildResult buildResult;
     
@@ -80,7 +80,7 @@ LanguageBuildResult fromResult(Result!(string, BuildError) result)
 }
 
 /// Wrap a function that may throw into a Result
-Result!(T, BuildError) wrap(T)(lazy T expression, string operation = "")
+BuildResult!T wrap(T)(lazy T expression, string operation = "")
 {
     try
     {
@@ -109,15 +109,15 @@ Result!(T, E) wrapAs(T, E : BaseBuildError)(lazy T expression, E delegate(Except
 }
 
 /// Assert with error result
-Result!BuildError ensure(bool condition, lazy BuildError error)
+VoidBuildResult ensure(bool condition, lazy BuildError error)
 {
     if (!condition)
-        return Result!BuildError.err(error);
-    return Result!BuildError.ok();
+        return VoidBuildResult.err(error);
+    return VoidBuildResult.ok();
 }
 
 /// Create error result from condition
-Result!(T, BuildError) check(T)(bool condition, T value, lazy BuildError error)
+BuildResult!T check(T)(bool condition, T value, lazy BuildError error)
 {
     if (condition)
         return Ok!(T, BuildError)(value);
@@ -125,10 +125,10 @@ Result!(T, BuildError) check(T)(bool condition, T value, lazy BuildError error)
 }
 
 /// Create void result from condition
-Result!BuildError checkVoid(bool condition, lazy BuildError error)
+VoidBuildResult checkVoid(bool condition, lazy BuildError error)
 {
     if (condition)
-        return Result!BuildError.ok();
-    return Result!BuildError.err(error);
+        return VoidBuildResult.ok();
+    return VoidBuildResult.err(error);
 }
 

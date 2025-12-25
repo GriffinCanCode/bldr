@@ -28,7 +28,7 @@ class MacroExpander
     }
     
     /// Define macro
-    Result!BuildError define(string name, string[] params, Statement[] body) @trusted
+    VoidBuildResult define(string name, string[] params, Statement[] body) @trusted
     {
         MacroDefinition macro_;
         macro_.name = name;
@@ -36,7 +36,7 @@ class MacroExpander
         macro_.body = body;
         
         macros[name] = macro_;
-        return Result!BuildError.ok();
+        return VoidBuildResult.ok();
     }
     
     /// Check if macro is defined
@@ -46,13 +46,13 @@ class MacroExpander
     }
     
     /// Expand macro call
-    Result!(TargetDeclStmt[], BuildError) expand(string name, Value[] args) @system
+    BuildResult!(TargetDeclStmt[]) expand(string name, Value[] args) @system
     {
         if (name !in macros)
         {
             auto error = new ParseError("Undefined macro '" ~ name ~ "'", null);
             error.addSuggestion("Define macro with 'macro " ~ name ~ "(...) { ... }'");
-            return Result!(TargetDeclStmt[], BuildError).err(error);
+            return BuildResult!(TargetDeclStmt[]).err(error);
         }
         
         auto macro_ = macros[name];
@@ -65,7 +65,7 @@ class MacroExpander
                 " arguments, got " ~ args.length.to!string,
                 null
             );
-            return Result!(TargetDeclStmt[], BuildError).err(error);
+            return BuildResult!(TargetDeclStmt[]).err(error);
         }
         
         // Create new scope for macro expansion
@@ -77,7 +77,7 @@ class MacroExpander
         {
             auto defineResult = evaluator.defineVariable(param, args[i], true);
             if (defineResult.isErr)
-                return Result!(TargetDeclStmt[], BuildError).err(defineResult.unwrapErr());
+                return BuildResult!(TargetDeclStmt[]).err(defineResult.unwrapErr());
         }
         
         // Execute macro body and collect generated targets
@@ -87,24 +87,24 @@ class MacroExpander
         {
             auto result = executeStatement(stmt);
             if (result.isErr)
-                return Result!(TargetDeclStmt[], BuildError).err(result.unwrapErr());
+                return BuildResult!(TargetDeclStmt[]).err(result.unwrapErr());
             
             targets ~= result.unwrap();
         }
         
-        return Result!(TargetDeclStmt[], BuildError).ok(targets);
+        return BuildResult!(TargetDeclStmt[]).ok(targets);
     }
     
     /// Execute statement and return generated targets
-    private Result!(TargetDeclStmt[], BuildError) executeStatement(Statement stmt) @system
+    private BuildResult!(TargetDeclStmt[]) executeStatement(Statement stmt) @system
     {
         final switch (stmt.type)
         {
             case StatementType.TargetDeclStmt:
                 // Return target declaration directly
                 if (stmt.targetDecl !is null)
-                    return Result!(TargetDeclStmt[], BuildError).ok([stmt.targetDecl]);
-                return Result!(TargetDeclStmt[], BuildError).ok([]);
+                    return BuildResult!(TargetDeclStmt[]).ok([stmt.targetDecl]);
+                return BuildResult!(TargetDeclStmt[]).ok([]);
                 
             case StatementType.ForLoop:
                 return executeForLoop(stmt);
@@ -114,27 +114,27 @@ class MacroExpander
                 
             case StatementType.LetDecl:
                 // Variable declarations don't generate targets, just evaluate
-                return Result!(TargetDeclStmt[], BuildError).ok([]);
+                return BuildResult!(TargetDeclStmt[]).ok([]);
                 
             case StatementType.Assignment:
                 // Assignments don't generate targets
-                return Result!(TargetDeclStmt[], BuildError).ok([]);
+                return BuildResult!(TargetDeclStmt[]).ok([]);
         }
     }
     
     /// Execute for loop and collect generated targets
-    private Result!(TargetDeclStmt[], BuildError) executeForLoop(Statement stmt) @system
+    private BuildResult!(TargetDeclStmt[]) executeForLoop(Statement stmt) @system
     {
         // Evaluate iterable expression
         auto iterableResult = evaluator.evaluate(stmt.loopIterable);
         if (iterableResult.isErr)
-            return Result!(TargetDeclStmt[], BuildError).err(iterableResult.unwrapErr());
+            return BuildResult!(TargetDeclStmt[]).err(iterableResult.unwrapErr());
         
         auto iterable = iterableResult.unwrap();
         if (!iterable.isArray())
         {
             auto error = new ParseError("For loop requires array iterable", null);
-            return Result!(TargetDeclStmt[], BuildError).err(error);
+            return BuildResult!(TargetDeclStmt[]).err(error);
         }
         
         TargetDeclStmt[] targets;
@@ -149,7 +149,7 @@ class MacroExpander
             // Bind loop variable
             auto defineResult = evaluator.defineVariable(stmt.loopVar, elem, false);
             if (defineResult.isErr)
-                return Result!(TargetDeclStmt[], BuildError).err(defineResult.unwrapErr());
+                return BuildResult!(TargetDeclStmt[]).err(defineResult.unwrapErr());
             
             // Execute loop body
             foreach (bodyStmt; stmt.loopBody)
@@ -161,16 +161,16 @@ class MacroExpander
             }
         }
         
-        return Result!(TargetDeclStmt[], BuildError).ok(targets);
+        return BuildResult!(TargetDeclStmt[]).ok(targets);
     }
     
     /// Execute if statement and return targets from appropriate branch
-    private Result!(TargetDeclStmt[], BuildError) executeIfStatement(Statement stmt) @system
+    private BuildResult!(TargetDeclStmt[]) executeIfStatement(Statement stmt) @system
     {
         // Evaluate condition
         auto condResult = evaluator.evaluate(stmt.condition);
         if (condResult.isErr)
-            return Result!(TargetDeclStmt[], BuildError).err(condResult.unwrapErr());
+            return BuildResult!(TargetDeclStmt[]).err(condResult.unwrapErr());
         
         TargetDeclStmt[] targets;
         auto branch = condResult.unwrap().toBool() ? stmt.thenBranch : stmt.elseBranch;
@@ -183,7 +183,7 @@ class MacroExpander
             targets ~= result.unwrap();
         }
         
-        return Result!(TargetDeclStmt[], BuildError).ok(targets);
+        return BuildResult!(TargetDeclStmt[]).ok(targets);
     }
 }
 

@@ -11,10 +11,10 @@ import infrastructure.errors.helpers;
 /// Parser for composer.json (PHP)
 final class ComposerManifestParser : IManifestParser
 {
-    override Result!(ManifestInfo, BuildError) parse(string filePath) @system
+    override BuildResult!ManifestInfo parse(string filePath) @system
     {
         if (!exists(filePath) || !isFile(filePath))
-            return Result!(ManifestInfo, BuildError).err(
+            return BuildResult!ManifestInfo.err(
                 manifestNotFoundError(filePath, "composer"));
         
         try
@@ -59,11 +59,11 @@ final class ComposerManifestParser : IManifestParser
                 }
             }
             
-            return Result!(ManifestInfo, BuildError).ok(info);
+            return BuildResult!ManifestInfo.ok(info);
         }
         catch (Exception e)
         {
-            return Result!(ManifestInfo, BuildError).err(
+            return BuildResult!ManifestInfo.err(
                 manifestParseError(filePath, "composer", e.msg));
         }
     }

@@ -38,7 +38,7 @@ final class ResilientRemoteExecutor
     }
     
     /// Execute action remotely with resilience
-    Result!(RemoteExecutionResult, BuildError) execute(
+    BuildResult!RemoteExecutionResult execute(
         ActionId actionId,
         SandboxSpec spec,
         string[] command,
@@ -56,7 +56,7 @@ final class ResilientRemoteExecutor
     }
     
     /// Execute with custom priority (for critical actions)
-    Result!(RemoteExecutionResult, BuildError) executeWithPriority(
+    BuildResult!RemoteExecutionResult executeWithPriority(
         ActionId actionId,
         SandboxSpec spec,
         string[] command,

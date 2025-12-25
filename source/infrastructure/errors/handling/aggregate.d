@@ -97,7 +97,7 @@ struct ErrorAggregator(T)
     }
     
     /// Add a result to the aggregation
-    void add(Result!(T, BuildError) result)
+    void add(BuildResult!T result)
     {
         if (stopped) return;
         if (result.isOk)
@@ -113,7 +113,7 @@ struct ErrorAggregator(T)
     }
     
     /// Add multiple results from an array
-    void add(Result!(T[], BuildError) result)
+    void add(BuildResult!(T[]) result)
     {
         if (result.isOk)
         {
@@ -141,7 +141,7 @@ struct ErrorAggregator(T)
     AggregatedResult!T finish() { return AggregatedResult!T(successes, errors); }
     
     /// Convert to a simple Result type (fails if any errors occurred)
-    Result!(T[], BuildError) toResult()
+    BuildResult!(T[]) toResult()
     {
         return errors.length == 0 
             ? Ok!(T[], BuildError)(successes) 
@@ -151,7 +151,7 @@ struct ErrorAggregator(T)
 
 /// Convenience function to aggregate an array of results
 AggregatedResult!T aggregate(T)(
-    Result!(T, BuildError)[] results,
+    BuildResult!T[] results,
     AggregationPolicy policy = AggregationPolicy.CollectAll)
 {
     auto agg = ErrorAggregator!T(policy);
@@ -169,7 +169,7 @@ AggregatedResult!T aggregate(T)(
 /// Process items with a function that returns Results, aggregating the outcomes
 AggregatedResult!R aggregateMap(T, R)(
     T[] items,
-    Result!(R, BuildError) delegate(T) fn,
+    BuildResult!R delegate(T) fn,
     AggregationPolicy policy = AggregationPolicy.CollectAll)
 {
     auto agg = ErrorAggregator!R(policy);
@@ -187,7 +187,7 @@ AggregatedResult!R aggregateMap(T, R)(
 /// Process items with a function that returns array Results, flattening the results
 AggregatedResult!R aggregateFlatMap(T, R)(
     T[] items,
-    Result!(R[], BuildError) delegate(T) fn,
+    BuildResult!(R[]) delegate(T) fn,
     AggregationPolicy policy = AggregationPolicy.CollectAll)
 {
     auto agg = ErrorAggregator!R(policy);

@@ -315,7 +315,7 @@ import engine.runtime.services.registry;
 
 class MyLanguageHandler : LanguageHandler
 {
-    override Result!(string, BuildError) build(Target target, WorkspaceConfig config)
+    override BuildResult!string build(Target target, WorkspaceConfig config)
     {
         // Custom build logic
     }

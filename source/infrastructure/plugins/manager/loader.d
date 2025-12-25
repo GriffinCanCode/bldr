@@ -33,7 +33,7 @@ class PluginLoader {
     }
     
     /// Execute plugin with RPC request
-    Result!(PluginExecution, BuildError) execute(
+    BuildResult!PluginExecution execute(
         string pluginName,
         RPCRequest request,
         Duration timeout = Duration.init
@@ -51,7 +51,7 @@ class PluginLoader {
     }
     
     /// Execute plugin by path
-    Result!(PluginExecution, BuildError) executePlugin(
+    BuildResult!PluginExecution executePlugin(
         string pluginPath,
         RPCRequest request,
         Duration timeout
@@ -173,7 +173,7 @@ class PluginLoader {
     }
     
     /// Query plugin info
-    Result!(PluginInfo, BuildError) queryInfo(string pluginName) @system {
+    BuildResult!PluginInfo queryInfo(string pluginName) @system {
         auto request = RPCCodec.infoRequest(nextRequestId++);
         auto execResult = execute(pluginName, request, 5.seconds);
         
@@ -195,7 +195,7 @@ class PluginLoader {
     }
     
     /// Call pre-build hook
-    Result!(HookResult, BuildError) callPreHook(
+    BuildResult!HookResult callPreHook(
         string pluginName,
         PluginTarget target,
         PluginWorkspace workspace
@@ -221,7 +221,7 @@ class PluginLoader {
     }
     
     /// Call post-build hook
-    Result!(HookResult, BuildError) callPostHook(
+    BuildResult!HookResult callPostHook(
         string pluginName,
         PluginTarget target,
         PluginWorkspace workspace,

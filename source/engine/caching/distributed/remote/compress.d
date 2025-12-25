@@ -48,7 +48,7 @@ final class ArtifactCompressor
     }
     
     /// Compress artifact with automatic compressibility detection
-    Result!(CompressedArtifact, BuildError) compress(const(ubyte)[] data) @trusted
+    BuildResult!CompressedArtifact compress(const(ubyte)[] data) @trusted
     {
         if (strategy == CompressionStrategy.None || data.length == 0)
         {
@@ -119,7 +119,7 @@ final class ArtifactCompressor
     }
     
     /// Decompress artifact
-    Result!(ubyte[], BuildError) decompress(const(ubyte)[] data, CompressionAlgorithm algo) @trusted
+    BuildResult!(ubyte[]) decompress(const(ubyte)[] data, CompressionAlgorithm algo) @trusted
     {
         if (algo == CompressionAlgorithm.None)
             return Ok!(ubyte[], BuildError)(cast(ubyte[])data);

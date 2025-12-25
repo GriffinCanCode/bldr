@@ -164,7 +164,7 @@ struct Lexer
     }
     
     /// Lex entire source into tokens
-    Result!(Token[], BuildError) tokenize()
+    BuildResult!(Token[]) tokenize()
     {
         Token[] tokens;
         // Reserve capacity based on empirical analysis of Builderfile files:
@@ -227,7 +227,7 @@ struct Lexer
     }
     
     /// Get next token (internal implementation)
-    private Result!(Token, BuildError) nextTokenInternal()
+    private BuildResult!Token nextTokenInternal()
     {
         if (isAtEnd())
             return Ok!(Token, BuildError)(Token(TokenType.EOF, "", line, column));
@@ -354,7 +354,7 @@ struct Lexer
     }
     
     /// Scan string literal
-    private Result!(Token, BuildError) scanString(char quote)
+    private BuildResult!Token scanString(char quote)
     {
         size_t startLine = line;
         size_t startCol = column;
@@ -410,7 +410,7 @@ struct Lexer
     }
     
     /// Scan number literal
-    private Result!(Token, BuildError) scanNumber()
+    private BuildResult!Token scanNumber()
     {
         size_t startLine = line;
         size_t startCol = column;
@@ -440,7 +440,7 @@ struct Lexer
     }
     
     /// Scan identifier or keyword
-    private Result!(Token, BuildError) scanIdentifier()
+    private BuildResult!Token scanIdentifier()
     {
         size_t startLine = line;
         size_t startCol = column;
@@ -613,14 +613,14 @@ struct Lexer
             return sourceLength / 7; // Longer files tend to be denser with strings
     }
     
-    private Result!(Token, BuildError) ok(TokenType type, string value, size_t line, size_t col)
+    private BuildResult!Token ok(TokenType type, string value, size_t line, size_t col)
     {
         return Ok!(Token, BuildError)(Token(type, value, line, col));
     }
 }
 
 /// Convenience function for quick tokenization
-Result!(Token[], BuildError) lex(string source, string filePath = "")
+BuildResult!(Token[]) lex(string source, string filePath = "")
 {
     auto lexer = Lexer(source, filePath);
     return lexer.tokenize();

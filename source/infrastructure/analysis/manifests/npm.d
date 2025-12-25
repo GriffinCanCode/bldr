@@ -14,10 +14,10 @@ import infrastructure.errors.helpers;
 /// Parser for package.json (npm/yarn/pnpm)
 final class NpmManifestParser : IManifestParser
 {
-    override Result!(ManifestInfo, BuildError) parse(string filePath) @system
+    override BuildResult!ManifestInfo parse(string filePath) @system
     {
         if (!exists(filePath) || !isFile(filePath))
-            return Result!(ManifestInfo, BuildError).err(
+            return BuildResult!ManifestInfo.err(
                 manifestNotFoundError(filePath, "npm"));
         
         try
@@ -54,16 +54,16 @@ final class NpmManifestParser : IManifestParser
             // Store additional metadata
             info.metadata = extractMetadata(pkg);
             
-            return Result!(ManifestInfo, BuildError).ok(info);
+            return BuildResult!ManifestInfo.ok(info);
         }
         catch (JSONException e)
         {
-            return Result!(ManifestInfo, BuildError).err(
+            return BuildResult!ManifestInfo.err(
                 manifestParseError(filePath, "npm", "Invalid JSON: " ~ e.msg));
         }
         catch (Exception e)
         {
-            return Result!(ManifestInfo, BuildError).err(
+            return BuildResult!ManifestInfo.err(
                 manifestParseError(filePath, "npm", e.msg));
         }
     }

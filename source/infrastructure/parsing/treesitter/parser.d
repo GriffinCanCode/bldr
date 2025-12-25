@@ -36,27 +36,27 @@ final class TreeSitterParser : BaseASTParser {
             privateNameRegex = regex(config.visibility.privateNamePattern);
     }
     
-    override Result!(FileAST, BuildError) parseFile(string filePath) @system {
+    override BuildResult!FileAST parseFile(string filePath) @system {
         if (!exists(filePath) || !isFile(filePath))
-            return Result!(FileAST, BuildError).err(
+            return BuildResult!FileAST.err(
                 new GenericError("File not found: " ~ filePath, ErrorCode.FileNotFound));
         
         try {
             auto content = readText(filePath);
             return parseContent(content, filePath);
         } catch (Exception e) {
-            return Result!(FileAST, BuildError).err(
+            return BuildResult!FileAST.err(
                 new GenericError("Failed to read file: " ~ filePath ~ " - " ~ e.msg,
                                ErrorCode.FileReadFailed));
         }
     }
     
-    override Result!(FileAST, BuildError) parseContent(string content, string filePath) @system {
+    override BuildResult!FileAST parseContent(string content, string filePath) @system {
         try {
             // Create parser
             auto parser = Parser(grammar);
             if (!parser.handle())
-                return Result!(FileAST, BuildError).err(
+                return BuildResult!FileAST.err(
                     new GenericError("Failed to create parser", ErrorCode.InternalError));
             
             // Parse content
@@ -64,12 +64,12 @@ final class TreeSitterParser : BaseASTParser {
                 parser.handle(), null, content.ptr, cast(uint)content.length));
             
             if (!tree.handle())
-                return Result!(FileAST, BuildError).err(
+                return BuildResult!FileAST.err(
                     new GenericError("Failed to parse: " ~ filePath, ErrorCode.ParseFailed));
             
             auto root = tree.root();
             if (ts_node_is_null(root))
-                return Result!(FileAST, BuildError).err(
+                return BuildResult!FileAST.err(
                     new GenericError("Invalid parse tree for: " ~ filePath, ErrorCode.ParseFailed));
             
             // Build AST
@@ -88,9 +88,9 @@ final class TreeSitterParser : BaseASTParser {
                           ast.symbols.length.to!string ~ " symbols, " ~
                           ast.includes.length.to!string ~ " imports");
             
-            return Result!(FileAST, BuildError).ok(ast);
+            return BuildResult!FileAST.ok(ast);
         } catch (Exception e) {
-            return Result!(FileAST, BuildError).err(
+            return BuildResult!FileAST.err(
                 new GenericError("Parse error: " ~ filePath ~ " - " ~ e.msg,
                                ErrorCode.ParseFailed));
         }

@@ -102,7 +102,7 @@ final class DistributedCache
         if (actionCache !is null) actionCache.close();
     }
     
-    private Result!(string, BuildError) computeTargetHash(
+    private BuildResult!string computeTargetHash(
         string targetId,
         scope const(string)[] sources,
         scope const(string)[] deps
@@ -148,7 +148,7 @@ final class DistributedCache
         }
     }
     
-    private Result!BuildError pullFromRemote(string targetHash, string targetId) @trusted
+    private VoidBuildResult pullFromRemote(string targetHash, string targetId) @trusted
     {
         try
         {
@@ -156,7 +156,7 @@ final class DistributedCache
             auto fetchResult = remoteCache.get(targetHash);
             if (fetchResult.isErr)
             {
-                return Result!BuildError.err(fetchResult.unwrapErr());
+                return VoidBuildResult.err(fetchResult.unwrapErr());
             }
             
             auto artifactData = fetchResult.unwrap();
@@ -178,7 +178,7 @@ final class DistributedCache
                 "Failed to pull from remote cache: " ~ e.msg,
                 ErrorCode.CacheLoadFailed
             );
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
     }
     

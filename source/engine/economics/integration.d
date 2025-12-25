@@ -71,7 +71,7 @@ final class EconomicsIntegration
     bool isEnabled() const pure @safe nothrow @nogc => enabled;
     
     /// Compute optimal build plan for graph
-    Result!(BuildPlan, BuildError) computePlan(BuildGraph graph, EconomicsConfig config) @trusted
+    BuildResult!BuildPlan computePlan(BuildGraph graph, EconomicsConfig config) @trusted
     {
         if (!enabled)
             return Ok!(BuildPlan, BuildError)(BuildPlan(StrategyConfig(ExecutionStrategy.Local, 1, 4), seconds(0), 0.0f));
@@ -119,7 +119,7 @@ final class EconomicsIntegration
     }
     
     /// Save execution history on shutdown
-    Result!BuildError shutdown() @trusted
+    VoidBuildResult shutdown() @trusted
     {
         if (!enabled) return Ok!BuildError();
         Logger.info("\n" ~ tracker.getSummary().format());

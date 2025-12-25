@@ -29,7 +29,7 @@ final class ContentAddressableStorage
     
     /// Store blob by content hash (deduplicates automatically)
     /// Returns: content hash of stored blob
-    Result!(string, BuildError) putBlob(const(ubyte)[] data) @system
+    BuildResult!string putBlob(const(ubyte)[] data) @system
     {
         string blobPath;
         try
@@ -65,7 +65,7 @@ final class ContentAddressableStorage
     }
     
     /// Retrieve blob by content hash
-    Result!(ubyte[], BuildError) getBlob(string hash) @system
+    BuildResult!(ubyte[]) getBlob(string hash) @system
     {
         try
         {
@@ -124,7 +124,7 @@ final class ContentAddressableStorage
     }
     
     /// Delete blob (only if no references)
-    Result!BuildError deleteBlob(string hash) @system
+    VoidBuildResult deleteBlob(string hash) @system
     {
         try
         {
@@ -132,7 +132,7 @@ final class ContentAddressableStorage
             {
                 // Check reference count
                 if (refCounts.get(hash, 0) > 0)
-                    return Result!BuildError.err(new CacheError(
+                    return VoidBuildResult.err(new CacheError(
                         "Cannot delete blob with active references", ErrorCode.CacheInUse));
                 
                 immutable blobPath = getBlobPath(hash);
@@ -146,7 +146,7 @@ final class ContentAddressableStorage
         }
         catch (Exception e)
         {
-            return Result!BuildError.err(new CacheError(
+            return VoidBuildResult.err(new CacheError(
                 "Failed to delete blob: " ~ e.msg, ErrorCode.CacheDeleteFailed));
         }
     }

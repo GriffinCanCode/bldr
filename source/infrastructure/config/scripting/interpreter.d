@@ -34,20 +34,20 @@ class Interpreter
     }
     
     /// Execute program (list of statements) and return generated targets
-    Result!(TargetDeclStmt[], BuildError) execute(Stmt[] statements) @system
+    BuildResult!(TargetDeclStmt[]) execute(Stmt[] statements) @system
     {
         foreach (stmt; statements)
         {
             auto result = executeStatement(stmt);
             if (result.isErr)
-                return Result!(TargetDeclStmt[], BuildError).err(result.unwrapErr());
+                return BuildResult!(TargetDeclStmt[]).err(result.unwrapErr());
         }
         
-        return Result!(TargetDeclStmt[], BuildError).ok(generatedTargets);
+        return BuildResult!(TargetDeclStmt[]).ok(generatedTargets);
     }
     
     /// Execute single statement
-    private Result!BuildError executeStatement(Stmt stmt) @system
+    private VoidBuildResult executeStatement(Stmt stmt) @system
     {
         if (auto varDecl = cast(VarDeclStmt)stmt)
             return executeVarDecl(varDecl);
@@ -74,19 +74,19 @@ class Interpreter
     }
     
     /// Execute variable declaration
-    private Result!BuildError executeVarDecl(VarDeclStmt stmt) @system
+    private VoidBuildResult executeVarDecl(VarDeclStmt stmt) @system
     {
         // Evaluate initializer
         auto valueResult = evaluateExpr(stmt.initializer);
         if (valueResult.isErr)
-            return Result!BuildError.err(valueResult.unwrapErr());
+            return VoidBuildResult.err(valueResult.unwrapErr());
         
         // Define variable
         return evaluator.defineVariable(stmt.name, valueResult.unwrap(), stmt.isConst);
     }
     
     /// Execute function declaration - creates closure capturing current scope
-    private Result!BuildError executeFunctionDecl(FunctionDeclStmt stmt) @system
+    private VoidBuildResult executeFunctionDecl(FunctionDeclStmt stmt) @system
     {
         // Capture current lexical environment for closure
         Closure closure;
@@ -115,7 +115,7 @@ class Interpreter
     }
     
     /// Execute macro declaration
-    private Result!BuildError executeMacroDecl(MacroDeclStmt stmt) @system
+    private VoidBuildResult executeMacroDecl(MacroDeclStmt stmt) @system
     {
         // Register macro with expander
         // Convert Stmt[] to Statement[] (old format)
@@ -165,12 +165,12 @@ class Interpreter
     }
     
     /// Execute if statement
-    private Result!BuildError executeIfStmt(IfStmt stmt) @system
+    private VoidBuildResult executeIfStmt(IfStmt stmt) @system
     {
         // Evaluate condition
         auto conditionResult = evaluateExpr(stmt.condition);
         if (conditionResult.isErr)
-            return Result!BuildError.err(conditionResult.unwrapErr());
+            return VoidBuildResult.err(conditionResult.unwrapErr());
         
         bool condition = conditionResult.unwrap().toBool();
         
@@ -194,16 +194,16 @@ class Interpreter
             }
         }
         
-        return Result!BuildError.ok();
+        return VoidBuildResult.ok();
     }
     
     /// Execute for loop
-    private Result!BuildError executeForStmt(ForStmt stmt) @system
+    private VoidBuildResult executeForStmt(ForStmt stmt) @system
     {
         // Evaluate iterable
         auto iterableResult = evaluateExpr(stmt.iterable);
         if (iterableResult.isErr)
-            return Result!BuildError.err(iterableResult.unwrapErr());
+            return VoidBuildResult.err(iterableResult.unwrapErr());
         
         auto iterable = iterableResult.unwrap();
         
@@ -211,7 +211,7 @@ class Interpreter
         if (!iterable.isArray())
         {
             auto error = new ParseError("For loop requires an array to iterate over", null);
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         
         auto array = iterable.asArray();
@@ -237,11 +237,11 @@ class Interpreter
             }
         }
         
-        return Result!BuildError.ok();
+        return VoidBuildResult.ok();
     }
     
     /// Execute return statement - sets return value for function exit
-    private Result!BuildError executeReturnStmt(ReturnStmt stmt) @system
+    private VoidBuildResult executeReturnStmt(ReturnStmt stmt) @system
     {
         // Return statements are handled by the evaluator's executeStmt
         // This path is for top-level returns (which are no-ops outside functions)
@@ -249,33 +249,33 @@ class Interpreter
         {
             auto result = evaluateExpr(stmt.value);
             if (result.isErr)
-                return Result!BuildError.err(result.unwrapErr());
+                return VoidBuildResult.err(result.unwrapErr());
             // Top-level return - value is discarded
         }
-        return Result!BuildError.ok();
+        return VoidBuildResult.ok();
     }
     
     /// Execute import statement (Tier 2 - D macros)
-    private Result!BuildError executeImportStmt(ImportStmt stmt) @system
+    private VoidBuildResult executeImportStmt(ImportStmt stmt) @system
     {
         // Import statements for Tier 2 macros - not yet implemented
-        return Result!BuildError.ok();
+        return VoidBuildResult.ok();
     }
     
     /// Execute target statement
-    private Result!BuildError executeTargetStmt(TargetDeclStmt stmt) @system
+    private VoidBuildResult executeTargetStmt(TargetDeclStmt stmt) @system
     {
         // Evaluate expressions in target fields before passing to semantic analyzer
         auto expandedTarget = expandTargetExpressions(stmt);
         if (expandedTarget.isErr)
-            return Result!BuildError.err(expandedTarget.unwrapErr());
+            return VoidBuildResult.err(expandedTarget.unwrapErr());
         
         generatedTargets ~= expandedTarget.unwrap();
-        return Result!BuildError.ok();
+        return VoidBuildResult.ok();
     }
     
     /// Expand expressions in target fields (resolve variables, concatenations, etc.)
-    private Result!(TargetDeclStmt, BuildError) expandTargetExpressions(TargetDeclStmt stmt) @system
+    private BuildResult!TargetDeclStmt expandTargetExpressions(TargetDeclStmt stmt) @system
     {
         import infrastructure.config.workspace.ast : Field, Location;
         
@@ -284,25 +284,25 @@ class Interpreter
         {
             auto expandedValue = expandExpr(field.value);
             if (expandedValue.isErr)
-                return Result!(TargetDeclStmt, BuildError).err(expandedValue.unwrapErr());
+                return BuildResult!TargetDeclStmt.err(expandedValue.unwrapErr());
             expandedFields ~= Field(field.name, expandedValue.unwrap(), field.loc);
         }
         
-        return Result!(TargetDeclStmt, BuildError).ok(
+        return BuildResult!TargetDeclStmt.ok(
             new TargetDeclStmt(stmt.name, expandedFields, stmt.location()));
     }
     
     /// Expand expression - evaluate variables and create literal expression
-    private Result!(Expr, BuildError) expandExpr(Expr expr) @system
+    private BuildResult!Expr expandExpr(Expr expr) @system
     {
         import infrastructure.config.workspace.ast : LiteralExpr, Literal, LiteralKind, Location;
         
         auto valueResult = evaluateExpr(expr);
         if (valueResult.isErr)
-            return Result!(Expr, BuildError).err(valueResult.unwrapErr());
+            return BuildResult!Expr.err(valueResult.unwrapErr());
         
         auto value = valueResult.unwrap();
-        return Result!(Expr, BuildError).ok(valueToExpr(value, expr.location()));
+        return BuildResult!Expr.ok(valueToExpr(value, expr.location()));
     }
     
     /// Convert Value to Expr (for expanded target fields)
@@ -347,18 +347,18 @@ class Interpreter
     }
     
     /// Execute expression statement
-    private Result!BuildError executeExprStmt(ExprStmt stmt) @system
+    private VoidBuildResult executeExprStmt(ExprStmt stmt) @system
     {
         // Evaluate expression (for side effects, like macro calls)
         auto result = evaluateExpr(stmt.expr);
         if (result.isErr)
-            return Result!BuildError.err(result.unwrapErr());
+            return VoidBuildResult.err(result.unwrapErr());
         
-        return Result!BuildError.ok();
+        return VoidBuildResult.ok();
     }
     
     /// Execute block statement
-    private Result!BuildError executeBlockStmt(BlockStmt stmt) @system
+    private VoidBuildResult executeBlockStmt(BlockStmt stmt) @system
     {
         // Enter new scope
         evaluator.enterScope();
@@ -372,11 +372,11 @@ class Interpreter
                 return result;
         }
         
-        return Result!BuildError.ok();
+        return VoidBuildResult.ok();
     }
     
     /// Evaluate expression (bridge between Expr and Value)
-    private Result!(Value, BuildError) evaluateExpr(Expr expr) @system
+    private BuildResult!Value evaluateExpr(Expr expr) @system
     {
         if (auto litExpr = cast(LiteralExpr)expr)
         {
@@ -411,7 +411,7 @@ class Interpreter
             {
                 auto argResult = evaluateExpr(arg);
                 if (argResult.isErr)
-                    return Result!(Value, BuildError).err(argResult.unwrapErr());
+                    return BuildResult!Value.err(argResult.unwrapErr());
                 argValues ~= argResult.unwrap();
             }
             
@@ -473,16 +473,16 @@ class Interpreter
         else
         {
             auto error = new ParseError("Unsupported expression type for evaluation", null);
-            return Result!(Value, BuildError).err(error);
+            return BuildResult!Value.err(error);
         }
     }
     
     // Helper methods
     
-    private Result!BuildError err(string msg) @system
+    private VoidBuildResult err(string msg) @system
     {
         auto error = new ParseError(msg, null);
-        return Result!BuildError.err(error);
+        return VoidBuildResult.err(error);
     }
 }
 

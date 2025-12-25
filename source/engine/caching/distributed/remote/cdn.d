@@ -81,7 +81,7 @@ final class CdnManager
     }
     
     /// Generate signed URL for CloudFront
-    Result!(string, BuildError) generateCloudFrontUrl(
+    BuildResult!string generateCloudFrontUrl(
         string path,
         Duration validity = 1.hours
     ) const @trusted
@@ -108,7 +108,7 @@ final class CdnManager
     }
     
     /// Generate signed URL for Cloudflare
-    Result!(string, BuildError) generateCloudflareUrl(
+    BuildResult!string generateCloudflareUrl(
         string path,
         Duration validity = 1.hours
     ) const @trusted
@@ -164,7 +164,7 @@ final class CdnManager
     }
     
     /// Verify signed URL
-    Result!(bool, BuildError) verifySignedUrl(
+    BuildResult!bool verifySignedUrl(
         string path,
         string signature,
         long expiry
@@ -190,7 +190,7 @@ final class CdnManager
     }
     
     /// Generate CDN purge request (for cache invalidation)
-    Result!BuildError purgePath(string path) @trusted
+    VoidBuildResult purgePath(string path) @trusted
     {
         if (!config.enabled)
             return Ok!BuildError();
@@ -208,12 +208,12 @@ final class CdnManager
                     "CDN provider '" ~ config.provider ~ "' not supported for purging",
                     ErrorCode.NotSupported
                 );
-                return Result!BuildError.err(error);
+                return VoidBuildResult.err(error);
         }
     }
     
     /// Purge path from CloudFront
-    private Result!BuildError purgeCloudFront(string path) @trusted
+    private VoidBuildResult purgeCloudFront(string path) @trusted
     {
         import std.json : JSONValue, toJSON, parseJSON;
         import std.uuid : randomUUID;
@@ -230,7 +230,7 @@ final class CdnManager
                 "CloudFront distribution ID or API key not configured",
                 ErrorCode.ConfigError
             );
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         
         // Create invalidation request
@@ -256,7 +256,7 @@ final class CdnManager
         {
             Logger.error("CloudFront purge failed");
             Logger.error(formatError(httpResult.unwrapErr()));
-            return Result!BuildError.err(httpResult.unwrapErr());
+            return VoidBuildResult.err(httpResult.unwrapErr());
         }
         
         Logger.info("CloudFront purge request successful for path: " ~ path);
@@ -264,7 +264,7 @@ final class CdnManager
     }
     
     /// Purge path from Cloudflare
-    private Result!BuildError purgeCloudflare(string path) @trusted
+    private VoidBuildResult purgeCloudflare(string path) @trusted
     {
         import std.json : JSONValue, toJSON, parseJSON;
         
@@ -274,7 +274,7 @@ final class CdnManager
                 "Cloudflare zone ID or API key not configured",
                 ErrorCode.ConfigError
             );
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         
         // Create purge request
@@ -296,7 +296,7 @@ final class CdnManager
         {
             Logger.error("Cloudflare purge failed");
             Logger.error(formatError(httpResult.unwrapErr()));
-            return Result!BuildError.err(httpResult.unwrapErr());
+            return VoidBuildResult.err(httpResult.unwrapErr());
         }
         
         // Parse response to verify success
@@ -313,18 +313,18 @@ final class CdnManager
                 auto errorMsg = "errors" in response ? response["errors"].toString() : "Unknown error";
                 Logger.error("Cloudflare purge failed: " ~ errorMsg);
                 auto error = new GenericError("Cloudflare purge failed: " ~ errorMsg, ErrorCode.NetworkError);
-                return Result!BuildError.err(error);
+                return VoidBuildResult.err(error);
             }
         }
         catch (Exception e)
         {
             auto error = new GenericError("Failed to parse Cloudflare response: " ~ e.msg, ErrorCode.NetworkError);
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
     }
     
     /// Purge path from Fastly
-    private Result!BuildError purgeFastly(string path) @trusted
+    private VoidBuildResult purgeFastly(string path) @trusted
     {
         if (config.apiKey.length == 0)
         {
@@ -332,7 +332,7 @@ final class CdnManager
                 "Fastly API key not configured",
                 ErrorCode.ConfigError
             );
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         
         immutable url = format("https://api.fastly.com/purge/%s%s",
@@ -350,7 +350,7 @@ final class CdnManager
         {
             Logger.error("Fastly purge failed");
             Logger.error(formatError(httpResult.unwrapErr()));
-            return Result!BuildError.err(httpResult.unwrapErr());
+            return VoidBuildResult.err(httpResult.unwrapErr());
         }
         
         // Fastly returns 200 with {"status":"ok"} on success
@@ -368,13 +368,13 @@ final class CdnManager
                 auto errorMsg = response.toString();
                 Logger.error("Fastly purge failed: " ~ errorMsg);
                 auto error = new GenericError("Fastly purge failed: " ~ errorMsg, ErrorCode.NetworkError);
-                return Result!BuildError.err(error);
+                return VoidBuildResult.err(error);
             }
         }
         catch (Exception e)
         {
             auto error = new GenericError("Failed to parse Fastly response: " ~ e.msg, ErrorCode.NetworkError);
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
     }
     
@@ -405,7 +405,7 @@ final class CdnManager
     }
     
     /// Execute generic HTTP request with headers
-    private Result!(ubyte[], BuildError) executeHttpRequest(
+    private BuildResult!(ubyte[]) executeHttpRequest(
         string method,
         string url,
         string body_,
@@ -484,7 +484,7 @@ final class CdnManager
     }
     
     /// Execute AWS request with Signature Version 4
-    private Result!(ubyte[], BuildError) executeAwsRequest(
+    private BuildResult!(ubyte[]) executeAwsRequest(
         string method,
         string url,
         string body_,

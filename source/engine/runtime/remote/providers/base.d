@@ -32,7 +32,7 @@ interface CloudProvider
     /// 
     /// Responsibility: Request worker from cloud provider
     /// Returns: WorkerId on success, error on failure
-    Result!(WorkerId, BuildError) provisionWorker(
+    BuildResult!WorkerId provisionWorker(
         string instanceType,
         string imageId,
         string[string] tags
@@ -42,12 +42,12 @@ interface CloudProvider
     /// 
     /// Responsibility: Gracefully shutdown worker
     /// Returns: Success or error
-    Result!BuildError terminateWorker(WorkerId workerId);
+    VoidBuildResult terminateWorker(WorkerId workerId);
     
     /// Get worker status
     /// 
     /// Responsibility: Query worker state from provider
     /// Returns: WorkerStatus with current state
-    Result!(WorkerStatus, BuildError) getWorkerStatus(WorkerId workerId);
+    BuildResult!WorkerStatus getWorkerStatus(WorkerId workerId);
 }
 

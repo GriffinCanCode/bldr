@@ -18,19 +18,19 @@ struct ServiceFactory
     }
     
     /// Create services with workspace auto-detection
-    static Result!(BuildServices, BuildError) createFromWorkspace(
+    static BuildResult!BuildServices createFromWorkspace(
         string workspaceRoot,
         BuildOptions options)
     {
         auto configResult = ConfigParser.parseWorkspace(workspaceRoot);
         if (configResult.isErr)
         {
-            return Result!(BuildServices, BuildError).err(configResult.unwrapErr());
+            return BuildResult!BuildServices.err(configResult.unwrapErr());
         }
         
         auto config = configResult.unwrap();
         auto services = new BuildServices(config, options);
-        return Result!(BuildServices, BuildError).ok(services);
+        return BuildResult!BuildServices.ok(services);
     }
     
     /// Create services for testing with mocks

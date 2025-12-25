@@ -14,7 +14,7 @@ struct SourceRef
     ulong size;           // File size in bytes
     
     /// Create from file path (computes hash)
-    static Result!(SourceRef, BuildError) fromFile(string path) @system
+    static BuildResult!SourceRef fromFile(string path) @system
     {
         try
         {

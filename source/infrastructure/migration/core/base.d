@@ -19,7 +19,7 @@ interface IMigrator
     bool canMigrate(string filePath) const @safe;
     
     /// Parse and migrate a build file
-    Result!(MigrationResult, BuildError) migrate(string inputPath) @system;
+    BuildResult!MigrationResult migrate(string inputPath) @system;
     
     /// Get human-readable description
     string description() const pure nothrow @safe;
@@ -35,7 +35,7 @@ interface IMigrator
 abstract class BaseMigrator : IMigrator
 {
     /// Helper to read and validate input file
-    protected Result!(string, BuildError) readInputFile(string filePath) @system
+    protected BuildResult!string readInputFile(string filePath) @system
     {
         import infrastructure.errors : fileReadError;
         
@@ -45,18 +45,18 @@ abstract class BaseMigrator : IMigrator
                 "reading build file for migration");
             error.addSuggestion("Check the file path is correct");
             error.addSuggestion("Ensure the file exists in the specified location");
-            return Result!(string, BuildError).err(error);
+            return BuildResult!string.err(error);
         }
         
         try
         {
             string content = readText(filePath);
-            return Result!(string, BuildError).ok(content);
+            return BuildResult!string.ok(content);
         }
         catch (Exception e)
         {
             auto error = fileReadError(filePath, e.msg, "reading build file for migration");
-            return Result!(string, BuildError).err(error);
+            return BuildResult!string.err(error);
         }
     }
     
@@ -74,7 +74,7 @@ abstract class BaseMigrator : IMigrator
     }
     
     /// Helper to create result with warnings
-    protected Result!(MigrationResult, BuildError) createResult(
+    protected BuildResult!MigrationResult createResult(
         MigrationTarget[] targets,
         MigrationWarning[] warnings = [],
         string[string] globalConfig = null
@@ -85,7 +85,7 @@ abstract class BaseMigrator : IMigrator
         result.warnings = warnings;
         result.globalConfig = globalConfig;
         result.success = !result.hasErrors();
-        return Result!(MigrationResult, BuildError).ok(result);
+        return BuildResult!MigrationResult.ok(result);
     }
 }
 

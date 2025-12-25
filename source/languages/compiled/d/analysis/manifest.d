@@ -76,7 +76,7 @@ class DubManifest
     
     /// Parse DUB manifest file
     /// Returns: Result with PackageManifest or BuildError
-    static Result!(PackageManifest, BuildError) parse(string manifestPath)
+    static BuildResult!PackageManifest parse(string manifestPath)
     {
         if (!exists(manifestPath))
         {
@@ -112,7 +112,7 @@ class DubManifest
     
     /// Parse dub.json format
     /// Returns: Result with PackageManifest or BuildError
-    private static Result!(PackageManifest, BuildError) parseJSON(string path)
+    private static BuildResult!PackageManifest parseJSON(string path)
     {
         PackageManifest manifest;
         
@@ -228,7 +228,7 @@ class DubManifest
     
     /// Parse dub.sdl format (simplified - basic support)
     /// Returns: Result with PackageManifest or BuildError
-    private static Result!(PackageManifest, BuildError) parseSDL(string path)
+    private static BuildResult!PackageManifest parseSDL(string path)
     {
         PackageManifest manifest;
         

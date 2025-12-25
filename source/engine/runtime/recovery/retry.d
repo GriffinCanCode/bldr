@@ -188,9 +188,9 @@ final class RetryOrchestrator
     }
     
     /// Execute operation with retry
-    Result!(T, BuildError) withRetry(T)(
+    BuildResult!T withRetry(T)(
         string operationId,
-        Result!(T, BuildError) delegate() operation,
+        BuildResult!T delegate() operation,
         RetryPolicy policy = RetryPolicy.init
     ) @system
     {

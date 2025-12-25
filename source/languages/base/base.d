@@ -69,7 +69,7 @@ interface LanguageHandler
     /// - SIMDCapabilities for hardware-accelerated operations
     /// 
     /// Handlers should implement buildImplWithContext() instead of overriding this directly.
-    Result!(string, BuildError) buildWithContext(BuildContext context);
+    BuildResult!string buildWithContext(BuildContext context);
     
     /// Check if target needs rebuild
     bool needsRebuild(in Target target, in WorkspaceConfig config);
@@ -111,7 +111,7 @@ abstract class BaseLanguageHandler : LanguageHandler
     /// - Handler buildImplWithContext() has memory safety bug: contained within handler
     /// - Exception thrown: caught and converted to BuildError Result
     /// - Invalid target: handler validates and returns error Result
-    Result!(string, BuildError) buildWithContext(BuildContext context) @system
+    BuildResult!string buildWithContext(BuildContext context) @system
     {
         // Use tracer and logger from context (dependency injection)
         auto tracer = context.tracer;

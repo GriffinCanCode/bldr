@@ -13,27 +13,35 @@ module engine.caching;
 /// Unified orchestration of all caching tiers with event emission,
 /// garbage collection, and content-addressable storage.
 /// 
-/// ### 2. Target-Level Caching (`caching.targets`)
+/// ### 2. Index (`caching.index`)
+/// SQLite-backed metadata index providing:
+/// - Efficient partial queries for cache introspection
+/// - LRU tracking without loading full cache
+/// - WAL-based crash recovery
+/// - Unified statistics across all cache types
+/// 
+/// ### 3. Target-Level Caching (`caching.targets`)
 /// Caches complete build outputs for each target based on source and
 /// dependency hashes. Primary caching mechanism.
 /// 
-/// ### 3. Action-Level Caching (`caching.actions`)
+/// ### 4. Action-Level Caching (`caching.actions`)
 /// Finer-grained caching for individual build actions (compile,
 /// link, codegen, etc.). Enables partial rebuilds.
 /// 
-/// ### 4. Cache Policies (`caching.policies`)
+/// ### 5. Cache Policies (`caching.policies`)
 /// Manages cache eviction using LRU, age-based, and size-based strategies.
+/// Now powered by SQLite index for efficient selection.
 /// 
-/// ### 5. Distributed Caching (`caching.distributed`)
+/// ### 6. Distributed Caching (`caching.distributed`)
 /// Coordinates local and remote cache tiers for team collaboration.
 /// 
-/// ### 6. Storage (`caching.storage`)
+/// ### 7. Storage (`caching.storage`)
 /// Content-addressable storage with deduplication and garbage collection.
 /// 
-/// ### 7. Metrics (`caching.metrics`)
+/// ### 8. Metrics (`caching.metrics`)
 /// Real-time cache metrics collection and statistics.
 /// 
-/// ### 8. Events (`caching.events`)
+/// ### 9. Events (`caching.events`)
 /// Cache events for telemetry integration.
 /// 
 /// ## Usage
@@ -68,8 +76,11 @@ module engine.caching;
 /// cache.close();
 /// ```
 
-// Coordinator (new unified interface)
+// Coordinator (unified interface)
 public import engine.caching.coordinator;
+
+// SQLite-backed index (metadata, queries, crash recovery)
+public import engine.caching.index;
 
 // Core caching components
 public import engine.caching.targets;

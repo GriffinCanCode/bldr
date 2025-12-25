@@ -37,7 +37,7 @@ final class ASTIncrementalEngine
     
     /// Analyze files and determine what needs recompilation at symbol level
     /// This is the main entry point for AST-level incremental compilation
-    Result!(ASTChangeAnalysis, BuildError) analyzeChanges(
+    BuildResult!ASTChangeAnalysis analyzeChanges(
         string[] allSourceFiles,
         string[] changedFiles
     ) @system
@@ -114,11 +114,11 @@ final class ASTIncrementalEngine
                        analysis.filesToRebuild.length.to!string ~ " files affected, " ~
                        analysis.changedSymbolCount.to!string ~ " symbols changed");
             
-            return Result!(ASTChangeAnalysis, BuildError).ok(analysis);
+            return BuildResult!ASTChangeAnalysis.ok(analysis);
         }
         catch (Exception e)
         {
-            return Result!(ASTChangeAnalysis, BuildError).err(
+            return BuildResult!ASTChangeAnalysis.err(
                 new GenericError("AST analysis failed: " ~ e.msg,
                                ErrorCode.AnalysisFailed));
         }
@@ -220,7 +220,7 @@ final class HybridIncrementalEngine
     
     /// Analyze changes using the most appropriate strategy
     /// Falls back to file-level if AST-level isn't beneficial
-    Result!(ASTChangeAnalysis, BuildError) analyzeChanges(
+    BuildResult!ASTChangeAnalysis analyzeChanges(
         string[] sourceFiles,
         string[] changedFiles
     ) @system
@@ -235,7 +235,7 @@ final class HybridIncrementalEngine
             foreach (file; changedFiles)
                 analysis.changeReasons[file] = "file modified (file-level tracking)";
             
-            return Result!(ASTChangeAnalysis, BuildError).ok(analysis);
+            return BuildResult!ASTChangeAnalysis.ok(analysis);
         }
         
         Logger.debugLog("Using AST-level incremental compilation");

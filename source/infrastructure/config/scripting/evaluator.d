@@ -43,7 +43,7 @@ class Evaluator
     }
     
     /// Evaluate expression value from AST
-    Result!(Value, BuildError) evaluate(Expr expr) @system
+    BuildResult!Value evaluate(Expr expr) @system
     {
         // Handle all expression types from the unified AST
         if (auto lit = cast(LiteralExpr)expr)
@@ -160,7 +160,7 @@ class Evaluator
     }
     
     /// Evaluate a Literal to a Value
-    private Result!(Value, BuildError) evaluateLiteral(Literal lit) @system
+    private BuildResult!Value evaluateLiteral(Literal lit) @system
     {
         final switch (lit.kind)
         {
@@ -188,7 +188,7 @@ class Evaluator
                 {
                     auto valueResult = evaluateLiteral(value);
                     if (valueResult.isErr)
-                        return Result!(Value, BuildError).err(valueResult.unwrapErr());
+                        return BuildResult!Value.err(valueResult.unwrapErr());
                     map[key] = valueResult.unwrap();
                 }
                 return ok(Value.makeMap(map));
@@ -223,22 +223,22 @@ class Evaluator
     }
     
     /// Evaluate identifier (variable lookup)
-    private Result!(Value, BuildError) evaluateIdentifier(string name) @system
+    private BuildResult!Value evaluateIdentifier(string name) @system
     {
         // Check if it's a boolean literal
         if (name == "true")
-            return Result!(Value, BuildError).ok(Value.makeBool(true));
+            return BuildResult!Value.ok(Value.makeBool(true));
         if (name == "false")
-            return Result!(Value, BuildError).ok(Value.makeBool(false));
+            return BuildResult!Value.ok(Value.makeBool(false));
         if (name == "null")
-            return Result!(Value, BuildError).ok(Value.makeNull());
+            return BuildResult!Value.ok(Value.makeNull());
         
         // Lookup in scope
         return scope_.lookup(name);
     }
     
     /// Evaluate array
-    private Result!(Value, BuildError) evaluateArray(Expr[] elements) @system
+    private BuildResult!Value evaluateArray(Expr[] elements) @system
     {
         Value[] result;
         result.reserve(elements.length);
@@ -251,11 +251,11 @@ class Evaluator
             result ~= evalResult.unwrap();
         }
         
-        return Result!(Value, BuildError).ok(Value.makeArray(result));
+        return BuildResult!Value.ok(Value.makeArray(result));
     }
     
     /// Evaluate map
-    private Result!(Value, BuildError) evaluateMap(Expr[string] map) @system
+    private BuildResult!Value evaluateMap(Expr[string] map) @system
     {
         Value[string] result;
         
@@ -263,15 +263,15 @@ class Evaluator
         {
             auto evalResult = evaluate(value);
             if (evalResult.isErr)
-                return Result!(Value, BuildError).err(evalResult.unwrapErr());
+                return BuildResult!Value.err(evalResult.unwrapErr());
             result[key] = evalResult.unwrap();
         }
         
-        return Result!(Value, BuildError).ok(Value.makeMap(result));
+        return BuildResult!Value.ok(Value.makeMap(result));
     }
     
     /// Evaluate binary operation
-    Result!(Value, BuildError) evaluateBinary(string op, Value left, Value right) @system
+    BuildResult!Value evaluateBinary(string op, Value left, Value right) @system
     {
         switch (op)
         {
@@ -370,7 +370,7 @@ class Evaluator
     }
     
     /// Evaluate unary operation
-    Result!(Value, BuildError) evaluateUnary(string op, Value operand) @system
+    BuildResult!Value evaluateUnary(string op, Value operand) @system
     {
         switch (op)
         {
@@ -389,14 +389,14 @@ class Evaluator
     }
     
     /// Evaluate function call
-    Result!(Value, BuildError) evaluateCall(string name, Value[] args) @system
+    BuildResult!Value evaluateCall(string name, Value[] args) @system
     {
         // Check if it's a built-in function
         if (builtins.has(name))
         {
             auto fnResult = builtins.get(name);
             if (fnResult.isErr)
-                return Result!(Value, BuildError).err(fnResult.unwrapErr());
+                return BuildResult!Value.err(fnResult.unwrapErr());
             
             auto fn = fnResult.unwrap();
             return fn(args);
@@ -409,7 +409,7 @@ class Evaluator
             auto error = new ParseError("Undefined function '" ~ name ~ "'", null);
             error.addSuggestion("Define function with 'fn " ~ name ~ "(...) { ... }'");
             error.addSuggestion("Or use a built-in function: " ~ builtins.functionNames().join(", "));
-            return Result!(Value, BuildError).err(error);
+            return BuildResult!Value.err(error);
         }
         
         auto fnValue = lookupResult.unwrap();
@@ -420,7 +420,7 @@ class Evaluator
     }
     
     /// Invoke a closure with arguments, setting up proper scope
-    Result!(Value, BuildError) invokeClosure(Closure closure, Value[] args) @system
+    BuildResult!Value invokeClosure(Closure closure, Value[] args) @system
     {
         // Validate argument count
         if (args.length < closure.arity())
@@ -449,7 +449,7 @@ class Evaluator
                 : (param.hasDefault() ? evaluate(param.defaultValue).unwrap() : Value.makeNull());
             auto defResult = scope_.define(param.name, argValue, false);
             if (defResult.isErr)
-                return Result!(Value, BuildError).err(defResult.unwrapErr());
+                return BuildResult!Value.err(defResult.unwrapErr());
         }
         
         // Handle lambda (single expression body)
@@ -464,7 +464,7 @@ class Evaluator
         {
             auto result = executeStmt(stmt);
             if (result.isErr)
-                return Result!(Value, BuildError).err(result.unwrapErr());
+                return BuildResult!Value.err(result.unwrapErr());
             if (hasReturned)
                 break;
         }
@@ -473,7 +473,7 @@ class Evaluator
     }
     
     /// Execute statement (for function body execution)
-    private Result!BuildError executeStmt(Stmt stmt) @system
+    private VoidBuildResult executeStmt(Stmt stmt) @system
     {
         import infrastructure.config.workspace.ast : ReturnStmt, VarDeclStmt, ExprStmt, 
             IfStmt, ForStmt, BlockStmt;
@@ -484,31 +484,31 @@ class Evaluator
             {
                 auto result = evaluate(ret.value);
                 if (result.isErr)
-                    return Result!BuildError.err(result.unwrapErr());
+                    return VoidBuildResult.err(result.unwrapErr());
                 returnValue = result.unwrap();
             }
             hasReturned = true;
-            return Result!BuildError.ok();
+            return VoidBuildResult.ok();
         }
         else if (auto varDecl = cast(VarDeclStmt)stmt)
         {
             auto valResult = evaluate(varDecl.initializer);
             if (valResult.isErr)
-                return Result!BuildError.err(valResult.unwrapErr());
+                return VoidBuildResult.err(valResult.unwrapErr());
             return scope_.define(varDecl.name, valResult.unwrap(), varDecl.isConst);
         }
         else if (auto exprStmt = cast(ExprStmt)stmt)
         {
             auto result = evaluate(exprStmt.expr);
             if (result.isErr)
-                return Result!BuildError.err(result.unwrapErr());
-            return Result!BuildError.ok();
+                return VoidBuildResult.err(result.unwrapErr());
+            return VoidBuildResult.ok();
         }
         else if (auto ifStmt = cast(IfStmt)stmt)
         {
             auto condResult = evaluate(ifStmt.condition);
             if (condResult.isErr)
-                return Result!BuildError.err(condResult.unwrapErr());
+                return VoidBuildResult.err(condResult.unwrapErr());
             
             auto branch = condResult.unwrap().toBool() ? ifStmt.thenBranch : ifStmt.elseBranch;
             foreach (s; branch)
@@ -517,16 +517,16 @@ class Evaluator
                 if (r.isErr) return r;
                 if (hasReturned) break;
             }
-            return Result!BuildError.ok();
+            return VoidBuildResult.ok();
         }
         else if (auto forStmt = cast(ForStmt)stmt)
         {
             auto iterResult = evaluate(forStmt.iterable);
             if (iterResult.isErr)
-                return Result!BuildError.err(iterResult.unwrapErr());
+                return VoidBuildResult.err(iterResult.unwrapErr());
             
             if (!iterResult.unwrap().isArray())
-                return Result!BuildError.err(new ParseError("For loop requires array", null));
+                return VoidBuildResult.err(new ParseError("For loop requires array", null));
             
             scope_.enterScope();
             scope(exit) scope_.exitScope();
@@ -542,7 +542,7 @@ class Evaluator
                 }
                 if (hasReturned) break;
             }
-            return Result!BuildError.ok();
+            return VoidBuildResult.ok();
         }
         else if (auto block = cast(BlockStmt)stmt)
         {
@@ -554,14 +554,14 @@ class Evaluator
                 if (r.isErr) return r;
                 if (hasReturned) break;
             }
-            return Result!BuildError.ok();
+            return VoidBuildResult.ok();
         }
         
-        return Result!BuildError.ok();
+        return VoidBuildResult.ok();
     }
     
     /// Evaluate array indexing
-    Result!(Value, BuildError) evaluateIndex(Value array, Value index) @system
+    BuildResult!Value evaluateIndex(Value array, Value index) @system
     {
         if (!array.isArray())
             return err("Can only index arrays");
@@ -579,7 +579,7 @@ class Evaluator
     }
     
     /// Evaluate array slicing [start:end]
-    Result!(Value, BuildError) evaluateSlice(Value array, Value start, Value end) @system
+    BuildResult!Value evaluateSlice(Value array, Value start, Value end) @system
     {
         if (!array.isArray())
             return err("Can only slice arrays");
@@ -609,7 +609,7 @@ class Evaluator
     }
     
     /// Evaluate map access
-    Result!(Value, BuildError) evaluateMapAccess(Value map, string key) @system
+    BuildResult!Value evaluateMapAccess(Value map, string key) @system
     {
         if (!map.isMap())
             return err("Can only access maps with []");
@@ -622,7 +622,7 @@ class Evaluator
     }
     
     /// Evaluate ternary operator: condition ? trueExpr : falseExpr
-    Result!(Value, BuildError) evaluateTernary(Value condition, Value trueVal, Value falseVal) @system
+    BuildResult!Value evaluateTernary(Value condition, Value trueVal, Value falseVal) @system
     {
         if (condition.toBool())
             return ok(trueVal);
@@ -631,13 +631,13 @@ class Evaluator
     }
     
     /// Define variable (let or const)
-    Result!BuildError defineVariable(string name, Value value, bool isConst) @system
+    VoidBuildResult defineVariable(string name, Value value, bool isConst) @system
     {
         return scope_.define(name, value, isConst);
     }
     
     /// Assign to variable
-    Result!BuildError assignVariable(string name, Value value) @system
+    VoidBuildResult assignVariable(string name, Value value) @system
     {
         return scope_.assign(name, value);
     }
@@ -655,7 +655,7 @@ class Evaluator
     }
     
     /// Get type information for expression (without evaluation)
-    Result!(ScriptTypeInfo, BuildError) inferType(Expr expr) @system
+    BuildResult!ScriptTypeInfo inferType(Expr expr) @system
     {
         // Comprehensive type inference for all expression types
         if (auto lit = cast(LiteralExpr)expr)
@@ -667,8 +667,8 @@ class Evaluator
             // Lookup identifier type in scope
             auto lookupResult = scope_.lookup(ident.name);
             if (lookupResult.isOk)
-                return Result!(ScriptTypeInfo, BuildError).ok(ScriptTypeInfo.simple(lookupResult.unwrap().type()));
-            return Result!(ScriptTypeInfo, BuildError).ok(ScriptTypeInfo.simple(ValueType.Null));
+                return BuildResult!ScriptTypeInfo.ok(ScriptTypeInfo.simple(lookupResult.unwrap().type()));
+            return BuildResult!ScriptTypeInfo.ok(ScriptTypeInfo.simple(ValueType.Null));
         }
         else if (auto bin = cast(BinaryExpr)expr)
         {
@@ -683,19 +683,19 @@ class Evaluator
             
             // Most binary ops preserve numeric/string types
             if (bin.op == "+" || bin.op == "-" || bin.op == "*" || bin.op == "/" || bin.op == "%")
-                return Result!(ScriptTypeInfo, BuildError).ok(ScriptTypeInfo.simple(ValueType.Number));
+                return BuildResult!ScriptTypeInfo.ok(ScriptTypeInfo.simple(ValueType.Number));
             else if (bin.op == "==" || bin.op == "!=" || bin.op == "<" || bin.op == ">" || 
                      bin.op == "<=" || bin.op == ">=" || bin.op == "&&" || bin.op == "||")
-                return Result!(ScriptTypeInfo, BuildError).ok(ScriptTypeInfo.simple(ValueType.Bool));
+                return BuildResult!ScriptTypeInfo.ok(ScriptTypeInfo.simple(ValueType.Bool));
             
             return leftResult;
         }
         else if (auto unary = cast(UnaryExpr)expr)
         {
             if (unary.op == "!")
-                return Result!(ScriptTypeInfo, BuildError).ok(ScriptTypeInfo.simple(ValueType.Bool));
+                return BuildResult!ScriptTypeInfo.ok(ScriptTypeInfo.simple(ValueType.Bool));
             else if (unary.op == "-")
-                return Result!(ScriptTypeInfo, BuildError).ok(ScriptTypeInfo.simple(ValueType.Number));
+                return BuildResult!ScriptTypeInfo.ok(ScriptTypeInfo.simple(ValueType.Number));
             
             return inferType(unary.operand);
         }
@@ -703,22 +703,22 @@ class Evaluator
         {
             // Function calls - would need function signature registry for proper inference
             // For now, assume returns null
-            return Result!(ScriptTypeInfo, BuildError).ok(ScriptTypeInfo.simple(ValueType.Null));
+            return BuildResult!ScriptTypeInfo.ok(ScriptTypeInfo.simple(ValueType.Null));
         }
         else if (auto index = cast(IndexExpr)expr)
         {
             // Array indexing - return element type (unknown for now)
-            return Result!(ScriptTypeInfo, BuildError).ok(ScriptTypeInfo.simple(ValueType.Null));
+            return BuildResult!ScriptTypeInfo.ok(ScriptTypeInfo.simple(ValueType.Null));
         }
         else if (auto slice = cast(SliceExpr)expr)
         {
             // Slicing returns array
-            return Result!(ScriptTypeInfo, BuildError).ok(ScriptTypeInfo.simple(ValueType.Array));
+            return BuildResult!ScriptTypeInfo.ok(ScriptTypeInfo.simple(ValueType.Array));
         }
         else if (auto member = cast(MemberExpr)expr)
         {
             // Member access - type depends on object structure
-            return Result!(ScriptTypeInfo, BuildError).ok(ScriptTypeInfo.simple(ValueType.Null));
+            return BuildResult!ScriptTypeInfo.ok(ScriptTypeInfo.simple(ValueType.Null));
         }
         else if (auto ternary = cast(TernaryExpr)expr)
         {
@@ -727,29 +727,29 @@ class Evaluator
         }
         else if (auto lambda = cast(LambdaExpr)expr)
         {
-            return Result!(ScriptTypeInfo, BuildError).ok(ScriptTypeInfo.simple(ValueType.Function));
+            return BuildResult!ScriptTypeInfo.ok(ScriptTypeInfo.simple(ValueType.Function));
         }
         
-        return Result!(ScriptTypeInfo, BuildError).ok(ScriptTypeInfo.simple(ValueType.Null));
+        return BuildResult!ScriptTypeInfo.ok(ScriptTypeInfo.simple(ValueType.Null));
     }
     
     /// Infer type of a Literal
-    private Result!(ScriptTypeInfo, BuildError) inferLiteralType(Literal lit) @system
+    private BuildResult!ScriptTypeInfo inferLiteralType(Literal lit) @system
     {
         final switch (lit.kind)
         {
             case LiteralKind.Null:
-                return Result!(ScriptTypeInfo, BuildError).ok(ScriptTypeInfo.simple(ValueType.Null));
+                return BuildResult!ScriptTypeInfo.ok(ScriptTypeInfo.simple(ValueType.Null));
             case LiteralKind.Bool:
-                return Result!(ScriptTypeInfo, BuildError).ok(ScriptTypeInfo.simple(ValueType.Bool));
+                return BuildResult!ScriptTypeInfo.ok(ScriptTypeInfo.simple(ValueType.Bool));
             case LiteralKind.Number:
-                return Result!(ScriptTypeInfo, BuildError).ok(ScriptTypeInfo.simple(ValueType.Number));
+                return BuildResult!ScriptTypeInfo.ok(ScriptTypeInfo.simple(ValueType.Number));
             case LiteralKind.String:
-                return Result!(ScriptTypeInfo, BuildError).ok(ScriptTypeInfo.simple(ValueType.String));
+                return BuildResult!ScriptTypeInfo.ok(ScriptTypeInfo.simple(ValueType.String));
             case LiteralKind.Array:
-                return Result!(ScriptTypeInfo, BuildError).ok(ScriptTypeInfo.simple(ValueType.Array));
+                return BuildResult!ScriptTypeInfo.ok(ScriptTypeInfo.simple(ValueType.Array));
             case LiteralKind.Map:
-                return Result!(ScriptTypeInfo, BuildError).ok(ScriptTypeInfo.simple(ValueType.Map));
+                return BuildResult!ScriptTypeInfo.ok(ScriptTypeInfo.simple(ValueType.Map));
         }
     }
     
@@ -768,15 +768,15 @@ class Evaluator
     
     // Helper methods
     
-    private Result!(Value, BuildError) ok(Value v) @system
+    private BuildResult!Value ok(Value v) @system
     {
-        return Result!(Value, BuildError).ok(v);
+        return BuildResult!Value.ok(v);
     }
     
-    private Result!(Value, BuildError) err(string msg) @system
+    private BuildResult!Value err(string msg) @system
     {
         auto error = new ParseError(msg, null);
-        return Result!(Value, BuildError).err(error);
+        return BuildResult!Value.err(error);
     }
 }
 

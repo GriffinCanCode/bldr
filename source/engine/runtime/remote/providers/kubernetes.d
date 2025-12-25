@@ -31,7 +31,7 @@ final class KubernetesProvider : CloudProvider
         this.kubeconfig = kubeconfig;
     }
     
-    Result!(WorkerId, BuildError) provisionWorker(
+    BuildResult!WorkerId provisionWorker(
         string instanceType,
         string imageId,
         string[string] tags
@@ -128,7 +128,7 @@ spec:
         return Ok!(WorkerId, BuildError)(WorkerId(id));
     }
     
-    Result!BuildError terminateWorker(WorkerId workerId) @trusted
+    VoidBuildResult terminateWorker(WorkerId workerId) @trusted
     {
         // Lookup actual pod name
         auto podNamePtr = workerId in podNameMap;
@@ -138,7 +138,7 @@ spec:
                 "Worker ID not found in pod map",
                 ErrorCode.WorkerFailed
             );
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         
         string podName = *podNamePtr;
@@ -161,7 +161,7 @@ spec:
                 format("Failed to delete Kubernetes pod %s: %s", podName, result.output),
                 ErrorCode.ProcessSpawnFailed
             );
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         
         Logger.info("Deleted Kubernetes pod: " ~ podName);
@@ -169,7 +169,7 @@ spec:
         return Ok!BuildError();
     }
     
-    Result!(WorkerStatus, BuildError) getWorkerStatus(WorkerId workerId) @trusted
+    BuildResult!WorkerStatus getWorkerStatus(WorkerId workerId) @trusted
     {
         // Lookup actual pod name
         auto podNamePtr = workerId in podNameMap;

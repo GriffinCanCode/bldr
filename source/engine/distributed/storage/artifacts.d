@@ -59,7 +59,7 @@ final class ArtifactStore
     }
     
     /// Fetch artifact by ID
-    Result!(InputArtifact, BuildError) fetch(InputSpec spec) @trusted
+    BuildResult!InputArtifact fetch(InputSpec spec) @trusted
     {
         InputArtifact artifact;
         artifact.id = spec.id;
@@ -120,7 +120,7 @@ final class ArtifactStore
     }
     
     /// Upload artifact
-    Result!BuildError upload(ArtifactId id, const ubyte[] data) @trusted
+    VoidBuildResult upload(ArtifactId id, const ubyte[] data) @trusted
     {
         // Verify content hash matches ID
         auto hasher = Blake3(0);
@@ -134,7 +134,7 @@ final class ArtifactStore
                 " but got " ~ toHexString(actualHash[0 .. 32]).toLower(),
                 ErrorCode.CacheCorrupted
             );
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         
         // Save to local cache
@@ -249,21 +249,21 @@ final class ArtifactStore
     }
     
     /// Fetch artifact from remote store via HTTP
-    private Result!(ubyte[], BuildError) fetchRemote(ArtifactId id) @trusted
+    private BuildResult!(ubyte[]) fetchRemote(ArtifactId id) @trusted
     {
         immutable url = config.remoteUrl ~ "/artifacts/" ~ id.toString();
         return executeHttpGet(url);
     }
     
     /// Upload artifact to remote store via HTTP
-    private Result!BuildError uploadRemote(ArtifactId id, const ubyte[] data) @trusted
+    private VoidBuildResult uploadRemote(ArtifactId id, const ubyte[] data) @trusted
     {
         immutable url = config.remoteUrl ~ "/artifacts/" ~ id.toString();
         return executeHttpPut(url, data);
     }
     
     /// Execute HTTP GET request
-    private Result!(ubyte[], BuildError) executeHttpGet(string url) @trusted
+    private BuildResult!(ubyte[]) executeHttpGet(string url) @trusted
     {
         import std.string : indexOf, startsWith;
         
@@ -376,7 +376,7 @@ final class ArtifactStore
     }
     
     /// Execute HTTP PUT request
-    private Result!BuildError executeHttpPut(string url, const ubyte[] data) @trusted
+    private VoidBuildResult executeHttpPut(string url, const ubyte[] data) @trusted
     {
         import std.string : indexOf, startsWith;
         
@@ -460,7 +460,7 @@ final class ArtifactStore
                             ErrorCode.NetworkError,
                             "HTTP PUT error: " ~ statusCode.to!string
                         );
-                        return Result!BuildError.err(error);
+                        return VoidBuildResult.err(error);
                     }
                 }
             }
@@ -470,7 +470,7 @@ final class ArtifactStore
         catch (Exception e)
         {
             auto error = new DistributedError(ErrorCode.NetworkError, "HTTP PUT failed: " ~ e.msg);
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
     }
 }

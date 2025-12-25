@@ -32,7 +32,8 @@ interface BuildError
 }
 
 /// Base implementation with context chain
-abstract class BaseBuildError : BuildError
+/// Extends Exception so errors can be thrown
+abstract class BaseBuildError : Exception, BuildError
 {
     private ErrorCode _code;
     private string _message;
@@ -41,6 +42,7 @@ abstract class BaseBuildError : BuildError
     
     this(ErrorCode code, string message) @trusted
     {
+        super(message);
         _code = code;
         _message = message;
     }

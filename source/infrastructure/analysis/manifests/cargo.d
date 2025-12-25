@@ -14,10 +14,10 @@ import infrastructure.errors.helpers;
 /// Parser for Cargo.toml (Rust)
 final class CargoManifestParser : IManifestParser
 {
-    override Result!(ManifestInfo, BuildError) parse(string filePath) @system
+    override BuildResult!ManifestInfo parse(string filePath) @system
     {
         if (!exists(filePath) || !isFile(filePath))
-            return Result!(ManifestInfo, BuildError).err(
+            return BuildResult!ManifestInfo.err(
                 manifestNotFoundError(filePath, "cargo"));
         
         try
@@ -65,11 +65,11 @@ final class CargoManifestParser : IManifestParser
             if (!framework.empty)
                 info.metadata["framework"] = framework;
             
-            return Result!(ManifestInfo, BuildError).ok(info);
+            return BuildResult!ManifestInfo.ok(info);
         }
         catch (Exception e)
         {
-            return Result!(ManifestInfo, BuildError).err(
+            return BuildResult!ManifestInfo.err(
                 manifestParseError(filePath, "cargo", e.msg));
         }
     }

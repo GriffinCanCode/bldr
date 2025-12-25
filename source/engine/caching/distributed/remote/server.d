@@ -273,7 +273,7 @@ final class CacheServer
         ubyte[] body_;
     }
     
-    private Result!(HttpRequest, BuildError) receiveHttpRequest(Socket client) @trusted
+    private BuildResult!HttpRequest receiveHttpRequest(Socket client) @trusted
     {
         HttpRequest request;
         ubyte[] buffer = new ubyte[8192];

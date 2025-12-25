@@ -15,7 +15,7 @@ struct RPCCodec {
     }
     
     /// Decode request from JSON string
-    static Result!(RPCRequest, BuildError) decodeRequest(string json) @system {
+    static BuildResult!RPCRequest decodeRequest(string json) @system {
         try {
             auto parsed = parseJSON(json);
             return RPCRequest.fromJSON(parsed);
@@ -36,7 +36,7 @@ struct RPCCodec {
     }
     
     /// Decode response from JSON string
-    static Result!(RPCResponse, BuildError) decodeResponse(string json) @system {
+    static BuildResult!RPCResponse decodeResponse(string json) @system {
         try {
             auto parsed = parseJSON(json);
             return RPCResponse.fromJSON(parsed);

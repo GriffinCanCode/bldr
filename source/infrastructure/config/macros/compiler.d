@@ -44,7 +44,7 @@ class DCompiler
     }
     
     /// Compile D source code to executable
-    Result!(CompilationResult, BuildError) compile(string source, string outputName) @system
+    BuildResult!CompilationResult compile(string source, string outputName) @system
     {
         CompilationResult result;
         
@@ -86,27 +86,27 @@ class DCompiler
             {
                 result.error = execResult.output;
                 auto error = new ParseError("Macro compilation failed: " ~ result.error, null);
-                return Result!(CompilationResult, BuildError).err(error);
+                return BuildResult!CompilationResult.err(error);
             }
             
-            return Result!(CompilationResult, BuildError).ok(result);
+            return BuildResult!CompilationResult.ok(result);
         }
         catch (Exception e)
         {
             result.success = false;
             result.error = e.msg;
             auto error = new ParseError("Macro compilation exception: " ~ e.msg, null);
-            return Result!(CompilationResult, BuildError).err(error);
+            return BuildResult!CompilationResult.err(error);
         }
     }
     
     /// Compile D file
-    Result!(CompilationResult, BuildError) compileFile(string filePath) @system
+    BuildResult!CompilationResult compileFile(string filePath) @system
     {
         if (!exists(filePath))
         {
             auto error = new ParseError("Macro file not found: " ~ filePath, null);
-            return Result!(CompilationResult, BuildError).err(error);
+            return BuildResult!CompilationResult.err(error);
         }
         
         auto source = std.file.readText(filePath);
@@ -146,7 +146,7 @@ struct MacroResult
 class MacroExecutor
 {
     /// Execute compiled macro binary
-    Result!(MacroResult, BuildError) execute(string binaryPath, string[] args = []) @system
+    BuildResult!MacroResult execute(string binaryPath, string[] args = []) @system
     {
         MacroResult result;
         
@@ -155,7 +155,7 @@ class MacroExecutor
             result.success = false;
             result.error = "Macro binary not found: " ~ binaryPath;
             auto error = new ParseError(result.error, null);
-            return Result!(MacroResult, BuildError).err(error);
+            return BuildResult!MacroResult.err(error);
         }
         
         try
@@ -171,20 +171,20 @@ class MacroExecutor
             {
                 result.error = execResult.output;
                 auto error = new ParseError("Macro execution failed: " ~ result.error, null);
-                return Result!(MacroResult, BuildError).err(error);
+                return BuildResult!MacroResult.err(error);
             }
             
             // Parse output as target definitions (JSON format)
             result.targets = parseTargetOutput(result.output);
             
-            return Result!(MacroResult, BuildError).ok(result);
+            return BuildResult!MacroResult.ok(result);
         }
         catch (Exception e)
         {
             result.success = false;
             result.error = e.msg;
             auto error = new ParseError("Macro execution exception: " ~ e.msg, null);
-            return Result!(MacroResult, BuildError).err(error);
+            return BuildResult!MacroResult.err(error);
         }
     }
     
@@ -263,7 +263,7 @@ class MacroBuilder
     }
     
     /// Compile and execute D macro
-    Result!(MacroResult, BuildError) build(string sourceFile, string[] args = []) @system
+    BuildResult!MacroResult build(string sourceFile, string[] args = []) @system
     {
         // Check cache
         if (compiler.isCached(sourceFile))
@@ -278,7 +278,7 @@ class MacroBuilder
         // Compile macro
         auto compileResult = compiler.compileFile(sourceFile);
         if (compileResult.isErr)
-            return Result!(MacroResult, BuildError).err(compileResult.unwrapErr());
+            return BuildResult!MacroResult.err(compileResult.unwrapErr());
         
         auto compilation = compileResult.unwrap();
         
@@ -287,11 +287,11 @@ class MacroBuilder
     }
     
     /// Compile and execute inline D code
-    Result!(MacroResult, BuildError) buildInline(string source, string name, string[] args = []) @system
+    BuildResult!MacroResult buildInline(string source, string name, string[] args = []) @system
     {
         auto compileResult = compiler.compile(source, name);
         if (compileResult.isErr)
-            return Result!(MacroResult, BuildError).err(compileResult.unwrapErr());
+            return BuildResult!MacroResult.err(compileResult.unwrapErr());
         
         auto compilation = compileResult.unwrap();
         return executor.execute(compilation.binaryPath, args);

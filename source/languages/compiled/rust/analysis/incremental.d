@@ -44,14 +44,14 @@ final class RustDependencyAnalyzer : BaseDependencyAnalyzer
     }
     
     /// Analyze Rust module dependencies
-    override Result!(string[], BuildError) analyzeDependencies(
+    override BuildResult!(string[]) analyzeDependencies(
         string sourceFile,
         string[] additionalSearchPaths = []
     ) @system
     {
         if (!exists(sourceFile) || !isFile(sourceFile))
         {
-            return Result!(string[], BuildError).err(
+            return BuildResult!(string[]).err(
                 new GenericError("Source file not found: " ~ sourceFile,
                              ErrorCode.FileNotFound)
             );
@@ -83,11 +83,11 @@ final class RustDependencyAnalyzer : BaseDependencyAnalyzer
                 }
             }
             
-            return Result!(string[], BuildError).ok(resolvedDeps);
+            return BuildResult!(string[]).ok(resolvedDeps);
         }
         catch (Exception e)
         {
-            return Result!(string[], BuildError).err(
+            return BuildResult!(string[]).err(
                 new GenericError("Failed to analyze Rust dependencies for " ~ 
                              sourceFile ~ ": " ~ e.msg,
                              ErrorCode.AnalysisFailed)

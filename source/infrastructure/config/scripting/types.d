@@ -373,12 +373,12 @@ struct TargetConfig
     }
     
     /// Create from Value map representation
-    static Result!(TargetConfig, BuildError) fromValue(Value v) @trusted
+    static BuildResult!TargetConfig fromValue(Value v) @trusted
     {
         if (!v.isMap())
         {
             auto error = new ParseError("Target configuration must be a map", null);
-            return Result!(TargetConfig, BuildError).err(error);
+            return BuildResult!TargetConfig.err(error);
         }
         
         TargetConfig config;
@@ -388,7 +388,7 @@ struct TargetConfig
         if ("type" !in map)
         {
             auto error = new ParseError("Target must have 'type' field", null);
-            return Result!(TargetConfig, BuildError).err(error);
+            return BuildResult!TargetConfig.err(error);
         }
         config.type = map["type"].asString();
         
@@ -420,7 +420,7 @@ struct TargetConfig
                 config.config[k] = val.asString();
         }
         
-        return Result!(TargetConfig, BuildError).ok(config);
+        return BuildResult!TargetConfig.ok(config);
     }
 }
 
@@ -443,7 +443,7 @@ struct FunctionSignature
 }
 
 /// Built-in function type
-alias BuiltinFunction = Result!(Value, BuildError) function(Value[] args) @system;
+alias BuiltinFunction = BuildResult!Value function(Value[] args) @system;
 
 /// Type information for expressions
 struct ScriptTypeInfo

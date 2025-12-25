@@ -28,7 +28,7 @@ final class CacheGarbageCollector
     
     /// Run garbage collection
     /// Returns: number of blobs collected and bytes freed
-    Result!(GCResult, BuildError) collect(
+    BuildResult!GCResult collect(
         BuildCache targetCache,
         ActionCache actionCache
     ) @system

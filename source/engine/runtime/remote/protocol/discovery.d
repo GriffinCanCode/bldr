@@ -15,7 +15,7 @@ import infrastructure.errors;
 struct RemoteDiscoveryExecutor
 {
     /// Execute discovery action remotely
-    Result!(DiscoveryResult, BuildError) executeRemoteDiscovery(
+    BuildResult!DiscoveryResult executeRemoteDiscovery(
         ActionId actionId,
         string command,
         string[] inputs,
@@ -38,7 +38,7 @@ struct RemoteDiscoveryExecutor
         // 4. Download discovered artifacts
         // 5. Return discovery result
         
-        return Result!(DiscoveryResult, BuildError).ok(result);
+        return BuildResult!DiscoveryResult.ok(result);
     }
     
     /// Serialize discovery metadata for remote transmission

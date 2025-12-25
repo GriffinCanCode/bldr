@@ -49,11 +49,11 @@ final class MavenMigrator : BaseMigrator
         ];
     }
     
-    override Result!(MigrationResult, BuildError) migrate(string inputPath) @system
+    override BuildResult!MigrationResult migrate(string inputPath) @system
     {
         auto contentResult = readInputFile(inputPath);
         if (contentResult.isErr)
-            return Result!(MigrationResult, BuildError).err(contentResult.unwrapErr());
+            return BuildResult!MigrationResult.err(contentResult.unwrapErr());
         
         auto content = contentResult.unwrap();
         MigrationTarget[] targets;
@@ -119,7 +119,7 @@ final class MavenMigrator : BaseMigrator
         result.warnings = warnings;
         result.success = true;
         
-        return Result!(MigrationResult, BuildError).ok(result);
+        return BuildResult!MigrationResult.ok(result);
     }
     
     private string extractXmlTag(string xml, string tagName)

@@ -49,20 +49,20 @@ final class DubMigrator : BaseMigrator
         ];
     }
     
-    override Result!(MigrationResult, BuildError) migrate(string inputPath) @system
+    override BuildResult!MigrationResult migrate(string inputPath) @system
     {
         import std.path : extension;
         
         auto contentResult = readInputFile(inputPath);
         if (contentResult.isErr)
-            return Result!(MigrationResult, BuildError).err(contentResult.unwrapErr());
+            return BuildResult!MigrationResult.err(contentResult.unwrapErr());
         
         auto content = contentResult.unwrap();
         
         // Only support JSON for now
         if (extension(inputPath) == ".sdl")
         {
-            return Result!(MigrationResult, BuildError).err(
+            return BuildResult!MigrationResult.err(
                 migrationError("SDL format not yet supported - convert to dub.json first", inputPath));
         }
         
@@ -117,7 +117,7 @@ final class DubMigrator : BaseMigrator
         }
         catch (JSONException e)
         {
-            return Result!(MigrationResult, BuildError).err(
+            return BuildResult!MigrationResult.err(
                 migrationError("Invalid JSON in dub.json: " ~ e.msg, inputPath));
         }
         
@@ -126,7 +126,7 @@ final class DubMigrator : BaseMigrator
         result.warnings = warnings;
         result.success = true;
         
-        return Result!(MigrationResult, BuildError).ok(result);
+        return BuildResult!MigrationResult.ok(result);
     }
 }
 

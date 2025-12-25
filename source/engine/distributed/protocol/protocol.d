@@ -144,7 +144,7 @@ struct Capabilities
     }
     
     /// Deserialize from binary
-    static Result!(Capabilities, BuildError) deserialize(const ubyte[] data) @system
+    static BuildResult!Capabilities deserialize(const ubyte[] data) @system
     {
         if (data.length < 1)
             return Err!(Capabilities, BuildError)(new DistributedError("Invalid capabilities: empty data"));

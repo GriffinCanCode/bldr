@@ -38,7 +38,7 @@ final class ResilientCacheTransport
     }
     
     /// Execute GET request with resilience
-    Result!(ubyte[], BuildError) get(string contentHash) @trusted
+    BuildResult!(ubyte[]) get(string contentHash) @trusted
     {
         return resilience.execute!(ubyte[])(
             endpoint,
@@ -49,7 +49,7 @@ final class ResilientCacheTransport
     }
     
     /// Execute PUT request with resilience
-    Result!BuildError put(string contentHash, const(ubyte)[] data) @trusted
+    VoidBuildResult put(string contentHash, const(ubyte)[] data) @trusted
     {
         // PUT operations are lower priority to not block reads
         auto result = resilience.execute!bool(
@@ -57,20 +57,20 @@ final class ResilientCacheTransport
             () @trusted {
                 auto putResult = transport.put(contentHash, data);
                 if (putResult.isErr)
-                    return Result!(bool, BuildError).err(putResult.unwrapErr());
-                return Result!(bool, BuildError).ok(true);
+                    return BuildResult!bool.err(putResult.unwrapErr());
+                return BuildResult!bool.ok(true);
             },
             Priority.Low,
             60.seconds
         );
         
         if (result.isErr)
-            return Result!BuildError.err(result.unwrapErr());
-        return Result!BuildError.ok();
+            return VoidBuildResult.err(result.unwrapErr());
+        return VoidBuildResult.ok();
     }
     
     /// Execute HEAD request with resilience  
-    Result!(bool, BuildError) head(string contentHash) @trusted
+    BuildResult!bool head(string contentHash) @trusted
     {
         // HEAD is lightweight - use high priority
         return resilience.execute!bool(
@@ -82,23 +82,23 @@ final class ResilientCacheTransport
     }
     
     /// Execute DELETE request with resilience
-    Result!BuildError remove(string contentHash) @trusted
+    VoidBuildResult remove(string contentHash) @trusted
     {
         auto result = resilience.execute!bool(
             endpoint,
             () @trusted {
                 auto delResult = transport.remove(contentHash);
                 if (delResult.isErr)
-                    return Result!(bool, BuildError).err(delResult.unwrapErr());
-                return Result!(bool, BuildError).ok(true);
+                    return BuildResult!bool.err(delResult.unwrapErr());
+                return BuildResult!bool.ok(true);
             },
             Priority.Low,
             30.seconds
         );
         
         if (result.isErr)
-            return Result!BuildError.err(result.unwrapErr());
-        return Result!BuildError.ok();
+            return VoidBuildResult.err(result.unwrapErr());
+        return VoidBuildResult.ok();
     }
     
     /// Get circuit breaker state

@@ -34,7 +34,7 @@ final class AnalysisWatcher
     }
     
     /// Start watching for file changes
-    Result!BuildError start(string watchPath = "") @system
+    VoidBuildResult start(string watchPath = "") @system
     {
         if (active)
         {
@@ -42,7 +42,7 @@ final class AnalysisWatcher
                 "Watcher already active",
                 ErrorCode.WatchError
             );
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         
         immutable path = watchPath.empty ? config.root : watchPath;

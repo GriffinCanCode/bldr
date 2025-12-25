@@ -14,10 +14,10 @@ import infrastructure.errors.helpers;
 /// Parser for go.mod
 final class GoManifestParser : IManifestParser
 {
-    override Result!(ManifestInfo, BuildError) parse(string filePath) @system
+    override BuildResult!ManifestInfo parse(string filePath) @system
     {
         if (!exists(filePath) || !isFile(filePath))
-            return Result!(ManifestInfo, BuildError).err(
+            return BuildResult!ManifestInfo.err(
                 manifestNotFoundError(filePath, "go"));
         
         try
@@ -52,11 +52,11 @@ final class GoManifestParser : IManifestParser
             // Go programs are typically executables
             info.suggestedType = hasMainPackage(dir) ? TargetType.Executable : TargetType.Library;
             
-            return Result!(ManifestInfo, BuildError).ok(info);
+            return BuildResult!ManifestInfo.ok(info);
         }
         catch (Exception e)
         {
-            return Result!(ManifestInfo, BuildError).err(
+            return BuildResult!ManifestInfo.err(
                 manifestParseError(filePath, "go", e.msg));
         }
     }

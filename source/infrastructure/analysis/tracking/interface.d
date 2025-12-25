@@ -8,23 +8,23 @@ import infrastructure.errors;
 interface IFileChangeTracker
 {
     /// Initialize tracking for a file
-    Result!BuildError track(string path) @system;
+    VoidBuildResult track(string path) @system;
     
     /// Track multiple files (batch operation)
-    Result!BuildError trackBatch(string[] paths) @system;
+    VoidBuildResult trackBatch(string[] paths) @system;
     
     /// Check if file has changed since last track
     /// Returns: ChangeResult with change status and content hash
-    Result!(ChangeResult, BuildError) checkChange(string path) @system;
+    BuildResult!ChangeResult checkChange(string path) @system;
     
     /// Check multiple files for changes (batch operation)
-    Result!(ChangeResult[string], BuildError) checkChanges(string[] paths) @system;
+    BuildResult!(ChangeResult[string]) checkChanges(string[] paths) @system;
     
     /// Get current state for a file
-    Result!(FileState*, BuildError) getState(string path) @system;
+    BuildResult!(FileState*) getState(string path) @system;
     
     /// Update state for a file (after analysis)
-    Result!BuildError updateState(string path, string contentHash) @system;
+    VoidBuildResult updateState(string path, string contentHash) @system;
     
     /// Remove file from tracking
     void untrack(string path) @system;

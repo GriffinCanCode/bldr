@@ -26,7 +26,7 @@ interface IProvenanceService
     void recordParameter(string key, string value) @system;
     
     /// Finalize and get provenance
-    Result!(BuildProvenance, BuildError) complete() @system;
+    BuildResult!BuildProvenance complete() @system;
     
     /// Check if provenance collection is active
     bool isActive() const @system;
@@ -85,7 +85,7 @@ final class ProvenanceService : IProvenanceService
     }
     
     /// Complete and get provenance
-    Result!(BuildProvenance, BuildError) complete() @system
+    BuildResult!BuildProvenance complete() @system
     {
         if (!_config.enabled)
             return Err!(BuildProvenance, BuildError)(
@@ -107,7 +107,7 @@ final class ProvenanceService : IProvenanceService
     }
     
     /// Sign and export provenance to file
-    Result!BuildError exportToFile(const ref BuildProvenance prov, string outputPath) @system
+    VoidBuildResult exportToFile(const ref BuildProvenance prov, string outputPath) @system
     {
         return ProvenanceExporter.writeToFile(prov, outputPath, _config.signProvenance, workspace);
     }
@@ -128,7 +128,7 @@ final class NullProvenanceService : IProvenanceService
     void recordOutput(string, string = "") @system {}
     void recordParameter(string, string) @system {}
     
-    Result!(BuildProvenance, BuildError) complete() @system
+    BuildResult!BuildProvenance complete() @system
     {
         return Err!(BuildProvenance, BuildError)(
             new SystemError("Provenance disabled", ErrorCode.BuildCancelled));

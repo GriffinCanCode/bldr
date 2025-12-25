@@ -33,7 +33,7 @@ struct SemanticAnalyzer
     }
     
     /// Analyze build file and extract targets
-    Result!(Target[], BuildError) analyzeTargets(BuildFile ast) @system
+    BuildResult!(Target[]) analyzeTargets(BuildFile ast) @system
     {
         Target[] targets;
         
@@ -52,7 +52,7 @@ struct SemanticAnalyzer
     }
     
     /// Analyze single target declaration
-    private Result!(Target, BuildError) analyzeTarget(TargetDeclStmt decl) @system
+    private BuildResult!Target analyzeTarget(TargetDeclStmt decl) @system
     {
         Target target;
         target.name = decl.name;
@@ -225,7 +225,7 @@ struct SemanticAnalyzer
     // FIELD EXTRACTION
     // ========================================================================
     
-    private Result!(string, BuildError) extractString(const Expr expr) @system
+    private BuildResult!string extractString(const Expr expr) @system
     {
         if (auto litExpr = cast(const LiteralExpr)expr)
         {
@@ -245,7 +245,7 @@ struct SemanticAnalyzer
             new ParseError("Expected string literal", null));
     }
     
-    private Result!(string[], BuildError) extractStringArray(const Expr expr) @system
+    private BuildResult!(string[]) extractStringArray(const Expr expr) @system
     {
         if (auto litExpr = cast(const LiteralExpr)expr)
         {
@@ -256,7 +256,7 @@ struct SemanticAnalyzer
             new ParseError("Expected array of strings", null));
     }
     
-    private Result!(string[string], BuildError) extractStringMap(const Expr expr) @system
+    private BuildResult!(string[string]) extractStringMap(const Expr expr) @system
     {
         if (auto litExpr = cast(const LiteralExpr)expr)
         {
@@ -267,7 +267,7 @@ struct SemanticAnalyzer
             new ParseError("Expected map of strings", null));
     }
     
-    private Result!(TargetType, BuildError) extractType(const Expr expr) @system
+    private BuildResult!TargetType extractType(const Expr expr) @system
     {
         auto strResult = extractString(expr);
         if (strResult.isErr)
@@ -291,7 +291,7 @@ struct SemanticAnalyzer
         }
     }
     
-    private Result!(TargetLanguage, BuildError) extractLanguage(const Expr expr) @system
+    private BuildResult!TargetLanguage extractLanguage(const Expr expr) @system
     {
         auto strResult = extractString(expr);
         if (strResult.isErr)
@@ -301,7 +301,7 @@ struct SemanticAnalyzer
             parseLanguageName(strResult.unwrap()));
     }
     
-    private Result!(string, BuildError) extractMapAsJSON(const Expr expr) @system
+    private BuildResult!string extractMapAsJSON(const Expr expr) @system
     {
         import std.json : JSONValue;
         
@@ -352,7 +352,7 @@ struct SemanticAnalyzer
         return glob(patterns, baseDir);
     }
     
-    private Result!(T, BuildError) error(T)(string message, Location loc) @system
+    private BuildResult!T error(T)(string message, Location loc) @system
     {
         auto err = new ParseError(loc.file, message, ErrorCode.InvalidFieldValue);
         err.line = loc.line;
@@ -371,7 +371,7 @@ struct ParseResult
 }
 
 /// High-level API - Parse DSL source into targets and repositories
-Result!(ParseResult, BuildError) parseDSL(
+BuildResult!ParseResult parseDSL(
     string source,
     string filePath,
     string workspaceRoot) @system

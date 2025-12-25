@@ -96,7 +96,7 @@ struct QueryLexer
     }
     
     /// Tokenize entire source
-    Result!(Token[], BuildError) tokenize() @system
+    BuildResult!(Token[]) tokenize() @system
     {
         Token[] tokens;
         tokens.reserve(32);  // Typical query has < 32 tokens
@@ -109,7 +109,7 @@ struct QueryLexer
             
             auto tokenResult = scanToken();
             if (tokenResult.isErr)
-                return Result!(Token[], BuildError).err(tokenResult.unwrapErr());
+                return BuildResult!(Token[]).err(tokenResult.unwrapErr());
             
             auto token = tokenResult.unwrap();
             if (token.type != TokenType.Invalid)
@@ -117,10 +117,10 @@ struct QueryLexer
         }
         
         tokens ~= Token(TokenType.EOF, "", line, column);
-        return Result!(Token[], BuildError).ok(tokens);
+        return BuildResult!(Token[]).ok(tokens);
     }
     
-    private Result!(Token, BuildError) scanToken() @system
+    private BuildResult!Token scanToken() @system
     {
         char c = peek();
         
@@ -164,11 +164,11 @@ struct QueryLexer
                     ErrorCode.ParseFailed);
                 error.line = line;
                 error.column = startCol;
-                return Result!(Token, BuildError).err(error);
+                return BuildResult!Token.err(error);
         }
     }
     
-    private Result!(Token, BuildError) scanPattern() @system
+    private BuildResult!Token scanPattern() @system
     {
         size_t startLine = line;
         size_t startCol = column;
@@ -198,7 +198,7 @@ struct QueryLexer
         return ok(TokenType.Pattern, value, startLine, startCol);
     }
     
-    private Result!(Token, BuildError) scanString() @system
+    private BuildResult!Token scanString() @system
     {
         size_t startLine = line;
         size_t startCol = column;
@@ -217,7 +217,7 @@ struct QueryLexer
                         "Unterminated string", 
                         ErrorCode.ParseFailed);
                     error.line = startLine;
-                    return Result!(Token, BuildError).err(error);
+                    return BuildResult!Token.err(error);
                 }
                 
                 // Handle escape sequences
@@ -247,14 +247,14 @@ struct QueryLexer
                 "Unterminated string", 
                 ErrorCode.ParseFailed);
             error.line = startLine;
-            return Result!(Token, BuildError).err(error);
+            return BuildResult!Token.err(error);
         }
         
         advance();  // Closing quote
         return ok(TokenType.String, value, startLine, startCol);
     }
     
-    private Result!(Token, BuildError) scanNumber(bool negative = false) @system
+    private BuildResult!Token scanNumber(bool negative = false) @system
     {
         size_t startLine = line;
         size_t startCol = column;
@@ -269,7 +269,7 @@ struct QueryLexer
         return ok(TokenType.Number, value, startLine, startCol);
     }
     
-    private Result!(Token, BuildError) scanIdentifier() @system
+    private BuildResult!Token scanIdentifier() @system
     {
         size_t startLine = line;
         size_t startCol = column;
@@ -346,10 +346,10 @@ struct QueryLexer
         }
     }
     
-    private Result!(Token, BuildError) ok(TokenType type, string value, size_t line, size_t column) 
+    private BuildResult!Token ok(TokenType type, string value, size_t line, size_t column) 
         const pure nothrow @system
     {
-        return Result!(Token, BuildError).ok(Token(type, value, line, column));
+        return BuildResult!Token.ok(Token(type, value, line, column));
     }
 }
 

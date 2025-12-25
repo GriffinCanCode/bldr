@@ -15,7 +15,7 @@ import infrastructure.errors;
 interface ToolchainProvider
 {
     /// Provide toolchains (fetch if necessary)
-    Result!(Toolchain[], BuildError) provide() @system;
+    BuildResult!(Toolchain[]) provide() @system;
     
     /// Get provider name
     string name() const @safe;
@@ -35,7 +35,7 @@ class LocalToolchainProvider : ToolchainProvider
         this.path = path;
     }
     
-    override Result!(Toolchain[], BuildError) provide() @system
+    override BuildResult!(Toolchain[]) provide() @system
     {
         if (!exists(path))
         {
@@ -148,7 +148,7 @@ class RepositoryToolchainProvider : ToolchainProvider
         this.resolver = new RepositoryResolver(cacheDir, workspaceRoot);
     }
     
-    override Result!(Toolchain[], BuildError) provide() @system
+    override BuildResult!(Toolchain[]) provide() @system
     {
         // Register repository rule
         auto registerResult = resolver.registerRule(rule);
@@ -199,13 +199,13 @@ class RepositoryToolchainProvider : ToolchainProvider
         return true; // Always available (will fetch if needed)
     }
     
-    private Result!(Toolchain[], BuildError) autoDetectFromPath(string rootPath) @system
+    private BuildResult!(Toolchain[]) autoDetectFromPath(string rootPath) @system
     {
         auto provider = new LocalToolchainProvider(rootPath);
         return provider.provide();
     }
     
-    private Result!(Toolchain[], BuildError) buildFromManifest(
+    private BuildResult!(Toolchain[]) buildFromManifest(
         ToolchainManifest manifest, string rootPath) @system
     {
         Toolchain[] toolchains;
@@ -258,7 +258,7 @@ struct ToolchainManifest
     ToolchainDefinition[] toolchains;
     
     /// Load manifest from file
-    static Result!(ToolchainManifest, BuildError) load(string path) @system
+    static BuildResult!ToolchainManifest load(string path) @system
     {
         import std.file : readText;
         import std.json : parseJSON, JSONException;

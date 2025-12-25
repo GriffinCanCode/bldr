@@ -43,7 +43,7 @@ final class RemoteCacheClient
     
     /// Fetch artifact from remote cache
     /// Returns: artifact data or error
-    Result!(ubyte[], BuildError) get(string contentHash) @trusted
+    BuildResult!(ubyte[]) get(string contentHash) @trusted
     {
         if (!config.enabled())
         {
@@ -113,7 +113,7 @@ final class RemoteCacheClient
     }
     
     /// Store artifact in remote cache
-    Result!(bool, BuildError) put(string contentHash, const(ubyte)[] data) @trusted
+    BuildResult!bool put(string contentHash, const(ubyte)[] data) @trusted
     {
         if (!config.enabled())
         {
@@ -181,7 +181,7 @@ final class RemoteCacheClient
     }
     
     /// Check if artifact exists in remote cache
-    Result!(bool, BuildError) has(string contentHash) @trusted
+    BuildResult!bool has(string contentHash) @trusted
     {
         if (!config.enabled())
         {
@@ -255,12 +255,12 @@ final class RemoteCacheClient
         catch (Exception) {}
     }
     
-    private Result!(T, BuildError) executeWithRetry(T)(
-        Result!(T, BuildError) delegate() @trusted operation
+    private BuildResult!T executeWithRetry(T)(
+        BuildResult!T delegate() @trusted operation
     ) @trusted
     {
         size_t attempts = 0;
-        Result!(T, BuildError) lastResult;
+        BuildResult!T lastResult;
         
         while (attempts < config.maxRetries)
         {
@@ -321,28 +321,28 @@ final class RemoteCacheClient
     
     /// Upload a single chunk to remote cache
     /// Used by chunk transfer mechanism for large files
-    Result!(bool, BuildError) putChunk(string chunkHash, const(ubyte)[] data) @trusted
+    BuildResult!bool putChunk(string chunkHash, const(ubyte)[] data) @trusted
     {
         // Use standard put with chunk hash as key
         return put(chunkHash, data);
     }
     
     /// Download a single chunk from remote cache
-    Result!(ubyte[], BuildError) getChunk(string chunkHash) @trusted
+    BuildResult!(ubyte[]) getChunk(string chunkHash) @trusted
     {
         // Use standard get with chunk hash as key
         return get(chunkHash);
     }
     
     /// Check if a chunk exists in remote cache
-    Result!(bool, BuildError) hasChunk(string chunkHash) @trusted
+    BuildResult!bool hasChunk(string chunkHash) @trusted
     {
         return has(chunkHash);
     }
     
     /// Upload file using chunk-based transfer (for large files)
     /// Returns: Transfer statistics and manifest
-    Result!(ChunkBasedUpload, BuildError) putFileChunked(
+    BuildResult!ChunkBasedUpload putFileChunked(
         string filePath,
         string fileHash
     ) @trusted
@@ -430,7 +430,7 @@ final class RemoteCacheClient
     }
     
     /// Download file using chunk-based transfer
-    Result!(TransferStats, BuildError) getFileChunked(
+    BuildResult!TransferStats getFileChunked(
         string fileHash,
         string outputPath
     ) @trusted
@@ -493,7 +493,7 @@ final class RemoteCacheClient
     
     /// Update file with only changed chunks (incremental upload)
     /// Returns: Transfer statistics showing bandwidth savings
-    Result!(TransferStats, BuildError) updateFileChunked(
+    BuildResult!TransferStats updateFileChunked(
         string filePath,
         string fileHash,
         string oldFileHash
@@ -575,7 +575,7 @@ final class RemoteCacheClient
     }
     
     /// Store chunk manifest in cache
-    private Result!BuildError putManifest(string fileHash, ChunkManifest manifest) @trusted
+    private VoidBuildResult putManifest(string fileHash, ChunkManifest manifest) @trusted
     {
         // Serialize manifest
         import std.json : JSONValue;
@@ -602,13 +602,13 @@ final class RemoteCacheClient
         auto putResult = put(manifestKey, manifestData);
         
         if (putResult.isErr)
-            return Result!BuildError.err(putResult.unwrapErr());
+            return VoidBuildResult.err(putResult.unwrapErr());
         
         return Ok!BuildError();
     }
     
     /// Retrieve chunk manifest from cache
-    private Result!(ChunkManifest, BuildError) getManifest(string fileHash) @trusted
+    private BuildResult!ChunkManifest getManifest(string fileHash) @trusted
     {
         import std.json : parseJSON, JSONException;
         

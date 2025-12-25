@@ -22,7 +22,7 @@ class LifecycleManager {
     }
     
     /// Execute pre-build hooks for all registered plugins
-    Result!BuildError executePreHooks(
+    VoidBuildResult executePreHooks(
         PluginTarget target,
         PluginWorkspace workspace
     ) @system {
@@ -48,7 +48,7 @@ class LifecycleManager {
             if (result.isErr) {
                 Logger.error("Pre-build hook failed: " ~ plugin.name ~ " - " ~ 
                     result.unwrapErr().message);
-                return Result!BuildError.err(result.unwrapErr());
+                return VoidBuildResult.err(result.unwrapErr());
             }
             
             auto hookResult = result.unwrap();
@@ -64,7 +64,7 @@ class LifecycleManager {
                     ErrorCode.BuildFailed
                 );
                 err.addContext(ErrorContext("plugin", plugin.name));
-                return Result!BuildError.err(err);
+                return VoidBuildResult.err(err);
             }
             
             Logger.debugLog("Pre-build hook completed: " ~ plugin.name ~ " (" ~ 
@@ -75,7 +75,7 @@ class LifecycleManager {
     }
     
     /// Execute post-build hooks for all registered plugins
-    Result!BuildError executePostHooks(
+    VoidBuildResult executePostHooks(
         PluginTarget target,
         PluginWorkspace workspace,
         string[] outputs,

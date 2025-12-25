@@ -113,7 +113,7 @@ final class WorkerPool
     }
     
     /// Start pool manager
-    Result!BuildError start() @trusted
+    VoidBuildResult start() @trusted
     {
         synchronized (mutex)
         {
@@ -220,7 +220,7 @@ final class WorkerPool
     }
     
     /// Scale pool to target size
-    private Result!BuildError scale(size_t targetSize) @trusted
+    private VoidBuildResult scale(size_t targetSize) @trusted
     {
         immutable currentSize = registry.count();
         
@@ -286,7 +286,7 @@ final class WorkerPool
     /// 
     /// Responsibility: Select workers to drain based on utilization
     /// Delegates actual deprovisioning to WorkerProvisioner (SRP)
-    private Result!BuildError drainWorkers(size_t count) @trusted
+    private VoidBuildResult drainWorkers(size_t count) @trusted
     {
         Logger.info("Draining " ~ count.to!string ~ " workers");
         

@@ -59,7 +59,7 @@ import infrastructure.errors : Result, BuildError, Ok, Err, SystemError, ErrorCo
 import std.range : empty;
 
 /// Convenience function to get a toolchain by name with optional version constraint
-Result!(Toolchain, BuildError) getToolchainByName(string name, string versionConstraint = "") @system
+BuildResult!Toolchain getToolchainByName(string name, string versionConstraint = "") @system
 {
     auto registry = ToolchainRegistry.instance();
     registry.initialize();

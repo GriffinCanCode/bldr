@@ -70,10 +70,10 @@ struct IncrementalTopoOrder
     
     /// Get topological order, computing if needed
     /// Returns: Result with sorted nodes (leaves first) or cycle error
-    Result!(BuildNode[], BuildError) getOrder() @system
+    BuildResult!(BuildNode[]) getOrder() @system
     {
         if (_valid)
-            return Result!(BuildNode[], BuildError).ok(_cachedOrder);
+            return BuildResult!(BuildNode[]).ok(_cachedOrder);
         
         // Full recomputation needed
         return recompute();
@@ -81,7 +81,7 @@ struct IncrementalTopoOrder
     
     /// Notify edge addition and update incrementally if possible
     /// Returns: Ok if valid, Err if cycle detected
-    Result!BuildError notifyEdgeAdded(TargetId from, TargetId to) @system
+    VoidBuildResult notifyEdgeAdded(TargetId from, TargetId to) @system
     {
         if (!_valid)
             return Ok!BuildError(); // Will recompute on next getOrder()
@@ -148,7 +148,7 @@ struct IncrementalTopoOrder
     }
     
     /// Full recomputation using DFS-based topological sort
-    private Result!(BuildNode[], BuildError) recompute() @system
+    private BuildResult!(BuildNode[]) recompute() @system
     {
         BuildNode[] sorted;
         bool[string] visited;
@@ -195,7 +195,7 @@ struct IncrementalTopoOrder
         {
             visit(node);
             if (cycleError !is null)
-                return Result!(BuildNode[], BuildError).err(cycleError);
+                return BuildResult!(BuildNode[]).err(cycleError);
         }
         
         // Cache results
@@ -207,12 +207,12 @@ struct IncrementalTopoOrder
         _valid = true;
         _version++;
         
-        return Result!(BuildNode[], BuildError).ok(sorted);
+        return BuildResult!(BuildNode[]).ok(sorted);
     }
     
     /// Incremental reorder of affected region [fromPos, toPos]
     /// Called when edge from→to added but fromPos < toPos (backward edge)
-    private Result!BuildError incrementalReorder(size_t fromPos, size_t toPos) @system
+    private VoidBuildResult incrementalReorder(size_t fromPos, size_t toPos) @system
     {
         // Extract affected region (nodes that may need reordering)
         auto affected = _cachedOrder[fromPos .. toPos + 1].dup;
@@ -269,7 +269,7 @@ struct IncrementalTopoOrder
                 invalidate(); // Force full recompute to get proper error
                 auto fullResult = recompute();
                 if (fullResult.isErr)
-                    return Result!BuildError.err(fullResult.unwrapErr());
+                    return VoidBuildResult.err(fullResult.unwrapErr());
                 return Ok!BuildError();
             }
         }

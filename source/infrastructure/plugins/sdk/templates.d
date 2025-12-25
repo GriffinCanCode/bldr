@@ -17,7 +17,7 @@ enum TemplateLanguage {
 /// Plugin template generator
 class TemplateGenerator {
     /// Create new plugin from template
-    static Result!BuildError create(
+    static VoidBuildResult create(
         string pluginName,
         TemplateLanguage language,
         string targetDir = "."
@@ -31,7 +31,7 @@ class TemplateGenerator {
                 ErrorCode.InvalidInput
             );
             err.addSuggestion("Choose a different name or remove the existing directory");
-            return Result!BuildError.err(err);
+            return VoidBuildResult.err(err);
         }
         
         // Create directory structure
@@ -66,7 +66,7 @@ class TemplateGenerator {
                 "Failed to create plugin template: " ~ e.msg,
                 ErrorCode.FileWriteFailed
             );
-            return Result!BuildError.err(err);
+            return VoidBuildResult.err(err);
         }
     }
     

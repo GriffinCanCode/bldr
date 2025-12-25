@@ -10,3 +10,10 @@ public import engine.distributed.protocol.schema;
 version (EnableGrpc) {
     public import engine.distributed.protocol.grpc;
 }
+
+// REAPI v2 compatibility layer
+// Provides wire-format compatibility with Bazel Remote Execution API v2
+// Import explicitly: import engine.distributed.protocol.reapi_v2;
+version (EnableReapiV2) {
+    public import engine.distributed.protocol.reapi_v2;
+}

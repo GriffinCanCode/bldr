@@ -12,7 +12,7 @@ interface DependencyAnalyzer
 {
     /// Analyze dependencies for a source file
     /// Returns list of files this source depends on
-    Result!(string[], BuildError) analyzeDependencies(
+    BuildResult!(string[]) analyzeDependencies(
         string sourceFile,
         string[] includePaths = []
     ) @system;

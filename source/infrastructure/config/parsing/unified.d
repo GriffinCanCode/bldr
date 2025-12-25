@@ -48,7 +48,7 @@ class UnifiedParser
     }
     
     /// Parse complete build file
-    Result!(BuildFile, BuildError) parse() @system
+    BuildResult!BuildFile parse() @system
     {
         BuildFile file;
         file.filePath = filePath;
@@ -77,7 +77,7 @@ class UnifiedParser
     // TOP-LEVEL PARSING
     // ========================================================================
     
-    private Result!(Stmt, BuildError) parseTopLevel() @system
+    private BuildResult!Stmt parseTopLevel() @system
     {
         auto token = peek();
         
@@ -109,7 +109,7 @@ class UnifiedParser
     // TARGET & REPOSITORY DECLARATIONS
     // ========================================================================
     
-    private Result!(Stmt, BuildError) parseTargetDecl() @system
+    private BuildResult!Stmt parseTargetDecl() @system
     {
         auto startToken = expect(TokenType.Target);
         auto loc = Location(filePath, startToken.line, startToken.column);
@@ -146,7 +146,7 @@ class UnifiedParser
         return Ok!(Stmt, BuildError)(new TargetDeclStmt(name, fields, loc));
     }
     
-    private Result!(Stmt, BuildError) parseRepositoryDecl() @system
+    private BuildResult!Stmt parseRepositoryDecl() @system
     {
         auto startToken = expect(TokenType.Repository);
         auto loc = Location(filePath, startToken.line, startToken.column);
@@ -183,7 +183,7 @@ class UnifiedParser
         return Ok!(Stmt, BuildError)(new RepositoryDeclStmt(name, fields, loc));
     }
     
-    private Result!(Field, BuildError) parseField() @system
+    private BuildResult!Field parseField() @system
     {
         auto token = peek();
         auto loc = Location(filePath, token.line, token.column);
@@ -223,7 +223,7 @@ class UnifiedParser
     // VARIABLE DECLARATIONS
     // ========================================================================
     
-    private Result!(Stmt, BuildError) parseVarDecl() @system
+    private BuildResult!Stmt parseVarDecl() @system
     {
         auto token = advance();
         bool isConst = (token.type == TokenType.Const);
@@ -254,7 +254,7 @@ class UnifiedParser
     // FUNCTION DECLARATIONS
     // ========================================================================
     
-    private Result!(Stmt, BuildError) parseFunctionDecl() @system
+    private BuildResult!Stmt parseFunctionDecl() @system
     {
         auto token = expect(TokenType.Fn);
         auto loc = Location(filePath, token.line, token.column);
@@ -312,7 +312,7 @@ class UnifiedParser
     // MACRO DECLARATIONS
     // ========================================================================
     
-    private Result!(Stmt, BuildError) parseMacroDecl() @system
+    private BuildResult!Stmt parseMacroDecl() @system
     {
         auto token = expect(TokenType.Macro);
         auto loc = Location(filePath, token.line, token.column);
@@ -358,7 +358,7 @@ class UnifiedParser
     // CONTROL FLOW
     // ========================================================================
     
-    private Result!(Stmt, BuildError) parseIfStmt() @system
+    private BuildResult!Stmt parseIfStmt() @system
     {
         auto token = expect(TokenType.If);
         auto loc = Location(filePath, token.line, token.column);
@@ -407,7 +407,7 @@ class UnifiedParser
             new IfStmt(condResult.unwrap(), thenResult.unwrap(), elseBranch, loc));
     }
     
-    private Result!(Stmt, BuildError) parseForStmt() @system
+    private BuildResult!Stmt parseForStmt() @system
     {
         auto token = expect(TokenType.For);
         auto loc = Location(filePath, token.line, token.column);
@@ -439,7 +439,7 @@ class UnifiedParser
     // OTHER STATEMENTS
     // ========================================================================
     
-    private Result!(Stmt, BuildError) parseImportStmt() @system
+    private BuildResult!Stmt parseImportStmt() @system
     {
         auto token = expect(TokenType.Import);
         auto loc = Location(filePath, token.line, token.column);
@@ -454,7 +454,7 @@ class UnifiedParser
         return Ok!(Stmt, BuildError)(new ImportStmt(modulePath, loc));
     }
     
-    private Result!(Stmt[], BuildError) parseBlock() @system
+    private BuildResult!(Stmt[]) parseBlock() @system
     {
         Stmt[] stmts;
         
@@ -472,7 +472,7 @@ class UnifiedParser
         return Ok!(Stmt[], BuildError)(stmts);
     }
     
-    private Result!(Stmt, BuildError) parseStatement() @system
+    private BuildResult!Stmt parseStatement() @system
     {
         auto token = peek();
         
@@ -494,7 +494,7 @@ class UnifiedParser
         }
     }
     
-    private Result!(Stmt, BuildError) parseReturnStmt() @system
+    private BuildResult!Stmt parseReturnStmt() @system
     {
         auto token = expect(TokenType.Return);
         auto loc = Location(filePath, token.line, token.column);
@@ -513,7 +513,7 @@ class UnifiedParser
         return Ok!(Stmt, BuildError)(new ReturnStmt(value, loc));
     }
     
-    private Result!(Stmt, BuildError) parseExprStmt() @system
+    private BuildResult!Stmt parseExprStmt() @system
     {
         auto token = peek();
         auto loc = Location(filePath, token.line, token.column);
@@ -531,7 +531,7 @@ class UnifiedParser
     // EXPRESSION PARSING (Pratt Parser)
     // ========================================================================
     
-    private Result!(Expr, BuildError) parseExpression(int minPrecedence) @system
+    private BuildResult!Expr parseExpression(int minPrecedence) @system
     {
         auto leftResult = parsePrimary();
         if (leftResult.isErr)
@@ -685,7 +685,7 @@ class UnifiedParser
         return Ok!(Expr, BuildError)(left);
     }
     
-    private Result!(Expr, BuildError) parsePrimary() @system
+    private BuildResult!Expr parsePrimary() @system
     {
         auto token = peek();
         auto loc = Location(filePath, token.line, token.column);
@@ -811,7 +811,7 @@ class UnifiedParser
         return error!Expr("Expected expression");
     }
     
-    private Result!(Expr, BuildError) parseArrayLiteral() @system
+    private BuildResult!Expr parseArrayLiteral() @system
     {
         auto token = expect(TokenType.LeftBracket);
         auto loc = Location(filePath, token.line, token.column);
@@ -849,7 +849,7 @@ class UnifiedParser
             new LiteralExpr(Literal.makeArray(elements), loc));
     }
     
-    private Result!(Expr, BuildError) parseMapLiteral() @system
+    private BuildResult!Expr parseMapLiteral() @system
     {
         auto token = expect(TokenType.LeftBrace);
         auto loc = Location(filePath, token.line, token.column);
@@ -986,7 +986,7 @@ class UnifiedParser
         return !isAtEnd() && peek().type == type;
     }
     
-    private Result!(T, BuildError) error(T)(string message) @system
+    private BuildResult!T error(T)(string message) @system
     {
         auto token = peek();
         auto err = new ParseError(filePath, message, token.line, token.column, ErrorCode.ParseFailed);
@@ -996,7 +996,7 @@ class UnifiedParser
 }
 
 /// High-level parsing API with caching
-Result!(BuildFile, BuildError) parse(
+BuildResult!BuildFile parse(
     string source,
     string filePath,
     string workspaceRoot,

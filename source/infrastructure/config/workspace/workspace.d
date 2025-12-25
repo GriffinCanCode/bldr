@@ -60,7 +60,7 @@ struct WorkspaceParser
     }
     
     /// Parse Builderspace file into AST
-    Result!(WorkspaceFile, BuildError) parse()
+    BuildResult!WorkspaceFile parse()
     {
         auto workspaceResult = parseWorkspace();
         if (workspaceResult.isErr) return Err!(WorkspaceFile, BuildError)(workspaceResult.unwrapErr());
@@ -69,7 +69,7 @@ struct WorkspaceParser
     }
     
     /// Parse workspace declaration
-    private Result!(WorkspaceDecl, BuildError) parseWorkspace()
+    private BuildResult!WorkspaceDecl parseWorkspace()
     {
         auto token = peek();
         immutable line = token.line, col = token.column;
@@ -109,7 +109,7 @@ struct WorkspaceParser
     }
     
     /// Parse field assignment
-    private Result!(WorkspaceField, BuildError) parseField()
+    private BuildResult!WorkspaceField parseField()
     {
         auto token = peek();
         immutable line = token.line, col = token.column;
@@ -134,13 +134,13 @@ struct WorkspaceParser
     }
     
     /// Parse expression - fully implemented with support for all literal types
-    private Result!(Expr, BuildError) parseExpression()
+    private BuildResult!Expr parseExpression()
     {
         return parseTernary();
     }
     
     /// Parse ternary conditional: condition ? trueExpr : falseExpr
-    private Result!(Expr, BuildError) parseTernary()
+    private BuildResult!Expr parseTernary()
     {
         auto exprResult = parseLogicalOr();
         if (exprResult.isErr) return exprResult;
@@ -167,7 +167,7 @@ struct WorkspaceParser
     }
     
     /// Parse logical OR: expr || expr
-    private Result!(Expr, BuildError) parseLogicalOr()
+    private BuildResult!Expr parseLogicalOr()
     {
         auto exprResult = parseLogicalAnd();
         if (exprResult.isErr) return exprResult;
@@ -186,7 +186,7 @@ struct WorkspaceParser
     }
     
     /// Parse logical AND: expr && expr
-    private Result!(Expr, BuildError) parseLogicalAnd()
+    private BuildResult!Expr parseLogicalAnd()
     {
         auto exprResult = parseEquality();
         if (exprResult.isErr) return exprResult;
@@ -205,7 +205,7 @@ struct WorkspaceParser
     }
     
     /// Parse equality: expr == expr, expr != expr
-    private Result!(Expr, BuildError) parseEquality()
+    private BuildResult!Expr parseEquality()
     {
         auto exprResult = parseComparison();
         if (exprResult.isErr) return exprResult;
@@ -225,7 +225,7 @@ struct WorkspaceParser
     }
     
     /// Parse comparison: <, <=, >, >=
-    private Result!(Expr, BuildError) parseComparison()
+    private BuildResult!Expr parseComparison()
     {
         auto exprResult = parseAdditive();
         if (exprResult.isErr) return exprResult;
@@ -248,7 +248,7 @@ struct WorkspaceParser
     }
     
     /// Parse additive: + -
-    private Result!(Expr, BuildError) parseAdditive()
+    private BuildResult!Expr parseAdditive()
     {
         auto exprResult = parseMultiplicative();
         if (exprResult.isErr) return exprResult;
@@ -268,7 +268,7 @@ struct WorkspaceParser
     }
     
     /// Parse multiplicative: * / %
-    private Result!(Expr, BuildError) parseMultiplicative()
+    private BuildResult!Expr parseMultiplicative()
     {
         auto exprResult = parseUnary();
         if (exprResult.isErr) return exprResult;
@@ -289,7 +289,7 @@ struct WorkspaceParser
     }
     
     /// Parse unary: ! -
-    private Result!(Expr, BuildError) parseUnary()
+    private BuildResult!Expr parseUnary()
     {
         if (check(TokenType.Bang) || check(TokenType.Minus))
         {
@@ -305,7 +305,7 @@ struct WorkspaceParser
     }
     
     /// Parse postfix: member access, indexing, calls
-    private Result!(Expr, BuildError) parsePostfix()
+    private BuildResult!Expr parsePostfix()
     {
         auto exprResult = parsePrimary();
         if (exprResult.isErr) return exprResult;
@@ -382,7 +382,7 @@ struct WorkspaceParser
     }
     
     /// Parse primary: literals, identifiers, arrays, maps, grouped expressions
-    private Result!(Expr, BuildError) parsePrimary()
+    private BuildResult!Expr parsePrimary()
     {
         auto token = peek();
         auto loc = Location(filePath, token.line, token.column);
@@ -520,7 +520,7 @@ struct WorkspaceParser
     
     private Token previous() const { return tokens[current - 1]; }
     
-    private Result!(T, BuildError) error(T)(string message)
+    private BuildResult!T error(T)(string message)
     {
         auto token = peek();
         auto err = new ParseError(filePath, message, ErrorCode.ParseFailed);
@@ -545,7 +545,7 @@ struct WorkspaceAnalyzer
     }
     
     /// Analyze and apply workspace configuration to WorkspaceConfig
-    Result!BuildError analyze(ref WorkspaceFile ast, ref WorkspaceConfig config)
+    VoidBuildResult analyze(ref WorkspaceFile ast, ref WorkspaceConfig config)
     {
         auto decl = ast.workspace;
         
@@ -681,27 +681,27 @@ struct WorkspaceAnalyzer
             Logger.warning("Unknown Builderspace field '" ~ field.name ~ "' will be ignored");
         }
         
-        return Result!BuildError.ok();
+        return VoidBuildResult.ok();
     }
     
-    private Result!BuildError error(string message)
+    private VoidBuildResult error(string message)
     {
         auto err = new ParseError(workspacePath, message, ErrorCode.InvalidBuildFile);
         ["Verify the workspace configuration is valid",
          "Check docs/architecture/DSL.md for valid workspace fields",
          "Review Builderspace examples in the examples/ directory"].each!(s => err.addSuggestion(s));
-        return Result!BuildError.err(err);
+        return VoidBuildResult.err(err);
     }
     
     /// Extract boolean from expression (handles bool literals and strings)
-    private Result!(bool, BuildError) extractBool(const Expr expr)
+    private BuildResult!bool extractBool(const Expr expr)
     {
         return expr ? extractBoolFromLiteral((cast(LiteralExpr)expr).value) :
             Err!(bool, BuildError)(new ParseError("Expected boolean literal", null));
     }
     
     /// Extract boolean from literal
-    private Result!(bool, BuildError) extractBoolFromLiteral(Literal lit)
+    private BuildResult!bool extractBoolFromLiteral(Literal lit)
     {
         if (lit.kind == LiteralKind.Bool) return Ok!(bool, BuildError)(lit.asBool());
         
@@ -716,7 +716,7 @@ struct WorkspaceAnalyzer
     }
     
     /// Extract number from expression
-    private Result!(long, BuildError) extractNumber(const Expr expr)
+    private BuildResult!long extractNumber(const Expr expr)
     {
         auto litExpr = cast(LiteralExpr)expr;
         if (!litExpr) return Err!(long, BuildError)(new ParseError("Expected number literal", null));
@@ -735,14 +735,14 @@ struct WorkspaceAnalyzer
 }
 
 /// High-level API for parsing Builderspace files
-Result!BuildError parseWorkspaceDSL(string source, string filePath, ref WorkspaceConfig config)
+VoidBuildResult parseWorkspaceDSL(string source, string filePath, ref WorkspaceConfig config)
 {
     auto lexResult = lex(source, filePath);
-    if (lexResult.isErr) return Result!BuildError.err(lexResult.unwrapErr());
+    if (lexResult.isErr) return VoidBuildResult.err(lexResult.unwrapErr());
     
     auto parser = WorkspaceParser(lexResult.unwrap(), filePath);
     auto parseResult = parser.parse();
-    if (parseResult.isErr) return Result!BuildError.err(parseResult.unwrapErr());
+    if (parseResult.isErr) return VoidBuildResult.err(parseResult.unwrapErr());
     
     auto ast = parseResult.unwrap();
     return WorkspaceAnalyzer(filePath).analyze(ast, config);

@@ -436,11 +436,11 @@ final class BuildGraph
     /// Returns: Ok on success, Err with cycle details on failure
     /// 
     /// Note: Not const because it modifies internal validation state (_validated).
-    Result!BuildError validate() @system
+    VoidBuildResult validate() @system
     {
         auto sortResult = topologicalSort();
         if (sortResult.isErr)
-            return Result!BuildError.err(sortResult.unwrapErr());
+            return VoidBuildResult.err(sortResult.unwrapErr());
         
         _validated = true;
         return Ok!BuildError();
@@ -474,7 +474,7 @@ final class BuildGraph
     
     /// Add a target to the graph (uses TargetId internally)
     /// Returns: Ok on success, Err if target with same ID already exists
-    Result!BuildError addTarget(Target target) @system
+    VoidBuildResult addTarget(Target target) @system
     {
         auto id = target.id;
         auto key = id.toString();
@@ -488,7 +488,7 @@ final class BuildGraph
                 .withSuggestion(ErrorSuggestion.fileCheck("Ensure each target has a unique name"))
                 .withCommand("List all targets", "bldr list")
                 .build();
-            return Result!BuildError.err(cast(BuildError) error);
+            return VoidBuildResult.err(cast(BuildError) error);
         }
         
         nodes[key] = createNode(id, target);
@@ -498,7 +498,7 @@ final class BuildGraph
     
     /// Add a target to the graph using TargetId
     /// Returns: Ok on success, Err if target with same ID already exists
-    Result!BuildError addTargetById(TargetId id, Target target) @system
+    VoidBuildResult addTargetById(TargetId id, Target target) @system
     {
         auto key = id.toString();
         if (key in nodes)
@@ -510,7 +510,7 @@ final class BuildGraph
                 .withSuggestion(ErrorSuggestion.fileCheck("Ensure all TargetId values are unique"))
                 .withCommand("View dependency graph", "bldr graph")
                 .build();
-            return Result!BuildError.err(cast(BuildError) error);
+            return VoidBuildResult.err(cast(BuildError) error);
         }
         
         nodes[key] = createNode(id, target);
@@ -534,14 +534,14 @@ final class BuildGraph
     }
     
     /// Add dependency between two targets (string version for backward compatibility)
-    Result!BuildError addDependency(in string from, in string to) @system
+    VoidBuildResult addDependency(in string from, in string to) @system
     {
         if (from !in nodes)
         {
             // Use smart constructor for target not found errors
             auto error = targetNotFoundError(from);
             error.addContext(ErrorContext("adding dependency", "from: " ~ from ~ ", to: " ~ to));
-            return Result!BuildError.err(cast(BuildError) error);
+            return VoidBuildResult.err(cast(BuildError) error);
         }
         
         if (to !in nodes)
@@ -549,7 +549,7 @@ final class BuildGraph
             // Use smart constructor for target not found errors
             auto error = targetNotFoundError(to);
             error.addContext(ErrorContext("adding dependency", "from: " ~ from ~ ", to: " ~ to));
-            return Result!BuildError.err(cast(BuildError) error);
+            return VoidBuildResult.err(cast(BuildError) error);
         }
         
         auto fromNode = nodes[from];
@@ -570,7 +570,7 @@ final class BuildGraph
                 .withSuggestion("Consider extracting shared code into a separate target")
                 .withFileCheck("Check if the dependency is actually needed")
                 .build();
-            return Result!BuildError.err(cast(BuildError) error);
+            return VoidBuildResult.err(cast(BuildError) error);
             }
         }
         
@@ -583,7 +583,7 @@ final class BuildGraph
         // Notify incremental topo order (may update incrementally)
         auto topoResult = _incrementalTopo.notifyEdgeAdded(fromNode.id, toNode.id);
         if (topoResult.isErr)
-            return Result!BuildError.err(topoResult.unwrapErr());
+            return VoidBuildResult.err(topoResult.unwrapErr());
         
         _topoStats.totalEdgeNotifications++;
         
@@ -591,7 +591,7 @@ final class BuildGraph
     }
     
     /// Add dependency using TargetId (type-safe version)
-    Result!BuildError addDependencyById(TargetId from, TargetId to) @system
+    VoidBuildResult addDependencyById(TargetId from, TargetId to) @system
     {
         auto fromKey = from.toString();
         auto toKey = to.toString();
@@ -603,7 +603,7 @@ final class BuildGraph
             error.addSuggestion("Ensure target '" ~ fromKey ~ "' is defined in your Builderfile");
             error.addSuggestion("Run 'bldr graph' to see all available targets");
             error.addSuggestion("Check for typos in the target name");
-            return Result!BuildError.err(cast(BuildError) error);
+            return VoidBuildResult.err(cast(BuildError) error);
         }
         
         if (toKey !in nodes)
@@ -613,7 +613,7 @@ final class BuildGraph
             error.addSuggestion("Ensure target '" ~ toKey ~ "' is defined in your Builderfile");
             error.addSuggestion("Run 'bldr graph' to see all available targets");
             error.addSuggestion("Check for typos in the target name");
-            return Result!BuildError.err(cast(BuildError) error);
+            return VoidBuildResult.err(cast(BuildError) error);
         }
         
         auto fromNode = nodes[fromKey];
@@ -630,7 +630,7 @@ final class BuildGraph
             error.addSuggestion("Remove or reorder dependencies to break the cycle");
             error.addSuggestion("Consider extracting shared code into a separate target");
             error.addSuggestion("Check if the dependency is actually needed");
-            return Result!BuildError.err(cast(BuildError) error);
+            return VoidBuildResult.err(cast(BuildError) error);
             }
         }
         
@@ -643,7 +643,7 @@ final class BuildGraph
         // Notify incremental topo order (may update incrementally)
         auto topoResult = _incrementalTopo.notifyEdgeAdded(from, to);
         if (topoResult.isErr)
-            return Result!BuildError.err(topoResult.unwrapErr());
+            return VoidBuildResult.err(topoResult.unwrapErr());
         
         _topoStats.totalEdgeNotifications++;
         
@@ -742,7 +742,7 @@ final class BuildGraph
     /// What could go wrong:
     /// - If nodes array is modified during iteration: undefined behavior
     /// - Prevented by not exposing mutable access during traversal
-    Result!(BuildNode[], BuildError) topologicalSort() @system
+    BuildResult!(BuildNode[]) topologicalSort() @system
     {
         // Try incremental cache first
         auto cachedResult = _incrementalTopo.getOrder();
@@ -766,7 +766,7 @@ final class BuildGraph
     
     /// Get topological order with forced full recomputation (bypasses cache)
     /// Use when graph structure may have changed externally
-    Result!(BuildNode[], BuildError) topologicalSortFresh() @system
+    BuildResult!(BuildNode[]) topologicalSortFresh() @system
     {
         _incrementalTopo.invalidate();
         _topoStats.fullRecomputations++;
@@ -941,13 +941,13 @@ final class BuildGraph
     
     /// Remove a target from the graph
     /// Returns: Ok on success, Err if target not found
-    Result!BuildError removeTarget(TargetId id) @system
+    VoidBuildResult removeTarget(TargetId id) @system
     {
         auto key = id.toString();
         if (key !in nodes)
         {
             auto error = new GraphError("Target not found: " ~ key, ErrorCode.NodeNotFound);
-            return Result!BuildError.err(cast(BuildError) error);
+            return VoidBuildResult.err(cast(BuildError) error);
         }
         
         auto node = nodes[key];

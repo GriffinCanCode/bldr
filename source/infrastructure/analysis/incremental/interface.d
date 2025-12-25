@@ -10,10 +10,10 @@ interface IIncrementalAnalyzer
 {
     /// Analyze target with incremental optimization
     /// Returns: Result with TargetAnalysis
-    Result!(TargetAnalysis, BuildError) analyzeTarget(ref Target target) @system;
+    BuildResult!TargetAnalysis analyzeTarget(ref Target target) @system;
     
     /// Initialize tracking for all sources in workspace
-    Result!BuildError initialize(WorkspaceConfig config) @system;
+    VoidBuildResult initialize(WorkspaceConfig config) @system;
     
     /// Invalidate cache for specific files
     void invalidate(string[] paths) @system;

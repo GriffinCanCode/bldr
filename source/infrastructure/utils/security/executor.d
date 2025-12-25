@@ -298,7 +298,7 @@ struct SecureExecutor
     /// - Malicious arguments: caught by SecurityValidator (returns Err)
     /// - Process execution fails: converted to SecurityError result
     /// - Path traversal attempts: blocked by isPathSafe() validation
-    Result!(ProcessResult, BuildError) run(scope const(string)[] cmd) @system
+    BuildResult!ProcessResult run(scope const(string)[] cmd) @system
     {
         // Validation layer
         if (cmd.length == 0)
@@ -417,7 +417,7 @@ struct SecureExecutor
     /// What could go wrong:
     /// - Command fails validation: returned as Err from run()
     /// - Non-zero exit: converted to proper BuildError (safe failure)
-    Result!(ProcessResult, BuildError) runChecked(scope const(string)[] cmd) @system
+    BuildResult!ProcessResult runChecked(scope const(string)[] cmd) @system
     {
         auto result = run(cmd);
         if (result.isErr)

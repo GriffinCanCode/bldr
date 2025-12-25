@@ -16,7 +16,7 @@ import infrastructure.errors.handling.result;
 /// Example:
 ///   auto files = ["a.txt", "b.txt", "c.txt"];
 ///   auto result = traverse(files, (f) => readFile(f));
-///   // Returns Result!(string[], BuildError) with all file contents or first error
+///   // Returns BuildResult!(string[]) with all file contents or first error
 Result!(T[], E) traverse(R, Fn, T, E)(R range, Fn fn)
     if (isInputRange!R)
 {

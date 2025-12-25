@@ -78,7 +78,7 @@ class DependencyResolver
     }
     
     /// Resolve a dependency reference to a TargetId (type-safe version)
-    Result!(TargetId, BuildError) resolveToId(string dep, TargetId fromTarget)
+    BuildResult!TargetId resolveToId(string dep, TargetId fromTarget)
     {
         import infrastructure.errors : ParseError;
         
@@ -95,7 +95,7 @@ class DependencyResolver
                 }
                 else
                 {
-                    return Result!(TargetId, BuildError).err(result.unwrapErr());
+                    return BuildResult!TargetId.err(result.unwrapErr());
                 }
             }
             else
@@ -103,7 +103,7 @@ class DependencyResolver
                 auto error = new ParseError("",
                     "External repository reference but no repositories defined: " ~ dep,
                     ErrorCode.MissingDependency);
-                return Result!(TargetId, BuildError).err(error);
+                return BuildResult!TargetId.err(error);
             }
         }
         
@@ -118,12 +118,12 @@ class DependencyResolver
         {
             auto newName = dep[1 .. $];  // Remove leading ":"
             auto resolved = TargetId(fromTarget.workspace, fromTarget.path, newName);
-            return Result!(TargetId, BuildError).ok(resolved);
+            return BuildResult!TargetId.ok(resolved);
         }
         
         // Simple name - same workspace and path
         auto resolved = TargetId(fromTarget.workspace, fromTarget.path, dep);
-        return Result!(TargetId, BuildError).ok(resolved);
+        return BuildResult!TargetId.ok(resolved);
     }
     
     /// Resolve an import statement to a target

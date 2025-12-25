@@ -2,12 +2,30 @@
 
 High-performance multi-tier caching for incremental builds, distributed builds, and CI/CD optimization.
 
+## Architecture Overview
+
+The caching system uses a **hybrid architecture**:
+- **Binary serialization** for data storage (~10x faster than JSON)
+- **SQLite index** for metadata, queries, and crash recovery
+
+This provides the best of both worlds:
+- Fast bulk read/write operations via binary format
+- Efficient partial queries and LRU tracking via SQLite
+- WAL-based crash recovery without data loss
+- Cache introspection without loading full data
+
 ## Directory Structure
 
 ```
 caching/
 ├── package.d              # Root module with overview
 ├── README.md              # This file
+│
+├── index/                 # SQLite-backed metadata index (NEW)
+│   ├── package.d          # Index module exports
+│   ├── index.d            # CacheIndex implementation
+│   ├── sqlite.d           # SQLite C bindings
+│   └── schema.sql         # Database schema
 │
 ├── targets/               # Target-level caching
 │   ├── package.d          # Target caching overview
@@ -23,6 +41,10 @@ caching/
 │   ├── package.d          # Eviction policy overview
 │   └── eviction.d         # LRU + age + size-based eviction
 │
+├── coordinator/           # Unified cache orchestration
+│   ├── package.d          # Coordinator module
+│   └── coordinator.d      # CacheCoordinator with shared index
+│
 └── distributed/           # Distributed caching
     ├── package.d          # Distributed caching overview
     ├── coordinator.d      # DistributedCache coordinator
@@ -36,38 +58,72 @@ caching/
 
 ## Module Organization
 
-### `core.caching.targets`
+### `caching.index`
 
-Target-level caching is the primary caching mechanism. It caches complete build outputs for each target based on hashes of sources and dependencies.
+SQLite-backed metadata index providing:
+- Efficient partial queries (SELECT WHERE)
+- LRU tracking without full cache load
+- WAL-based crash recovery
+- Unified statistics tracking
+- Cache introspection API
 
 **Key Types:**
-- `BuildCache` - Main cache class
+- `CacheIndex` - Main SQLite index class
+- `TargetIndexEntry` - Target metadata
+- `ActionIndexEntry` - Action metadata
+- `TargetCacheStats` - Target statistics
+- `ActionCacheStats` - Action statistics
+
+**Storage Layout:**
+```
+.builder-cache/
+├── index.db          # SQLite database (WAL mode)
+├── index.db-wal      # WAL file (auto-managed)
+├── cache.bin         # Binary target data
+├── actions/
+│   └── actions.bin   # Binary action data
+└── blobs/            # Content-addressable storage
+```
+
+### `caching.targets`
+
+Target-level caching is the primary caching mechanism. Now uses SQLite index for metadata tracking.
+
+**Key Types:**
+- `BuildCache` - Main cache class (uses CacheIndex)
 - `CacheEntry` - Cache entry with metadata
 - `CacheConfig` - Configuration structure
 - `BinaryStorage` - Binary serialization
 
-### `core.caching.actions`
+### `caching.actions`
 
-Action-level caching provides finer-grained caching for individual build steps. Each action (compile, link, codegen, etc.) can be cached independently.
+Action-level caching provides finer-grained caching. Now uses shared SQLite index.
 
 **Key Types:**
-- `ActionCache` - Action-level cache
+- `ActionCache` - Action-level cache (uses CacheIndex)
 - `ActionId` - Composite action identifier
 - `ActionEntry` - Action cache entry
 - `ActionType` - Enum of action types
 - `ActionCacheConfig` - Configuration structure
 - `ActionStorage` - Binary serialization
 
-### `core.caching.policies`
+### `caching.coordinator`
 
-Cache eviction policies manage cache size and prevent unbounded growth.
+Unified orchestration with shared SQLite index.
+
+**Key Types:**
+- `CacheCoordinator` - Main coordinator (owns shared index)
+
+### `caching.policies`
+
+Cache eviction policies. Now powered by SQLite index queries.
 
 **Key Types:**
 - `EvictionPolicy` - Hybrid LRU + age + size eviction
 
-### `core.caching.distributed`
+### `caching.distributed`
 
-Distributed caching coordinates local and remote cache tiers for team collaboration.
+Distributed caching coordinates local and remote cache tiers.
 
 **Key Types:**
 - `DistributedCache` - Multi-tier cache coordinator
@@ -202,6 +258,44 @@ Real-time metrics collection:
 
 See [CACHE_COORDINATOR.md](../../../docs/implementation/CACHE_COORDINATOR.md) for details.
 
+## SQLite Index Benefits
+
+The SQLite index provides several advantages over the previous all-binary approach:
+
+### 1. Partial Queries
+```d
+// Query targets by pattern (fast SQL LIKE)
+auto frontendTargets = coordinator.queryTargets("frontend/");
+
+// Get actions for specific target
+auto actions = index.getActionsForTarget("//myapp:server");
+```
+
+### 2. Efficient Eviction
+```d
+// SQLite selects LRU entries without loading full cache
+auto toEvict = index.selectTargetEvictions(maxEntries, maxSize, maxAgeDays);
+```
+
+### 3. Crash Recovery
+- WAL mode ensures durability
+- Journal table tracks uncommitted operations
+- Automatic replay on startup
+
+### 4. Cache Introspection
+```d
+// List all cached targets
+writeln(coordinator.listTargets());
+
+// Get statistics without loading data
+auto stats = index.getTargetStats();
+writefln("Hit rate: %.1f%%", stats.hitRate);
+```
+
+### 5. Concurrent Access
+- WAL mode allows concurrent readers
+- Single-writer with readers doesn't block
+
 ## Future Enhancements
 
 Potential improvements for future versions:
@@ -209,4 +303,5 @@ Potential improvements for future versions:
 - **Cache warming**: Pre-populate from CI artifacts
 - **Distributed GC**: Coordinate cleanup across build cluster
 - **ML-based prediction**: Intelligent cache pre-fetching
+- **Index replication**: Sync index across distributed builds
 

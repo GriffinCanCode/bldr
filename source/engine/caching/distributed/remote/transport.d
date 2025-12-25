@@ -47,28 +47,28 @@ final class HttpTransport
     }
     
     /// Execute GET request
-    Result!(ubyte[], BuildError) get(string contentHash) @trusted
+    BuildResult!(ubyte[]) get(string contentHash) @trusted
     {
         immutable path = "/artifacts/" ~ encode(contentHash);
         return executeRequest("GET", path, null);
     }
     
     /// Execute PUT request
-    Result!BuildError put(string contentHash, const(ubyte)[] data) @trusted
+    VoidBuildResult put(string contentHash, const(ubyte)[] data) @trusted
     {
         immutable path = "/artifacts/" ~ encode(contentHash);
         auto result = executeRequest("PUT", path, data);
         
         if (result.isErr)
         {
-            return Result!BuildError.err(result.unwrapErr());
+            return VoidBuildResult.err(result.unwrapErr());
         }
         
         return Ok!BuildError();
     }
     
     /// Execute HEAD request
-    Result!(bool, BuildError) head(string contentHash) @trusted
+    BuildResult!bool head(string contentHash) @trusted
     {
         immutable path = "/artifacts/" ~ encode(contentHash);
         auto result = executeRequest("HEAD", path, null);
@@ -89,18 +89,18 @@ final class HttpTransport
     }
     
     /// Execute DELETE request
-    Result!BuildError remove(string contentHash) @trusted
+    VoidBuildResult remove(string contentHash) @trusted
     {
         immutable path = "/artifacts/" ~ encode(contentHash);
         auto result = executeRequest("DELETE", path, null);
         
         if (result.isErr)
-            return Result!BuildError.err(result.unwrapErr());
+            return VoidBuildResult.err(result.unwrapErr());
         
         return Ok!BuildError();
     }
     
-    private Result!(ubyte[], BuildError) executeRequest(
+    private BuildResult!(ubyte[]) executeRequest(
         string method,
         string path,
         const(ubyte)[] body_
@@ -191,7 +191,7 @@ final class HttpTransport
         string path;
     }
     
-    private Result!(UrlInfo, BuildError) parseUrl(string url) pure @trusted
+    private BuildResult!UrlInfo parseUrl(string url) pure @trusted
     {
         UrlInfo info;
         
@@ -282,7 +282,7 @@ final class HttpTransport
         ubyte[] body_;
     }
     
-    private Result!(HttpResponse, BuildError) receiveHttpResponse(Socket socket) @trusted
+    private BuildResult!HttpResponse receiveHttpResponse(Socket socket) @trusted
     {
         HttpResponse response;
         ubyte[] buffer = new ubyte[8192];
@@ -413,7 +413,7 @@ final class HttpTransport
         }
     }
     
-    private Result!(Socket, BuildError) getConnection(string host, ushort port) @trusted
+    private BuildResult!Socket getConnection(string host, ushort port) @trusted
     {
         // Try to find available connection
         foreach (i, available; connectionAvailable)

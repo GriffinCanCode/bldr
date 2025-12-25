@@ -46,7 +46,7 @@ final class MacroRegistry
     }
     
     /// Call a macro
-    Result!(Target[], BuildError) call(string name, string[] args) @trusted
+    BuildResult!(Target[]) call(string name, string[] args) @trusted
     {
         if (name !in macros)
         {
@@ -91,7 +91,7 @@ final class MacroRegistry
 struct MacroLoader
 {
     /// Load macros from a D source file
-    static Result!(bool, BuildError) loadFromFile(string filename) @system
+    static BuildResult!bool loadFromFile(string filename) @system
     {
         import std.file : exists, readText, tempDir, write;
         import std.process : execute, ProcessException;
@@ -146,7 +146,7 @@ struct MacroLoader
     }
     
     /// Compile D source file to shared library
-    private static Result!BuildError compileMacroLibrary(string sourceFile, string outputLib) @system
+    private static VoidBuildResult compileMacroLibrary(string sourceFile, string outputLib) @system
     {
         import std.process : execute;
         import std.format : format;
@@ -156,7 +156,7 @@ struct MacroLoader
         if (compiler.length == 0)
         {
             import infrastructure.errors.types.types : SystemError;
-            return Result!BuildError.err(new SystemError(
+            return VoidBuildResult.err(new SystemError(
                 "No D compiler found (dmd or ldc2 required for macro compilation)",
                 ErrorCode.CompilationFailed
             ));
@@ -178,7 +178,7 @@ struct MacroLoader
         if (result.status != 0)
         {
             import infrastructure.errors.types.types : compilationError;
-            return Result!BuildError.err(compilationError(
+            return VoidBuildResult.err(compilationError(
                 sourceFile,
                 "Macro compilation failed",
                 format("Compiler output:\n%s", result.output)
@@ -208,7 +208,7 @@ struct MacroLoader
     }
     
     /// Load shared library and register macros
-    private static Result!BuildError loadMacroLibrary(string libPath) @system
+    private static VoidBuildResult loadMacroLibrary(string libPath) @system
     {
         import std.file : exists;
         import core.sys.posix.dlfcn : dlopen, dlsym, dlclose, dlerror, RTLD_LAZY, RTLD_LOCAL;
@@ -217,7 +217,7 @@ struct MacroLoader
         if (!exists(libPath))
         {
             import infrastructure.errors.types.types : IOError;
-            return Result!BuildError.err(new IOError(
+            return VoidBuildResult.err(new IOError(
                 libPath,
                 "Compiled macro library not found",
                 ErrorCode.FileNotFound
@@ -231,7 +231,7 @@ struct MacroLoader
             import infrastructure.errors.types.types : SystemError;
             import std.format : format;
             auto errorMsg = fromStringz(dlerror());
-            return Result!BuildError.err(new SystemError(
+            return VoidBuildResult.err(new SystemError(
                 format("Failed to load macro library: %s", errorMsg),
                 ErrorCode.MacroLoadFailed
             ));
@@ -245,7 +245,7 @@ struct MacroLoader
         {
             import infrastructure.errors.types.types : SystemError;
             dlclose(handle);
-            return Result!BuildError.err(new SystemError(
+            return VoidBuildResult.err(new SystemError(
                 "Macro library missing 'registerMacros' function",
                 ErrorCode.MacroExpansionFailed
             ));
@@ -261,7 +261,7 @@ struct MacroLoader
             import infrastructure.errors.types.types : SystemError;
             import std.format : format;
             dlclose(handle);
-            return Result!BuildError.err(new SystemError(
+            return VoidBuildResult.err(new SystemError(
                 format("Macro registration failed: %s", e.msg),
                 ErrorCode.MacroLoadFailed
             ));
@@ -273,7 +273,7 @@ struct MacroLoader
     }
     
     /// Load macros from a directory
-    static Result!(bool, BuildError) loadFromDirectory(string dir) @system
+    static BuildResult!bool loadFromDirectory(string dir) @system
     {
         import std.file : dirEntries, SpanMode, exists;
         import std.path : extension;

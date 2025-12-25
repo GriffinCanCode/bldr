@@ -53,7 +53,7 @@ final class CargoMigrator : BaseMigrator
         ];
     }
     
-    override Result!(MigrationResult, BuildError) migrate(string inputPath) @system
+    override BuildResult!MigrationResult migrate(string inputPath) @system
     {
         // Use the new manifest parser
         import infrastructure.analysis.manifests : CargoManifestParser;
@@ -62,7 +62,7 @@ final class CargoMigrator : BaseMigrator
         auto parseResult = parser.parse(inputPath);
         
         if (parseResult.isErr)
-            return Result!(MigrationResult, BuildError).err(parseResult.unwrapErr());
+            return BuildResult!MigrationResult.err(parseResult.unwrapErr());
         
         auto manifest = parseResult.unwrap();
         MigrationTarget[] targets;
@@ -91,7 +91,7 @@ final class CargoMigrator : BaseMigrator
         result.warnings = warnings;
         result.success = true;
         
-        return Result!(MigrationResult, BuildError).ok(result);
+        return BuildResult!MigrationResult.ok(result);
     }
     
     private string extractPackageName(string content)

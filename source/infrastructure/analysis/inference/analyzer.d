@@ -53,7 +53,7 @@ class DependencyAnalyzer
     
     /// Initialize incremental analysis (if analyzer is available)
     /// Call this after construction to initialize file tracking
-    Result!BuildError enableIncremental() @system
+    VoidBuildResult enableIncremental() @system
     {
         if (incrementalAnalyzer is null)
         {
@@ -61,7 +61,7 @@ class DependencyAnalyzer
                 "Incremental analyzer not injected - must be provided via constructor",
                 ErrorCode.InvalidConfiguration
             );
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         return incrementalAnalyzer.initialize(config);
     }
@@ -81,7 +81,7 @@ class DependencyAnalyzer
     /// Analyze dependencies and build graph
     /// Note: Uses target.id for type-safe identification where possible
     /// Returns: Ok with BuildGraph on success, Err with BuildError on validation failure
-    Result!(BuildGraph, BuildError) analyze(in string targetFilter = "") @trusted
+    BuildResult!BuildGraph analyze(in string targetFilter = "") @trusted
     {
         Logger.debugLog("Analyzing dependencies...");
         auto sw = StopWatch(AutoStart.yes);
@@ -101,10 +101,10 @@ class DependencyAnalyzer
             if (!targetFilter.empty)
             {
                 auto filteredGraph = filterGraph(cachedGraph, targetFilter);
-                return Result!(BuildGraph, BuildError).ok(filteredGraph);
+                return BuildResult!BuildGraph.ok(filteredGraph);
             }
             
-            return Result!(BuildGraph, BuildError).ok(cachedGraph);
+            return BuildResult!BuildGraph.ok(cachedGraph);
         }
         
         Logger.debugLog("Graph cache miss - analyzing dependencies...");
@@ -235,7 +235,7 @@ class DependencyAnalyzer
         {
             auto error = validateResult.unwrapErr();
             Logger.error("Graph validation failed: " ~ format(error));
-            return Result!(BuildGraph, BuildError).err(error);
+            return BuildResult!BuildGraph.err(error);
         }
         
         // Cache the validated graph
@@ -253,7 +253,7 @@ class DependencyAnalyzer
         sw.stop();
         Logger.success("Analysis complete (" ~ sw.peek().total!"msecs".to!string ~ "ms)");
         
-        return Result!(BuildGraph, BuildError).ok(graph);
+        return BuildResult!BuildGraph.ok(graph);
     }
     
     /// Collect all Builderfile and Builderspace paths for cache validation
@@ -345,7 +345,7 @@ class DependencyAnalyzer
     /// Analyze a single target with error aggregation
     /// Returns Result with TargetAnalysis, collecting all file analysis errors
     /// Uses incremental analysis if available for improved performance
-    Result!(TargetAnalysis, BuildError) analyzeTarget(
+    BuildResult!TargetAnalysis analyzeTarget(
         ref Target target,
         AggregationPolicy policy = AggregationPolicy.CollectAll)
     {

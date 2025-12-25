@@ -57,7 +57,7 @@ struct ProvenanceSigner
     }
     
     /// Sign provenance and create envelope
-    Result!(ProvenanceEnvelope, BuildError) sign(const ref BuildProvenance provenance) @system
+    BuildResult!ProvenanceEnvelope sign(const ref BuildProvenance provenance) @system
     {
         // Serialize statement to JSON
         auto payload = serializeStatement(provenance.statement);
@@ -85,7 +85,7 @@ struct ProvenanceSigner
     }
     
     /// Verify signed envelope
-    Result!(ProvenanceStatement, BuildError) verify(const ref ProvenanceEnvelope envelope) @system
+    BuildResult!ProvenanceStatement verify(const ref ProvenanceEnvelope envelope) @system
     {
         if (envelope.signatures.length == 0)
             return Err!(ProvenanceStatement, BuildError)(
@@ -270,7 +270,7 @@ private string escapeJson(string s) @safe pure
 }
 
 /// Deserialize provenance statement from JSON (minimal parser)
-Result!(ProvenanceStatement, BuildError) deserializeStatement(string json) @system
+BuildResult!ProvenanceStatement deserializeStatement(string json) @system
 {
     // Minimal JSON parsing - extract key fields
     // For production, would use proper JSON parser

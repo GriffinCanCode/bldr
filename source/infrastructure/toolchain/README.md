@@ -219,7 +219,7 @@ target("app") {
 ### Platform
 
 ```d
-Platform.parse(string triple) -> Result!(Platform, BuildError)
+Platform.parse(string triple) -> BuildResult!Platform
 Platform.host() -> Platform
 Platform.toTriple() -> string
 Platform.isCross() -> bool
@@ -231,11 +231,11 @@ Platform.compatibleWith(Platform) -> bool
 ```d
 ToolchainRegistry.instance() -> ToolchainRegistry
 initialize() -> void
-get(string id) -> Result!(Toolchain, BuildError)
+get(string id) -> BuildResult!Toolchain
 getByName(string name) -> Toolchain[]
-findFor(Platform, ToolchainType) -> Result!(Toolchain, BuildError)
-findMatching(ToolchainConstraint) -> Result!(Toolchain, BuildError)
-resolve(ToolchainRef) -> Result!(Toolchain, BuildError)
+findFor(Platform, ToolchainType) -> BuildResult!Toolchain
+findMatching(ToolchainConstraint) -> BuildResult!Toolchain
+resolve(ToolchainRef) -> BuildResult!Toolchain
 list() -> const(Toolchain)[]
 addDetector(ToolchainDetector) -> void
 addProvider(ToolchainProvider) -> void
@@ -244,10 +244,10 @@ addProvider(ToolchainProvider) -> void
 ### Convenience Functions
 
 ```d
-getToolchain(string id) -> Result!(Toolchain, BuildError)
-findToolchain(Platform, ToolchainType) -> Result!(Toolchain, BuildError)
-resolveToolchain(string refStr) -> Result!(Toolchain, BuildError)
-getToolchainByName(string name, string versionConstraint = "") -> Result!(Toolchain, BuildError)
+getToolchain(string id) -> BuildResult!Toolchain
+findToolchain(Platform, ToolchainType) -> BuildResult!Toolchain
+resolveToolchain(string refStr) -> BuildResult!Toolchain
+getToolchainByName(string name, string versionConstraint = "") -> BuildResult!Toolchain
 getCompilerPath(string toolchainName) -> string
 ```
 

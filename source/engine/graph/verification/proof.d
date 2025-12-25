@@ -180,7 +180,7 @@ struct BuildVerifier
 {
     /// Verify entire build graph and generate proof
     /// Returns: Result with BuildProof on success, BuildError on failure
-    static Result!(BuildProof, BuildError) verify(BuildGraph graph) @system
+    static BuildResult!BuildProof verify(BuildGraph graph) @system
     {
         BuildProof proof;
         proof.timestamp = Clock.currTime();
@@ -188,36 +188,36 @@ struct BuildVerifier
         // 1. Prove acyclicity (DAG property)
         auto acyclicityResult = proveAcyclicity(graph);
         if (acyclicityResult.isErr)
-            return Result!(BuildProof, BuildError).err(acyclicityResult.unwrapErr());
+            return BuildResult!BuildProof.err(acyclicityResult.unwrapErr());
         proof.acyclicity = acyclicityResult.unwrap();
         
         // 2. Prove hermeticity (I ∩ O = ∅)
         auto hermeticityResult = proveHermeticity(graph);
         if (hermeticityResult.isErr)
-            return Result!(BuildProof, BuildError).err(hermeticityResult.unwrapErr());
+            return BuildResult!BuildProof.err(hermeticityResult.unwrapErr());
         proof.hermeticity = hermeticityResult.unwrap();
         
         // 3. Prove determinism (same inputs → same outputs)
         auto determinismResult = proveDeterminism(graph);
         if (determinismResult.isErr)
-            return Result!(BuildProof, BuildError).err(determinismResult.unwrapErr());
+            return BuildResult!BuildProof.err(determinismResult.unwrapErr());
         proof.determinism = determinismResult.unwrap();
         
         // 4. Prove race-freedom (no data races)
         auto raceFreedomResult = proveRaceFreedom(graph);
         if (raceFreedomResult.isErr)
-            return Result!(BuildProof, BuildError).err(raceFreedomResult.unwrapErr());
+            return BuildResult!BuildProof.err(raceFreedomResult.unwrapErr());
         proof.raceFreedom = raceFreedomResult.unwrap();
         
         // Generate proof hash for integrity
         proof.proofHash = computeProofHash(proof);
         
-        return Result!(BuildProof, BuildError).ok(proof);
+        return BuildResult!BuildProof.ok(proof);
     }
     
     /// Prove acyclicity: graph is a DAG
     /// Uses topological sort as constructive proof
-    private static Result!(AcyclicityProof, BuildError) proveAcyclicity(BuildGraph graph) @system
+    private static BuildResult!AcyclicityProof proveAcyclicity(BuildGraph graph) @system
     {
         AcyclicityProof proof;
         proof.timestamp = Clock.currTime();
@@ -228,7 +228,7 @@ struct BuildVerifier
         {
             auto error = new GraphError("Acyclicity proof failed: graph contains cycles", ErrorCode.GraphCycle);
             error.addSuggestion("Remove circular dependencies to make graph acyclic");
-            return Result!(AcyclicityProof, BuildError).err(cast(BuildError) error);
+            return BuildResult!AcyclicityProof.err(cast(BuildError) error);
         }
         
         auto sorted = sortResult.unwrap();
@@ -243,10 +243,10 @@ struct BuildVerifier
         if (!proof.isValid)
         {
             auto error = new GraphError("Acyclicity proof verification failed", ErrorCode.GraphInvalid);
-            return Result!(AcyclicityProof, BuildError).err(cast(BuildError) error);
+            return BuildResult!AcyclicityProof.err(cast(BuildError) error);
         }
         
-        return Result!(AcyclicityProof, BuildError).ok(proof);
+        return BuildResult!AcyclicityProof.ok(proof);
     }
     
     /// Verify all edges point forward in topological order
@@ -278,7 +278,7 @@ struct BuildVerifier
     }
     
     /// Prove hermeticity: I ∩ O = ∅ for all targets
-    private static Result!(HermeticityProof, BuildError) proveHermeticity(BuildGraph graph) @system
+    private static BuildResult!HermeticityProof proveHermeticity(BuildGraph graph) @system
     {
         HermeticityProof proof;
         proof.timestamp = Clock.currTime();
@@ -310,15 +310,15 @@ struct BuildVerifier
             auto error = new GraphError("Hermeticity proof failed: input and output sets overlap", ErrorCode.GraphInvalid);
             error.addContext(ErrorContext("hermeticity", "I ∩ O ≠ ∅"));
             error.addSuggestion("Ensure inputs and outputs do not overlap");
-            return Result!(HermeticityProof, BuildError).err(cast(BuildError) error);
+            return BuildResult!HermeticityProof.err(cast(BuildError) error);
         }
         
-        return Result!(HermeticityProof, BuildError).ok(proof);
+        return BuildResult!HermeticityProof.ok(proof);
     }
     
     /// Prove determinism: same inputs → same outputs
     /// Uses content-addressable hashing
-    private static Result!(DeterminismProof, BuildError) proveDeterminism(BuildGraph graph) @system
+    private static BuildResult!DeterminismProof proveDeterminism(BuildGraph graph) @system
     {
         DeterminismProof proof;
         proof.timestamp = Clock.currTime();
@@ -351,10 +351,10 @@ struct BuildVerifier
         if (!proof.isValid)
         {
             auto error = new GraphError("Determinism proof failed: incomplete specifications", ErrorCode.GraphInvalid);
-            return Result!(DeterminismProof, BuildError).err(cast(BuildError) error);
+            return BuildResult!DeterminismProof.err(cast(BuildError) error);
         }
         
-        return Result!(DeterminismProof, BuildError).ok(proof);
+        return BuildResult!DeterminismProof.ok(proof);
     }
     
     /// Compute hash of inputs for determinism proof
@@ -379,7 +379,7 @@ struct BuildVerifier
     
     /// Prove race-freedom: no data races in parallel execution
     /// Uses happens-before analysis
-    private static Result!(RaceFreedomProof, BuildError) proveRaceFreedom(BuildGraph graph) @system
+    private static BuildResult!RaceFreedomProof proveRaceFreedom(BuildGraph graph) @system
     {
         RaceFreedomProof proof;
         proof.timestamp = Clock.currTime();
@@ -412,10 +412,10 @@ struct BuildVerifier
             auto error = new GraphError("Race-freedom proof failed", ErrorCode.GraphInvalid);
             error.addContext(ErrorContext("concurrency", "potential data race detected"));
             error.addSuggestion("Ensure all shared state uses atomic operations");
-            return Result!(RaceFreedomProof, BuildError).err(cast(BuildError) error);
+            return BuildResult!RaceFreedomProof.err(cast(BuildError) error);
         }
         
-        return Result!(RaceFreedomProof, BuildError).ok(proof);
+        return BuildResult!RaceFreedomProof.ok(proof);
     }
     
     /// Verify that all targets write to disjoint output sets
@@ -521,11 +521,11 @@ struct ProofCertificate
 }
 
 /// Helper: Generate proof certificate for graph
-Result!(ProofCertificate, BuildError) generateCertificate(BuildGraph graph, string workspace) @system
+BuildResult!ProofCertificate generateCertificate(BuildGraph graph, string workspace) @system
 {
     auto proofResult = BuildVerifier.verify(graph);
     if (proofResult.isErr)
-        return Result!(ProofCertificate, BuildError).err(proofResult.unwrapErr());
+        return BuildResult!ProofCertificate.err(proofResult.unwrapErr());
     
     ProofCertificate cert;
     cert.proof = proofResult.unwrap();
@@ -534,6 +534,6 @@ Result!(ProofCertificate, BuildError) generateCertificate(BuildGraph graph, stri
     // Generate signature using BLAKE3
     cert.signature = Blake3.hashHex(cast(ubyte[])(cert.proof.proofHash ~ workspace));
     
-    return Result!(ProofCertificate, BuildError).ok(cert);
+    return BuildResult!ProofCertificate.ok(cert);
 }
 

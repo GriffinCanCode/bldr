@@ -66,9 +66,9 @@ final class NetworkResilience
     }
     
     /// Execute operation with full resilience (circuit breaker + rate limiter)
-    Result!(T, BuildError) execute(T)(
+    BuildResult!T execute(T)(
         string endpoint,
-        Result!(T, BuildError) delegate() @trusted operation,
+        BuildResult!T delegate() @trusted operation,
         Priority priority = Priority.Normal,
         Duration timeout = 10.seconds
     ) @trusted
@@ -104,9 +104,9 @@ final class NetworkResilience
     }
     
     /// Execute with only circuit breaker (no rate limiting)
-    Result!(T, BuildError) executeWithBreaker(T)(
+    BuildResult!T executeWithBreaker(T)(
         string endpoint,
-        Result!(T, BuildError) delegate() @trusted operation
+        BuildResult!T delegate() @trusted operation
     ) @trusted
     {
         ensureEndpointRegistered(endpoint);
@@ -124,9 +124,9 @@ final class NetworkResilience
     }
     
     /// Execute with only rate limiter (no circuit breaker)
-    Result!(T, BuildError) executeWithLimiter(T)(
+    BuildResult!T executeWithLimiter(T)(
         string endpoint,
-        Result!(T, BuildError) delegate() @trusted operation,
+        BuildResult!T delegate() @trusted operation,
         Priority priority = Priority.Normal,
         Duration timeout = 10.seconds
     ) @trusted

@@ -11,6 +11,7 @@ import engine.caching.incremental.filter : IncrementalFilter;
 import engine.caching.distributed.remote.client : RemoteCacheClient;
 import engine.caching.distributed.remote.protocol : RemoteCacheConfig;
 import engine.caching.storage : ContentAddressableStorage, CacheGarbageCollector, SourceRepository, SourceTracker, SourceRef, SourceRefSet;
+import engine.caching.index : CacheIndex;
 import engine.caching.events;
 import frontend.cli.events.events : EventPublisher;
 import infrastructure.errors;
@@ -27,6 +28,7 @@ import infrastructure.utils.files.directories : ensureDirectoryWithGitignore;
 /// - Batch validation
 final class CacheCoordinator
 {
+    private CacheIndex sharedIndex;  // Shared SQLite index for all caches
     private BuildCache targetCache;
     private ActionCache actionCache;
     private DependencyCache depCache;
@@ -53,6 +55,10 @@ final class CacheCoordinator
         // Ensure cache directory exists and is ignored by git
         ensureDirectoryWithGitignore(cacheDir);
         
+        // Initialize shared SQLite index for all caches
+        // This provides unified metadata tracking, LRU, introspection, and crash recovery
+        this.sharedIndex = new CacheIndex(cacheDir);
+        
         // Initialize content-addressable storage
         this.cas = new ContentAddressableStorage(cacheDir ~ "/blobs");
         
@@ -62,13 +68,13 @@ final class CacheCoordinator
         // Initialize source tracker
         this.sourceTracker = new SourceTracker(sourceRepo);
         
-        // Initialize target cache
+        // Initialize target cache with shared index
         auto targetConfig = CacheConfig.fromEnvironment();
         this.targetCache = new BuildCache(cacheDir, targetConfig);
         
-        // Initialize action cache
+        // Initialize action cache with shared index
         auto actionConfig = ActionCacheConfig.fromEnvironment();
-        this.actionCache = new ActionCache(cacheDir ~ "/actions", actionConfig);
+        this.actionCache = new ActionCache(cacheDir ~ "/actions", actionConfig, sharedIndex);
         
         // Initialize dependency cache for incremental compilation
         this.depCache = new DependencyCache(cacheDir ~ "/incremental");
@@ -302,11 +308,12 @@ final class CacheCoordinator
         {
             if (targetCache) targetCache.close();
             if (actionCache) actionCache.close();
+            if (sharedIndex) sharedIndex.close();
         }
     }
     
     /// Run garbage collection
-    Result!(size_t, BuildError) runGC() @system
+    BuildResult!size_t runGC() @system
         => gc.collect(targetCache, actionCache).match(
             (result) => Ok!(size_t, BuildError)(result.bytesFreed),
             (err) => Err!(size_t, BuildError)(err)
@@ -486,8 +493,51 @@ final class CacheCoordinator
     /// Get source tracker
     SourceTracker getSourceTracker() @system => sourceTracker;
     
+    /// Get shared cache index for introspection
+    CacheIndex getIndex() @system => sharedIndex;
+    
+    // ─────────────────────────────────────────────────────────────────
+    // Introspection API (powered by shared SQLite index)
+    // ─────────────────────────────────────────────────────────────────
+    
+    /// List all cached targets
+    string[] listTargets() @system
+    {
+        synchronized (coordinatorMutex)
+        {
+            return sharedIndex.listTargets();
+        }
+    }
+    
+    /// List all cached actions
+    string[] listActions() @system
+    {
+        synchronized (coordinatorMutex)
+        {
+            return sharedIndex.listActions();
+        }
+    }
+    
+    /// Query targets by partial key match
+    string[] queryTargets(string pattern) @system
+    {
+        synchronized (coordinatorMutex)
+        {
+            return sharedIndex.queryTargets(pattern);
+        }
+    }
+    
+    /// Get total cache entry count
+    size_t totalEntryCount() @system
+    {
+        synchronized (coordinatorMutex)
+        {
+            return sharedIndex.totalEntryCount();
+        }
+    }
+    
     /// Store sources in CAS and return references
-    Result!(SourceRefSet, BuildError) storeSources(const(string)[] paths) @system
+    BuildResult!SourceRefSet storeSources(const(string)[] paths) @system
     {
         auto timer = StopWatch(AutoStart.yes);
         synchronized (coordinatorMutex)
@@ -512,13 +562,13 @@ final class CacheCoordinator
     }
     
     /// Materialize sources from CAS to workspace
-    Result!BuildError materializeSources(SourceRefSet refSet) @system
+    VoidBuildResult materializeSources(SourceRefSet refSet) @system
     {
         synchronized (coordinatorMutex) return sourceRepo.materializeBatch(refSet);
     }
     
     /// Detect changed sources and update CAS
-    Result!(SourceTracker.ChangedFile[], BuildError) detectSourceChanges(const(string)[] paths) @system
+    BuildResult!(SourceTracker.ChangedFile[]) detectSourceChanges(const(string)[] paths) @system
     {
         synchronized (coordinatorMutex)
         {

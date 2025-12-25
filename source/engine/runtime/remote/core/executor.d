@@ -94,7 +94,7 @@ private final class ActionCompletionTracker
     }
     
     /// Wait for action completion with timeout
-    Result!(ActionResult, BuildError) wait(ActionId actionId, Duration timeout) @trusted
+    BuildResult!ActionResult wait(ActionId actionId, Duration timeout) @trusted
     {
         CompletionInfo* info;
         
@@ -218,7 +218,7 @@ final class RemoteExecutor
     }
     
     /// Execute action remotely
-    Result!(RemoteExecutionResult, BuildError) execute(
+    BuildResult!RemoteExecutionResult execute(
         ActionId actionId,
         SandboxSpec spec,
         string[] command,
@@ -362,7 +362,7 @@ final class RemoteExecutor
     
     
     /// Submit action to worker via coordinator
-    private Result!(engine.distributed.protocol.protocol.ActionResult, BuildError) 
+    private BuildResult!(engine.distributed.protocol.protocol.ActionResult) 
     submitToWorker(ActionRequest request) @trusted
     {
         if (coordinator is null)
@@ -432,7 +432,7 @@ final class RemoteExecutor
     }
     
     /// Check action cache
-    private Result!(RemoteExecutionResult, BuildError) checkActionCache(ActionId actionId) @trusted
+    private BuildResult!RemoteExecutionResult checkActionCache(ActionId actionId) @trusted
     {
         // Query action cache (would integrate with action cache service)
         auto error = new GenericError("Not in cache", ErrorCode.CacheNotFound);
@@ -440,7 +440,7 @@ final class RemoteExecutor
     }
     
     /// Cache action result
-    private Result!BuildError cacheActionResult(
+    private VoidBuildResult cacheActionResult(
         ActionId actionId,
         RemoteExecutionResult result
     ) @trusted

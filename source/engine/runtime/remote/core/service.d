@@ -268,7 +268,7 @@ final class RemoteExecutionService : IRemoteExecutionService
     }
     
     /// Start service
-    Result!BuildError start() @trusted
+    VoidBuildResult start() @trusted
     {
         synchronized (mutex)
         {
@@ -285,7 +285,7 @@ final class RemoteExecutionService : IRemoteExecutionService
                     "Failed to start coordinator: " ~ coordResult.unwrapErr().message(),
                     ErrorCode.InitializationFailed
                 );
-                return Result!BuildError.err(error);
+                return VoidBuildResult.err(error);
             }
             
             // Start worker pool
@@ -345,7 +345,7 @@ final class RemoteExecutionService : IRemoteExecutionService
     }
     
     /// Execute action remotely
-    Result!(RemoteExecutionResult, BuildError) execute(
+    BuildResult!RemoteExecutionResult execute(
         ActionId actionId,
         SandboxSpec spec,
         string[] command,
@@ -365,7 +365,7 @@ final class RemoteExecutionService : IRemoteExecutionService
     }
     
     /// Execute via REAPI (Bazel compatibility)
-    Result!(ExecuteResponse, BuildError) executeReapi(
+    BuildResult!ExecuteResponse executeReapi(
         Action action,
         bool skipCacheLookup = false
     ) @trusted

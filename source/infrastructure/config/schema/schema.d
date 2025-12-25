@@ -35,7 +35,7 @@ struct TargetId
     
     /// Parse qualified target ID from string
     /// Format: "workspace//path:name" or "//path:name" or "name"
-    static Result!(TargetId, BuildError) parse(string qualified) @system
+    static BuildResult!TargetId parse(string qualified) @system
     {
         if (qualified.empty)
         {
@@ -43,7 +43,7 @@ struct TargetId
             error.addSuggestion("Provide a valid target identifier in the format 'name' or 'namespace:name'");
             error.addSuggestion("Check that the target definition has a non-empty 'name' field");
             error.addSuggestion("See docs/architecture/DSL.md for target naming conventions");
-            return Result!(TargetId, BuildError).err(error);
+            return BuildResult!TargetId.err(error);
         }
         
         string workspace = "";
@@ -77,10 +77,10 @@ struct TargetId
             error.addSuggestion("Ensure target names are non-empty after namespace delimiter");
             error.addSuggestion("Format should be 'name' or 'namespace:name' where both parts are non-empty");
             error.addSuggestion("Check for trailing colons or double colons in target IDs");
-            return Result!(TargetId, BuildError).err(error);
+            return BuildResult!TargetId.err(error);
         }
         
-        return Result!(TargetId, BuildError).ok(TargetId(workspace, path, name));
+        return BuildResult!TargetId.ok(TargetId(workspace, path, name));
     }
     
     /// Convert to fully-qualified string representation

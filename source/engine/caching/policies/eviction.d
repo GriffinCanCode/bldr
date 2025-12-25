@@ -62,7 +62,7 @@ struct EvictionPolicy
     }
     
     /// Estimate the size of a cache entry in bytes
-    private size_t estimateEntrySize(T)(auto ref const T entry) const pure @nogc
+    size_t estimateEntrySize(T)(auto ref const T entry) const pure @nogc
     {
         size_t size = 0;
         

@@ -50,7 +50,7 @@ struct Version
     string prerelease;
     
     /// Parse from string (e.g., "1.2.3", "4.5.6-beta")
-    static Result!(Version, BuildError) parse(string str) @system
+    static BuildResult!Version parse(string str) @system
     {
         import std.array : empty;
         import std.string : split, strip, indexOf;
@@ -244,7 +244,7 @@ struct ToolchainRef
     bool isExternal;   // External reference (@toolchains//)
     
     /// Parse toolchain reference
-    static Result!(ToolchainRef, BuildError) parse(string str) @system
+    static BuildResult!ToolchainRef parse(string str) @system
     {
         import std.string : startsWith, indexOf, strip;
         

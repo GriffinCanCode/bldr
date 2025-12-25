@@ -41,7 +41,7 @@ final class AzureVmProvider : CloudProvider
         this.clientSecret = clientSecret;
     }
     
-    Result!(WorkerId, BuildError) provisionWorker(
+    BuildResult!WorkerId provisionWorker(
         string instanceType,
         string imageId,
         string[string] tags
@@ -127,7 +127,7 @@ final class AzureVmProvider : CloudProvider
         return Ok!(WorkerId, BuildError)(WorkerId(id));
     }
     
-    Result!BuildError terminateWorker(WorkerId workerId) @trusted
+    VoidBuildResult terminateWorker(WorkerId workerId) @trusted
     {
         string[] azArgs = [
             "az", "vm", "delete",
@@ -155,14 +155,14 @@ final class AzureVmProvider : CloudProvider
                 format("Failed to delete Azure VM %s: %s", workerId.toString(), result.output),
                 ErrorCode.NetworkError
             );
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         
         Logger.info("Deleted Azure VM: " ~ workerId.toString());
         return Ok!BuildError();
     }
     
-    Result!(WorkerStatus, BuildError) getWorkerStatus(WorkerId workerId) @trusted
+    BuildResult!WorkerStatus getWorkerStatus(WorkerId workerId) @trusted
     {
         string[] azArgs = [
             "az", "vm", "show",

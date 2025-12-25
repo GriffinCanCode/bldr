@@ -49,7 +49,7 @@ struct ToolchainConstraint
     
     /// Parse constraint from string
     /// Format: "name@version" or "name@>=1.0.0" or "name@1.x"
-    static Result!(ToolchainConstraint, BuildError) parse(string str) @system
+    static BuildResult!ToolchainConstraint parse(string str) @system
     {
         import std.string : indexOf;
         
@@ -141,7 +141,7 @@ struct VersionConstraint
     }
     
     /// Parse version constraint from string
-    static Result!(VersionConstraint, BuildError) parse(string str) @system
+    static BuildResult!VersionConstraint parse(string str) @system
     {
         import std.string : startsWith, indexOf, split, strip;
         import std.algorithm : canFind;
@@ -225,7 +225,7 @@ struct VersionConstraint
         return version_.patch == 0 || version_.patch == ver.patch;
     }
     
-    private static Result!(VersionConstraint, BuildError) parseWildcard(string str) @system
+    private static BuildResult!VersionConstraint parseWildcard(string str) @system
     {
         import std.string : split, strip, toLower;
         import std.conv : to;
@@ -261,7 +261,7 @@ struct VersionConstraint
         return Ok!(VersionConstraint, BuildError)(constraint);
     }
     
-    private static Result!(VersionConstraint, BuildError) parseRange(string str) @system
+    private static BuildResult!VersionConstraint parseRange(string str) @system
     {
         import std.string : split, strip, startsWith;
         
@@ -310,7 +310,7 @@ struct VersionConstraint
 struct ConstraintSolver
 {
     /// Find best toolchain matching constraints
-    static Result!(const(Toolchain)*, BuildError) solve(
+    static BuildResult!(const(Toolchain)*) solve(
         const Toolchain[] toolchains,
         ToolchainConstraint constraint
     ) @system

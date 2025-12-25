@@ -74,12 +74,12 @@ final class GraphExtension
     
     /// Apply pending discoveries to graph
     /// Returns newly added nodes that need to be scheduled
-    Result!(BuildNode[], BuildError) applyDiscoveries() @system
+    BuildResult!(BuildNode[]) applyDiscoveries() @system
     {
         synchronized (mutex)
         {
             if (pendingDiscoveries.empty)
-                return Result!(BuildNode[], BuildError).ok([]);
+                return BuildResult!(BuildNode[]).ok([]);
             
             BuildNode[] newNodes;
             
@@ -88,7 +88,7 @@ final class GraphExtension
                 // Apply each discovery
                 auto result = applyDiscovery(discovery);
                 if (result.isErr)
-                    return Result!(BuildNode[], BuildError).err(result.unwrapErr());
+                    return BuildResult!(BuildNode[]).err(result.unwrapErr());
                 
                 newNodes ~= result.unwrap();
             }
@@ -96,12 +96,12 @@ final class GraphExtension
             // Clear processed discoveries
             pendingDiscoveries = [];
             
-            return Result!(BuildNode[], BuildError).ok(newNodes);
+            return BuildResult!(BuildNode[]).ok(newNodes);
         }
     }
     
     /// Apply a single discovery to the graph
-    private Result!(BuildNode[], BuildError) applyDiscovery(DiscoveryMetadata discovery) @system
+    private BuildResult!(BuildNode[]) applyDiscovery(DiscoveryMetadata discovery) @system
     {
         BuildNode[] newNodes;
         
@@ -116,7 +116,7 @@ final class GraphExtension
             
             auto addResult = graph.addTarget(target);
             if (addResult.isErr)
-                return Result!(BuildNode[], BuildError).err(addResult.unwrapErr());
+                return BuildResult!(BuildNode[]).err(addResult.unwrapErr());
             
             // Track as discovered
             discoveredTargets[targetKey] = true;
@@ -145,13 +145,13 @@ final class GraphExtension
                         
                         // Allow duplicate edge errors (idempotent)
                         if (error.code != ErrorCode.GraphInvalid)
-                            return Result!(BuildNode[], BuildError).err(error);
+                            return BuildResult!(BuildNode[]).err(error);
                     }
                 }
             }
         }
         
-        return Result!(BuildNode[], BuildError).ok(newNodes);
+        return BuildResult!(BuildNode[]).ok(newNodes);
     }
     
     /// Check if a target was discovered dynamically

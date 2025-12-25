@@ -14,10 +14,10 @@ import infrastructure.errors.helpers;
 /// Parser for pyproject.toml, requirements.txt, setup.py
 final class PythonManifestParser : IManifestParser
 {
-    override Result!(ManifestInfo, BuildError) parse(string filePath) @system
+    override BuildResult!ManifestInfo parse(string filePath) @system
     {
         if (!exists(filePath) || !isFile(filePath))
-            return Result!(ManifestInfo, BuildError).err(
+            return BuildResult!ManifestInfo.err(
                 manifestNotFoundError(filePath, "python"));
         
         string fileName = baseName(filePath);
@@ -29,7 +29,7 @@ final class PythonManifestParser : IManifestParser
         else if (fileName == "requirements.txt" || fileName == "requirements-dev.txt")
             return parseRequirements(filePath);
         
-        return Result!(ManifestInfo, BuildError).err(
+        return BuildResult!ManifestInfo.err(
             manifestParseError(filePath, "python", "Unknown Python manifest type: " ~ fileName));
     }
     
@@ -45,7 +45,7 @@ final class PythonManifestParser : IManifestParser
         return "python";
     }
     
-    private Result!(ManifestInfo, BuildError) parsePyproject(string filePath) @system
+    private BuildResult!ManifestInfo parsePyproject(string filePath) @system
     {
         try
         {
@@ -77,16 +77,16 @@ final class PythonManifestParser : IManifestParser
             if (!framework.empty)
                 info.metadata["framework"] = framework;
             
-            return Result!(ManifestInfo, BuildError).ok(info);
+            return BuildResult!ManifestInfo.ok(info);
         }
         catch (Exception e)
         {
-            return Result!(ManifestInfo, BuildError).err(
+            return BuildResult!ManifestInfo.err(
                 manifestParseError(filePath, "python", e.msg));
         }
     }
     
-    private Result!(ManifestInfo, BuildError) parseSetupPy(string filePath) @system
+    private BuildResult!ManifestInfo parseSetupPy(string filePath) @system
     {
         try
         {
@@ -109,16 +109,16 @@ final class PythonManifestParser : IManifestParser
             // Target type
             info.suggestedType = inferPythonTargetType(dirName(filePath), info.dependencies);
             
-            return Result!(ManifestInfo, BuildError).ok(info);
+            return BuildResult!ManifestInfo.ok(info);
         }
         catch (Exception e)
         {
-            return Result!(ManifestInfo, BuildError).err(
+            return BuildResult!ManifestInfo.err(
                 manifestParseError(filePath, "python", e.msg));
         }
     }
     
-    private Result!(ManifestInfo, BuildError) parseRequirements(string filePath) @system
+    private BuildResult!ManifestInfo parseRequirements(string filePath) @system
     {
         try
         {
@@ -139,12 +139,12 @@ final class PythonManifestParser : IManifestParser
             // Target type
             info.suggestedType = inferPythonTargetType(dirName(filePath), info.dependencies);
             
-            return Result!(ManifestInfo, BuildError).ok(info);
+            return BuildResult!ManifestInfo.ok(info);
         }
         catch (Exception e)
         {
             auto error = new ParseError(filePath, "Parse error: " ~ e.msg, ErrorCode.ParseFailed);
-            return Result!(ManifestInfo, BuildError).err(error);
+            return BuildResult!ManifestInfo.err(error);
         }
     }
     

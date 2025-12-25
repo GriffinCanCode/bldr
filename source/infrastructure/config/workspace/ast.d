@@ -151,7 +151,7 @@ struct Literal
     }
     
     // Conversions
-    Result!(string[], BuildError) toStringArray() const @trusted
+    BuildResult!(string[]) toStringArray() const @trusted
     {
         if (kind != LiteralKind.Array)
             return Err!(string[], BuildError)(new ParseError("Expected array", null));
@@ -166,7 +166,7 @@ struct Literal
         return Ok!(string[], BuildError)(result);
     }
     
-    Result!(string[string], BuildError) toStringMap() const @trusted
+    BuildResult!(string[string]) toStringMap() const @trusted
     {
         if (kind != LiteralKind.Map)
             return Err!(string[string], BuildError)(new ParseError("Expected map", null));

@@ -40,7 +40,7 @@ final class AnalysisCache : IAnalysisCache
     
     /// Get cached analysis for a file by content hash
     /// Returns null on cache miss
-    Result!(FileAnalysis*, BuildError) get(string contentHash) @system
+    BuildResult!(FileAnalysis*) get(string contentHash) @system
     {
         synchronized (cacheMutex)
         {
@@ -49,7 +49,7 @@ final class AnalysisCache : IAnalysisCache
             if (blobResult.isErr)
             {
                 missCount++;
-                return Result!(FileAnalysis*, BuildError).ok(null);
+                return BuildResult!(FileAnalysis*).ok(null);
             }
             
             try
@@ -65,7 +65,7 @@ final class AnalysisCache : IAnalysisCache
                 result.contentHash = analysis.contentHash;
                 result.hasErrors = analysis.hasErrors;
                 result.errors = analysis.errors;
-                return Result!(FileAnalysis*, BuildError).ok(result);
+                return BuildResult!(FileAnalysis*).ok(result);
             }
             catch (Exception e)
             {
@@ -74,13 +74,13 @@ final class AnalysisCache : IAnalysisCache
                     "Failed to deserialize analysis: " ~ e.msg,
                     ErrorCode.CacheLoadFailed
                 );
-                return Result!(FileAnalysis*, BuildError).err(error);
+                return BuildResult!(FileAnalysis*).err(error);
             }
         }
     }
     
     /// Store file analysis indexed by content hash
-    Result!BuildError put(string contentHash, const ref FileAnalysis analysis) @system
+    VoidBuildResult put(string contentHash, const ref FileAnalysis analysis) @system
     {
         synchronized (cacheMutex)
         {
@@ -92,7 +92,7 @@ final class AnalysisCache : IAnalysisCache
                 // Store in CAS (automatic deduplication)
                 auto storeResult = cas.putBlob(data);
                 if (storeResult.isErr)
-                    return Result!BuildError.err(storeResult.unwrapErr());
+                    return VoidBuildResult.err(storeResult.unwrapErr());
                 
                 storeCount++;
                 return Ok!BuildError();
@@ -103,7 +103,7 @@ final class AnalysisCache : IAnalysisCache
                     "Failed to cache analysis: " ~ e.msg,
                     ErrorCode.CacheWriteFailed
                 );
-                return Result!BuildError.err(error);
+                return VoidBuildResult.err(error);
             }
         }
     }
@@ -118,7 +118,7 @@ final class AnalysisCache : IAnalysisCache
     }
     
     /// Get batch of analyses (optimized for bulk operations)
-    Result!(FileAnalysis*[string], BuildError) getBatch(string[] contentHashes) @system
+    BuildResult!(FileAnalysis*[string]) getBatch(string[] contentHashes) @system
     {
         FileAnalysis*[string] results;
         
@@ -126,18 +126,18 @@ final class AnalysisCache : IAnalysisCache
         {
             auto result = get(hash);
             if (result.isErr)
-                return Result!(FileAnalysis*[string], BuildError).err(result.unwrapErr());
+                return BuildResult!(FileAnalysis*[string]).err(result.unwrapErr());
             
             auto analysis = result.unwrap();
             if (analysis !is null)
                 results[hash] = analysis;
         }
         
-        return Result!(FileAnalysis*[string], BuildError).ok(results);
+        return BuildResult!(FileAnalysis*[string]).ok(results);
     }
     
     /// Store batch of analyses (optimized for bulk operations)
-    Result!BuildError putBatch(FileAnalysis[string] analyses) @system
+    VoidBuildResult putBatch(FileAnalysis[string] analyses) @system
     {
         foreach (contentHash, analysis; analyses)
         {

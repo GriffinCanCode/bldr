@@ -9,10 +9,10 @@ import infrastructure.errors;
 /// Plugin registry interface
 interface IPluginRegistry {
     /// Discover and register all plugins
-    Result!BuildError refresh();
+    VoidBuildResult refresh();
     
     /// Get plugin info by name
-    Result!(PluginInfo, BuildError) get(string name);
+    BuildResult!PluginInfo get(string name);
     
     /// Check if plugin exists
     bool has(string name);
@@ -38,7 +38,7 @@ class PluginRegistry : IPluginRegistry {
     }
     
     /// Discover and register all plugins
-    Result!BuildError refresh() @system {
+    VoidBuildResult refresh() @system {
         // Try to load from cache first
         auto cacheResult = scanner.loadCache();
         if (cacheResult.isOk) {
@@ -55,7 +55,7 @@ class PluginRegistry : IPluginRegistry {
         // Discover plugins
         auto discoverResult = scanner.discover();
         if (discoverResult.isErr) {
-            return Result!BuildError.err(discoverResult.unwrapErr());
+            return VoidBuildResult.err(discoverResult.unwrapErr());
         }
         
         auto discovered = discoverResult.unwrap();
@@ -79,7 +79,7 @@ class PluginRegistry : IPluginRegistry {
     }
     
     /// Get plugin info by name
-    Result!(PluginInfo, BuildError) get(string name) @system {
+    BuildResult!PluginInfo get(string name) @system {
         if (!initialized) {
             auto refreshResult = refresh();
             if (refreshResult.isErr) {
@@ -142,11 +142,11 @@ class PluginRegistry : IPluginRegistry {
 
 /// Null plugin registry for testing
 class NullPluginRegistry : IPluginRegistry {
-    Result!BuildError refresh() @system {
+    VoidBuildResult refresh() @system {
         return Ok!BuildError();
     }
     
-    Result!(PluginInfo, BuildError) get(string name) @system {
+    BuildResult!PluginInfo get(string name) @system {
         auto err = new PluginError(
             "Plugin not found: " ~ name,
             ErrorCode.ToolNotFound

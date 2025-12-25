@@ -43,8 +43,8 @@ final class ResilientProtocolTransport : Transport
             () @trusted {
                 auto sendResult = inner.sendHeartBeat(recipient, message);
                 if (sendResult.isErr)
-                    return Result!(bool, BuildError).err(cast(BuildError)sendResult.unwrapErr());
-                return Result!(bool, BuildError).ok(true);
+                    return BuildResult!bool.err(cast(BuildError)sendResult.unwrapErr());
+                return BuildResult!bool.ok(true);
             },
             RateLimiterPriority.High,
             5.seconds
@@ -70,8 +70,8 @@ final class ResilientProtocolTransport : Transport
             () @trusted {
                 auto sendResult = inner.sendStealRequest(recipient, message);
                 if (sendResult.isErr)
-                    return Result!(bool, BuildError).err(cast(BuildError)sendResult.unwrapErr());
-                return Result!(bool, BuildError).ok(true);
+                    return BuildResult!bool.err(cast(BuildError)sendResult.unwrapErr());
+                return BuildResult!bool.ok(true);
             },
             RateLimiterPriority.Normal,
             10.seconds
@@ -96,8 +96,8 @@ final class ResilientProtocolTransport : Transport
             () @trusted {
                 auto sendResult = inner.sendStealResponse(recipient, message);
                 if (sendResult.isErr)
-                    return Result!(bool, BuildError).err(cast(BuildError)sendResult.unwrapErr());
-                return Result!(bool, BuildError).ok(true);
+                    return BuildResult!bool.err(cast(BuildError)sendResult.unwrapErr());
+                return BuildResult!bool.ok(true);
             },
             RateLimiterPriority.High,
             5.seconds
@@ -123,8 +123,8 @@ final class ResilientProtocolTransport : Transport
             () @trusted {
                 auto recvResult = inner.receiveStealResponse(timeout);
                 if (recvResult.isErr)
-                    return Result!(Envelope!StealResponse, BuildError).err(cast(BuildError)recvResult.unwrapErr());
-                return Result!(Envelope!StealResponse, BuildError).ok(recvResult.unwrap());
+                    return BuildResult!(Envelope!StealResponse).err(cast(BuildError)recvResult.unwrapErr());
+                return BuildResult!(Envelope!StealResponse).ok(recvResult.unwrap());
             }
         );
         

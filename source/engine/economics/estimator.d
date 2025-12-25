@@ -27,7 +27,7 @@ final class CostEstimator
     }
     
     /// Estimate entire build graph
-    Result!(BuildEstimate, BuildError) estimateGraph(BuildGraph graph) @trusted
+    BuildResult!BuildEstimate estimateGraph(BuildGraph graph) @trusted
     {
         try
         {
@@ -64,7 +64,7 @@ final class CostEstimator
     }
     
     /// Estimate single build node
-    Result!(BuildEstimate, BuildError) estimateNode(BuildNode node) @trusted
+    BuildResult!BuildEstimate estimateNode(BuildNode node) @trusted
     {
         import std.algorithm : canFind;
         

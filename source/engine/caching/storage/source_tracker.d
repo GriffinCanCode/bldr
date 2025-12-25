@@ -32,7 +32,7 @@ final class SourceTracker
     
     /// Track and store a source file
     /// Returns source reference or error
-    Result!(SourceRef, BuildError) track(string path) @system
+    BuildResult!SourceRef track(string path) @system
     {
         synchronized (trackerMutex)
         {
@@ -54,7 +54,7 @@ final class SourceTracker
     }
     
     /// Track and store multiple source files
-    Result!(SourceRefSet, BuildError) trackBatch(const(string)[] paths) @system
+    BuildResult!SourceRefSet trackBatch(const(string)[] paths) @system
     {
         synchronized (trackerMutex)
         {
@@ -85,7 +85,7 @@ final class SourceTracker
         SourceRef newRef;
     }
     
-    Result!(ChangedFile[], BuildError) detectChanges(const(string)[] paths) @system
+    BuildResult!(ChangedFile[]) detectChanges(const(string)[] paths) @system
     {
         synchronized (trackerMutex)
         {
@@ -130,7 +130,7 @@ final class SourceTracker
     }
     
     /// Verify file integrity (matches stored hash)
-    Result!(bool, BuildError) verify(string path) @system
+    BuildResult!bool verify(string path) @system
     {
         synchronized (trackerMutex)
         {
@@ -139,7 +139,7 @@ final class SourceTracker
     }
     
     /// Get source reference for path
-    Result!(SourceRef, BuildError) getRef(string path) @system
+    BuildResult!SourceRef getRef(string path) @system
     {
         synchronized (trackerMutex)
         {
@@ -148,7 +148,7 @@ final class SourceTracker
     }
     
     /// Materialize source file from CAS
-    Result!BuildError materialize(string hash, string targetPath) @system
+    VoidBuildResult materialize(string hash, string targetPath) @system
     {
         synchronized (trackerMutex)
         {

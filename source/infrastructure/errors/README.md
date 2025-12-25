@@ -24,7 +24,7 @@ The errors package provides a sophisticated, type-safe error handling system wit
 ```d
 import errors;
 
-Result!(string, BuildError) parse(string file) {
+BuildResult!string parse(string file) {
     try {
         auto content = readText(file);
         return Ok!(string, BuildError)(content);

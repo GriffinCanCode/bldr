@@ -49,7 +49,7 @@ alias WatchCallback = void delegate(const ref FileEvent event);
 alias WatchBatchCallback = void delegate(const FileEvent[] events);
 
 /// Result of a watch operation
-alias WatchResult = Result!BuildError;
+alias WatchResult = VoidBuildResult;
 
 /// Cross-platform file watcher interface
 interface IFileWatcher

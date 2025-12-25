@@ -24,7 +24,7 @@ interface IRemoteExecutionService
 {
     /// Start the remote execution service
     /// Initializes coordinator, worker pool, and health monitoring
-    Result!BuildError start();
+    VoidBuildResult start();
     
     /// Stop the remote execution service
     /// Gracefully shuts down all components
@@ -39,7 +39,7 @@ interface IRemoteExecutionService
     ///   workDir = Working directory for execution
     /// 
     /// Returns: Execution result or error
-    Result!(RemoteExecutionResult, BuildError) execute(
+    BuildResult!RemoteExecutionResult execute(
         ActionId actionId,
         SandboxSpec spec,
         string[] command,
@@ -53,7 +53,7 @@ interface IRemoteExecutionService
     ///   skipCacheLookup = Bypass cache and force execution
     /// 
     /// Returns: REAPI execution response or error
-    Result!(ExecuteResponse, BuildError) executeReapi(
+    BuildResult!ExecuteResponse executeReapi(
         Action action,
         bool skipCacheLookup = false
     );
@@ -72,7 +72,7 @@ interface IRemoteExecutionService
 final class NullRemoteExecutionService : IRemoteExecutionService
 {
     @trusted {
-        Result!BuildError start()
+        VoidBuildResult start()
         {
             return Ok!BuildError();
         }
@@ -81,7 +81,7 @@ final class NullRemoteExecutionService : IRemoteExecutionService
         {
         }
         
-        Result!(RemoteExecutionResult, BuildError) execute(
+        BuildResult!RemoteExecutionResult execute(
             ActionId actionId,
             SandboxSpec spec,
             string[] command,
@@ -95,7 +95,7 @@ final class NullRemoteExecutionService : IRemoteExecutionService
             return Err!(RemoteExecutionResult, BuildError)(error);
         }
         
-        Result!(ExecuteResponse, BuildError) executeReapi(
+        BuildResult!ExecuteResponse executeReapi(
             Action action,
             bool skipCacheLookup = false
         )

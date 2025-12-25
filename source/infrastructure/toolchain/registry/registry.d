@@ -71,7 +71,7 @@ class ToolchainRegistry
     }
     
     /// Get toolchain by ID
-    Result!(Toolchain, BuildError) get(string id) @system
+    BuildResult!Toolchain get(string id) @system
     {
         if (!initialized)
             initialize();
@@ -96,7 +96,7 @@ class ToolchainRegistry
     }
     
     /// Find toolchain for platform and type
-    Result!(Toolchain, BuildError) findFor(
+    BuildResult!Toolchain findFor(
         Platform platform, 
         ToolchainType type = ToolchainType.Compiler
     ) @system
@@ -133,7 +133,7 @@ class ToolchainRegistry
     }
     
     /// Resolve toolchain reference
-    Result!(Toolchain, BuildError) resolve(ToolchainRef ref_) @system
+    BuildResult!Toolchain resolve(ToolchainRef ref_) @system
     {
         if (!initialized)
             initialize();
@@ -242,7 +242,7 @@ class ToolchainRegistry
     }
     
     /// Find toolchain matching constraint
-    Result!(Toolchain, BuildError) findMatching(ToolchainConstraint constraint) @system
+    BuildResult!Toolchain findMatching(ToolchainConstraint constraint) @system
     {
         if (!initialized)
             initialize();
@@ -272,22 +272,22 @@ class ToolchainRegistry
 }
 
 /// Convenience functions for global registry access
-Result!(Toolchain, BuildError) getToolchain(string id) @system
+BuildResult!Toolchain getToolchain(string id) @system
 {
     return ToolchainRegistry.instance().get(id);
 }
 
-Result!(Toolchain, BuildError) findToolchain(Platform platform, ToolchainType type = ToolchainType.Compiler) @system
+BuildResult!Toolchain findToolchain(Platform platform, ToolchainType type = ToolchainType.Compiler) @system
 {
     return ToolchainRegistry.instance().findFor(platform, type);
 }
 
-Result!(Toolchain, BuildError) resolveToolchain(ToolchainRef ref_) @system
+BuildResult!Toolchain resolveToolchain(ToolchainRef ref_) @system
 {
     return ToolchainRegistry.instance().resolve(ref_);
 }
 
-Result!(Toolchain, BuildError) resolveToolchain(string refStr) @system
+BuildResult!Toolchain resolveToolchain(string refStr) @system
 {
     auto parseResult = ToolchainRef.parse(refStr);
     if (parseResult.isErr)

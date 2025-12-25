@@ -99,7 +99,7 @@ final class RateLimiter
     }
     
     /// Acquire permission to make request
-    Result!BuildError acquire(
+    VoidBuildResult acquire(
         Priority priority = Priority.Normal,
         Duration timeout = Duration.zero
     ) @trusted
@@ -140,7 +140,7 @@ final class RateLimiter
                     "Rate limit exceeded for endpoint: " ~ endpoint,
                     ErrorCode.NetworkError
                 );
-                return Result!BuildError.err(error);
+                return VoidBuildResult.err(error);
             }
         }
         
@@ -172,8 +172,8 @@ final class RateLimiter
     }
     
     /// Execute operation with rate limiting
-    Result!(T, BuildError) execute(T)(
-        Result!(T, BuildError) delegate() @trusted operation,
+    BuildResult!T execute(T)(
+        BuildResult!T delegate() @trusted operation,
         Priority priority = Priority.Normal,
         Duration timeout = 10.seconds
     ) @trusted
@@ -272,7 +272,7 @@ final class RateLimiter
     }
     
     /// Wait for token availability with timeout
-    private Result!BuildError waitForToken(
+    private VoidBuildResult waitForToken(
         Duration timeout, 
         Priority priority,
         MonoTime startTime
@@ -316,7 +316,7 @@ final class RateLimiter
             "Rate limit timeout for endpoint: " ~ endpoint,
             ErrorCode.NetworkError
         );
-        return Result!BuildError.err(error);
+        return VoidBuildResult.err(error);
     }
     
     /// Emit rate limit hit event
@@ -367,7 +367,7 @@ final class SlidingWindowLimiter
     }
     
     /// Acquire permission
-    Result!BuildError acquire(Priority priority = Priority.Normal) @trusted
+    VoidBuildResult acquire(Priority priority = Priority.Normal) @trusted
     {
         synchronized (mutex)
         {
@@ -413,7 +413,7 @@ final class SlidingWindowLimiter
                     "Rate limit exceeded (sliding window): " ~ endpoint,
                     ErrorCode.NetworkError
                 );
-                return Result!BuildError.err(error);
+                return VoidBuildResult.err(error);
                 }
             }
             

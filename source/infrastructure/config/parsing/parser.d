@@ -23,7 +23,7 @@ class ConfigParser
 {
     /// Parse entire workspace starting from root
     /// Returns Result with WorkspaceConfig
-    static Result!(WorkspaceConfig, BuildError) parseWorkspace(
+    static BuildResult!WorkspaceConfig parseWorkspace(
         in string root,
         in AggregationPolicy policy = AggregationPolicy.CollectAll) @system
     {
@@ -187,7 +187,7 @@ class ConfigParser
     }
     
     /// Parse a single Builderfile file
-    private static Result!(ParseResult, BuildError) parseBuildFile(
+    private static BuildResult!ParseResult parseBuildFile(
         string path, 
         string root,
         ParseCache cache) @system
@@ -211,25 +211,25 @@ class ConfigParser
     }
     
     /// Parse workspace-level configuration
-    private static Result!BuildError parseWorkspaceFile(string path, ref WorkspaceConfig config) @system
+    private static VoidBuildResult parseWorkspaceFile(string path, ref WorkspaceConfig config) @system
     {
         try
         {
             auto content = readText(path);
             // Future: Migrate to unified parser for workspace files
             // For now, just succeed
-            return Result!BuildError.ok();
+            return VoidBuildResult.ok();
         }
         catch (FileException e)
         {
             auto error = fileReadError(path, e.msg, "reading Builderspace file");
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         catch (Exception e)
         {
             auto error = parseErrorWithContext(path, 
                 "Failed to parse Builderspace file: " ~ e.msg, 0, 0, "parsing Builderspace file");
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
     }
 }

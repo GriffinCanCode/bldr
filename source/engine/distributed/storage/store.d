@@ -163,8 +163,8 @@ final class LocalArtifactStore : ArtifactStore
     
     private ArtifactId computeArtifactId(const ubyte[] data) @trusted
     {
-        import infrastructure.utils.files.hash : FastHash;
-        return ArtifactId(cast(ubyte[])FastHash.compute(data));
+        import infrastructure.utils.crypto.blake3 : Blake3;
+        return ArtifactId(Blake3.hash(data));
     }
     
     private string artifactPath(ArtifactId id) @safe

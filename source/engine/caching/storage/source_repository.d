@@ -45,7 +45,7 @@ final class SourceRepository
     }
     
     /// Store source file in CAS and return reference
-    Result!(SourceRef, BuildError) store(string path) @system
+    BuildResult!SourceRef store(string path) @system
     {
         synchronized (repoMutex)
         {
@@ -106,7 +106,7 @@ final class SourceRepository
     }
     
     /// Store multiple source files (batch operation)
-    Result!(SourceRefSet, BuildError) storeBatch(const(string)[] paths) @system
+    BuildResult!SourceRefSet storeBatch(const(string)[] paths) @system
     {
         SourceRefSet refSet;
         
@@ -123,7 +123,7 @@ final class SourceRepository
     }
     
     /// Retrieve source file by hash
-    Result!(ubyte[], BuildError) fetch(string hash) @system
+    BuildResult!(ubyte[]) fetch(string hash) @system
     {
         synchronized (repoMutex)
         {
@@ -136,7 +136,7 @@ final class SourceRepository
     }
     
     /// Retrieve source and write to specific path (materialization)
-    Result!BuildError materialize(string hash, string targetPath) @system
+    VoidBuildResult materialize(string hash, string targetPath) @system
     {
         synchronized (repoMutex)
         {
@@ -144,7 +144,7 @@ final class SourceRepository
             {
                 auto fetchResult = cas.getBlob(hash);
                 if (fetchResult.isErr)
-                    return Result!BuildError.err(fetchResult.unwrapErr());
+                    return VoidBuildResult.err(fetchResult.unwrapErr());
                 
                 auto content = fetchResult.unwrap();
                 
@@ -163,7 +163,7 @@ final class SourceRepository
             }
             catch (Exception e)
             {
-                return Result!BuildError.err(
+                return VoidBuildResult.err(
                     new IOError(
                         targetPath,
                         "Failed to materialize source: " ~ e.msg,
@@ -175,7 +175,7 @@ final class SourceRepository
     }
     
     /// Materialize multiple sources (workspace restoration)
-    Result!BuildError materializeBatch(SourceRefSet refSet) @system
+    VoidBuildResult materializeBatch(SourceRefSet refSet) @system
     {
         foreach (ref source; refSet.sources)
         {
@@ -200,7 +200,7 @@ final class SourceRepository
     }
     
     /// Get source ref from path (if tracked)
-    Result!(SourceRef, BuildError) getRefByPath(string path) @system
+    BuildResult!SourceRef getRefByPath(string path) @system
     {
         synchronized (repoMutex)
         {
@@ -217,7 +217,7 @@ final class SourceRepository
     }
     
     /// Verify source file matches stored hash (integrity check)
-    Result!(bool, BuildError) verify(string path) @system
+    BuildResult!bool verify(string path) @system
     {
         synchronized (repoMutex)
         {

@@ -106,7 +106,7 @@ struct DeterminismIntegration
     private bool initialized;
     
     /// Create integration with configuration
-    static Result!(DeterminismIntegration, BuildError) create(
+    static BuildResult!DeterminismIntegration create(
         VerificationConfig config = VerificationConfig.defaults()
     ) @system
     {
@@ -124,7 +124,7 @@ struct DeterminismIntegration
     }
     
     /// Verify build determinism with automatic two-build comparison
-    Result!(VerificationReport, BuildError) verifyBuild(
+    BuildResult!VerificationReport verifyBuild(
         string[] command,
         SandboxSpec spec,
         string workingDir = ""
@@ -248,7 +248,7 @@ struct DeterminismIntegration
     }
     
     /// Quick determinism check (single run with detection only)
-    Result!(VerificationReport, BuildError) quickCheck(
+    BuildResult!VerificationReport quickCheck(
         string[] command
     ) @system
     {

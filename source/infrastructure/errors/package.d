@@ -13,7 +13,7 @@ module infrastructure.errors;
 ///   import errors;
 ///   
 ///   // Using Result type
-///   Result!(string, BuildError) parse(string file) {
+///   BuildResult!string parse(string file) {
 ///       try {
 ///           auto content = readText(file);
 ///           return Ok!(string, BuildError)(content);

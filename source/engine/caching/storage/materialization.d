@@ -35,7 +35,7 @@ final class WorkspaceMaterializer
     }
     
     /// Materialize sources to workspace
-    Result!(MaterializationResult, BuildError) materialize(
+    BuildResult!MaterializationResult materialize(
         SourceRefSet refSet,
         string workspaceRoot = "."
     ) @system
@@ -122,7 +122,7 @@ final class WorkspaceMaterializer
     }
     
     /// Incremental update: only materialize changed sources
-    Result!(MaterializationResult, BuildError) update(
+    BuildResult!MaterializationResult update(
         SourceRefSet oldRefs,
         SourceRefSet newRefs,
         string workspaceRoot = "."
@@ -159,7 +159,7 @@ final class WorkspaceMaterializer
     }
     
     /// Clean workspace: remove files not in source set
-    Result!(CleanupResult, BuildError) clean(
+    BuildResult!CleanupResult clean(
         SourceRefSet refSet,
         string workspaceRoot = ".",
         bool dryRun = false

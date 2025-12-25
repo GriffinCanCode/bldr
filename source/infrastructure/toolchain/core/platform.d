@@ -69,7 +69,7 @@ struct Platform
     }
     
     /// Parse from target triple (e.g., "x86_64-unknown-linux-gnu")
-    static Result!(Platform, BuildError) parse(string triple) @system
+    static BuildResult!Platform parse(string triple) @system
     {
         import std.array : split;
         

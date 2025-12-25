@@ -11,9 +11,9 @@ import infrastructure.errors;
 interface IResilienceService
 {
     /// Execute action with retry logic (string result version)
-    Result!(string, BuildError) withRetryString(
+    BuildResult!string withRetryString(
         string targetId,
-        Result!(string, BuildError) delegate() action,
+        BuildResult!string delegate() action,
         RetryPolicy policy
     );
     
@@ -27,10 +27,10 @@ interface IResilienceService
     bool saveCheckpoint(BuildGraph graph);
     
     /// Load checkpoint
-    Result!(Checkpoint, BuildError) loadCheckpoint();
+    BuildResult!Checkpoint loadCheckpoint();
     
     /// Plan resume from checkpoint
-    Result!(ResumePlan, BuildError) planResume(BuildGraph graph);
+    BuildResult!ResumePlan planResume(BuildGraph graph);
     
     /// Clear checkpoint
     void clearCheckpoint();
@@ -77,9 +77,9 @@ final class ResilienceService : IResilienceService
     }
     
     /// Generic template method (kept for internal/test use)
-    Result!(T, BuildError) withRetry(T)(
+    BuildResult!T withRetry(T)(
         string targetId,
-        Result!(T, BuildError) delegate() action,
+        BuildResult!T delegate() action,
         RetryPolicy policy
     ) @trusted
     {
@@ -87,9 +87,9 @@ final class ResilienceService : IResilienceService
     }
     
     /// Execute action with retry logic (string result version)
-    Result!(string, BuildError) withRetryString(
+    BuildResult!string withRetryString(
         string targetId,
-        Result!(string, BuildError) delegate() action,
+        BuildResult!string delegate() action,
         RetryPolicy policy
     ) @trusted
     {
@@ -116,11 +116,11 @@ final class ResilienceService : IResilienceService
         return true;
     }
     
-    Result!(Checkpoint, BuildError) loadCheckpoint() @trusted
+    BuildResult!Checkpoint loadCheckpoint() @trusted
     {
         if (!enableCheckpoints)
         {
-            return Result!(Checkpoint, BuildError).err(
+            return BuildResult!Checkpoint.err(
                 new SystemError("Checkpoints disabled", ErrorCode.UnknownError)
             );
         }
@@ -128,18 +128,18 @@ final class ResilienceService : IResilienceService
         auto loadResult = checkpointManager.load();
         if (loadResult.isErr)
         {
-            return Result!(Checkpoint, BuildError).err(
+            return BuildResult!Checkpoint.err(
                 new SystemError(loadResult.unwrapErr(), ErrorCode.CacheLoadFailed)
             );
         }
-        return Result!(Checkpoint, BuildError).ok(loadResult.unwrap());
+        return BuildResult!Checkpoint.ok(loadResult.unwrap());
     }
     
-    Result!(ResumePlan, BuildError) planResume(BuildGraph graph) @trusted
+    BuildResult!ResumePlan planResume(BuildGraph graph) @trusted
     {
         if (!enableCheckpoints)
         {
-            return Result!(ResumePlan, BuildError).err(
+            return BuildResult!ResumePlan.err(
                 new SystemError("Checkpoints disabled", ErrorCode.UnknownError)
             );
         }
@@ -147,7 +147,7 @@ final class ResilienceService : IResilienceService
         auto checkpointResult = checkpointManager.load();
         if (checkpointResult.isErr)
         {
-            return Result!(ResumePlan, BuildError).err(
+            return BuildResult!ResumePlan.err(
                 new SystemError(checkpointResult.unwrapErr(), ErrorCode.CacheLoadFailed)
             );
         }
@@ -156,11 +156,11 @@ final class ResilienceService : IResilienceService
         auto planResult = resumePlanner.plan(checkpoint, graph);
         if (planResult.isErr)
         {
-            return Result!(ResumePlan, BuildError).err(
+            return BuildResult!ResumePlan.err(
                 new SystemError(planResult.unwrapErr(), ErrorCode.UnknownError)
             );
         }
-        return Result!(ResumePlan, BuildError).ok(planResult.unwrap());
+        return BuildResult!ResumePlan.ok(planResult.unwrap());
     }
     
     void clearCheckpoint() @trusted
@@ -189,9 +189,9 @@ final class NullResilienceService : IResilienceService
     }
     
     @trusted {
-        Result!(string, BuildError) withRetryString(
+        BuildResult!string withRetryString(
             string targetId,
-            Result!(string, BuildError) delegate() action,
+            BuildResult!string delegate() action,
             RetryPolicy policy
         ) { return action(); }
         
@@ -199,14 +199,14 @@ final class NullResilienceService : IResilienceService
         bool isCheckpointStale() { return true; }
         bool saveCheckpoint(BuildGraph graph) { return true; }
         
-        Result!(Checkpoint, BuildError) loadCheckpoint()
+        BuildResult!Checkpoint loadCheckpoint()
         {
-            return Result!(Checkpoint, BuildError).err(cast(BuildError)nullError);
+            return BuildResult!Checkpoint.err(cast(BuildError)nullError);
         }
         
-        Result!(ResumePlan, BuildError) planResume(BuildGraph graph)
+        BuildResult!ResumePlan planResume(BuildGraph graph)
         {
-            return Result!(ResumePlan, BuildError).err(cast(BuildError)nullError);
+            return BuildResult!ResumePlan.err(cast(BuildError)nullError);
         }
         
         void clearCheckpoint() { }

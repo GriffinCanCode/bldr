@@ -104,15 +104,15 @@ final class DependencyCache
     }
     
     /// Get dependencies for a source file
-    Result!(FileDependency*, BuildError) getDependencies(string sourceFile) @system
+    BuildResult!(FileDependency*) getDependencies(string sourceFile) @system
     {
         synchronized (mutex)
         {
             auto depPtr = buildNormalizedPath(sourceFile) in dependencies;
             return depPtr is null 
-                ? Result!(FileDependency*, BuildError).err(
+                ? BuildResult!(FileDependency*).err(
                     new GenericError("No dependencies recorded for: " ~ sourceFile, ErrorCode.FileNotFound))
-                : Result!(FileDependency*, BuildError).ok(depPtr);
+                : BuildResult!(FileDependency*).ok(depPtr);
         }
     }
     

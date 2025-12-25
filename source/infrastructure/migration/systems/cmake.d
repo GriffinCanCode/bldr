@@ -54,11 +54,11 @@ final class CMakeMigrator : BaseMigrator
         ];
     }
     
-    override Result!(MigrationResult, BuildError) migrate(string inputPath) @system
+    override BuildResult!MigrationResult migrate(string inputPath) @system
     {
         auto contentResult = readInputFile(inputPath);
         if (contentResult.isErr)
-            return Result!(MigrationResult, BuildError).err(contentResult.unwrapErr());
+            return BuildResult!MigrationResult.err(contentResult.unwrapErr());
         
         auto content = contentResult.unwrap();
         MigrationTarget[] targets;
@@ -138,7 +138,7 @@ final class CMakeMigrator : BaseMigrator
         
         if (targets.length == 0)
         {
-            return Result!(MigrationResult, BuildError).err(
+            return BuildResult!MigrationResult.err(
                 migrationError("No valid CMake targets found", inputPath));
         }
         
@@ -147,7 +147,7 @@ final class CMakeMigrator : BaseMigrator
         result.warnings = warnings;
         result.success = true;
         
-        return Result!(MigrationResult, BuildError).ok(result);
+        return BuildResult!MigrationResult.ok(result);
     }
     
     private MigrationTarget createTarget(string name, TargetType type, string[] sources)

@@ -29,7 +29,7 @@ final class ArtifactManager
     /// Responsibility: Read, hash, and upload all input files/directories
     /// Uses chunk-based transfer for large files (> 1MB) for efficiency
     /// Returns: Array of InputSpec with artifact IDs for remote execution
-    Result!(InputSpec[], BuildError) uploadInputs(SandboxSpec spec) @trusted
+    BuildResult!(InputSpec[]) uploadInputs(SandboxSpec spec) @trusted
     {
         InputSpec[] inputs;
         
@@ -96,7 +96,7 @@ final class ArtifactManager
     /// 
     /// Use this when updating an existing artifact to save bandwidth
     /// Returns: Transfer statistics showing bandwidth savings
-    Result!(TransferStats, BuildError) uploadInputIncremental(
+    BuildResult!TransferStats uploadInputIncremental(
         string inputPath,
         ArtifactId newArtifactId,
         ArtifactId oldArtifactId
@@ -154,7 +154,7 @@ final class ArtifactManager
     /// 
     /// Responsibility: Download all output artifacts specified
     /// Uses chunk-based download for large files for efficiency
-    Result!BuildError downloadOutputs(ArtifactId[] artifacts, string outputDir) @trusted
+    VoidBuildResult downloadOutputs(ArtifactId[] artifacts, string outputDir) @trusted
     {
         import std.path : buildPath;
         
@@ -167,7 +167,7 @@ final class ArtifactManager
             auto downloadResult = cacheClient.getFileChunked(artifactHash, outputPath);
             if (downloadResult.isErr)
             {
-                return Result!BuildError.err(downloadResult.unwrapErr());
+                return VoidBuildResult.err(downloadResult.unwrapErr());
             }
             
             auto stats = downloadResult.unwrap();
@@ -187,7 +187,7 @@ final class ArtifactManager
     }
     
     /// Download output artifacts (backward compatibility - no output directory)
-    Result!BuildError downloadOutputs(ArtifactId[] artifacts) @trusted
+    VoidBuildResult downloadOutputs(ArtifactId[] artifacts) @trusted
     {
         foreach (artifactId; artifacts)
         {
@@ -195,7 +195,7 @@ final class ArtifactManager
             auto downloadResult = cacheClient.get(artifactId.toString());
             if (downloadResult.isErr)
             {
-                return Result!BuildError.err(downloadResult.unwrapErr());
+                return VoidBuildResult.err(downloadResult.unwrapErr());
             }
             
             Logger.debugLog("Downloaded output: " ~ artifactId.toString());

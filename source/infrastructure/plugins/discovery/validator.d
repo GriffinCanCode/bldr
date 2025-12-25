@@ -21,7 +21,7 @@ struct SemanticVersion {
     }
     
     /// Parse semantic version from string
-    static Result!(SemanticVersion, BuildError) parse(string ver) @system {
+    static BuildResult!SemanticVersion parse(string ver) @system {
         import std.array : split;
         
         try {
@@ -99,14 +99,14 @@ class PluginValidator {
     }
     
     /// Validate plugin info
-    Result!BuildError validate(PluginInfo info) @system {
+    VoidBuildResult validate(PluginInfo info) @system {
         // Check required fields
         if (info.name.empty) {
             auto err = new PluginError(
                 "Plugin name is required",
                 ErrorCode.InvalidFieldValue
             );
-            return Result!BuildError.err(err);
+            return VoidBuildResult.err(err);
         }
         
         if (info.version_.empty) {
@@ -114,13 +114,13 @@ class PluginValidator {
                 "Plugin version is required",
                 ErrorCode.InvalidFieldValue
             );
-            return Result!BuildError.err(err);
+            return VoidBuildResult.err(err);
         }
         
         // Validate version format
         auto pluginVerResult = SemanticVersion.parse(info.version_);
         if (pluginVerResult.isErr) {
-            return Result!BuildError.err(pluginVerResult.unwrapErr());
+            return VoidBuildResult.err(pluginVerResult.unwrapErr());
         }
         
         // Check Builder version compatibility
@@ -143,15 +143,15 @@ class PluginValidator {
     }
     
     /// Check if plugin is compatible with current Builder version
-    private Result!BuildError checkVersionCompatibility(string minVersion) @system {
+    private VoidBuildResult checkVersionCompatibility(string minVersion) @system {
         auto minVerResult = SemanticVersion.parse(minVersion);
         if (minVerResult.isErr) {
-            return Result!BuildError.err(minVerResult.unwrapErr());
+            return VoidBuildResult.err(minVerResult.unwrapErr());
         }
         
         auto currentVerResult = SemanticVersion.parse(builderVersion);
         if (currentVerResult.isErr) {
-            return Result!BuildError.err(currentVerResult.unwrapErr());
+            return VoidBuildResult.err(currentVerResult.unwrapErr());
         }
         
         auto minVer = minVerResult.unwrap();
@@ -164,14 +164,14 @@ class PluginValidator {
             );
             err.addSuggestion("Upgrade Builder: brew upgrade builder");
             err.addSuggestion("Or use an older version of the plugin");
-            return Result!BuildError.err(err);
+            return VoidBuildResult.err(err);
         }
         
         return Ok!BuildError();
     }
     
     /// Validate capability string
-    private Result!BuildError validateCapability(string capability) @system {
+    private VoidBuildResult validateCapability(string capability) @system {
         import std.algorithm : among;
         
         // Known capabilities
@@ -198,20 +198,20 @@ class PluginValidator {
                 ErrorCode.InvalidFieldValue
             );
             err.addSuggestion("Valid capabilities: " ~ validCapabilities.to!string);
-            return Result!BuildError.err(err);
+            return VoidBuildResult.err(err);
         }
         
         return Ok!BuildError();
     }
     
     /// Validate plugin executable
-    static Result!BuildError validateExecutable(string pluginPath) @system {
+    static VoidBuildResult validateExecutable(string pluginPath) @system {
         if (!exists(pluginPath)) {
             auto err = new PluginError(
                 "Plugin executable not found: " ~ pluginPath,
                 ErrorCode.ToolNotFound
             );
-            return Result!BuildError.err(err);
+            return VoidBuildResult.err(err);
         }
         
         if (!isFile(pluginPath)) {
@@ -219,7 +219,7 @@ class PluginValidator {
                 "Plugin path is not a file: " ~ pluginPath,
                 ErrorCode.InvalidInput
             );
-            return Result!BuildError.err(err);
+            return VoidBuildResult.err(err);
         }
         
         // Check if executable
@@ -235,7 +235,7 @@ class PluginValidator {
                         ErrorCode.InvalidInput
                     );
                     err.addSuggestion("Make it executable: chmod +x " ~ pluginPath);
-                    return Result!BuildError.err(err);
+                    return VoidBuildResult.err(err);
                 }
             }
         }

@@ -54,7 +54,7 @@ final class Compressor
     }
     
     /// Compress data
-    Result!(CompressionResult, BuildError) compress(const(ubyte)[] data) @trusted
+    BuildResult!CompressionResult compress(const(ubyte)[] data) @trusted
     {
         if (data.length == 0)
         {
@@ -74,7 +74,7 @@ final class Compressor
     }
     
     /// Decompress data
-    Result!(DecompressionResult, BuildError) decompress(const(ubyte)[] data, CompressionAlgorithm algo) @trusted
+    BuildResult!DecompressionResult decompress(const(ubyte)[] data, CompressionAlgorithm algo) @trusted
     {
         if (data.length == 0)
         {
@@ -103,7 +103,7 @@ final class Compressor
         return ratio < 0.95;
     }
     
-    private Result!(CompressionResult, BuildError) compressNone(const(ubyte)[] data) pure @trusted
+    private BuildResult!CompressionResult compressNone(const(ubyte)[] data) pure @trusted
     {
         CompressionResult result;
         result.data = data.dup;
@@ -115,7 +115,7 @@ final class Compressor
         return Ok!(CompressionResult, BuildError)(result);
     }
     
-    private Result!(CompressionResult, BuildError) compressZstd(const(ubyte)[] data) @trusted
+    private BuildResult!CompressionResult compressZstd(const(ubyte)[] data) @trusted
     {
         // Use external zstd command-line tool for simplicity
         // In production, you'd use zstd D bindings or FFI
@@ -179,7 +179,7 @@ final class Compressor
         }
     }
     
-    private Result!(CompressionResult, BuildError) compressLz4(const(ubyte)[] data) @trusted
+    private BuildResult!CompressionResult compressLz4(const(ubyte)[] data) @trusted
     {
         // Use external lz4 command-line tool
         
@@ -234,12 +234,12 @@ final class Compressor
         }
     }
     
-    private Result!(DecompressionResult, BuildError) decompressNone(const(ubyte)[] data) pure @trusted
+    private BuildResult!DecompressionResult decompressNone(const(ubyte)[] data) pure @trusted
     {
         return Ok!(DecompressionResult, BuildError)(data.dup);
     }
     
-    private Result!(DecompressionResult, BuildError) decompressZstd(const(ubyte)[] data) @trusted
+    private BuildResult!DecompressionResult decompressZstd(const(ubyte)[] data) @trusted
     {
         try
         {
@@ -286,7 +286,7 @@ final class Compressor
         }
     }
     
-    private Result!(DecompressionResult, BuildError) decompressLz4(const(ubyte)[] data) @trusted
+    private BuildResult!DecompressionResult decompressLz4(const(ubyte)[] data) @trusted
     {
         try
         {
@@ -337,7 +337,7 @@ final class Compressor
 struct CompressUtil
 {
     /// Quick compress with default settings
-    static Result!(ubyte[], BuildError) compress(const(ubyte)[] data) @trusted
+    static BuildResult!(ubyte[]) compress(const(ubyte)[] data) @trusted
     {
         auto compressor = new Compressor();
         auto result = compressor.compress(data);
@@ -349,7 +349,7 @@ struct CompressUtil
     }
     
     /// Quick decompress
-    static Result!(ubyte[], BuildError) decompress(const(ubyte)[] data, CompressionAlgorithm algo) @trusted
+    static BuildResult!(ubyte[]) decompress(const(ubyte)[] data, CompressionAlgorithm algo) @trusted
     {
         auto compressor = new Compressor();
         return compressor.decompress(data, algo);

@@ -70,7 +70,7 @@ struct BuildEnvironment
             }
         }
         
-        // Check critical environment variables match
+        // Check critical environment variables match (both directions)
         foreach (pair; envVars.byKeyValue)
         {
             if (isCriticalEnvVar(pair.key))
@@ -82,8 +82,18 @@ struct BuildEnvironment
                 }
                 else
                 {
-                    return false; // Critical env var missing
+                    return false; // Critical env var missing in other
                 }
+            }
+        }
+        
+        // Check for critical env vars added in other but not in this
+        foreach (pair; other.envVars.byKeyValue)
+        {
+            if (isCriticalEnvVar(pair.key))
+            {
+                if (pair.key !in envVars)
+                    return false; // Critical env var added
             }
         }
         

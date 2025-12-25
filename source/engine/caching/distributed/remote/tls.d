@@ -222,7 +222,7 @@ final class TlsContext
     }
     
     /// Initialize TLS context
-    Result!BuildError initialize() @trusted
+    VoidBuildResult initialize() @trusted
     {
         if (!config.enabled)
             return Ok!BuildError();
@@ -233,7 +233,7 @@ final class TlsContext
                 "Invalid TLS configuration",
                 ErrorCode.ConfigError
             );
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         
         if (!config.certificatesExist())
@@ -243,7 +243,7 @@ final class TlsContext
                 "TLS certificates not found: " ~ config.certFile,
                 ErrorCode.FileNotFound
             );
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         
         // Production with SSL library (e.g., deimos-openssl):
@@ -258,7 +258,7 @@ final class TlsContext
     }
     
     /// Wrap socket with TLS
-    Result!(TlsSocket, BuildError) wrapSocket(Socket socket) @trusted
+    BuildResult!TlsSocket wrapSocket(Socket socket) @trusted
     {
         if (!config.enabled || !initialized)
         {
@@ -322,7 +322,7 @@ final class TlsSocket
     }
     
     /// Perform TLS handshake
-    package Result!BuildError performHandshake() @trusted
+    package VoidBuildResult performHandshake() @trusted
     {
         if (!tlsEnabled)
             return Ok!BuildError();
@@ -341,7 +341,7 @@ final class TlsSocket
                 "Socket not connected for TLS handshake",
                 ErrorCode.NetworkError
             );
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         
         return Ok!BuildError();
@@ -467,7 +467,7 @@ final class CertificateManager
     }
     
     /// Renew certificates using ACME
-    Result!BuildError renew() @trusted
+    VoidBuildResult renew() @trusted
     {
         import std.process : execute;
         import std.file : write, exists, mkdirRecurse;
@@ -482,7 +482,7 @@ final class CertificateManager
                 "certbot not found - install with: apt-get install certbot or brew install certbot",
                 ErrorCode.NetworkError
             );
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         
         // Ensure certificate directory exists
@@ -515,7 +515,7 @@ final class CertificateManager
                 "Certificate renewal failed: " ~ result.output,
                 ErrorCode.NetworkError
             );
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         
         Logger.info("Certificate renewed successfully for: " ~ domain);
@@ -541,7 +541,7 @@ final class CertificateManager
     }
     
     /// Hot-reload certificates without downtime
-    Result!BuildError reload() @trusted
+    VoidBuildResult reload() @trusted
     {
         import infrastructure.utils.logging.logger;
         
@@ -553,13 +553,13 @@ final class CertificateManager
                 "Certificate files not found for reload",
                 ErrorCode.FileNotFound
             );
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         
         // Verify certificate is valid
         auto verifyResult = TlsUtil.verifyCertificate(config.certFile);
         if (verifyResult.isErr)
-            return Result!BuildError.err(verifyResult.unwrapErr());
+            return VoidBuildResult.err(verifyResult.unwrapErr());
         
         // In production with proper TLS library:
         // 1. Create new SSL_CTX with new certificates
@@ -577,7 +577,7 @@ final class CertificateManager
 struct TlsUtil
 {
     /// Generate self-signed certificate for development
-    static Result!BuildError generateSelfSigned(
+    static VoidBuildResult generateSelfSigned(
         string certPath,
         string keyPath,
         string commonName = "localhost",
@@ -598,7 +598,7 @@ struct TlsUtil
                 "openssl not found - install OpenSSL to generate certificates",
                 ErrorCode.NetworkError
             );
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         
         // Ensure directories exist
@@ -625,7 +625,7 @@ struct TlsUtil
                 "Failed to generate private key: " ~ keyResult.output,
                 ErrorCode.NetworkError
             );
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         
         // Generate self-signed certificate
@@ -646,7 +646,7 @@ struct TlsUtil
                 "Failed to generate certificate: " ~ certResult.output,
                 ErrorCode.NetworkError
             );
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         
         Logger.info("Self-signed certificate generated successfully");
@@ -658,7 +658,7 @@ struct TlsUtil
     }
     
     /// Verify certificate chain
-    static Result!(bool, BuildError) verifyCertificate(string certPath) @trusted
+    static BuildResult!bool verifyCertificate(string certPath) @trusted
     {
         import std.process : execute;
         

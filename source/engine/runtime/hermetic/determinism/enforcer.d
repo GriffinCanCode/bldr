@@ -75,7 +75,7 @@ struct DeterminismEnforcer
     private bool initialized;
     
     /// Create enforcer with hermetic executor
-    static Result!(DeterminismEnforcer, BuildError) create(
+    static BuildResult!DeterminismEnforcer create(
         HermeticExecutor executor,
         DeterminismConfig config = DeterminismConfig.defaults()
     ) @system
@@ -103,7 +103,7 @@ struct DeterminismEnforcer
     }
     
     /// Execute command with determinism enforcement
-    Result!(DeterminismResult, BuildError) execute(
+    BuildResult!DeterminismResult execute(
         string[] command,
         string workingDir = ""
     ) @system
@@ -153,7 +153,7 @@ struct DeterminismEnforcer
     }
     
     /// Execute and verify determinism across multiple runs
-    Result!(DeterminismResult, BuildError) executeAndVerify(
+    BuildResult!DeterminismResult executeAndVerify(
         string[] command,
         string workingDir = "",
         uint iterations = 3

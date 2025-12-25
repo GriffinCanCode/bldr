@@ -51,10 +51,10 @@ final class TreeSitterRegistry {
     }
     
     /// Create a parser for a language
-    Result!(TreeSitterParser, BuildError) createParser(string languageId) @system {
+    BuildResult!TreeSitterParser createParser(string languageId) @system {
         auto entry = languageId in grammars;
         if (!entry)
-            return Result!(TreeSitterParser, BuildError).err(
+            return BuildResult!TreeSitterParser.err(
                 new GenericError("No grammar registered for: " ~ languageId,
                                ErrorCode.UnsupportedLanguage));
         
@@ -66,12 +66,12 @@ final class TreeSitterRegistry {
         }
         
         if (!entry.grammar)
-            return Result!(TreeSitterParser, BuildError).err(
+            return BuildResult!TreeSitterParser.err(
                 new GenericError("Failed to load grammar for: " ~ languageId,
                                ErrorCode.InternalError));
         
         auto parser = new TreeSitterParser(entry.grammar, entry.config);
-        return Result!(TreeSitterParser, BuildError).ok(parser);
+        return BuildResult!TreeSitterParser.ok(parser);
     }
     
     /// Check if a language is supported

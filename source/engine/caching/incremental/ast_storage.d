@@ -26,12 +26,12 @@ final class ASTStorage
     }
     
     /// Load AST cache from disk
-    Result!(FileAST[], BuildError) load() @system
+    BuildResult!(FileAST[]) load() @system
     {
         string cachePath = buildPath(cacheDir, CACHE_FILE);
         
         if (!exists(cachePath))
-            return Result!(FileAST[], BuildError).ok([]);
+            return BuildResult!(FileAST[]).ok([]);
         
         try
         {
@@ -43,7 +43,7 @@ final class ASTStorage
             file.rawRead((&magic)[0..1]);
             if (magic != MAGIC)
             {
-                return Result!(FileAST[], BuildError).err(
+                return BuildResult!(FileAST[]).err(
                     new GenericError("Invalid AST cache format", ErrorCode.CacheCorrupted));
             }
             
@@ -51,7 +51,7 @@ final class ASTStorage
             file.rawRead((&ver)[0..1]);
             if (ver != VERSION)
             {
-                return Result!(FileAST[], BuildError).err(
+                return BuildResult!(FileAST[]).err(
                     new GenericError("Unsupported AST cache version: " ~ ver.to!string,
                                    ErrorCode.CacheCorrupted));
             }
@@ -117,18 +117,18 @@ final class ASTStorage
                 asts ~= ast;
             }
             
-            return Result!(FileAST[], BuildError).ok(asts);
+            return BuildResult!(FileAST[]).ok(asts);
         }
         catch (Exception e)
         {
-            return Result!(FileAST[], BuildError).err(
+            return BuildResult!(FileAST[]).err(
                 new GenericError("Failed to load AST cache: " ~ e.msg,
                                ErrorCode.CacheLoadFailed));
         }
     }
     
     /// Save AST cache to disk
-    Result!(bool, BuildError) save(FileAST[] asts) @system
+    BuildResult!bool save(FileAST[] asts) @system
     {
         string cachePath = buildPath(cacheDir, CACHE_FILE);
         

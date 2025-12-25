@@ -57,11 +57,11 @@ final class BazelMigrator : BaseMigrator
         ];
     }
     
-    override Result!(MigrationResult, BuildError) migrate(string inputPath) @system
+    override BuildResult!MigrationResult migrate(string inputPath) @system
     {
         auto contentResult = readInputFile(inputPath);
         if (contentResult.isErr)
-            return Result!(MigrationResult, BuildError).err(contentResult.unwrapErr());
+            return BuildResult!MigrationResult.err(contentResult.unwrapErr());
         
         auto content = contentResult.unwrap();
         MigrationTarget[] targets;
@@ -88,7 +88,7 @@ final class BazelMigrator : BaseMigrator
         
         if (targets.length == 0)
         {
-            return Result!(MigrationResult, BuildError).err(
+            return BuildResult!MigrationResult.err(
                 migrationError("No valid Bazel rules found in BUILD file", inputPath));
         }
         
@@ -97,7 +97,7 @@ final class BazelMigrator : BaseMigrator
         result.warnings = warnings;
         result.success = !result.hasErrors();
         
-        return Result!(MigrationResult, BuildError).ok(result);
+        return BuildResult!MigrationResult.ok(result);
     }
     
     private MigrationTarget parseRule(string ruleType, string name, string body, string filePath)

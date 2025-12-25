@@ -13,7 +13,7 @@ import infrastructure.utils.files.glob;
 import infrastructure.errors;
 
 /// Closure invoker delegate for higher-order functions
-alias ClosureInvoker = Result!(Value, BuildError) delegate(Closure, Value[]) @system;
+alias ClosureInvoker = BuildResult!Value delegate(Closure, Value[]) @system;
 
 /// Module-level evaluator context for closure invocation in builtins
 private ClosureInvoker closureInvoker_;
@@ -25,7 +25,7 @@ void setClosureInvoker(ClosureInvoker invoker) @system
 }
 
 /// Invoke a closure with arguments (used by filter/map)
-private Result!(Value, BuildError) invokeClosure(Closure closure, Value[] args) @system
+private BuildResult!Value invokeClosure(Closure closure, Value[] args) @system
 {
     if (closureInvoker_ is null)
         return err("Closure invoker not initialized");
@@ -115,7 +115,7 @@ class BuiltinRegistry
     }
     
     /// Get function
-    Result!(BuiltinFunction, BuildError) get(string name) @trusted
+    BuildResult!BuiltinFunction get(string name) @trusted
     {
         if (name !in functions)
         {
@@ -123,20 +123,20 @@ class BuiltinRegistry
             error.addSuggestion("Check function name spelling");
             error.addSuggestion("Use one of the built-in functions: " ~ 
                                 functions.keys.join(", "));
-            return Result!(BuiltinFunction, BuildError).err(error);
+            return BuildResult!BuiltinFunction.err(error);
         }
-        return Result!(BuiltinFunction, BuildError).ok(functions[name]);
+        return BuildResult!BuiltinFunction.ok(functions[name]);
     }
     
     /// Get signature
-    Result!(FunctionSignature, BuildError) getSignature(string name) @trusted
+    BuildResult!FunctionSignature getSignature(string name) @trusted
     {
         if (name !in signatures)
         {
             auto error = new ParseError("Undefined function '" ~ name ~ "'", null);
-            return Result!(FunctionSignature, BuildError).err(error);
+            return BuildResult!FunctionSignature.err(error);
         }
-        return Result!(FunctionSignature, BuildError).ok(signatures[name]);
+        return BuildResult!FunctionSignature.ok(signatures[name]);
     }
     
     /// List all function names
@@ -148,28 +148,28 @@ class BuiltinRegistry
 
 // String operations
 
-private Result!(Value, BuildError) builtinUpper(Value[] args) @system
+private BuildResult!Value builtinUpper(Value[] args) @system
 {
     if (args.length != 1 || !args[0].isString())
         return err("upper() expects 1 string argument");
     return ok(Value.makeString(args[0].asString().toUpper()));
 }
 
-private Result!(Value, BuildError) builtinLower(Value[] args) @system
+private BuildResult!Value builtinLower(Value[] args) @system
 {
     if (args.length != 1 || !args[0].isString())
         return err("lower() expects 1 string argument");
     return ok(Value.makeString(args[0].asString().toLower()));
 }
 
-private Result!(Value, BuildError) builtinTrim(Value[] args) @system
+private BuildResult!Value builtinTrim(Value[] args) @system
 {
     if (args.length != 1 || !args[0].isString())
         return err("trim() expects 1 string argument");
     return ok(Value.makeString(args[0].asString().strip()));
 }
 
-private Result!(Value, BuildError) builtinSplit(Value[] args) @system
+private BuildResult!Value builtinSplit(Value[] args) @system
 {
     if (args.length != 2 || !args[0].isString() || !args[1].isString())
         return err("split() expects 2 string arguments");
@@ -179,7 +179,7 @@ private Result!(Value, BuildError) builtinSplit(Value[] args) @system
     return ok(Value.makeArray(result));
 }
 
-private Result!(Value, BuildError) builtinJoin(Value[] args) @system
+private BuildResult!Value builtinJoin(Value[] args) @system
 {
     if (args.length != 2 || !args[0].isArray() || !args[1].isString())
         return err("join() expects array and string arguments");
@@ -190,7 +190,7 @@ private Result!(Value, BuildError) builtinJoin(Value[] args) @system
     return ok(Value.makeString(strings.join(sep)));
 }
 
-private Result!(Value, BuildError) builtinReplace(Value[] args) @system
+private BuildResult!Value builtinReplace(Value[] args) @system
 {
     if (args.length != 3 || !args[0].isString() || !args[1].isString() || !args[2].isString())
         return err("replace() expects 3 string arguments");
@@ -199,7 +199,7 @@ private Result!(Value, BuildError) builtinReplace(Value[] args) @system
     return ok(Value.makeString(result));
 }
 
-private Result!(Value, BuildError) builtinStartsWith(Value[] args) @system
+private BuildResult!Value builtinStartsWith(Value[] args) @system
 {
     if (args.length != 2 || !args[0].isString() || !args[1].isString())
         return err("startsWith() expects 2 string arguments");
@@ -208,7 +208,7 @@ private Result!(Value, BuildError) builtinStartsWith(Value[] args) @system
     return ok(Value.makeBool(result));
 }
 
-private Result!(Value, BuildError) builtinEndsWith(Value[] args) @system
+private BuildResult!Value builtinEndsWith(Value[] args) @system
 {
     if (args.length != 2 || !args[0].isString() || !args[1].isString())
         return err("endsWith() expects 2 string arguments");
@@ -217,7 +217,7 @@ private Result!(Value, BuildError) builtinEndsWith(Value[] args) @system
     return ok(Value.makeBool(result));
 }
 
-private Result!(Value, BuildError) builtinContains(Value[] args) @system
+private BuildResult!Value builtinContains(Value[] args) @system
 {
     if (args.length != 2 || !args[0].isString() || !args[1].isString())
         return err("contains() expects 2 string arguments");
@@ -228,7 +228,7 @@ private Result!(Value, BuildError) builtinContains(Value[] args) @system
 
 // Array operations
 
-private Result!(Value, BuildError) builtinLen(Value[] args) @system
+private BuildResult!Value builtinLen(Value[] args) @system
 {
     if (args.length != 1)
         return err("len() expects 1 argument");
@@ -243,7 +243,7 @@ private Result!(Value, BuildError) builtinLen(Value[] args) @system
         return err("len() expects array, string, or map");
 }
 
-private Result!(Value, BuildError) builtinAppend(Value[] args) @system
+private BuildResult!Value builtinAppend(Value[] args) @system
 {
     if (args.length != 2 || !args[0].isArray())
         return err("append() expects array and element");
@@ -253,7 +253,7 @@ private Result!(Value, BuildError) builtinAppend(Value[] args) @system
     return ok(Value.makeArray(arr));
 }
 
-private Result!(Value, BuildError) builtinFilter(Value[] args) @system
+private BuildResult!Value builtinFilter(Value[] args) @system
 {
     if (args.length != 2)
         return err("filter() expects 2 arguments: array and predicate");
@@ -298,7 +298,7 @@ private Result!(Value, BuildError) builtinFilter(Value[] args) @system
     return ok(Value.makeArray(filtered));
 }
 
-private Result!(Value, BuildError) builtinMap(Value[] args) @system
+private BuildResult!Value builtinMap(Value[] args) @system
 {
     if (args.length != 2)
         return err("map() expects 2 arguments: array and transform function");
@@ -342,7 +342,7 @@ private Result!(Value, BuildError) builtinMap(Value[] args) @system
 }
 
 /// Evaluate predicate expression with 'it' variable bound to element
-private Result!(Value, BuildError) evaluatePredicateExpression(string expr, Value elem) @system
+private BuildResult!Value evaluatePredicateExpression(string expr, Value elem) @system
 {
     import std.algorithm : canFind, startsWith, endsWith;
     import std.string : strip;
@@ -488,7 +488,7 @@ private Result!(Value, BuildError) evaluatePredicateExpression(string expr, Valu
 }
 
 /// Evaluate transform expression with 'it' variable bound to element
-private Result!(Value, BuildError) evaluateTransformExpression(string expr, Value elem) @system
+private BuildResult!Value evaluateTransformExpression(string expr, Value elem) @system
 {
     import std.algorithm : startsWith, endsWith;
     import std.string : strip, toUpper, toLower;
@@ -567,7 +567,7 @@ private Result!(Value, BuildError) evaluateTransformExpression(string expr, Valu
     return err("Unsupported transform expression: " ~ expr);
 }
 
-private Result!(Value, BuildError) builtinRange(Value[] args) @system
+private BuildResult!Value builtinRange(Value[] args) @system
 {
     if (args.length != 2 || !args[0].isNumber() || !args[1].isNumber())
         return err("range() expects 2 number arguments");
@@ -584,14 +584,14 @@ private Result!(Value, BuildError) builtinRange(Value[] args) @system
 
 // Type conversions
 
-private Result!(Value, BuildError) builtinStr(Value[] args) @system
+private BuildResult!Value builtinStr(Value[] args) @system
 {
     if (args.length != 1)
         return err("str() expects 1 argument");
     return ok(Value.makeString(args[0].toString()));
 }
 
-private Result!(Value, BuildError) builtinInt(Value[] args) @system
+private BuildResult!Value builtinInt(Value[] args) @system
 {
     if (args.length != 1)
         return err("int() expects 1 argument");
@@ -614,7 +614,7 @@ private Result!(Value, BuildError) builtinInt(Value[] args) @system
         return err("int() expects number or string");
 }
 
-private Result!(Value, BuildError) builtinBool(Value[] args) @system
+private BuildResult!Value builtinBool(Value[] args) @system
 {
     if (args.length != 1)
         return err("bool() expects 1 argument");
@@ -623,7 +623,7 @@ private Result!(Value, BuildError) builtinBool(Value[] args) @system
 
 // File operations
 
-private Result!(Value, BuildError) builtinGlob(Value[] args) @system
+private BuildResult!Value builtinGlob(Value[] args) @system
 {
     if (args.length != 1 || !args[0].isString())
         return err("glob() expects 1 string argument");
@@ -643,7 +643,7 @@ private Result!(Value, BuildError) builtinGlob(Value[] args) @system
     }
 }
 
-private Result!(Value, BuildError) builtinFileExists(Value[] args) @system
+private BuildResult!Value builtinFileExists(Value[] args) @system
 {
     if (args.length != 1 || !args[0].isString())
         return err("fileExists() expects 1 string argument");
@@ -653,7 +653,7 @@ private Result!(Value, BuildError) builtinFileExists(Value[] args) @system
     return ok(Value.makeBool(exists));
 }
 
-private Result!(Value, BuildError) builtinReadFile(Value[] args) @system
+private BuildResult!Value builtinReadFile(Value[] args) @system
 {
     if (args.length != 1 || !args[0].isString())
         return err("readFile() expects 1 string argument");
@@ -670,7 +670,7 @@ private Result!(Value, BuildError) builtinReadFile(Value[] args) @system
     }
 }
 
-private Result!(Value, BuildError) builtinBasename(Value[] args) @system
+private BuildResult!Value builtinBasename(Value[] args) @system
 {
     if (args.length != 1 || !args[0].isString())
         return err("basename() expects 1 string argument");
@@ -679,7 +679,7 @@ private Result!(Value, BuildError) builtinBasename(Value[] args) @system
     return ok(Value.makeString(result));
 }
 
-private Result!(Value, BuildError) builtinDirname(Value[] args) @system
+private BuildResult!Value builtinDirname(Value[] args) @system
 {
     if (args.length != 1 || !args[0].isString())
         return err("dirname() expects 1 string argument");
@@ -688,7 +688,7 @@ private Result!(Value, BuildError) builtinDirname(Value[] args) @system
     return ok(Value.makeString(result));
 }
 
-private Result!(Value, BuildError) builtinStripExtension(Value[] args) @system
+private BuildResult!Value builtinStripExtension(Value[] args) @system
 {
     if (args.length != 1 || !args[0].isString())
         return err("stripExtension() expects 1 string argument");
@@ -699,7 +699,7 @@ private Result!(Value, BuildError) builtinStripExtension(Value[] args) @system
 
 // Environment
 
-private Result!(Value, BuildError) builtinEnv(Value[] args) @system
+private BuildResult!Value builtinEnv(Value[] args) @system
 {
     if (args.length < 1 || args.length > 2 || !args[0].isString())
         return err("env() expects 1-2 arguments (name, default)");
@@ -718,7 +718,7 @@ private Result!(Value, BuildError) builtinEnv(Value[] args) @system
     return ok(Value.makeString(value));
 }
 
-private Result!(Value, BuildError) builtinPlatform(Value[] args) @system
+private BuildResult!Value builtinPlatform(Value[] args) @system
 {
     if (args.length != 0)
         return err("platform() expects no arguments");
@@ -733,7 +733,7 @@ private Result!(Value, BuildError) builtinPlatform(Value[] args) @system
         return ok(Value.makeString("unknown"));
 }
 
-private Result!(Value, BuildError) builtinArch(Value[] args) @system
+private BuildResult!Value builtinArch(Value[] args) @system
 {
     if (args.length != 0)
         return err("arch() expects no arguments");
@@ -750,14 +750,14 @@ private Result!(Value, BuildError) builtinArch(Value[] args) @system
 
 // Helpers
 
-private Result!(Value, BuildError) ok(Value v) @system
+private BuildResult!Value ok(Value v) @system
 {
-    return Result!(Value, BuildError).ok(v);
+    return BuildResult!Value.ok(v);
 }
 
-private Result!(Value, BuildError) err(string msg) @system
+private BuildResult!Value err(string msg) @system
 {
     auto error = new ParseError(msg, null);
-    return Result!(Value, BuildError).err(error);
+    return BuildResult!Value.err(error);
 }
 

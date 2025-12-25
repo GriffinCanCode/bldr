@@ -87,7 +87,7 @@ final class DynamicBuildGraph
     
     /// Apply all pending discoveries and get newly scheduled nodes
     /// Returns nodes that should be added to the execution queue
-    Result!(BuildNode[], BuildError) applyDiscoveries() @system
+    BuildResult!(BuildNode[]) applyDiscoveries() @system
     {
         auto result = extension.applyDiscoveries();
         if (result.isErr)
@@ -112,7 +112,7 @@ final class DynamicBuildGraph
         
         Logger.info("Applied discoveries: " ~ newNodes.length.to!string ~ " new nodes scheduled");
         
-        return Result!(BuildNode[], BuildError).ok(newNodes);
+        return BuildResult!(BuildNode[]).ok(newNodes);
     }
     
     /// Check if there are pending discoveries to apply

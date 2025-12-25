@@ -49,7 +49,7 @@ struct Script
 interface IManifestParser
 {
     /// Parse manifest file
-    Result!(ManifestInfo, BuildError) parse(string filePath) @system;
+    BuildResult!ManifestInfo parse(string filePath) @system;
     
     /// Check if parser can handle this file
     bool canParse(string filePath) const @safe;

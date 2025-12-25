@@ -28,7 +28,7 @@ final class GcpComputeProvider : CloudProvider
         this.serviceAccountKey = serviceAccountKey;
     }
     
-    Result!(WorkerId, BuildError) provisionWorker(
+    BuildResult!WorkerId provisionWorker(
         string instanceType,
         string imageId,
         string[string] tags
@@ -96,7 +96,7 @@ final class GcpComputeProvider : CloudProvider
         return Ok!(WorkerId, BuildError)(WorkerId(id));
     }
     
-    Result!BuildError terminateWorker(WorkerId workerId) @trusted
+    VoidBuildResult terminateWorker(WorkerId workerId) @trusted
     {
         // Lookup actual instance name
         auto instanceNamePtr = workerId in instanceNameMap;
@@ -106,7 +106,7 @@ final class GcpComputeProvider : CloudProvider
                 "Worker ID not found in instance map",
                 ErrorCode.WorkerFailed
             );
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         
         string instanceName = *instanceNamePtr;
@@ -132,7 +132,7 @@ final class GcpComputeProvider : CloudProvider
                 format("Failed to delete GCP instance %s: %s", instanceName, result.output),
                 ErrorCode.NetworkError
             );
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         
         Logger.info("Deleted GCP instance: " ~ instanceName);
@@ -140,7 +140,7 @@ final class GcpComputeProvider : CloudProvider
         return Ok!BuildError();
     }
     
-    Result!(WorkerStatus, BuildError) getWorkerStatus(WorkerId workerId) @trusted
+    BuildResult!WorkerStatus getWorkerStatus(WorkerId workerId) @trusted
     {
         // Lookup actual instance name
         auto instanceNamePtr = workerId in instanceNameMap;

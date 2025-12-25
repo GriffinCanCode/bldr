@@ -41,7 +41,7 @@ struct RPCRequest {
     }
     
     /// Create from JSON
-    static Result!(RPCRequest, BuildError) fromJSON(JSONValue json) @system {
+    static BuildResult!RPCRequest fromJSON(JSONValue json) @system {
         try {
             RPCRequest req;
             req.jsonrpc = json["jsonrpc"].str;
@@ -98,7 +98,7 @@ struct RPCError {
     }
     
     /// Create from JSON
-    static Result!(RPCError, BuildError) fromJSON(JSONValue json) @system {
+    static BuildResult!RPCError fromJSON(JSONValue json) @system {
         try {
             int code = cast(int)json["code"].integer;
             string message = json["message"].str;
@@ -165,7 +165,7 @@ struct RPCResponse {
     }
     
     /// Create from JSON
-    static Result!(RPCResponse, BuildError) fromJSON(JSONValue json) @system {
+    static BuildResult!RPCResponse fromJSON(JSONValue json) @system {
         try {
             RPCResponse resp;
             resp.jsonrpc = json["jsonrpc"].str;
@@ -235,7 +235,7 @@ struct PluginInfo {
     }
     
     /// Create from JSON
-    static Result!(PluginInfo, BuildError) fromJSON(JSONValue json) @system {
+    static BuildResult!PluginInfo fromJSON(JSONValue json) @system {
         try {
             PluginInfo info;
             info.name = json["name"].str;
@@ -288,7 +288,7 @@ struct PluginTarget {
     }
     
     /// Create from JSON
-    static Result!(PluginTarget, BuildError) fromJSON(JSONValue json) @system {
+    static BuildResult!PluginTarget fromJSON(JSONValue json) @system {
         try {
             PluginTarget target;
             target.name = json["name"].str;
@@ -380,7 +380,7 @@ struct HookResult {
     }
     
     /// Create from JSON
-    static Result!(HookResult, BuildError) fromJSON(JSONValue json) @system {
+    static BuildResult!HookResult fromJSON(JSONValue json) @system {
         try {
             HookResult result;
             result.success = json["success"].boolean;

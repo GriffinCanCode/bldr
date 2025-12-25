@@ -40,11 +40,11 @@ private struct MavenDependency
 /// Parser for pom.xml (Maven) - Full XML parsing implementation
 final class MavenManifestParser : IManifestParser
 {
-    override Result!(ManifestInfo, BuildError) parse(string filePath) @system
+    override BuildResult!ManifestInfo parse(string filePath) @system
     {
         if (!exists(filePath))
         {
-            return Result!(ManifestInfo, BuildError).err(
+            return BuildResult!ManifestInfo.err(
                 ioError(filePath, "File not found"));
         }
         
@@ -55,7 +55,7 @@ final class MavenManifestParser : IManifestParser
             auto parseResult = parsePomXml(content);
             
             if (parseResult.isErr)
-                return Result!(ManifestInfo, BuildError).err(parseResult.unwrapErr());
+                return BuildResult!ManifestInfo.err(parseResult.unwrapErr());
             
             auto project = parseResult.unwrap();
             
@@ -92,11 +92,11 @@ final class MavenManifestParser : IManifestParser
             
             Logger.info("Parsed Maven project: " ~ info.name ~ " v" ~ info.version_);
             
-            return Result!(ManifestInfo, BuildError).ok(info);
+            return BuildResult!ManifestInfo.ok(info);
         }
         catch (Exception e)
         {
-            return Result!(ManifestInfo, BuildError).err(
+            return BuildResult!ManifestInfo.err(
                 new ParseError(filePath, "Failed to parse pom.xml: " ~ e.msg,
                              ErrorCode.InvalidConfiguration));
         }
@@ -115,7 +115,7 @@ final class MavenManifestParser : IManifestParser
 private:
     
     /// Parse pom.xml content (full XML parsing)
-    Result!(MavenProject, BuildError) parsePomXml(string content) @system
+    BuildResult!MavenProject parsePomXml(string content) @system
     {
         MavenProject project;
         

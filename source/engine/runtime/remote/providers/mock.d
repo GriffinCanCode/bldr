@@ -13,7 +13,7 @@ final class MockCloudProvider : CloudProvider
     private size_t provisionedCount = 0;
     private WorkerStatus[WorkerId] workers;
     
-    Result!(WorkerId, BuildError) provisionWorker(
+    BuildResult!WorkerId provisionWorker(
         string instanceType,
         string imageId,
         string[string] tags
@@ -35,7 +35,7 @@ final class MockCloudProvider : CloudProvider
         return Ok!(WorkerId, BuildError)(workerId);
     }
     
-    Result!BuildError terminateWorker(WorkerId workerId) @trusted
+    VoidBuildResult terminateWorker(WorkerId workerId) @trusted
     {
         if (workerId in workers)
         {
@@ -48,7 +48,7 @@ final class MockCloudProvider : CloudProvider
         return Ok!BuildError();
     }
     
-    Result!(WorkerStatus, BuildError) getWorkerStatus(WorkerId workerId) @trusted
+    BuildResult!WorkerStatus getWorkerStatus(WorkerId workerId) @trusted
     {
         if (auto status = workerId in workers)
         {

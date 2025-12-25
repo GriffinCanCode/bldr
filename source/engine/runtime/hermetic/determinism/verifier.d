@@ -74,7 +74,7 @@ struct DeterminismVerifier
     }
     
     /// Verify outputs from two builds match
-    Result!(VerificationResult, BuildError) verify(
+    BuildResult!VerificationResult verify(
         string[] outputPaths1,
         string[] outputPaths2
     ) @system
@@ -134,7 +134,7 @@ struct DeterminismVerifier
     }
     
     /// Verify directory outputs match
-    Result!(VerificationResult, BuildError) verifyDirectory(
+    BuildResult!VerificationResult verifyDirectory(
         string dir1,
         string dir2
     ) @system
@@ -153,7 +153,7 @@ struct DeterminismVerifier
     }
     
     /// Verify single file matches across runs
-    Result!(bool, BuildError) verifyFile(string path1, string path2) @system
+    BuildResult!bool verifyFile(string path1, string path2) @system
     {
         if (!exists(path1) || !exists(path2))
             return Err!(bool, BuildError)(

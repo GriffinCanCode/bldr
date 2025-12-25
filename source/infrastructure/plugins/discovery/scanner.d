@@ -52,7 +52,7 @@ class PluginScanner {
     }
     
     /// Discover all installed plugins
-    Result!(PluginInfo[], BuildError) discover() @system {
+    BuildResult!(PluginInfo[]) discover() @system {
         Logger.debugLog("Scanning for plugins in " ~ searchPaths.length.to!string ~ " directories");
         
         PluginInfo[] plugins;
@@ -87,7 +87,7 @@ class PluginScanner {
     }
     
     /// Find plugin by name
-    Result!(string, BuildError) findPlugin(string name) @system {
+    BuildResult!string findPlugin(string name) @system {
         auto fullName = name.startsWith(PLUGIN_PREFIX) ? name : PLUGIN_PREFIX ~ name;
         
         foreach (dir; searchPaths) {
@@ -124,7 +124,7 @@ class PluginScanner {
     }
     
     /// Query plugin for its metadata
-    Result!(PluginInfo, BuildError) queryPluginInfo(string pluginPath) @system {
+    BuildResult!PluginInfo queryPluginInfo(string pluginPath) @system {
         import std.process : pipeProcess, Redirect, wait;
         import std.stdio : File;
         
@@ -201,7 +201,7 @@ class PluginScanner {
     }
     
     /// Load cached plugin information
-    Result!(PluginInfo[], BuildError) loadCache() @system {
+    BuildResult!(PluginInfo[]) loadCache() @system {
         try {
             if (!exists(CACHE_FILE))
                 return Ok!(PluginInfo[], BuildError)([]);
@@ -224,7 +224,7 @@ class PluginScanner {
     }
     
     /// Save plugin information to cache
-    Result!BuildError saveCache(PluginInfo[] plugins) @system {
+    VoidBuildResult saveCache(PluginInfo[] plugins) @system {
         try {
             import std.file : mkdirRecurse;
             
@@ -250,7 +250,7 @@ class PluginScanner {
                 "Failed to save plugin cache: " ~ e.msg,
                 ErrorCode.CacheSaveFailed
             );
-            return Result!BuildError.err(err);
+            return VoidBuildResult.err(err);
         }
     }
 }

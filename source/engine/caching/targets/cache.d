@@ -13,6 +13,7 @@ import infrastructure.utils.files.hash;
 import infrastructure.utils.simd.hash;
 import engine.caching.targets.storage;
 import engine.caching.policies.eviction;
+import engine.caching.index : CacheIndex, TargetIndexEntry;
 import infrastructure.utils.security.integrity;
 import infrastructure.utils.concurrency.lockfree;
 import infrastructure.errors;
@@ -52,6 +53,7 @@ final class BuildCache
     private IntegrityValidator validator;  // HMAC validation for tampering detection
     private FastHashCache hashCache;  // Per-build-session hash memoization
     private bool closed = false;  // Track if explicitly closed
+    private CacheIndex index;  // SQLite-backed index for metadata/queries
     
     /// Constructor: Initialize cache with directory and configuration
     /// 
@@ -89,6 +91,9 @@ final class BuildCache
         if (!exists(cacheDir))
             mkdirRecurse(cacheDir);
         
+        // Initialize SQLite index for metadata tracking
+        this.index = new CacheIndex(cacheDir);
+        
         loadCache();
     }
     
@@ -103,6 +108,7 @@ final class BuildCache
             if (!closed)
             {
                 if (dirty) flush(false); // Flush without eviction on close
+                if (index) index.close();
                 closed = true;
             }
         }
@@ -135,15 +141,26 @@ final class BuildCache
         synchronized (cacheMutex)
         {
             auto entryPtr = targetId in entries;
-            if (entryPtr is null) return false;
+            if (entryPtr is null)
+            {
+                index.recordTargetMiss();
+                return false;
+            }
             
             entryPtr.lastAccess = Clock.currTime();
             dirty = true;
             
+            // Update index LRU tracking
+            index.touchTarget(targetId);
+            
             // Check if any source files changed (two-tier strategy)
             foreach (source; sources)
             {
-                if (!exists(source)) return false;
+                if (!exists(source))
+                {
+                    index.recordTargetMiss();
+                    return false;
+                }
                 
                 const hashResult = FastHash.hashFileTwoTier(source, entryPtr.sourceMetadata.get(source, ""));
                 
@@ -151,12 +168,22 @@ final class BuildCache
                 
                 if (hashResult.contentHashed && 
                     !SIMDHash.equals(hashResult.contentHash, entryPtr.sourceHashes.get(source, "")))
+                {
+                    index.recordTargetMiss();
                     return false;
+                }
             }
             
             // Check if any dependencies changed
-            return !deps.any!(dep => dep !in entries || 
-                !SIMDHash.equals(entries[dep].buildHash, entryPtr.depHashes.get(dep, "")));
+            if (deps.any!(dep => dep !in entries || 
+                !SIMDHash.equals(entries[dep].buildHash, entryPtr.depHashes.get(dep, ""))))
+            {
+                index.recordTargetMiss();
+                return false;
+            }
+            
+            index.recordTargetHit();
+            return true;
         }
     }
     
@@ -249,6 +276,18 @@ final class BuildCache
             
             entries[targetId] = entry;
             dirty = true;
+            
+            // Sync to index for LRU tracking and queries
+            index.putTarget(TargetIndexEntry(
+                targetId,
+                outputHash,
+                "",  // metadataHash computed lazily
+                cast(long)eviction.estimateEntrySize(entry),
+                entry.timestamp,
+                entry.lastAccess,
+                sources.length,
+                deps.length
+            ));
         }
     }
     
@@ -258,6 +297,7 @@ final class BuildCache
         try synchronized (cacheMutex)
         {
             entries.remove(targetId);
+            index.deleteTarget(targetId);
             dirty = true;
         }
         catch (Exception) {}
@@ -270,12 +310,16 @@ final class BuildCache
         synchronized (cacheMutex)
         {
             entries.clear();
+            index.clear();
             dirty = false;
         }
         
         if (exists(cacheDir))
             rmdirRecurse(cacheDir);
         mkdirRecurse(cacheDir);
+        
+        // Reinitialize index after clearing
+        index = new CacheIndex(cacheDir);
     }
     
     /// Flush cache to disk (lazy write)
@@ -286,13 +330,23 @@ final class BuildCache
         {
             if (!dirty) return;
         
-            // Run eviction policy before saving
+            // Run eviction policy using SQLite index (efficient partial query)
             if (runEviction)
             {
                 try
                 {
-                    auto toEvict = eviction.selectEvictions(entries, eviction.calculateTotalSize(entries));
-                    toEvict.each!(key => entries.remove(key));
+                    // Use SQLite index for LRU-based eviction selection
+                    auto toEvict = index.selectTargetEvictions(
+                        config.maxEntries, 
+                        config.maxSize, 
+                        config.maxAge
+                    );
+                    
+                    foreach (key; toEvict)
+                    {
+                        entries.remove(key);
+                        index.deleteTarget(key);
+                    }
                     
                     if (toEvict.length > 0)
                         writeln("Cache evicted ", toEvict.length, " entries");
@@ -322,6 +376,9 @@ final class BuildCache
         size_t hashCacheHits;    // How many build-session hash cache hits
         size_t hashCacheMisses;  // How many build-session hash cache misses
         float hashCacheHitRate;  // Percentage of hash cache hits
+        size_t indexHits;        // Hits tracked by SQLite index
+        size_t indexMisses;      // Misses tracked by SQLite index
+        float indexHitRate;      // Hit rate from SQLite index
     }
     
     /// Get cache statistics
@@ -331,18 +388,18 @@ final class BuildCache
         synchronized (cast(Mutex)cacheMutex)  // const_cast for read-only access
         {
             CacheStats stats;
-            stats.totalEntries = entries.length;
             
-            if (entries.empty)
-                return stats;
+            // Get stats from SQLite index (fast, no full scan)
+            auto indexStats = (cast(CacheIndex)index).getTargetStats();
+            stats.totalEntries = cast(size_t)indexStats.totalEntries;
+            stats.totalSize = cast(size_t)indexStats.totalSize;
+            stats.oldestEntry = indexStats.oldestEntry;
+            stats.newestEntry = indexStats.newestEntry;
+            stats.indexHits = cast(size_t)indexStats.hits;
+            stats.indexMisses = cast(size_t)indexStats.misses;
+            stats.indexHitRate = indexStats.hitRate;
             
-            stats.oldestEntry = entries.values.map!(e => e.timestamp).minElement;
-            stats.newestEntry = entries.values.map!(e => e.timestamp).maxElement;
-            
-            // Calculate cache size
-            stats.totalSize = eviction.calculateTotalSize(entries);
-            
-            // Hash statistics
+            // Hash statistics (session-local)
             stats.contentHashes = contentHashCount;
             stats.metadataHits = metadataHitCount;
             
@@ -475,6 +532,40 @@ final class BuildCache
             }
         }
     }
+    
+    // ─────────────────────────────────────────────────────────────────
+    // Introspection API (powered by SQLite index)
+    // ─────────────────────────────────────────────────────────────────
+    
+    /// List all cached target IDs (efficient via index)
+    string[] listTargets() @system
+    {
+        synchronized (cacheMutex)
+        {
+            return index.listTargets();
+        }
+    }
+    
+    /// Query targets by partial key match
+    string[] queryTargets(string pattern) @system
+    {
+        synchronized (cacheMutex)
+        {
+            return index.queryTargets(pattern);
+        }
+    }
+    
+    /// Get index entry for a target (metadata only)
+    BuildResult!TargetIndexEntry getTargetMetadata(string targetId) @system
+    {
+        synchronized (cacheMutex)
+        {
+            return index.getTarget(targetId);
+        }
+    }
+    
+    /// Get the underlying cache index for advanced queries
+    CacheIndex getIndex() @system => index;
     
     /// Load old JSON format for migration
     private void loadJsonCache(string cacheFile)

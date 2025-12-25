@@ -89,10 +89,10 @@ struct DiscoveryExecutor
     }
     
     /// Apply pending discoveries and return new nodes to schedule
-    Result!(BuildNode[], BuildError) applyPendingDiscoveries() @system
+    BuildResult!(BuildNode[]) applyPendingDiscoveries() @system
     {
         if (!dynamicGraph.hasPendingDiscoveries())
-            return Result!(BuildNode[], BuildError).ok([]);
+            return BuildResult!(BuildNode[]).ok([]);
         
         Logger.info("Applying pending discoveries...");
         return dynamicGraph.applyDiscoveries();

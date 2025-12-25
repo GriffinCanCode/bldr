@@ -91,13 +91,13 @@ mixin template ActionCacheIntegration(string handlerName)
     }
     
     /// Check and execute action with caching
-    protected Result!(string, BuildError) withActionCache(
+    protected BuildResult!string withActionCache(
         string targetName,
         ActionType actionType,
         string subId,
         scope const(string)[] inputs,
         scope const(string[string]) metadata,
-        Result!(string, BuildError) delegate() @system action
+        BuildResult!string delegate() @system action
     ) @system
     {
         import std.file : exists;
@@ -147,13 +147,13 @@ mixin template ActionCacheIntegration(string handlerName)
     }
     
     /// Enhanced version with explicit output specification
-    protected Result!(string[], BuildError) withActionCacheAndOutputs(
+    protected BuildResult!(string[]) withActionCacheAndOutputs(
         string targetName,
         ActionType actionType,
         string subId,
         scope const(string)[] inputs,
         scope const(string[string]) metadata,
-        Result!(string[], BuildError) delegate() @system action
+        BuildResult!(string[]) delegate() @system action
     ) @system
     {
         import std.file : exists;

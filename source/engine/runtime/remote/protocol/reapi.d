@@ -325,7 +325,7 @@ final class ReapiAdapter
     }
     
     /// Execute action via REAPI
-    Result!(ExecuteResponse, BuildError) execute(
+    BuildResult!ExecuteResponse execute(
         Action action,
         bool skipCacheLookup = false
     ) @trusted
@@ -357,7 +357,7 @@ final class ReapiAdapter
     }
     
     /// Wait for execution (long-running operation)
-    Result!(ExecuteResponse, BuildError) waitExecution(
+    BuildResult!ExecuteResponse waitExecution(
         string operationName,
         Duration timeout = 0.seconds
     ) @trusted
@@ -403,7 +403,7 @@ final class ReapiAdapter
     }
     
     /// Get operation status
-    private Result!(ExecuteResponse, BuildError) getOperationStatus(string operationName) @trusted
+    private BuildResult!ExecuteResponse getOperationStatus(string operationName) @trusted
     {
         auto httpResult = sendHttpRequest("GET", remoteUrl ~ "/v2/operations/" ~ operationName, []);
         
@@ -424,7 +424,7 @@ final class ReapiAdapter
     }
     
     /// Get action result from cache
-    Result!(ActionResult, BuildError) getActionResult(
+    BuildResult!ActionResult getActionResult(
         Digest actionDigest
     ) @trusted
     {
@@ -466,7 +466,7 @@ final class ReapiAdapter
     }
     
     /// Update action result in cache
-    Result!BuildError updateActionResult(
+    VoidBuildResult updateActionResult(
         Digest actionDigest,
         ActionResult result
     ) @trusted
@@ -483,13 +483,13 @@ final class ReapiAdapter
         auto httpResult = sendHttpRequest("PUT", remoteUrl ~ path, resultData);
         
         if (httpResult.isErr)
-            return Result!BuildError.err(httpResult.unwrapErr());
+            return VoidBuildResult.err(httpResult.unwrapErr());
         
         return Ok!BuildError();
     }
     
     /// Send HTTP request helper
-    private Result!(ubyte[], BuildError) sendHttpRequest(
+    private BuildResult!(ubyte[]) sendHttpRequest(
         string method,
         string url,
         const ubyte[] body_

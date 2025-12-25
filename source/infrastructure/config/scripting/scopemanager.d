@@ -63,7 +63,7 @@ class ScopeManager
     }
     
     /// Define variable (let or const)
-    Result!BuildError define(string name, Value value, bool isConst) @trusted
+    VoidBuildResult define(string name, Value value, bool isConst) @trusted
     {
         // Check if already defined in current scope
         if (name in symbols)
@@ -77,7 +77,7 @@ class ScopeManager
                 );
                 error.addSuggestion("Use a different variable name");
                 error.addSuggestion("Or use assignment instead of re-declaration");
-                return Result!BuildError.err(error);
+                return VoidBuildResult.err(error);
             }
         }
         
@@ -93,11 +93,11 @@ class ScopeManager
             symbols[name] = [];
         symbols[name] ~= sym;
         
-        return Result!BuildError.ok();
+        return VoidBuildResult.ok();
     }
     
     /// Define function
-    Result!BuildError defineFunction(string name, Value fnValue) @trusted
+    VoidBuildResult defineFunction(string name, Value fnValue) @trusted
     {
         // Functions can be redefined (last definition wins)
         Symbol sym;
@@ -111,11 +111,11 @@ class ScopeManager
             symbols[name] = [];
         symbols[name] ~= sym;
         
-        return Result!BuildError.ok();
+        return VoidBuildResult.ok();
     }
     
     /// Assign to existing variable
-    Result!BuildError assign(string name, Value value) @trusted
+    VoidBuildResult assign(string name, Value value) @trusted
     {
         if (name !in symbols || symbols[name].empty)
         {
@@ -125,7 +125,7 @@ class ScopeManager
             );
             error.addSuggestion("Define variable with 'let " ~ name ~ " = ...'");
             error.addSuggestion("Check for typos in variable name");
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         
         auto stack = symbols[name];
@@ -139,18 +139,18 @@ class ScopeManager
             );
             error.addSuggestion("Use 'let' instead of 'const' for mutable variables");
             error.addSuggestion("Create a new variable with a different name");
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         
         // Update value
         sym.value = value;
         symbols[name][$ - 1] = sym;
         
-        return Result!BuildError.ok();
+        return VoidBuildResult.ok();
     }
     
     /// Lookup variable
-    Result!(Value, BuildError) lookup(string name) @trusted
+    BuildResult!Value lookup(string name) @trusted
     {
         if (name !in symbols || symbols[name].empty)
         {
@@ -161,11 +161,11 @@ class ScopeManager
             error.addSuggestion("Define variable with 'let " ~ name ~ " = ...'");
             error.addSuggestion("Check for typos in variable name");
             error.addSuggestion("Ensure variable is defined before use");
-            return Result!(Value, BuildError).err(error);
+            return BuildResult!Value.err(error);
         }
         
         auto stack = symbols[name];
-        return Result!(Value, BuildError).ok(stack[$ - 1].value);
+        return BuildResult!Value.ok(stack[$ - 1].value);
     }
     
     /// Check if variable is defined

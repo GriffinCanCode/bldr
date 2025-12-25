@@ -12,6 +12,7 @@ import core.sync.mutex;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.simd.hash;
 import engine.caching.policies.eviction;
+import engine.caching.index : CacheIndex, ActionIndexEntry;
 import infrastructure.utils.security.integrity;
 import infrastructure.utils.concurrency.lockfree;
 import engine.caching.actions.storage;
@@ -52,7 +53,7 @@ struct ActionId
     
     /// Parse action ID from string
     /// Returns: Result with ActionId or BuildError
-    static Result!(ActionId, BuildError) parse(string str) @system
+    static BuildResult!ActionId parse(string str) @system
     {
         auto parts = str.split(":");
         if (parts.length < 3)
@@ -152,13 +153,14 @@ final class ActionCache
     private IntegrityValidator validator;
     private FastHashCache hashCache;
     private bool closed = false;
+    private CacheIndex index;  // SQLite-backed index for metadata/queries
     
-    // Statistics
+    // Statistics (session-local, index tracks persistent)
     private size_t actionHits;
     private size_t actionMisses;
     
     /// Constructor: Initialize action cache
-    this(string cacheDir = ".builder-cache/actions", ActionCacheConfig config = ActionCacheConfig.init) @system
+    this(string cacheDir = ".builder-cache/actions", ActionCacheConfig config = ActionCacheConfig.init, CacheIndex sharedIndex = null) @system
     {
         this.cacheDir = cacheDir;
         this.cacheFilePath = buildPath(cacheDir, "actions.bin");
@@ -177,6 +179,9 @@ final class ActionCache
         if (!exists(cacheDir))
             mkdirRecurse(cacheDir);
         
+        // Use shared index or create our own
+        this.index = sharedIndex ? sharedIndex : new CacheIndex(dirName(cacheDir));
+        
         loadCache();
     }
     
@@ -189,6 +194,7 @@ final class ActionCache
             {
                 if (dirty) 
                     flush(false);
+                // Note: Don't close index here if shared with other caches
                 closed = true;
             }
         }
@@ -235,15 +241,25 @@ final class ActionCache
             if (metadata.byKeyValue.any!(kv => entryPtr.metadata.get(kv.key, "") != kv.value))
                 return recordMiss();
             
-            actionHits++;
+            // Update LRU tracking in index
+            index.touchAction(actionId.toString());
+            
+            recordHit();
             return true;
         }
     }
     
-    private bool recordMiss() @safe nothrow
+    private bool recordMiss() @system nothrow
     {
         actionMisses++;
+        try { index.recordActionMiss(); } catch (Exception) {}
         return false;
+    }
+    
+    private void recordHit() @system nothrow
+    {
+        actionHits++;
+        try { index.recordActionHit(); } catch (Exception) {}
     }
     
     /// Update action cache entry
@@ -291,6 +307,20 @@ final class ActionCache
             entry.executionHash = computeExecutionHash(metadata);
             entries[actionId.toString()] = entry;
             dirty = true;
+            
+            // Sync to index
+            index.putAction(ActionIndexEntry(
+                actionId.toString(),
+                actionId.targetId,
+                cast(ubyte)actionId.type,
+                entry.executionHash,
+                cast(long)eviction.estimateEntrySize(entry),
+                entry.timestamp,
+                entry.lastAccess,
+                success,
+                inputs.length,
+                outputs.length
+            ));
         }
     }
     
@@ -299,7 +329,9 @@ final class ActionCache
     {
         try synchronized (cacheMutex)
         {
-            entries.remove(actionId.toString());
+            auto key = actionId.toString();
+            entries.remove(key);
+            index.deleteAction(key);
             dirty = true;
         }
         catch (Exception) {}
@@ -326,13 +358,22 @@ final class ActionCache
         {
             if (!dirty) return;
             
-            // Run eviction policy
+            // Run eviction policy using SQLite index
             if (runEviction)
             {
                 try
                 {
-                    auto toEvict = eviction.selectEvictions(entries, eviction.calculateTotalSize(entries));
-                    toEvict.each!(key => entries.remove(key));
+                    auto toEvict = index.selectActionEvictions(
+                        config.maxEntries,
+                        config.maxSize,
+                        config.maxAge
+                    );
+                    
+                    foreach (key; toEvict)
+                    {
+                        entries.remove(key);
+                        index.deleteAction(key);
+                    }
                 }
                 catch (Exception) {}
             }
@@ -353,46 +394,69 @@ final class ActionCache
         float hitRate;
         size_t successfulActions;
         size_t failedActions;
+        size_t indexHits;
+        size_t indexMisses;
+        float indexHitRate;
     }
     
     ActionCacheStats getStats() const @system
     {
         synchronized (cast(Mutex)cacheMutex)
         {
+            // Get stats from SQLite index (fast)
+            auto indexStats = (cast(CacheIndex)index).getActionStats();
+            
             ActionCacheStats stats;
-            stats.totalEntries = entries.length;
+            stats.totalEntries = cast(size_t)indexStats.totalEntries;
+            stats.totalSize = cast(size_t)indexStats.totalSize;
             stats.hits = actionHits;
             stats.misses = actionMisses;
+            stats.indexHits = cast(size_t)indexStats.hits;
+            stats.indexMisses = cast(size_t)indexStats.misses;
+            stats.indexHitRate = indexStats.hitRate;
+            stats.successfulActions = cast(size_t)indexStats.successfulActions;
+            stats.failedActions = cast(size_t)indexStats.failedActions;
             
             immutable total = actionHits + actionMisses;
             if (total > 0)
                 stats.hitRate = (actionHits * 100.0) / total;
             
-            foreach (entry; entries.byValue)
-            {
-                if (entry.success)
-                    stats.successfulActions++;
-                else
-                    stats.failedActions++;
-            }
-            
-            stats.totalSize = eviction.calculateTotalSize(entries);
-            
             return stats;
         }
     }
     
-    /// Get all cached actions for a target
+    /// Get all cached actions for a target (uses index for efficient query)
     ActionEntry[] getActionsForTarget(string targetId) const @system
     {
         synchronized (cast(Mutex)cacheMutex)
         {
-            return entries.byValue
-                .filter!(e => e.actionId.targetId == targetId)
-                .map!(e => duplicateEntry(e))
-                .array;
+            // Use index for efficient target lookup
+            auto actionKeys = (cast(CacheIndex)index).getActionsForTarget(targetId);
+            
+            ActionEntry[] results;
+            results.reserve(actionKeys.length);
+            
+            foreach (key; actionKeys)
+            {
+                if (auto entryPtr = key in entries)
+                    results ~= duplicateEntry(*entryPtr);
+            }
+            
+            return results;
         }
     }
+    
+    /// List all action keys (via index)
+    string[] listActions() @system
+    {
+        synchronized (cacheMutex)
+        {
+            return index.listActions();
+        }
+    }
+    
+    /// Get the underlying cache index
+    CacheIndex getIndex() @system => index;
     
     private static ActionEntry duplicateEntry(const ref ActionEntry entry) @system
     {

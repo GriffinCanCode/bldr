@@ -40,7 +40,7 @@ final class FileChangeTracker : IFileChangeTracker
     }
     
     /// Initialize tracking for a file
-    Result!BuildError track(string path) @system
+    VoidBuildResult track(string path) @system
     {
         synchronized (trackerMutex)
         {
@@ -57,13 +57,13 @@ final class FileChangeTracker : IFileChangeTracker
                     "Failed to track file: " ~ e.msg,
                     ErrorCode.FileReadFailed
                 );
-                return Result!BuildError.err(error);
+                return VoidBuildResult.err(error);
             }
         }
     }
     
     /// Track multiple files (batch operation)
-    Result!BuildError trackBatch(string[] paths) @system
+    VoidBuildResult trackBatch(string[] paths) @system
     {
         foreach (path; paths)
         {
@@ -76,7 +76,7 @@ final class FileChangeTracker : IFileChangeTracker
     
     /// Check if file has changed since last track
     /// Returns: tuple (hasChanged, contentHash)
-    Result!(ChangeResult, BuildError) checkChange(string path) @system
+    BuildResult!ChangeResult checkChange(string path) @system
     {
         synchronized (trackerMutex)
         {
@@ -92,7 +92,7 @@ final class FileChangeTracker : IFileChangeTracker
                     states[path] = newState;
                     changesDetected++;
                     
-                    return Result!(ChangeResult, BuildError).ok(
+                    return BuildResult!ChangeResult.ok(
                         ChangeResult(true, newState.contentHash, ChangeKind.New)
                     );
                 }
@@ -105,14 +105,14 @@ final class FileChangeTracker : IFileChangeTracker
                         // File was deleted
                         states[path].exists = false;
                         changesDetected++;
-                        return Result!(ChangeResult, BuildError).ok(
+                        return BuildResult!ChangeResult.ok(
                             ChangeResult(true, "", ChangeKind.Deleted)
                         );
                     }
                     else
                     {
                         // Still doesn't exist
-                        return Result!(ChangeResult, BuildError).ok(
+                        return BuildResult!ChangeResult.ok(
                             ChangeResult(false, "", ChangeKind.Unchanged)
                         );
                     }
@@ -123,7 +123,7 @@ final class FileChangeTracker : IFileChangeTracker
                 if (newMetadataHash == oldState.metadataHash)
                 {
                     // Metadata unchanged - assume content unchanged
-                    return Result!(ChangeResult, BuildError).ok(
+                    return BuildResult!ChangeResult.ok(
                         ChangeResult(false, oldState.contentHash, ChangeKind.Unchanged)
                     );
                 }
@@ -139,7 +139,7 @@ final class FileChangeTracker : IFileChangeTracker
                     states[path].metadataHash = newMetadataHash;
                     states[path].lastModified = DirEntry(path).timeLastModified;
                     
-                    return Result!(ChangeResult, BuildError).ok(
+                    return BuildResult!ChangeResult.ok(
                         ChangeResult(false, newContentHash, ChangeKind.Unchanged)
                     );
                 }
@@ -149,7 +149,7 @@ final class FileChangeTracker : IFileChangeTracker
                 states[path] = newState;
                 changesDetected++;
                 
-                return Result!(ChangeResult, BuildError).ok(
+                return BuildResult!ChangeResult.ok(
                     ChangeResult(true, newContentHash, ChangeKind.Modified)
                 );
             }
@@ -160,13 +160,13 @@ final class FileChangeTracker : IFileChangeTracker
                     "Failed to check file change: " ~ e.msg,
                     ErrorCode.FileReadFailed
                 );
-                return Result!(ChangeResult, BuildError).err(error);
+                return BuildResult!ChangeResult.err(error);
             }
         }
     }
     
     /// Check multiple files for changes (batch operation)
-    Result!(ChangeResult[string], BuildError) checkChanges(string[] paths) @system
+    BuildResult!(ChangeResult[string]) checkChanges(string[] paths) @system
     {
         ChangeResult[string] results;
         
@@ -174,16 +174,16 @@ final class FileChangeTracker : IFileChangeTracker
         {
             auto result = checkChange(path);
             if (result.isErr)
-                return Result!(ChangeResult[string], BuildError).err(result.unwrapErr());
+                return BuildResult!(ChangeResult[string]).err(result.unwrapErr());
             
             results[path] = result.unwrap();
         }
         
-        return Result!(ChangeResult[string], BuildError).ok(results);
+        return BuildResult!(ChangeResult[string]).ok(results);
     }
     
     /// Get current state for a file
-    Result!(FileState*, BuildError) getState(string path) @system
+    BuildResult!(FileState*) getState(string path) @system
     {
         synchronized (trackerMutex)
         {
@@ -195,15 +195,15 @@ final class FileChangeTracker : IFileChangeTracker
                     "File not tracked",
                     ErrorCode.FileNotFound
                 );
-                return Result!(FileState*, BuildError).err(error);
+                return BuildResult!(FileState*).err(error);
             }
             
-            return Result!(FileState*, BuildError).ok(state);
+            return BuildResult!(FileState*).ok(state);
         }
     }
     
     /// Update state for a file (after analysis)
-    Result!BuildError updateState(string path, string contentHash) @system
+    VoidBuildResult updateState(string path, string contentHash) @system
     {
         synchronized (trackerMutex)
         {
@@ -215,7 +215,7 @@ final class FileChangeTracker : IFileChangeTracker
                     "File not tracked",
                     ErrorCode.FileNotFound
                 );
-                return Result!BuildError.err(error);
+                return VoidBuildResult.err(error);
             }
             
             state.contentHash = contentHash;

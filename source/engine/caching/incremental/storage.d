@@ -28,11 +28,11 @@ final class DependencyStorage
     /// - Zero-copy deserialization
     /// - Automatic version checking
     /// - Schema evolution support
-    Result!(FileDependency[], BuildError) load() @system
+    BuildResult!(FileDependency[]) load() @system
     {
         if (!exists(storageFile))
         {
-            return Result!(FileDependency[], BuildError).ok([]);
+            return BuildResult!(FileDependency[]).ok([]);
         }
         
         try
@@ -45,7 +45,7 @@ final class DependencyStorage
             
             if (result.isErr)
             {
-                return Result!(FileDependency[], BuildError).err(
+                return BuildResult!(FileDependency[]).err(
                     new GenericError("Failed to deserialize dependency cache: " ~ 
                                    result.unwrapErr(), ErrorCode.InvalidJson)
                 );
@@ -62,11 +62,11 @@ final class DependencyStorage
                 deps ~= fromSerializable!FileDependency(serialDep);
             }
             
-            return Result!(FileDependency[], BuildError).ok(deps);
+            return BuildResult!(FileDependency[]).ok(deps);
         }
         catch (Exception e)
         {
-            return Result!(FileDependency[], BuildError).err(
+            return BuildResult!(FileDependency[]).err(
                 new GenericError("Failed to load dependency cache: " ~ e.msg,
                              ErrorCode.FileReadFailed)
             );
@@ -79,7 +79,7 @@ final class DependencyStorage
     /// - SIMD-accelerated serialization
     /// - Compact varint encoding
     /// - Atomic write with temporary file
-    Result!BuildError save(FileDependency[] deps) @system
+    VoidBuildResult save(FileDependency[] deps) @system
     {
         try
         {
@@ -118,11 +118,11 @@ final class DependencyStorage
                 remove(storageFile);
             rename(tempFile, storageFile);
             
-            return Result!BuildError.ok();
+            return VoidBuildResult.ok();
         }
         catch (Exception e)
         {
-            return Result!BuildError.err(
+            return VoidBuildResult.err(
                 new GenericError("Failed to save dependency cache: " ~ e.msg,
                              ErrorCode.FileReadFailed)
             );

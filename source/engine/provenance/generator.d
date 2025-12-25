@@ -119,7 +119,7 @@ struct ProvenanceGenerator
     }
     
     /// Finalize and generate provenance attestation
-    Result!(BuildProvenance, BuildError) finalize() @system
+    BuildResult!BuildProvenance finalize() @system
     {
         immutable buildEnd = Clock.currTime();
         
@@ -299,7 +299,7 @@ final class ProvenanceCollector
     }
     
     /// Finalize and return provenance
-    Result!(BuildProvenance, BuildError) complete() @system
+    BuildResult!BuildProvenance complete() @system
     {
         synchronized (mutex)
         {

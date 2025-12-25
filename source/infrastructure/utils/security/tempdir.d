@@ -43,7 +43,7 @@ struct AtomicTempDir
     /// - All retries exhausted: returns error (safe failure)
     /// - Permission denied: caught and retried with new name
     /// - Race condition: mitigated by atomic mkdir() and retries
-    static Result!(AtomicTempDir, BuildError) create(string prefix = "builder-tmp") @system
+    static BuildResult!AtomicTempDir create(string prefix = "builder-tmp") @system
     {
         AtomicTempDir tmp;
         
@@ -102,7 +102,7 @@ struct AtomicTempDir
     /// What could go wrong:
     /// - baseDir creation fails: returns error (safe failure)
     /// - All retries exhausted: returns error with context
-    static Result!(AtomicTempDir, BuildError) in_(string baseDir, string prefix = "builder-tmp") @system
+    static BuildResult!AtomicTempDir in_(string baseDir, string prefix = "builder-tmp") @system
     {
         AtomicTempDir tmp;
         

@@ -45,7 +45,7 @@ final class IncrementalAnalyzer : IIncrementalAnalyzer
     
     /// Analyze target with incremental optimization
     /// Returns: Result with TargetAnalysis
-    Result!(TargetAnalysis, BuildError) analyzeTarget(ref Target target) @system
+    BuildResult!TargetAnalysis analyzeTarget(ref Target target) @system
     {
         auto sw = StopWatch(AutoStart.yes);
         
@@ -69,7 +69,7 @@ final class IncrementalAnalyzer : IIncrementalAnalyzer
             error.addContext(ErrorContext("initializing incremental analysis", "change tracking initialization failed"));
             error.addSuggestion(ErrorSuggestion("Full rebuild will be performed"));
             error.addSuggestion(ErrorSuggestion.fileCheck("Check file system permissions for change tracking"));
-            return Result!(TargetAnalysis, BuildError).err(error);
+            return BuildResult!TargetAnalysis.err(error);
         }
         
         auto changes = changesResult.unwrap();
@@ -151,7 +151,7 @@ final class IncrementalAnalyzer : IIncrementalAnalyzer
     }
     
     /// Initialize tracking for all sources in workspace
-    Result!BuildError initialize(WorkspaceConfig config) @system
+    VoidBuildResult initialize(WorkspaceConfig config) @system
     {
         Logger.info("Initializing incremental analysis tracking...");
         

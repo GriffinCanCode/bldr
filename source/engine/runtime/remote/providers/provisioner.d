@@ -33,7 +33,7 @@ final class WorkerProvisioner
     /// 
     /// Responsibility: Coordinate with cloud provider to launch worker instance
     /// Returns: Worker ID of newly provisioned worker
-    Result!(WorkerId, BuildError) provisionWorker() @trusted
+    BuildResult!WorkerId provisionWorker() @trusted
     {
         Logger.debugLog("Provisioning new worker via provider");
         
@@ -64,7 +64,7 @@ final class WorkerProvisioner
     /// 
     /// Responsibility: Efficiently provision multiple workers
     /// Returns: Array of successfully provisioned worker IDs
-    Result!(WorkerId[], BuildError) provisionBatch(size_t count) @trusted
+    BuildResult!(WorkerId[]) provisionBatch(size_t count) @trusted
     {
         WorkerId[] workers;
         workers.reserve(count);
@@ -98,7 +98,7 @@ final class WorkerProvisioner
     /// Deprovision a worker
     /// 
     /// Responsibility: Gracefully terminate worker instance
-    Result!BuildError deprovisionWorker(WorkerId workerId) @trusted
+    VoidBuildResult deprovisionWorker(WorkerId workerId) @trusted
     {
         Logger.info("Deprovisioning worker: " ~ workerId.toString());
         
@@ -121,7 +121,7 @@ final class WorkerProvisioner
     /// Deprovision multiple workers in batch
     /// 
     /// Responsibility: Efficiently deprovision multiple workers
-    Result!BuildError deprovisionBatch(WorkerId[] workerIds) @trusted
+    VoidBuildResult deprovisionBatch(WorkerId[] workerIds) @trusted
     {
         size_t successCount = 0;
         
@@ -138,7 +138,7 @@ final class WorkerProvisioner
                 "Failed to deprovision any workers in batch",
                 ErrorCode.InternalError
             );
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         
         return Ok!BuildError();

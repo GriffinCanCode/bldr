@@ -40,7 +40,7 @@ final class RemoteServiceHealthMonitor
     }
     
     /// Start health monitoring
-    Result!BuildError start() @trusted
+    VoidBuildResult start() @trusted
     {
         synchronized (mutex)
         {
@@ -50,7 +50,7 @@ final class RemoteServiceHealthMonitor
                     "Health monitor already running",
                     ErrorCode.InitializationFailed
                 );
-                return Result!BuildError.err(error);
+                return VoidBuildResult.err(error);
             }
             
             atomicStore(running, true);

@@ -44,7 +44,7 @@ final class WorkerRecovery
     }
     
     /// Execute action with retry logic (wraps retry orchestrator with distributed failure handling)
-    Result!(ActionResult, BuildError) executeWithRetry(ActionRequest request, Result!(ActionResult, BuildError) delegate() @system execute) @system
+    BuildResult!ActionResult executeWithRetry(ActionRequest request, BuildResult!ActionResult delegate() @system execute) @system
     {
         auto result = retryOrchestrator.withRetry!ActionResult("action-" ~ request.id.toString(), execute, createPolicy(request.priority));
         if (result.isOk) atomicOp!"+="(successfulRetries, 1);

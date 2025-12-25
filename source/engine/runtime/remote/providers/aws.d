@@ -28,7 +28,7 @@ final class AwsEc2Provider : CloudProvider
         this.secretKey = secretKey;
     }
     
-    Result!(WorkerId, BuildError) provisionWorker(
+    BuildResult!WorkerId provisionWorker(
         string instanceType,
         string imageId,
         string[string] tags
@@ -135,7 +135,7 @@ final class AwsEc2Provider : CloudProvider
         return Ok!(WorkerId, BuildError)(WorkerId(id));
     }
     
-    Result!BuildError terminateWorker(WorkerId workerId) @trusted
+    VoidBuildResult terminateWorker(WorkerId workerId) @trusted
     {
         // Lookup actual instance ID
         auto instanceIdPtr = workerId in instanceIdMap;
@@ -145,7 +145,7 @@ final class AwsEc2Provider : CloudProvider
                 "Worker ID not found in instance map",
                 ErrorCode.WorkerFailed
             );
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         
         string instanceId = *instanceIdPtr;
@@ -173,7 +173,7 @@ final class AwsEc2Provider : CloudProvider
                 format("Failed to terminate EC2 instance %s: %s", instanceId, result.output),
                 ErrorCode.NetworkError
             );
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
         
         Logger.info("Terminated EC2 instance: " ~ instanceId);
@@ -181,7 +181,7 @@ final class AwsEc2Provider : CloudProvider
         return Ok!BuildError();
     }
     
-    Result!(WorkerStatus, BuildError) getWorkerStatus(WorkerId workerId) @trusted
+    BuildResult!WorkerStatus getWorkerStatus(WorkerId workerId) @trusted
     {
         // Lookup actual instance ID
         auto instanceIdPtr = workerId in instanceIdMap;

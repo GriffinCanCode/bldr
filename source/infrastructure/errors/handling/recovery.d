@@ -203,7 +203,7 @@ auto withRecovery(T)(T delegate() fn, RecoveryManager manager = null)
     {
         try
         {
-            return Result!(T, BuildError).ok(fn());
+            return BuildResult!T.ok(fn());
         }
         catch (Exception e)
         {
@@ -216,11 +216,11 @@ auto withRecovery(T)(T delegate() fn, RecoveryManager manager = null)
                 continue;
             }
             
-            return Result!(T, BuildError).err(error);
+            return BuildResult!T.err(error);
         }
     }
     
-    return Result!(T, BuildError).err(new InternalError("Max recovery attempts exceeded"));
+    return BuildResult!T.err(new InternalError("Max recovery attempts exceeded"));
 }
 
 unittest

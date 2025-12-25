@@ -43,14 +43,14 @@ final class CppDependencyAnalyzer : BaseDependencyAnalyzer
     
     /// Analyze dependencies for a C++ source file
     /// Returns resolved absolute paths of all header dependencies
-    override Result!(string[], BuildError) analyzeDependencies(
+    override BuildResult!(string[]) analyzeDependencies(
         string sourceFile,
         string[] additionalIncludePaths = []
     ) @system
     {
         if (!exists(sourceFile) || !isFile(sourceFile))
         {
-            return Result!(string[], BuildError).err(
+            return BuildResult!(string[]).err(
                 new GenericError("Source file not found: " ~ sourceFile,
                              ErrorCode.FileNotFound)
             );
@@ -92,11 +92,11 @@ final class CppDependencyAnalyzer : BaseDependencyAnalyzer
                 }
             }
             
-            return Result!(string[], BuildError).ok(resolvedDeps);
+            return BuildResult!(string[]).ok(resolvedDeps);
         }
         catch (Exception e)
         {
-            return Result!(string[], BuildError).err(
+            return BuildResult!(string[]).err(
                 new GenericError("Failed to analyze dependencies for " ~ 
                              sourceFile ~ ": " ~ e.msg,
                              ErrorCode.AnalysisFailed)

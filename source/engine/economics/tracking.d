@@ -48,7 +48,7 @@ final class CostTracker
     }
     
     /// Save history to disk
-    Result!BuildError save() @trusted
+    VoidBuildResult save() @trusted
     {
         try
         {
@@ -61,12 +61,12 @@ final class CostTracker
         catch (Exception e)
         {
             BuildError error = new EconomicsError("Failed to save history: " ~ e.msg);
-            return Result!BuildError.err(error);
+            return VoidBuildResult.err(error);
         }
     }
     
     /// Load history from disk
-    Result!BuildError load() @trusted
+    VoidBuildResult load() @trusted
     {
         try
         {

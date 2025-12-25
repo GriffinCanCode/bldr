@@ -43,14 +43,14 @@ final class DDependencyAnalyzer : BaseDependencyAnalyzer
     }
     
     /// Analyze D module dependencies
-    override Result!(string[], BuildError) analyzeDependencies(
+    override BuildResult!(string[]) analyzeDependencies(
         string sourceFile,
         string[] additionalImportPaths = []
     ) @system
     {
         if (!exists(sourceFile) || !isFile(sourceFile))
         {
-            return Result!(string[], BuildError).err(
+            return BuildResult!(string[]).err(
                 new GenericError("Source file not found: " ~ sourceFile,
                              ErrorCode.FileNotFound)
             );
@@ -90,11 +90,11 @@ final class DDependencyAnalyzer : BaseDependencyAnalyzer
                 }
             }
             
-            return Result!(string[], BuildError).ok(resolvedDeps);
+            return BuildResult!(string[]).ok(resolvedDeps);
         }
         catch (Exception e)
         {
-            return Result!(string[], BuildError).err(
+            return BuildResult!(string[]).err(
                 new GenericError("Failed to analyze D dependencies for " ~ 
                              sourceFile ~ ": " ~ e.msg,
                              ErrorCode.AnalysisFailed)

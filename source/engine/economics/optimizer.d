@@ -46,7 +46,7 @@ final class CostOptimizer
     }
     
     /// Optimize build plan for entire graph
-    Result!(BuildPlan, BuildError) optimize(BuildGraph graph, OptimizationConstraints constraints) @trusted
+    BuildResult!BuildPlan optimize(BuildGraph graph, OptimizationConstraints constraints) @trusted
     {
         Logger.info("Computing optimal build plan...");
         
@@ -103,7 +103,7 @@ final class CostOptimizer
     }
     
     /// Optimize single target (for incremental builds)
-    Result!(BuildPlan, BuildError) optimizeTarget(BuildNode target, OptimizationConstraints constraints) @trusted
+    BuildResult!BuildPlan optimizeTarget(BuildNode target, OptimizationConstraints constraints) @trusted
     {
         auto estimateResult = estimator.estimateNode(target);
         if (estimateResult.isErr)

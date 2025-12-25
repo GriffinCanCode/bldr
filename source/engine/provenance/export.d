@@ -32,13 +32,13 @@ import infrastructure.errors;
 struct ProvenanceExporter
 {
     /// Export provenance to SLSA JSON format
-    static Result!(string, BuildError) toSlsaJson(const ref BuildProvenance prov) @system
+    static BuildResult!string toSlsaJson(const ref BuildProvenance prov) @system
     {
         return Ok!(string, BuildError)(serializeStatement(prov.statement));
     }
     
     /// Export signed provenance as DSSE envelope
-    static Result!(string, BuildError) toSignedEnvelope(
+    static BuildResult!string toSignedEnvelope(
         const ref BuildProvenance prov,
         ProvenanceSigner signer
     ) @system
@@ -89,7 +89,7 @@ struct ProvenanceExporter
     }
     
     /// Write provenance to file
-    static Result!BuildError writeToFile(
+    static VoidBuildResult writeToFile(
         const ref BuildProvenance prov,
         string outputPath,
         bool sign = true,
@@ -108,14 +108,14 @@ struct ProvenanceExporter
             auto signer = ProvenanceSigner.fromWorkspace(workspace);
             auto result = toSignedEnvelope(prov, signer);
             if (result.isErr)
-                return Result!BuildError.err(result.unwrapErr());
+                return VoidBuildResult.err(result.unwrapErr());
             content = result.unwrap();
         }
         else
         {
             auto result = toSlsaJson(prov);
             if (result.isErr)
-                return Result!BuildError.err(result.unwrapErr());
+                return VoidBuildResult.err(result.unwrapErr());
             content = result.unwrap();
         }
         
@@ -126,7 +126,7 @@ struct ProvenanceExporter
         }
         catch (Exception e)
         {
-            return Result!BuildError.err(
+            return VoidBuildResult.err(
                 ioError(outputPath, "Failed to write provenance: " ~ e.msg));
         }
     }
@@ -151,7 +151,7 @@ struct ProvenanceVerifier
     }
     
     /// Verify provenance from signed envelope
-    Result!(ProvenanceVerification, BuildError) verify(const ref ProvenanceEnvelope envelope) @system
+    BuildResult!ProvenanceVerification verify(const ref ProvenanceEnvelope envelope) @system
     {
         ProvenanceVerification result;
         result.violations = [];
@@ -195,7 +195,7 @@ struct ProvenanceVerifier
     }
     
     /// Verify provenance file
-    Result!(ProvenanceVerification, BuildError) verifyFile(string path) @system
+    BuildResult!ProvenanceVerification verifyFile(string path) @system
     {
         if (!exists(path))
             return Err!(ProvenanceVerification, BuildError)(
@@ -219,7 +219,7 @@ struct ProvenanceVerifier
     }
     
     /// Verify outputs match provenance subjects
-    Result!(bool, BuildError) verifyOutputs(
+    BuildResult!bool verifyOutputs(
         const ref BuildProvenance prov,
         scope const(string)[] outputPaths
     ) @system
@@ -255,7 +255,7 @@ struct ProvenanceVerifier
 }
 
 /// Parse DSSE envelope from JSON
-private Result!(ProvenanceEnvelope, BuildError) parseEnvelope(string json) @system
+private BuildResult!ProvenanceEnvelope parseEnvelope(string json) @system
 {
     import std.string : strip;
     

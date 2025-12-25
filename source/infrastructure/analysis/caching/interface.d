@@ -9,19 +9,19 @@ interface IAnalysisCache
 {
     /// Get cached analysis for a file by content hash
     /// Returns: Ok with FileAnalysis* (null on miss), Err on error
-    Result!(FileAnalysis*, BuildError) get(string contentHash) @system;
+    BuildResult!(FileAnalysis*) get(string contentHash) @system;
     
     /// Store file analysis indexed by content hash
-    Result!BuildError put(string contentHash, const ref FileAnalysis analysis) @system;
+    VoidBuildResult put(string contentHash, const ref FileAnalysis analysis) @system;
     
     /// Check if analysis exists for content hash
     bool has(string contentHash) @system;
     
     /// Get batch of analyses (optimized for bulk operations)
-    Result!(FileAnalysis*[string], BuildError) getBatch(string[] contentHashes) @system;
+    BuildResult!(FileAnalysis*[string]) getBatch(string[] contentHashes) @system;
     
     /// Store batch of analyses (optimized for bulk operations)
-    Result!BuildError putBatch(FileAnalysis[string] analyses) @system;
+    VoidBuildResult putBatch(FileAnalysis[string] analyses) @system;
     
     /// Clear cache
     void clear() @system;

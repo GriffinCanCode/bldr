@@ -60,7 +60,7 @@ struct LanguageSpec
     Dependencies deps;
     
     /// Load spec from JSON file
-    static Result!(LanguageSpec, BuildError) fromJSON(string jsonPath) @system
+    static BuildResult!LanguageSpec fromJSON(string jsonPath) @system
     {
         try
         {
@@ -188,7 +188,7 @@ final class SpecRegistry
     }
     
     /// Discover and load all spec files from directory
-    Result!(size_t, BuildError) loadAll() @system
+    BuildResult!size_t loadAll() @system
     {
         if (!exists(specsDir) || !isDir(specsDir))
             return Ok!(size_t, BuildError)(0);

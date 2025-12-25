@@ -117,7 +117,7 @@ migration/
 - Enables composability and testing
 
 ### 3. Result-Based Error Handling
-- All operations return `Result!(T, BuildError)`
+- All operations return `BuildResult!T`
 - No exceptions thrown in normal flow
 - Rich error context and suggestions
 
@@ -255,11 +255,11 @@ final class MySystemMigrator : BaseMigrator
         return ["Limitation 1"];
     }
     
-    override Result!(MigrationResult, BuildError) migrate(string inputPath) @system {
+    override BuildResult!MigrationResult migrate(string inputPath) @system {
         // Parse input file
         auto contentResult = readInputFile(inputPath);
         if (contentResult.isErr())
-            return Result!(MigrationResult, BuildError).err(contentResult.unwrapErr());
+            return BuildResult!MigrationResult.err(contentResult.unwrapErr());
         
         string content = contentResult.unwrap();
         

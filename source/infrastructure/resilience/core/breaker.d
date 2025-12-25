@@ -178,8 +178,8 @@ final class CircuitBreaker
     }
     
     /// Execute operation with circuit breaker protection
-    Result!(T, BuildError) execute(T)(
-        Result!(T, BuildError) delegate() @trusted operation
+    BuildResult!T execute(T)(
+        BuildResult!T delegate() @trusted operation
     ) @trusted
     {
         // Check if circuit allows request
@@ -199,7 +199,7 @@ final class CircuitBreaker
     }
     
     /// Check if request is allowed
-    private Result!BuildError allowRequest() @trusted
+    private VoidBuildResult allowRequest() @trusted
     {
         immutable currentState = atomicLoad(state);
         
@@ -223,7 +223,7 @@ final class CircuitBreaker
                     "Circuit breaker open for endpoint: " ~ endpoint,
                     ErrorCode.NetworkError
                 );
-                return Result!BuildError.err(error);
+                return VoidBuildResult.err(error);
             
             case BreakerState.HalfOpen:
                 synchronized (mutex)
@@ -234,7 +234,7 @@ final class CircuitBreaker
                             "Circuit breaker half-open, max test requests reached: " ~ endpoint,
                             ErrorCode.NetworkError
                         );
-                        return Result!BuildError.err(error);
+                        return VoidBuildResult.err(error);
                     }
                     halfOpenRequests++;
                 }
@@ -243,7 +243,7 @@ final class CircuitBreaker
     }
     
     /// Record request result
-    private void recordResult(T)(Result!(T, BuildError) result, Duration duration) @trusted
+    private void recordResult(T)(BuildResult!T result, Duration duration) @trusted
     {
         immutable currentState = atomicLoad(state);
         RequestResult outcome;

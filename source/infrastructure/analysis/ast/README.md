@@ -47,14 +47,14 @@ class MyLanguageParser : BaseASTParser
         super("MyLanguage", [".mylang"]);
     }
     
-    override Result!(FileAST, BuildError) parseFile(string filePath) @system
+    override BuildResult!FileAST parseFile(string filePath) @system
     {
         // Read and parse file
         auto content = readText(filePath);
         return parseContent(content, filePath);
     }
     
-    override Result!(FileAST, BuildError) parseContent(string content, string filePath) @system
+    override BuildResult!FileAST parseContent(string content, string filePath) @system
     {
         FileAST ast;
         ast.filePath = filePath;
@@ -63,7 +63,7 @@ class MyLanguageParser : BaseASTParser
         // Extract symbols from content
         ast.symbols = extractSymbols(content);
         
-        return Result!(FileAST, BuildError).ok(ast);
+        return BuildResult!FileAST.ok(ast);
     }
     
     private ASTSymbol[] extractSymbols(string content)

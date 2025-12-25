@@ -31,7 +31,7 @@ struct ArtifactMetadata
     }
     
     /// Deserialize from binary format using high-performance Codec
-    static Result!(ArtifactMetadata, BuildError) deserialize(const(ubyte)[] data) @system
+    static BuildResult!ArtifactMetadata deserialize(const(ubyte)[] data) @system
     {
         if (data.length < 8)
         {

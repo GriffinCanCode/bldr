@@ -158,10 +158,14 @@ struct NonDeterminismDetector
         
         immutable compiler = command[0];
         
-        if (compiler.canFind("gcc") || compiler.canFind("g++"))
-            return CompilerType.GCC;
+        // Check clang BEFORE gcc/g++ since "clang++" contains "g++" as substring
         if (compiler.canFind("clang"))
             return CompilerType.Clang;
+        // Check gdc before gcc since they're different compilers
+        if (compiler.canFind("gdc"))
+            return CompilerType.GDC;
+        if (compiler.canFind("gcc") || compiler.canFind("g++"))
+            return CompilerType.GCC;
         if (compiler.canFind("rustc"))
             return CompilerType.Rustc;
         if (compiler.canFind("go"))
@@ -170,8 +174,6 @@ struct NonDeterminismDetector
             return CompilerType.DMD;
         if (compiler.canFind("ldc"))
             return CompilerType.LDC;
-        if (compiler.canFind("gdc"))
-            return CompilerType.GDC;
         if (compiler.canFind("javac"))
             return CompilerType.Javac;
         if (compiler.canFind("scalac"))
@@ -183,14 +185,18 @@ struct NonDeterminismDetector
     /// Check for timestamp patterns in output
     static bool containsTimestamp(string text) @safe
     {
-        // Pattern: YYYY-MM-DD or HH:MM:SS
+        // Pattern: YYYY-MM-DD, HH:MM:SS, Unix timestamp, or month format
         try
         {
             auto datePattern = regex(r"\d{4}-\d{2}-\d{2}");
             auto timePattern = regex(r"\d{2}:\d{2}:\d{2}");
+            auto unixPattern = regex(r"[Tt]imestamp[:\s]+\d{9,10}");
+            auto monthPattern = regex(r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+\d{4}");
             
             return !matchFirst(text, datePattern).empty || 
-                   !matchFirst(text, timePattern).empty;
+                   !matchFirst(text, timePattern).empty ||
+                   !matchFirst(text, unixPattern).empty ||
+                   !matchFirst(text, monthPattern).empty;
         }
         catch (Exception)
         {

@@ -309,6 +309,19 @@ struct Result(E) if (is(E))
 /// Void result type alias (for operations that don't return a value)
 alias VoidResult(E) = Result!E;
 
+// ============================================================================
+// BuildError-specific Result Aliases
+// ============================================================================
+
+/// Import BuildError for type aliases
+import infrastructure.errors.types.types : BuildError;
+
+/// Result with a value and BuildError - the most common pattern in the codebase
+alias BuildResult(T) = Result!(T, BuildError);
+
+/// Void result with BuildError - for operations that don't return a value
+alias VoidBuildResult = Result!BuildError;
+
 /// Create a successful void result
 Result!E success(E)() @system { return Result!E.ok(); }
 

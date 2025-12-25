@@ -189,15 +189,15 @@ final class ASTDependencyCache
     }
     
     /// Get AST for a file
-    Result!(FileAST*, BuildError) getAST(string filePath) @system
+    BuildResult!(FileAST*) getAST(string filePath) @system
     {
         synchronized (mutex)
         {
             auto astPtr = buildNormalizedPath(filePath) in astCache;
             return astPtr is null
-                ? Result!(FileAST*, BuildError).err(
+                ? BuildResult!(FileAST*).err(
                     new GenericError("No AST cached for: " ~ filePath, ErrorCode.FileNotFound))
-                : Result!(FileAST*, BuildError).ok(astPtr);
+                : BuildResult!(FileAST*).ok(astPtr);
         }
     }
     
