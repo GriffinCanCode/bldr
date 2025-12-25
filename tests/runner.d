@@ -65,11 +65,11 @@ class TestRunner
     private bool runModuleUnitTests()
     {
         // D's unittest blocks run automatically when compiled with -unittest
-        // This is a placeholder for custom test discovery if needed
+        // The druntime handles unittest execution before main() is called
         
         writeln("\x1b[36m[INFO]\x1b[0m Running built-in unittest blocks...\n");
         
-        // The actual unittests will run automatically
+        // The actual unittests run automatically via druntime
         // We can extend this with custom test discovery later
         
         return true;

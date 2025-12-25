@@ -109,6 +109,16 @@ language_handler_integration:
       continue;
     }
 
+usage_examples:
+  - description: "Enable action cache in Builderspace"
+    code: |
+      options {
+          action_cache: {
+              enabled: true;
+              max_entries: 50000;
+          };
+      }
+
 performance_characteristics:
   space_per_action: "~512 bytes"
   default_max_entries: "50,000 actions (~25 MB)"

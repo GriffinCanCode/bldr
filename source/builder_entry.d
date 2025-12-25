@@ -101,7 +101,7 @@ int runBuilder(string[] args)
     
     if (showVersion)
     {
-        writeln("bldr version 2.0.0");
+        writeln("bldr version 2.0.3");
         writeln("High-performance build system for mixed-language monorepos");
         return 0;
     }
@@ -237,7 +237,7 @@ int runBuilder(string[] args)
                 ExplainCommand.execute(args[1 .. $]);
                 break;
             case "version":
-                writeln("bldr version 2.0.0");
+                writeln("bldr version 2.0.3");
                 writeln("High-performance build system for mixed-language monorepos");
                 break;
             default:

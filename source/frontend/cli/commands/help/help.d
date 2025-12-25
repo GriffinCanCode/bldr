@@ -99,6 +99,7 @@ struct HelpCommand
         // Information
         printSectionHeader("INFORMATION");
         printCommand("help", "[command]", "Show detailed help for a command");
+        printCommand("explain", "<topic>", "Browse documentation (try 'explain directory')");
         terminal.writeln();
         
         // Global options

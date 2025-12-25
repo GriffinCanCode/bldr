@@ -2,7 +2,7 @@
   "name": "builder-lang",
   "displayName": "Builder Language Support",
   "description": "Complete language support for Builder configuration files with LSP",
-  "version": "2.0.1",
+  "version": "2.0.3",
   "publisher": "builder",
   "engines": {
     "vscode": "^1.75.0"

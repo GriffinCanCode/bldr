@@ -41,6 +41,15 @@ key_points:
   - "Foundation for deterministic builds"
   - "Required for distributed execution"
 
+usage_examples:
+  - description: "Enable hermetic builds"
+    code: |
+      target("myapp") {
+          type: executable;
+          hermetic: true;
+          sources: ["main.cpp"];
+      }
+
 hermetic_vs_deterministic:
   hermetic: "Same inputs, isolated environment"
   deterministic: "Same inputs → bit-for-bit same outputs"
