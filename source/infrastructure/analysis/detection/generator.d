@@ -128,6 +128,7 @@ class EnhancedTemplateGenerator
             case TargetLanguage.Ruby:
             case TargetLanguage.Perl:
             case TargetLanguage.Elixir:
+            case TargetLanguage.Gleam:
             case TargetLanguage.Swift:
             case TargetLanguage.CSharp:
             case TargetLanguage.FSharp:

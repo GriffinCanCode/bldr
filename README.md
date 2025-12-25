@@ -22,7 +22,7 @@ Builder advances the state of build systems through novel architectural approach
 | Tier 2 D Macros | ✅ Production | CTFE, template metaprogramming |
 | Content-Defined Chunking | ✅ Production | Rabin fingerprinting |
 | Bayesian Flaky Detection | ✅ Production | Statistical modeling |
-| Language Support | ✅ Production | 27 language handlers |
+| Language Support | ✅ Production | 28 language handlers |
 | Distributed Execution | ⚠️ Beta | Architecture complete, production hardening in progress |
 | Plugin System | ⚠️ Beta | Core works, external SDKs in development |
 | Explain System | ✅ Production | AI-optimized documentation engine |
@@ -207,12 +207,12 @@ Three distinct cache tiers, each optimized for its domain:
 
 ## Language Support
 
-27 languages with unified handler architecture. Centralized registry in `source/languages/registry.d` ensures consistency.
+28 languages with unified handler architecture. Centralized registry in `source/languages/registry.d` ensures consistency.
 
 **Compiled:** C, C++, D, Rust, Go, Zig, Nim, OCaml, Haskell, Swift
 **JVM:** Java, Kotlin, Scala
 **.NET:** C#, F#
-**Scripting:** Python, JavaScript, TypeScript, Ruby, Perl, PHP, Lua, R, Elixir
+**Scripting:** Python, JavaScript, TypeScript, Ruby, Perl, PHP, Lua, R, Elixir, Gleam
 **Web:** JavaScript (esbuild/webpack/rollup), TypeScript (tsc/swc/esbuild), CSS, Elm
 **Data:** Protocol Buffers
 
@@ -495,7 +495,7 @@ target("tests") {
 - **Lines of Code:** ~48,000 (D), ~3,000 (C for SIMD/BLAKE3)
 - **Modules:** 517 documented modules
 - **Test Coverage:** Comprehensive unit and integration tests
-- **Languages Supported:** 27 language handlers
+- **Languages Supported:** 28 language handlers
 - **Architecture Quality:** Result monads throughout, zero `any` types, arena allocators, circuit breakers
 - **Genuine Innovations:** Dynamic build graphs, economic optimization, SIMD serialization, statistical flaky detection, process-based plugins
 
@@ -506,7 +506,7 @@ The codebase follows clean architectural principles with modular separation:
 - `source/runtime/` - Execution engine with service architecture
 - `source/caching/` - Multi-tier caching with distributed support
 - `source/analysis/` - Dependency analysis and incremental tracking
-- `source/languages/` - Language handlers (27 languages)
+- `source/languages/` - Language handlers (28 languages)
 - `source/config/` - DSL parsing, AST, scripting, macros
 - `source/cli/` - Event-driven CLI rendering
 - `source/testframework/` - Advanced test execution

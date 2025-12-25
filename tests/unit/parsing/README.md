@@ -39,7 +39,7 @@ dub test -- --verbose
 
 ### With Tree-sitter Installed
 If tree-sitter is installed on the system, tests will:
-- ✅ Load all 27 language configurations
+- ✅ Load all 28 language configurations
 - ✅ Attempt to load available grammars
 - ✅ Register parsers for languages with grammars
 - ✅ Log which languages have full AST support
@@ -92,7 +92,7 @@ Ensure tree-sitter is installed and dub.json has correct library paths:
 
 ## Test Coverage
 
-- ✅ 27 language configurations
+- ✅ 28 language configurations
 - ✅ JSON format validation
 - ✅ Extension mapping
 - ✅ Symbol type mappings

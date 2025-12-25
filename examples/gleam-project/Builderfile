@@ -1,0 +1,28 @@
+// Builderfile for Gleam project
+// Demonstrates Gleam language support with BEAM target
+
+target("hello_gleam") {
+    type: executable;
+    language: gleam;
+    sources: ["src/*.gleam"];
+    
+    gleam: {
+        "target": "erlang",
+        "format": {
+            "enabled": true
+        },
+        "warningsAsErrors": false
+    };
+}
+
+target("hello_gleam_test") {
+    type: test;
+    language: gleam;
+    sources: ["test/*.gleam"];
+    deps: ["hello_gleam"];
+    
+    gleam: {
+        "target": "erlang"
+    };
+}
+

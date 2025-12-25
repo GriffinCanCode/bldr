@@ -24,6 +24,7 @@ module languages;
 ///   kotlin/      - Kotlin language support (modular - Gradle, Maven, multiplatform, Android, KSP, detekt)
 ///   scala/       - Scala language support (modular)
 ///   elixir/      - Elixir language support (modular - scripts, Mix, Phoenix, Umbrella, Escript, Nerves)
+///   gleam/       - Gleam language support (modular - BEAM/JS targets, Hex packages, formatting)
 ///   lua/         - Lua language support (modular - runtimes, LuaRocks, LuaJIT, formatters, linters, testers)
 ///   nim/         - Nim language support (modular)
 ///   zig/         - Zig language support (modular)
@@ -75,6 +76,7 @@ public import languages.scripting.php;
 public import languages.scripting.r;
 public import languages.compiled.swift;
 public import languages.scripting.elixir;
+public import languages.scripting.gleam;
 public import languages.scripting.lua;
 public import languages.compiled.nim;
 public import languages.compiled.zig;

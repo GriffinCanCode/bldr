@@ -1,0 +1,7 @@
+// Workspace configuration for Gleam project
+
+workspace {
+    name: "gleam-project";
+    version: "1.0.0";
+}
+

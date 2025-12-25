@@ -152,14 +152,14 @@ ASTParserRegistry.instance().registerParser(parser);
 ### Phase 2: Library Integration ✅ COMPLETE
 - [x] Tree-sitter C library linking
 - [x] Grammar loader infrastructure
-- [x] 27 language configs (JSON)
+- [x] 28 language configs (JSON)
 - [x] Dynamic grammar loading
 - [x] Graceful fallback system
 - [x] Comprehensive validation tests
 
 ### Phase 3: Grammar Integration ✅ COMPLETE
 - [x] Dynamic grammar loader (C)
-- [x] D modules for all 27 languages
+- [x] D modules for all 28 languages
 - [x] Automated grammar build system
 - [x] System library integration
 - [x] Hook into `initializeASTParsers()`

@@ -223,7 +223,7 @@ unittest {
     auto duration = sw.peek();
     writeln("  Configuration loading time: ", duration);
     
-    // Should be very fast (< 100ms even for all 27 languages)
+    // Should be very fast (< 100ms even for all 28 languages)
     assert(duration.total!"msecs" < 100, "Configuration loading too slow");
     
     writeln("✅ Performance test passed");

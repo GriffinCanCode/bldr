@@ -97,6 +97,9 @@ final class HandlerRegistry : IHandlerRegistry
             case TargetLanguage.Elixir:
                 import languages.scripting.elixir : ElixirHandler;
                 return new ElixirHandler();
+            case TargetLanguage.Gleam:
+                import languages.scripting.gleam : GleamHandler;
+                return new GleamHandler();
             case TargetLanguage.Nim:
                 import languages.compiled.nim : NimHandler;
                 return new NimHandler();

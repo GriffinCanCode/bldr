@@ -24,7 +24,7 @@ IASTParser (interface)
 BaseASTParser (abstract)
     ↑
     |
-    └── TreeSitterParser (universal, 27+ languages)
+    └── TreeSitterParser (universal, 28+ languages)
         ├── C/C++ via tree-sitter-cpp
         ├── Python via tree-sitter-python  
         ├── Java via tree-sitter-java

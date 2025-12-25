@@ -268,9 +268,9 @@ auto handler = registry.getByName("crystal");
 ## Supported Languages
 
 ### Built-in (D Handlers)
-**26 languages** with full integration:
+**28 languages** with full integration:
 - Compiled: C, C++, D, Rust, Go, Zig, Nim, OCaml, Haskell, Swift
-- Scripting: Python, Ruby, Perl, PHP, Lua, R, Elixir
+- Scripting: Python, Ruby, Perl, PHP, Lua, R, Elixir, Gleam
 - JVM: Java, Kotlin, Scala
 - .NET: C#, F#
 - Web: JavaScript, TypeScript, CSS, Elm
