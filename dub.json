@@ -33,6 +33,7 @@
                 "bin/obj/blake3_neon.o",
                 "bin/obj/simd_ops.o",
                 "bin/obj/cpu_detect.o",
+                "bin/obj/bloom.o",
                 "bin/obj/ts_loader.o",
                 "source/infrastructure/utils/serialization/c/varint.o",
                 "source/infrastructure/utils/serialization/c/memops.o"
@@ -59,6 +60,7 @@
                 "bin/obj/blake3_neon.o",
                 "bin/obj/simd_ops.o",
                 "bin/obj/cpu_detect.o",
+                "bin/obj/bloom.o",
                 "bin/obj/ts_loader.o",
                 "source/infrastructure/utils/serialization/c/varint.o",
                 "source/infrastructure/utils/serialization/c/memops.o"
@@ -88,7 +90,8 @@
                 "tests/bench/*_benchmark.d",
                 "tests/bench/comparative/*",
                 "tests/bench/benchmark_config.example.d",
-                "tests/bench/realworld.d"
+                "tests/bench/realworld.d",
+                "tests/bench/profiler.d"
             ],
             "mainSourceFile": "tests/runner.d",
             "sourceFiles": [
@@ -101,6 +104,7 @@
                 "bin/obj/blake3_neon.o",
                 "bin/obj/simd_ops.o",
                 "bin/obj/cpu_detect.o",
+                "bin/obj/bloom.o",
                 "bin/obj/ts_loader.o",
                 "source/infrastructure/utils/serialization/c/varint.o",
                 "source/infrastructure/utils/serialization/c/memops.o"

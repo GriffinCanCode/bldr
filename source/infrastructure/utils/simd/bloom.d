@@ -46,55 +46,55 @@ module infrastructure.utils.simd.bloom;
 import infrastructure.utils.crypto.blake3 : Blake3;
 import std.traits : isIntegral;
 
-extern(C) @system nothrow @nogc:
+extern(C) @system nothrow @nogc {
+    /// Opaque C filter structure
+    struct bloom_filter_t {
+        ulong* bits;
+        size_t num_bits;
+        size_t num_words;
+        uint num_hashes;
+        size_t num_items;
+        bool owns_memory;
+    }
 
-/// Opaque C filter structure
-struct bloom_filter_t {
-    ulong* bits;
-    size_t num_bits;
-    size_t num_words;
-    uint num_hashes;
-    size_t num_items;
-    bool owns_memory;
+    /// Filter statistics from C layer
+    struct bloom_stats_t {
+        size_t num_bits;
+        size_t num_items;
+        uint num_hashes;
+        double fill_ratio;
+        double false_positive_rate;
+        size_t memory_bytes;
+    }
+
+    /// C API bindings
+    void bloom_optimal_params(size_t expected, double error, size_t* bits, uint* hashes);
+    int bloom_init(bloom_filter_t* filter, size_t num_bits, uint num_hashes);
+    int bloom_init_with_buffer(bloom_filter_t* filter, ulong* buffer, size_t words, uint hashes);
+    void bloom_free(bloom_filter_t* filter);
+    void bloom_reset(bloom_filter_t* filter);
+
+    void bloom_insert_hash(bloom_filter_t* filter, ulong hash);
+    void bloom_insert_hashes(bloom_filter_t* filter, ulong h1, ulong h2);
+    void bloom_insert(bloom_filter_t* filter, const(ubyte)* data, size_t len);
+
+    bool bloom_may_contain_hash(const(bloom_filter_t)* filter, ulong hash);
+    bool bloom_may_contain_hashes(const(bloom_filter_t)* filter, ulong h1, ulong h2);
+    bool bloom_may_contain(const(bloom_filter_t)* filter, const(ubyte)* data, size_t len);
+
+    void bloom_insert_batch(bloom_filter_t* filter, const(ulong)* hashes, size_t count);
+    ulong bloom_may_contain_batch(const(bloom_filter_t)* filter, const(ulong)* hashes, size_t count);
+    size_t bloom_count_matches(const(bloom_filter_t)* filter, const(ulong)* hashes, size_t count);
+
+    bloom_stats_t bloom_get_stats(const(bloom_filter_t)* filter);
+    double bloom_estimate_fpr(const(bloom_filter_t)* filter);
+    size_t bloom_popcount(const(bloom_filter_t)* filter);
+    int bloom_merge(bloom_filter_t* dest, const(bloom_filter_t)* src);
+
+    size_t bloom_serialize_size(const(bloom_filter_t)* filter);
+    int bloom_serialize(const(bloom_filter_t)* filter, ubyte* buffer, size_t size);
+    int bloom_deserialize(bloom_filter_t* filter, const(ubyte)* buffer, size_t size);
 }
-
-/// Filter statistics from C layer
-struct bloom_stats_t {
-    size_t num_bits;
-    size_t num_items;
-    uint num_hashes;
-    double fill_ratio;
-    double false_positive_rate;
-    size_t memory_bytes;
-}
-
-/// C API bindings
-void bloom_optimal_params(size_t expected, double error, size_t* bits, uint* hashes);
-int bloom_init(bloom_filter_t* filter, size_t num_bits, uint num_hashes);
-int bloom_init_with_buffer(bloom_filter_t* filter, ulong* buffer, size_t words, uint hashes);
-void bloom_free(bloom_filter_t* filter);
-void bloom_reset(bloom_filter_t* filter);
-
-void bloom_insert_hash(bloom_filter_t* filter, ulong hash);
-void bloom_insert_hashes(bloom_filter_t* filter, ulong h1, ulong h2);
-void bloom_insert(bloom_filter_t* filter, const(ubyte)* data, size_t len);
-
-bool bloom_may_contain_hash(const(bloom_filter_t)* filter, ulong hash);
-bool bloom_may_contain_hashes(const(bloom_filter_t)* filter, ulong h1, ulong h2);
-bool bloom_may_contain(const(bloom_filter_t)* filter, const(ubyte)* data, size_t len);
-
-void bloom_insert_batch(bloom_filter_t* filter, const(ulong)* hashes, size_t count);
-ulong bloom_may_contain_batch(const(bloom_filter_t)* filter, const(ulong)* hashes, size_t count);
-size_t bloom_count_matches(const(bloom_filter_t)* filter, const(ulong)* hashes, size_t count);
-
-bloom_stats_t bloom_get_stats(const(bloom_filter_t)* filter);
-double bloom_estimate_fpr(const(bloom_filter_t)* filter);
-size_t bloom_popcount(const(bloom_filter_t)* filter);
-int bloom_merge(bloom_filter_t* dest, const(bloom_filter_t)* src);
-
-size_t bloom_serialize_size(const(bloom_filter_t)* filter);
-int bloom_serialize(const(bloom_filter_t)* filter, ubyte* buffer, size_t size);
-int bloom_deserialize(bloom_filter_t* filter, const(ubyte)* buffer, size_t size);
 
 /// D-friendly Bloom filter wrapper
 /// Thread-safe for concurrent reads, not thread-safe for writes

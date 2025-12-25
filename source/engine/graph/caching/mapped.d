@@ -1,9 +1,10 @@
 module engine.graph.caching.mapped;
 
-import std.file : read, write, remove, mkdirRecurse, getSize;
+import std.file : read, write, remove, mkdirRecurse, getSize, rmdirRecurse, tempDir;
 import stdfile = std.file;
 import std.path : buildPath, dirName;
 import std.bitmanip : nativeToLittleEndian, littleEndianToNative;
+import std.exception : collectException;
 import std.conv : to;
 import core.sync.mutex : Mutex;
 
@@ -668,9 +669,7 @@ unittest
         
         // Test persistence
         immutable testDir = buildPath(tempDir(), "mapped_graph_test");
-        scope(exit) {
-            try { rmdirRecurse(testDir); } catch (Exception) {}
-        }
+        scope(exit) collectException(rmdirRecurse(testDir));
         
         auto storage = new MappedGraphStorage(testDir);
         

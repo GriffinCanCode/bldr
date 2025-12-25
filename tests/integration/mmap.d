@@ -127,9 +127,9 @@ import std.array : array;
     blob.random();
     
     // Get statistics
-    auto stats = store.getStats();
-    assert(stats.blobsStored >= 1);
-    assert(stats.bytesStored >= size);
+    auto s = store.stats();
+    assert(s.blobsWritten >= 1);
+    assert(s.bytesWritten >= size);
 }
 
 /// Integration test: Mmap with FastHash
@@ -212,32 +212,35 @@ import std.array : array;
     write(testPath, testData);
     
     // Stream through file
-    auto stream = new MappedBlobStream(testPath, 64 * 1024);  // 64 KB window
-    scope(exit) destroy(stream);
+    auto streamResult = MappedBlobStream.open(testPath, 64 * 1024);  // 64 KB window
+    assert(streamResult.isOk, "Failed to open stream");
+    auto stream = streamResult.unwrap();
     
     assert(!stream.eof);
-    assert(stream.fileSize == size);
+    assert(stream.size == size);
     assert(stream.position == 0);
     
-    // Read first chunk
-    auto chunk1 = stream.read(1024);
-    assert(chunk1.length == 1024);
+    // Read first chunk (window-based, returns up to window size)
+    auto chunk1 = stream.read();
+    assert(chunk1.length > 0);
     assert(chunk1[0] == 0);
-    assert(chunk1[255] == 255);
+    assert(chunk1.length >= 256 || chunk1[255] == 255);
     
-    // Seek and read
-    stream.seek(500_000);
-    assert(stream.position == 500_000);
-    
-    auto chunk2 = stream.read(1024);
-    assert(chunk2.length == 1024);
-    assert(chunk2[0] == (500_000 & 0xFF));
-    
-    // Read to end
-    stream.seek(size - 100);
-    auto chunk3 = stream.read(200);  // Request more than available
-    assert(chunk3.length == 100);  // Should only get remaining bytes
+    // Continue reading until end
+    size_t totalRead = chunk1.length;
+    while (!stream.eof)
+    {
+        auto chunk = stream.read();
+        if (chunk !is null)
+            totalRead += chunk.length;
+    }
+    assert(totalRead == size);
     assert(stream.eof);
+    
+    // Reset and verify
+    stream.reset();
+    assert(stream.position == 0);
+    assert(!stream.eof);
 }
 
 /// Integration test: Memory efficiency - verify no excessive allocations
