@@ -8,6 +8,7 @@ import std.array : array;
 import core.sync.mutex;
 import engine.caching.distributed.remote.protocol;
 import engine.caching.distributed.remote.transport;
+import engine.caching.distributed.remote.delta : DeltaCompressor, DeltaPackage, RsyncDelta;
 import infrastructure.utils.files.hash : FastHash;
 import infrastructure.utils.security.integrity : IntegrityValidator;
 import infrastructure.utils.compression.compress;
@@ -664,6 +665,170 @@ struct ChunkBasedUpload
     ChunkManifest manifest;
     TransferStats stats;
     bool useChunking;  // Whether chunking was actually used
+}
+
+/// Delta transfer result
+struct DeltaUploadResult
+{
+    size_t originalSize;
+    size_t deltaSize;
+    size_t bytesSaved;
+    bool usedDelta;
+    
+    double savingsPercent() const pure @safe nothrow @nogc
+        => originalSize > 0 ? 100.0 * bytesSaved / originalSize : 0.0;
+}
+
+/// Remote cache client with delta compression support
+/// Mixin for delta transfer operations
+mixin template DeltaTransferOps()
+{
+    private DeltaCompressor _deltaCompressor;
+    
+    /// Initialize delta compressor (call after construction if using delta)
+    void initDeltaCompression(string cacheDir) @trusted
+    {
+        _deltaCompressor = new DeltaCompressor(cacheDir);
+    }
+    
+    /// Upload artifact using delta compression against a base version
+    /// Returns delta statistics showing bandwidth savings
+    BuildResult!DeltaUploadResult putWithDelta(
+        string contentHash,
+        const(ubyte)[] data,
+        string baseHash
+    ) @trusted
+    {
+        if (_deltaCompressor is null)
+            return Err!(DeltaUploadResult, BuildError)(
+                Errors.cache("Delta compressor not initialized", ErrorCode.CacheDisabled).build());
+        
+        // Get base data for delta computation
+        auto baseResult = get(baseHash);
+        if (baseResult.isErr)
+        {
+            // No base available, do full upload
+            auto putResult = put(contentHash, data);
+            if (putResult.isErr)
+                return Err!(DeltaUploadResult, BuildError)(putResult.unwrapErr());
+            
+            DeltaUploadResult result;
+            result.originalSize = data.length;
+            result.deltaSize = data.length;
+            result.bytesSaved = 0;
+            result.usedDelta = false;
+            return Ok!(DeltaUploadResult, BuildError)(result);
+        }
+        
+        auto baseData = baseResult.unwrap();
+        
+        // Compute delta
+        auto deltaResult = _deltaCompressor.createDelta(baseData, data);
+        if (deltaResult.isErr)
+        {
+            // Delta failed, do full upload
+            auto putResult = put(contentHash, data);
+            if (putResult.isErr)
+                return Err!(DeltaUploadResult, BuildError)(putResult.unwrapErr());
+            
+            DeltaUploadResult result;
+            result.originalSize = data.length;
+            result.deltaSize = data.length;
+            result.bytesSaved = 0;
+            result.usedDelta = false;
+            return Ok!(DeltaUploadResult, BuildError)(result);
+        }
+        
+        auto deltaPkg = deltaResult.unwrap();
+        
+        // Only use delta if it saves space
+        if (deltaPkg.deltaSize >= data.length)
+        {
+            auto putResult = put(contentHash, data);
+            if (putResult.isErr)
+                return Err!(DeltaUploadResult, BuildError)(putResult.unwrapErr());
+            
+            DeltaUploadResult result;
+            result.originalSize = data.length;
+            result.deltaSize = data.length;
+            result.bytesSaved = 0;
+            result.usedDelta = false;
+            return Ok!(DeltaUploadResult, BuildError)(result);
+        }
+        
+        // Upload delta package
+        immutable deltaKey = "delta:" ~ contentHash ~ ":" ~ baseHash;
+        auto putResult = put(deltaKey, deltaPkg.data);
+        if (putResult.isErr)
+            return Err!(DeltaUploadResult, BuildError)(putResult.unwrapErr());
+        
+        // Store metadata for reconstruction
+        ubyte[] metadata;
+        metadata ~= cast(ubyte)(deltaPkg.compressed ? 1 : 0);
+        metadata ~= (cast(ubyte*)&deltaPkg.originalNewSize)[0 .. size_t.sizeof];
+        
+        auto metaKey = "delta-meta:" ~ contentHash;
+        auto metaResult = put(metaKey, metadata);
+        if (metaResult.isErr)
+            return Err!(DeltaUploadResult, BuildError)(metaResult.unwrapErr());
+        
+        DeltaUploadResult result;
+        result.originalSize = data.length;
+        result.deltaSize = deltaPkg.deltaSize;
+        result.bytesSaved = data.length - deltaPkg.deltaSize;
+        result.usedDelta = true;
+        
+        synchronized (statsMutex)
+        {
+            stats.deltaUploads++;
+            stats.deltaByteSavings += result.bytesSaved;
+        }
+        
+        return Ok!(DeltaUploadResult, BuildError)(result);
+    }
+    
+    /// Get artifact, reconstructing from delta if necessary
+    BuildResult!(ubyte[]) getWithDelta(string contentHash, string baseHash) @trusted
+    {
+        if (_deltaCompressor is null)
+            return get(contentHash);
+        
+        // Try delta reconstruction first
+        immutable deltaKey = "delta:" ~ contentHash ~ ":" ~ baseHash;
+        auto deltaResult = get(deltaKey);
+        
+        if (deltaResult.isErr)
+            return get(contentHash);  // No delta, get full blob
+        
+        // Get base for reconstruction
+        auto baseResult = get(baseHash);
+        if (baseResult.isErr)
+            return get(contentHash);  // Can't get base, try full blob
+        
+        // Reconstruct from delta
+        DeltaPackage pkg;
+        pkg.data = deltaResult.unwrap();
+        
+        // Get metadata
+        auto metaKey = "delta-meta:" ~ contentHash;
+        auto metaResult = get(metaKey);
+        if (metaResult.isOk)
+        {
+            auto meta = metaResult.unwrap();
+            if (meta.length > 0)
+            {
+                pkg.compressed = meta[0] != 0;
+                if (meta.length >= 1 + size_t.sizeof)
+                    pkg.originalNewSize = *(cast(size_t*)(meta.ptr + 1));
+            }
+        }
+        
+        auto reconstructResult = _deltaCompressor.applyDelta(baseResult.unwrap(), pkg);
+        if (reconstructResult.isErr)
+            return get(contentHash);  // Reconstruction failed, try full blob
+        
+        return reconstructResult;
+    }
 }
 
 

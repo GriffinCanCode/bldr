@@ -155,14 +155,16 @@ struct RemoteCacheStats
     size_t cdcChunksReused;     // Chunks reused (delta savings)
     size_t cdcChunksDownloaded; // Chunks downloaded
     
+    // Delta compression statistics (rsync-style)
+    size_t deltaUploads;        // Number of delta uploads
+    size_t deltaByteSavings;    // Bytes saved via delta compression
+    size_t deltaReconstructions; // Successful delta reconstructions
+    
     /// Compute derived statistics
     void compute() pure @safe nothrow
     {
         immutable total = hits + misses;
-        if (total > 0)
-            hitRate = (hits * 100.0) / total;
-        else
-            hitRate = 0.0;
+        hitRate = total > 0 ? (hits * 100.0) / total : 0.0;
     }
     
     /// CDC bandwidth savings percentage
@@ -170,5 +172,12 @@ struct RemoteCacheStats
     {
         immutable total = cdcChunksUploaded + cdcChunksReused;
         return total > 0 ? (cdcChunksReused * 100.0f) / total : 0.0f;
+    }
+    
+    /// Delta compression savings percentage
+    float deltaSavingsPercent() const pure @safe nothrow
+    {
+        immutable total = bytesUploaded + deltaByteSavings;
+        return total > 0 ? (deltaByteSavings * 100.0f) / total : 0.0f;
     }
 }
