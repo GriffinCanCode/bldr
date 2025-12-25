@@ -131,9 +131,7 @@ final class HttpTransport
             immutable sent = socket.send(request);
             if (sent != request.length)
             {
-                auto error = new NetworkError(
-                    "Failed to send complete request",
-                    ErrorCode.NetworkError
+                auto error = Errors.network("Failed to send complete request", ErrorCode.NetworkError
                 );
                 return Err!(ubyte[], BuildError)(error);
             }
@@ -148,26 +146,14 @@ final class HttpTransport
             
             // Parse status code
             if (response.statusCode == 404)
-            {
-                auto error = new CacheError(
-                    "Artifact not found",
-                    ErrorCode.CacheNotFound
-                );
-                return Err!(ubyte[], BuildError)(error);
-            }
+                return Err!(ubyte[], BuildError)(
+                    Errors.cache("Artifact not found", ErrorCode.CacheNotFound).build());
             else if (response.statusCode == 401 || response.statusCode == 403)
-            {
-                auto error = new CacheError(
-                    "Authentication failed",
-                    ErrorCode.CacheUnauthorized
-                );
-                return Err!(ubyte[], BuildError)(error);
-            }
+                return Err!(ubyte[], BuildError)(
+                    Errors.cache("Authentication failed", ErrorCode.CacheUnauthorized).build());
             else if (response.statusCode >= 400)
             {
-                auto error = new NetworkError(
-                    "HTTP error: " ~ response.statusCode.to!string,
-                    ErrorCode.NetworkError
+                auto error = Errors.network("HTTP error: " ~ response.statusCode.to!string, ErrorCode.NetworkError
                 );
                 return Err!(ubyte[], BuildError)(error);
             }
@@ -176,9 +162,7 @@ final class HttpTransport
         }
         catch (Exception e)
         {
-            auto error = new NetworkError(
-                "Request failed: " ~ e.msg,
-                ErrorCode.NetworkError
+            auto error = Errors.network("Request failed: " ~ e.msg, ErrorCode.NetworkError
             );
             return Err!(ubyte[], BuildError)(error);
         }
@@ -316,9 +300,7 @@ final class HttpTransport
             
             if (headerEnd < 0)
             {
-                auto error = new NetworkError(
-                    "Failed to receive HTTP headers",
-                    ErrorCode.NetworkError
+                auto error = Errors.network("Failed to receive HTTP headers", ErrorCode.NetworkError
                 );
                 return Err!(HttpResponse, BuildError)(error);
             }
@@ -330,9 +312,7 @@ final class HttpTransport
             // Parse status line
             if (lines.length == 0)
             {
-                auto error = new NetworkError(
-                    "Invalid HTTP response: no status line",
-                    ErrorCode.NetworkError
+                auto error = Errors.network("Invalid HTTP response: no status line", ErrorCode.NetworkError
                 );
                 return Err!(HttpResponse, BuildError)(error);
             }
@@ -340,9 +320,7 @@ final class HttpTransport
             auto statusParts = lines[0].split(" ");
             if (statusParts.length < 2)
             {
-                auto error = new NetworkError(
-                    "Invalid HTTP status line",
-                    ErrorCode.NetworkError
+                auto error = Errors.network("Invalid HTTP status line", ErrorCode.NetworkError
                 );
                 return Err!(HttpResponse, BuildError)(error);
             }
@@ -353,9 +331,7 @@ final class HttpTransport
             }
             catch (Exception)
             {
-                auto error = new NetworkError(
-                    "Invalid HTTP status code",
-                    ErrorCode.NetworkError
+                auto error = Errors.network("Invalid HTTP status code", ErrorCode.NetworkError
                 );
                 return Err!(HttpResponse, BuildError)(error);
             }
@@ -405,9 +381,7 @@ final class HttpTransport
         }
         catch (Exception e)
         {
-            auto error = new NetworkError(
-                "Failed to receive HTTP response: " ~ e.msg,
-                ErrorCode.NetworkError
+            auto error = Errors.network("Failed to receive HTTP response: " ~ e.msg, ErrorCode.NetworkError
             );
             return Err!(HttpResponse, BuildError)(error);
         }
@@ -447,9 +421,7 @@ final class HttpTransport
         }
         catch (Exception e)
         {
-            auto error = new NetworkError(
-                "Failed to connect to " ~ host ~ ":" ~ port.to!string ~ ": " ~ e.msg,
-                ErrorCode.NetworkError
+            auto error = Errors.network("Failed to connect to " ~ host ~ ":" ~ port.to!string ~ ": " ~ e.msg, ErrorCode.NetworkError
             );
             return Err!(Socket, BuildError)(error);
         }

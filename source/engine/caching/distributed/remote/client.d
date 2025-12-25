@@ -46,13 +46,8 @@ final class RemoteCacheClient
     BuildResult!(ubyte[]) get(string contentHash) @trusted
     {
         if (!config.enabled())
-        {
-            auto error = new CacheError(
-                "Remote cache not configured",
-                ErrorCode.CacheDisabled
-            );
-            return Err!(ubyte[], BuildError)(error);
-        }
+            return Err!(ubyte[], BuildError)(
+                Errors.cache("Remote cache not configured", ErrorCode.CacheDisabled).build());
         
         immutable startTime = Clock.currStdTime();
         
@@ -116,23 +111,13 @@ final class RemoteCacheClient
     BuildResult!bool put(string contentHash, const(ubyte)[] data) @trusted
     {
         if (!config.enabled())
-        {
-            BuildError error = new CacheError(
-                "Remote cache not configured",
-                ErrorCode.CacheDisabled
-            );
-            return Err!(bool, BuildError)(error);
-        }
+            return Err!(bool, BuildError)(
+                Errors.cache("Remote cache not configured", ErrorCode.CacheDisabled).build());
         
         // Check size limit
         if (data.length > config.maxArtifactSize)
-        {
-            BuildError error = new CacheError(
-                "Artifact exceeds maximum size",
-                ErrorCode.CacheTooLarge
-            );
-            return Err!(bool, BuildError)(error);
-        }
+            return Err!(bool, BuildError)(
+                Errors.cache("Artifact exceeds maximum size", ErrorCode.CacheTooLarge).build());
         
         immutable startTime = Clock.currStdTime();
         
@@ -184,13 +169,8 @@ final class RemoteCacheClient
     BuildResult!bool has(string contentHash) @trusted
     {
         if (!config.enabled())
-        {
-            auto error = new CacheError(
-                "Remote cache not configured",
-                ErrorCode.CacheDisabled
-            );
-            return Err!(bool, BuildError)(error);
-        }
+            return Err!(bool, BuildError)(
+                Errors.cache("Remote cache not configured", ErrorCode.CacheDisabled).build());
         
         immutable startTime = Clock.currStdTime();
         
@@ -351,13 +331,8 @@ final class RemoteCacheClient
         
         // Check if file exists
         if (!exists(filePath))
-        {
-            auto error = new GenericError(
-                "File not found: " ~ filePath,
-                ErrorCode.FileNotFound
-            );
-            return Err!(ChunkBasedUpload, BuildError)(error);
-        }
+            return Err!(ChunkBasedUpload, BuildError)(
+                Errors.io(filePath, "File not found: " ~ filePath, ErrorCode.FileNotFound).build());
         
         // Check file size threshold (only use chunking for files > 1MB)
         auto fileSize = getSize(filePath);
@@ -393,26 +368,16 @@ final class RemoteCacheClient
         );
         
         if (uploadResult.isErr)
-        {
-            auto error = new CacheError(
-                "Chunk upload failed: " ~ uploadResult.unwrapErr(),
-                ErrorCode.CacheLoadFailed
-            );
-            return Err!(ChunkBasedUpload, BuildError)(error);
-        }
+            return Err!(ChunkBasedUpload, BuildError)(
+                Errors.cache("Chunk upload failed: " ~ uploadResult.unwrapErr(), ErrorCode.CacheLoadFailed).build());
         
         auto manifest = uploadResult.unwrap();
         
         // Store manifest in cache with special key
         auto manifestResult = putManifest(fileHash, manifest);
         if (manifestResult.isErr)
-        {
-            auto error = new CacheError(
-                "Failed to upload manifest: " ~ manifestResult.unwrapErr().message,
-                ErrorCode.CacheLoadFailed
-            );
-            return Err!(ChunkBasedUpload, BuildError)(error);
-        }
+            return Err!(ChunkBasedUpload, BuildError)(
+                Errors.cache("Failed to upload manifest: " ~ manifestResult.unwrapErr().message, ErrorCode.CacheLoadFailed).build());
         
         synchronized (statsMutex)
         {
@@ -475,13 +440,8 @@ final class RemoteCacheClient
         );
         
         if (downloadResult.isErr)
-        {
-            auto error = new CacheError(
-                "Chunk download failed: " ~ downloadResult.unwrapErr(),
-                ErrorCode.CacheLoadFailed
-            );
-            return Err!(TransferStats, BuildError)(error);
-        }
+            return Err!(TransferStats, BuildError)(
+                Errors.cache("Chunk download failed: " ~ downloadResult.unwrapErr(), ErrorCode.CacheLoadFailed).build());
         
         synchronized (statsMutex)
         {
@@ -518,13 +478,8 @@ final class RemoteCacheClient
         // Chunk the new file
         auto chunkResult = ContentChunker.chunkFile(filePath);
         if (chunkResult.chunks.length == 0)
-        {
-            auto error = new CacheError(
-                "Failed to chunk file: " ~ filePath,
-                ErrorCode.CacheLoadFailed
-            );
-            return Err!(TransferStats, BuildError)(error);
-        }
+            return Err!(TransferStats, BuildError)(
+                Errors.cache("Failed to chunk file: " ~ filePath, ErrorCode.CacheLoadFailed).build());
         
         // Build new manifest
         ChunkManifest newManifest;
@@ -547,24 +502,14 @@ final class RemoteCacheClient
         );
         
         if (uploadResult.isErr)
-        {
-            auto error = new CacheError(
-                "Incremental chunk upload failed: " ~ uploadResult.unwrapErr(),
-                ErrorCode.CacheLoadFailed
-            );
-            return Err!(TransferStats, BuildError)(error);
-        }
+            return Err!(TransferStats, BuildError)(
+                Errors.cache("Incremental chunk upload failed: " ~ uploadResult.unwrapErr(), ErrorCode.CacheLoadFailed).build());
         
         // Store new manifest
         auto manifestResult = putManifest(fileHash, newManifest);
         if (manifestResult.isErr)
-        {
-            auto error = new CacheError(
-                "Failed to upload manifest: " ~ manifestResult.unwrapErr().message,
-                ErrorCode.CacheLoadFailed
-            );
-            return Err!(TransferStats, BuildError)(error);
-        }
+            return Err!(TransferStats, BuildError)(
+                Errors.cache("Failed to upload manifest: " ~ manifestResult.unwrapErr().message, ErrorCode.CacheLoadFailed).build());
         
         synchronized (statsMutex)
         {
@@ -642,11 +587,8 @@ final class RemoteCacheClient
         }
         catch (JSONException e)
         {
-            auto error = new CacheError(
-                "Failed to parse manifest: " ~ e.msg,
-                ErrorCode.CacheCorrupted
-            );
-            return Err!(ChunkManifest, BuildError)(error);
+            return Err!(ChunkManifest, BuildError)(
+                Errors.cache("Failed to parse manifest: " ~ e.msg, ErrorCode.CacheCorrupted).build());
         }
     }
 }

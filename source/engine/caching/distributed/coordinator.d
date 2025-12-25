@@ -140,11 +140,8 @@ final class DistributedCache
         }
         catch (Exception e)
         {
-            auto error = new CacheError(
-                "Failed to compute target hash: " ~ e.msg,
-                ErrorCode.CacheLoadFailed
-            );
-            return Err!(string, BuildError)(error);
+            return Err!(string, BuildError)(
+                Errors.cache("Failed to compute target hash: " ~ e.msg, ErrorCode.CacheLoadFailed).build());
         }
     }
     
@@ -174,11 +171,8 @@ final class DistributedCache
         }
         catch (Exception e)
         {
-            BuildError error = new CacheError(
-                "Failed to pull from remote cache: " ~ e.msg,
-                ErrorCode.CacheLoadFailed
-            );
-            return VoidBuildResult.err(error);
+            return VoidBuildResult.err(
+                Errors.cache("Failed to pull from remote cache: " ~ e.msg, ErrorCode.CacheLoadFailed).build());
         }
     }
     

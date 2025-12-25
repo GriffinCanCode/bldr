@@ -5,6 +5,7 @@ import std.algorithm;
 import std.array;
 import infrastructure.errors.handling.codes;
 import infrastructure.errors.types.context;
+import infrastructure.errors.types.network : NetworkError;
 
 /// Base error interface - all errors implement this
 interface BuildError
@@ -485,57 +486,176 @@ struct ErrorBuilder(T : BaseBuildError)
     }
     
     /// Add context to the error
-    ErrorBuilder withContext(string operation, string details = "")
+    ref ErrorBuilder withContext(string operation, string details = "") return
     {
         error.addContext(ErrorContext(operation, details));
         return this;
     }
     
+    /// Add source location context
+    ref ErrorBuilder withLocation(string file = __FILE__, size_t line = __LINE__) return
+    {
+        import std.path : baseName;
+        import std.string : format;
+        error.addContext(ErrorContext("at", format("%s:%d", baseName(file), line)));
+        return this;
+    }
+    
     /// Add a strongly-typed suggestion
-    ErrorBuilder withSuggestion(ErrorSuggestion suggestion)
+    ref ErrorBuilder withSuggestion(ErrorSuggestion suggestion) return
     {
         error.addSuggestion(suggestion);
         return this;
     }
     
     /// Add a string suggestion (convenience method)
-    ErrorBuilder withSuggestion(string suggestion)
+    ref ErrorBuilder withSuggestion(string suggestion) return
     {
         error.addSuggestion(suggestion);
         return this;
     }
     
     /// Add a command suggestion
-    ErrorBuilder withCommand(string description, string cmd)
+    ref ErrorBuilder withCommand(string description, string cmd) return
     {
         error.addSuggestion(ErrorSuggestion.command(description, cmd));
         return this;
     }
     
     /// Add a documentation suggestion
-    ErrorBuilder withDocs(string description, string url = "")
+    ref ErrorBuilder withDocs(string description, string url = "") return
     {
         error.addSuggestion(ErrorSuggestion.docs(description, url));
         return this;
     }
     
     /// Add a file check suggestion
-    ErrorBuilder withFileCheck(string description, string path = "")
+    ref ErrorBuilder withFileCheck(string description, string path = "") return
     {
         error.addSuggestion(ErrorSuggestion.fileCheck(description, path));
         return this;
     }
     
     /// Add a configuration suggestion
-    ErrorBuilder withConfig(string description, string setting = "")
+    ref ErrorBuilder withConfig(string description, string setting = "") return
     {
         error.addSuggestion(ErrorSuggestion.config(description, setting));
         return this;
     }
     
-    T build()
+    T build() { return error; }
+    
+    /// Implicit conversion to error type for ergonomic usage
+    alias build this;
+}
+
+/// Unified error factory - single entry point for all error construction
+/// 
+/// Usage:
+///   Errors.parse("file.txt", "Invalid syntax")
+///       .withContext("parsing config")
+///       .withDocs("See syntax guide", "docs/syntax.md")
+///   
+///   Errors.cache("Cache corrupted", ErrorCode.CacheCorrupted)
+///       .withCommand("Clear cache", "bldr clean --cache")
+struct Errors
+{
+    @disable this();
+    
+    /// Build failure error
+    static ErrorBuilder!BuildFailureError build(string targetId, string message, ErrorCode code = ErrorCode.BuildFailed)
     {
-        return error;
+        return ErrorBuilder!BuildFailureError.create(targetId, message, code);
+    }
+    
+    /// Parse/configuration error
+    static ErrorBuilder!ParseError parse(string filePath, string message, ErrorCode code = ErrorCode.ParseFailed)
+    {
+        return ErrorBuilder!ParseError.create(filePath, message, code);
+    }
+    
+    /// Parse error with location
+    static ErrorBuilder!ParseError parseAt(string filePath, string message, size_t line, size_t col = 0, ErrorCode code = ErrorCode.ParseFailed)
+    {
+        return ErrorBuilder!ParseError.create(filePath, message, line, col, code);
+    }
+    
+    /// Analysis error
+    static ErrorBuilder!AnalysisError analysis(string targetName, string message, ErrorCode code = ErrorCode.AnalysisFailed)
+    {
+        return ErrorBuilder!AnalysisError.create(targetName, message, code);
+    }
+    
+    /// Cache operation error
+    static ErrorBuilder!CacheError cache(string message, ErrorCode code = ErrorCode.CacheLoadFailed)
+    {
+        return ErrorBuilder!CacheError.create(message, code);
+    }
+    
+    /// IO operation error
+    static ErrorBuilder!IOError io(string path, string message, ErrorCode code = ErrorCode.FileNotFound)
+    {
+        return ErrorBuilder!IOError.create(path, message, code);
+    }
+    
+    /// Graph operation error
+    static ErrorBuilder!GraphError graph(string message, ErrorCode code = ErrorCode.GraphInvalid)
+    {
+        return ErrorBuilder!GraphError.create(message, code);
+    }
+    
+    /// Language-specific error
+    static ErrorBuilder!LanguageError language(string lang, string message, ErrorCode code = ErrorCode.CompilationFailed)
+    {
+        return ErrorBuilder!LanguageError.create(lang, message, code);
+    }
+    
+    /// System-level error
+    static ErrorBuilder!SystemError system(string message, ErrorCode code = ErrorCode.ProcessSpawnFailed)
+    {
+        return ErrorBuilder!SystemError.create(message, code);
+    }
+    
+    /// Network communication error
+    static NetworkError network(string message, ErrorCode code = ErrorCode.NetworkError)
+    {
+        return new NetworkError(message, code);
+    }
+    
+    /// Internal/unexpected error
+    static ErrorBuilder!InternalError internal(string message, ErrorCode code = ErrorCode.InternalError)
+    {
+        return ErrorBuilder!InternalError.create(message, code);
+    }
+    
+    /// Generic error
+    static ErrorBuilder!GenericError generic(string message, ErrorCode code = ErrorCode.UnknownError)
+    {
+        return ErrorBuilder!GenericError.create(message, code);
+    }
+    
+    /// Plugin system error
+    static ErrorBuilder!PluginError plugin(string message, ErrorCode code = ErrorCode.PluginError)
+    {
+        return ErrorBuilder!PluginError.create(message, code);
+    }
+    
+    /// LSP server error
+    static ErrorBuilder!LSPError lsp(string message, ErrorCode code = ErrorCode.LSPError)
+    {
+        return ErrorBuilder!LSPError.create(message, code);
+    }
+    
+    /// Watch mode error
+    static ErrorBuilder!WatchError watch(string message, ErrorCode code = ErrorCode.WatchError)
+    {
+        return ErrorBuilder!WatchError.create(message, code);
+    }
+    
+    /// Configuration/validation error
+    static ErrorBuilder!ConfigError config(string message, ErrorCode code = ErrorCode.ConfigError)
+    {
+        return ErrorBuilder!ConfigError.create(message, code);
     }
 }
 

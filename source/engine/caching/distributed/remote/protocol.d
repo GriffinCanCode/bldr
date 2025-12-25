@@ -34,26 +34,16 @@ struct ArtifactMetadata
     static BuildResult!ArtifactMetadata deserialize(const(ubyte)[] data) @system
     {
         if (data.length < 8)
-        {
-            auto error = new CacheError(
-                "Invalid artifact metadata: insufficient data",
-                ErrorCode.CacheCorrupted
-            );
-            return Err!(ArtifactMetadata, BuildError)(error);
-        }
+            return Err!(ArtifactMetadata, BuildError)(
+                Errors.cache("Invalid artifact metadata: insufficient data", ErrorCode.CacheCorrupted).build());
         
         try
         {
             auto result = Codec.deserialize!SerializableArtifactMetadata(cast(ubyte[])data);
             
             if (result.isErr)
-            {
-                auto error = new CacheError(
-                    "Failed to deserialize artifact metadata: " ~ result.unwrapErr(),
-                    ErrorCode.CacheCorrupted
-                );
-                return Err!(ArtifactMetadata, BuildError)(error);
-            }
+                return Err!(ArtifactMetadata, BuildError)(
+                    Errors.cache("Failed to deserialize artifact metadata: " ~ result.unwrapErr(), ErrorCode.CacheCorrupted).build());
             
             auto serializable = result.unwrap();
             auto meta = fromSerializable!ArtifactMetadata(serializable);
@@ -62,11 +52,8 @@ struct ArtifactMetadata
         }
         catch (Exception e)
         {
-            auto error = new CacheError(
-                "Exception during deserialization: " ~ e.msg,
-                ErrorCode.CacheCorrupted
-            );
-            return Err!(ArtifactMetadata, BuildError)(error);
+            return Err!(ArtifactMetadata, BuildError)(
+                Errors.cache("Exception during deserialization: " ~ e.msg, ErrorCode.CacheCorrupted).build());
         }
     }
 }

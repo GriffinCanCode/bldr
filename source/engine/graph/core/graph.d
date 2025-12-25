@@ -597,24 +597,22 @@ final class BuildGraph
         auto toKey = to.toString();
         
         if (fromKey !in nodes)
-        {
-            auto error = new GraphError("Target '" ~ fromKey ~ "' not found in dependency graph", ErrorCode.NodeNotFound);
-            error.addContext(ErrorContext("adding dependency", "from: " ~ fromKey ~ ", to: " ~ toKey));
-            error.addSuggestion("Ensure target '" ~ fromKey ~ "' is defined in your Builderfile");
-            error.addSuggestion("Run 'bldr graph' to see all available targets");
-            error.addSuggestion("Check for typos in the target name");
-            return VoidBuildResult.err(cast(BuildError) error);
-        }
+            return VoidBuildResult.err(
+                Errors.graph("Target '" ~ fromKey ~ "' not found in dependency graph", ErrorCode.NodeNotFound)
+                    .withContext("adding dependency", "from: " ~ fromKey ~ ", to: " ~ toKey)
+                    .withSuggestion("Ensure target '" ~ fromKey ~ "' is defined in your Builderfile")
+                    .withCommand("See all available targets", "bldr graph")
+                    .withSuggestion("Check for typos in the target name")
+                    .build());
         
         if (toKey !in nodes)
-        {
-            auto error = new GraphError("Target '" ~ toKey ~ "' not found in dependency graph", ErrorCode.NodeNotFound);
-            error.addContext(ErrorContext("adding dependency", "from: " ~ fromKey ~ ", to: " ~ toKey));
-            error.addSuggestion("Ensure target '" ~ toKey ~ "' is defined in your Builderfile");
-            error.addSuggestion("Run 'bldr graph' to see all available targets");
-            error.addSuggestion("Check for typos in the target name");
-            return VoidBuildResult.err(cast(BuildError) error);
-        }
+            return VoidBuildResult.err(
+                Errors.graph("Target '" ~ toKey ~ "' not found in dependency graph", ErrorCode.NodeNotFound)
+                    .withContext("adding dependency", "from: " ~ fromKey ~ ", to: " ~ toKey)
+                    .withSuggestion("Ensure target '" ~ toKey ~ "' is defined in your Builderfile")
+                    .withCommand("See all available targets", "bldr graph")
+                    .withSuggestion("Check for typos in the target name")
+                    .build());
         
         auto fromNode = nodes[fromKey];
         auto toNode = nodes[toKey];
@@ -623,15 +621,14 @@ final class BuildGraph
         if (_validationMode == ValidationMode.Immediate)
         {
         if (wouldCreateCycle(fromNode, toNode))
-        {
-            auto error = new GraphError("Circular dependency detected: adding '" ~ fromKey ~ "' -> '" ~ toKey ~ "' would create a cycle", ErrorCode.GraphCycle);
-            error.addContext(ErrorContext("adding dependency", "would create cycle"));
-            error.addSuggestion("Run 'bldr graph' to visualize the dependency cycle");
-            error.addSuggestion("Remove or reorder dependencies to break the cycle");
-            error.addSuggestion("Consider extracting shared code into a separate target");
-            error.addSuggestion("Check if the dependency is actually needed");
-            return VoidBuildResult.err(cast(BuildError) error);
-            }
+            return VoidBuildResult.err(
+                Errors.graph("Circular dependency detected: adding '" ~ fromKey ~ "' -> '" ~ toKey ~ "' would create a cycle", ErrorCode.GraphCycle)
+                    .withContext("adding dependency", "would create cycle")
+                    .withCommand("Visualize the dependency cycle", "bldr graph")
+                    .withSuggestion("Remove or reorder dependencies to break the cycle")
+                    .withSuggestion("Consider extracting shared code into a separate target")
+                    .withSuggestion("Check if the dependency is actually needed")
+                    .build());
         }
         
         fromNode.dependencyIds ~= toNode.id;
@@ -945,10 +942,8 @@ final class BuildGraph
     {
         auto key = id.toString();
         if (key !in nodes)
-        {
-            auto error = new GraphError("Target not found: " ~ key, ErrorCode.NodeNotFound);
-            return VoidBuildResult.err(cast(BuildError) error);
-        }
+            return VoidBuildResult.err(
+                Errors.graph("Target not found: " ~ key, ErrorCode.NodeNotFound).build());
         
         auto node = nodes[key];
         

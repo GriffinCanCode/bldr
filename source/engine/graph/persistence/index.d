@@ -55,8 +55,8 @@ final class GraphIndex
         
         auto rc = sqlite3_open(dbPath.toStringz, &db);
         if (rc != SQLITE_OK)
-            throw new GraphError("Failed to open graph index: " ~ fromStringz(sqlite3_errmsg(db)).idup,
-                                ErrorCode.CacheLoadFailed);
+            throw Errors.graph("Failed to open graph index: " ~ fromStringz(sqlite3_errmsg(db)).idup,
+                              ErrorCode.CacheLoadFailed).build();
         
         // WAL mode for crash recovery and concurrent reads
         execSQL("PRAGMA journal_mode=WAL");
@@ -111,7 +111,7 @@ final class GraphIndex
             
             if (sqlite3_step(stmtNodeGet) != SQLITE_ROW)
                 return Err!(GraphNodeEntry, BuildError)(
-                    new GraphError("Node not found: " ~ nodeId, ErrorCode.NodeNotFound));
+                    Errors.graph("Node not found: " ~ nodeId, ErrorCode.NodeNotFound).build());
             
             GraphNodeEntry entry;
             entry.nodeId = fromStringz(sqlite3_column_text(stmtNodeGet, 0)).idup;
@@ -151,8 +151,8 @@ final class GraphIndex
             sqlite3_bind_int64(stmtNodePut, 10, entry.buildDuration);
             
             if (sqlite3_step(stmtNodePut) != SQLITE_DONE)
-                throw new GraphError("Failed to insert node: " ~ fromStringz(sqlite3_errmsg(db)).idup,
-                                    ErrorCode.CacheWriteFailed);
+                throw Errors.graph("Failed to insert node: " ~ fromStringz(sqlite3_errmsg(db)).idup,
+                                  ErrorCode.CacheWriteFailed).build();
             
             commitJournal();
         }

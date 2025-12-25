@@ -46,7 +46,7 @@ struct HermeticExecutor
         auto validateResult = spec.validate();
         if (validateResult.isErr)
             return BuildResult!HermeticExecutor.err(
-                new SystemError(validateResult.unwrapErr(), ErrorCode.InvalidConfiguration));
+                Errors.system(validateResult.unwrapErr(), ErrorCode.InvalidConfiguration).build());
         
         HermeticExecutor executor;
         executor.spec = spec;
@@ -85,11 +85,11 @@ struct HermeticExecutor
     {
         if (!initialized)
             return BuildResult!Output.err(
-                new SystemError("Executor not initialized", ErrorCode.NotInitialized));
+                Errors.system("Executor not initialized", ErrorCode.NotInitialized).build());
         
         if (command.length == 0)
             return BuildResult!Output.err(
-                new SystemError("Empty command", ErrorCode.InvalidInput));
+                Errors.system("Empty command", ErrorCode.InvalidInput).build());
         
         // Use working dir or current dir
         immutable execDir = workingDir.empty ? workDir : workingDir;
@@ -109,8 +109,7 @@ struct HermeticExecutor
             }
             
             return BuildResult!Output.err(
-                new SystemError("Working directory not in allowed paths: " ~ execDir, 
-                              ErrorCode.PermissionDenied));
+                Errors.system("Working directory not in allowed paths: " ~ execDir, ErrorCode.PermissionDenied).build());
         }
         
         // Log execution start
@@ -150,11 +149,11 @@ struct HermeticExecutor
         
         if (!initialized)
             return BuildResult!Output.err(
-                new SystemError("Executor not initialized", ErrorCode.NotInitialized));
+                Errors.system("Executor not initialized", ErrorCode.NotInitialized).build());
         
         if (command.length == 0)
             return BuildResult!Output.err(
-                new SystemError("Empty command", ErrorCode.InvalidInput));
+                Errors.system("Empty command", ErrorCode.InvalidInput).build());
         
         // Create timeout enforcer
         auto timeoutEnforcer = createTimeoutEnforcer();
@@ -175,8 +174,7 @@ struct HermeticExecutor
         if (timeoutEnforcer.isTimedOut())
         {
             return BuildResult!Output.err(
-                new SystemError("Execution timed out after " ~ timeout.toString(), 
-                              ErrorCode.ProcessTimeout));
+                Errors.system("Execution timed out after " ~ timeout.toString(), ErrorCode.ProcessTimeout).build());
         }
         
         return result;
@@ -220,14 +218,14 @@ struct HermeticExecutor
             auto sandboxResult = LinuxSandbox.create(spec, workDir);
             if (sandboxResult.isErr)
                 return BuildResult!Output.err(
-                    new SystemError(sandboxResult.unwrapErr(), ErrorCode.SandboxError));
+                    Errors.system(sandboxResult.unwrapErr(), ErrorCode.SandboxError).build());
             
             auto sandbox = sandboxResult.unwrap();
             auto execResult = sandbox.execute(command, workingDir);
             
             if (execResult.isErr)
                 return BuildResult!Output.err(
-                    new SystemError(execResult.unwrapErr(), ErrorCode.ProcessSpawnFailed));
+                    Errors.system(execResult.unwrapErr(), ErrorCode.ProcessSpawnFailed).build());
             
             auto linuxOutput = execResult.unwrap();
             Output output;
@@ -248,14 +246,14 @@ struct HermeticExecutor
             auto sandboxResult = MacOSSandbox.create(spec);
             if (sandboxResult.isErr)
                 return BuildResult!Output.err(
-                    new SystemError(sandboxResult.unwrapErr(), ErrorCode.SandboxError));
+                    Errors.system(sandboxResult.unwrapErr(), ErrorCode.SandboxError).build());
             
             auto sandbox = sandboxResult.unwrap();
             auto execResult = sandbox.execute(command, workingDir);
             
             if (execResult.isErr)
                 return BuildResult!Output.err(
-                    new SystemError(execResult.unwrapErr(), ErrorCode.ProcessSpawnFailed));
+                    Errors.system(execResult.unwrapErr(), ErrorCode.ProcessSpawnFailed).build());
             
             auto macOutput = execResult.unwrap();
             Output output;
@@ -285,7 +283,7 @@ struct HermeticExecutor
             auto sandboxResult = WindowsSandbox.create(spec, workDir);
             if (sandboxResult.isErr)
                 return BuildResult!Output.err(
-                    new SystemError(sandboxResult.unwrapErr(), ErrorCode.SandboxError));
+                    Errors.system(sandboxResult.unwrapErr(), ErrorCode.SandboxError).build());
             
             auto sandbox = sandboxResult.unwrap();
             scope(exit) sandbox.cleanup();
@@ -294,7 +292,7 @@ struct HermeticExecutor
             
             if (execResult.isErr)
                 return BuildResult!Output.err(
-                    new SystemError(execResult.unwrapErr(), ErrorCode.ProcessSpawnFailed));
+                    Errors.system(execResult.unwrapErr(), ErrorCode.ProcessSpawnFailed).build());
             
             auto winOutput = execResult.unwrap();
             Output output;
@@ -318,8 +316,7 @@ struct HermeticExecutor
         {
             if (!SecurityValidator.isArgumentSafe(arg))
                 return BuildResult!Output.err(
-                    new SystemError("Unsafe command argument: " ~ arg, 
-                                  ErrorCode.InvalidInput));
+                    Errors.system("Unsafe command argument: " ~ arg, ErrorCode.InvalidInput).build());
         }
         
         // Build environment
@@ -410,7 +407,7 @@ struct HermeticSpecBuilder
         auto result = builder.build();
         if (result.isErr)
             return BuildResult!SandboxSpec.err(
-                new SystemError(result.unwrapErr(), ErrorCode.InvalidConfiguration));
+                Errors.system(result.unwrapErr(), ErrorCode.InvalidConfiguration).build());
         return BuildResult!SandboxSpec.ok(result.unwrap());
     }
     
@@ -452,7 +449,7 @@ struct HermeticSpecBuilder
         auto result = builder.build();
         if (result.isErr)
             return BuildResult!SandboxSpec.err(
-                new SystemError(result.unwrapErr(), ErrorCode.InvalidConfiguration));
+                Errors.system(result.unwrapErr(), ErrorCode.InvalidConfiguration).build());
         return BuildResult!SandboxSpec.ok(result.unwrap());
     }
 }

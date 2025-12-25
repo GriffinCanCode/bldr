@@ -303,7 +303,7 @@ final class ReapiV2Client {
     BuildResult!ActionResult execute(ActionRequest request, bool skipCache = false) @trusted {
         if (request is null)
             return Err!(ActionResult, BuildError)(
-                new DistributedError("Null action request"));
+                DistributedErrors.protocol("Null action request").build());
         
         // Convert to REAPI format
         ReapiCommand cmd;
@@ -317,7 +317,7 @@ final class ReapiV2Client {
         auto digestResult = adapter.getHashTranslator().actionIdToDigest(request.id, 0);
         if (digestResult.isErr)
             return Err!(ActionResult, BuildError)(
-                new DistributedError("Failed to convert action digest: " ~ digestResult.unwrapErr()));
+                DistributedErrors.protocol("Failed to convert action digest: " ~ digestResult.unwrapErr()).build());
         
         execReq.actionDigest = digestResult.unwrap();
         
@@ -333,14 +333,14 @@ final class ReapiV2Client {
         auto decodeResult = ReapiV2Codec.decodeExecuteResponse(httpResult.unwrap());
         if (decodeResult.isErr)
             return Err!(ActionResult, BuildError)(
-                new DistributedError("Failed to decode response: " ~ decodeResult.unwrapErr()));
+                DistributedErrors.protocol("Failed to decode response: " ~ decodeResult.unwrapErr()).build());
         
         auto response = decodeResult.unwrap();
         
         // Check status
         if (!response.status.isOk)
             return Err!(ActionResult, BuildError)(
-                new DistributedError("Execution failed: " ~ response.status.message));
+                DistributedErrors.protocol("Execution failed: " ~ response.status.message).build());
         
         // Convert to Builder ActionResult
         return Ok!(ActionResult, BuildError)(
@@ -352,7 +352,7 @@ final class ReapiV2Client {
         auto digestResult = adapter.getHashTranslator().actionIdToDigest(actionId, 0);
         if (digestResult.isErr)
             return Err!(ActionResult, BuildError)(
-                new DistributedError("Failed to convert digest"));
+                DistributedErrors.protocol("Failed to convert digest").build());
         
         auto digest = digestResult.unwrap();
         auto path = "/v2/" ~ instanceName ~ "/actionResults/" ~ 
@@ -365,7 +365,7 @@ final class ReapiV2Client {
         auto decodeResult = ReapiV2Codec.decodeActionResult(httpResult.unwrap());
         if (decodeResult.isErr)
             return Err!(ActionResult, BuildError)(
-                new DistributedError("Failed to decode action result"));
+                DistributedErrors.protocol("Failed to decode action result").build());
         
         return Ok!(ActionResult, BuildError)(
             adapter.reapiToActionResult(decodeResult.unwrap(), actionId));
@@ -486,7 +486,7 @@ final class ReapiV2Client {
             auto headersEnd = responseStr.indexOf("\r\n\r\n");
             if (headersEnd < 0)
                 return Err!(ubyte[], BuildError)(
-                    new DistributedError("Invalid HTTP response"));
+                    DistributedErrors.protocol("Invalid HTTP response").build());
             
             // Extract body
             return Ok!(ubyte[], BuildError)(
@@ -494,7 +494,7 @@ final class ReapiV2Client {
         }
         catch (Exception e) {
             return Err!(ubyte[], BuildError)(
-                new DistributedError("HTTP request failed: " ~ e.msg));
+                DistributedErrors.protocol("HTTP request failed: " ~ e.msg).build());
         }
     }
 }

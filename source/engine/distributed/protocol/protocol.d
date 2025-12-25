@@ -147,7 +147,7 @@ struct Capabilities
     static BuildResult!Capabilities deserialize(const ubyte[] data) @system
     {
         if (data.length < 1)
-            return Err!(Capabilities, BuildError)(new DistributedError("Invalid capabilities: empty data"));
+            return Err!(Capabilities, BuildError)(DistributedErrors.protocol("Invalid capabilities: empty data").build());
         
         Capabilities caps;
         size_t offset = 0;
@@ -206,7 +206,7 @@ struct Capabilities
         }
         catch (Exception e)
         {
-            return Err!(Capabilities, BuildError)(new DistributedError("Failed to deserialize capabilities: " ~ e.msg));
+            return Err!(Capabilities, BuildError)(DistributedErrors.deserialize("capabilities: " ~ e.msg).build());
         }
     }
 }
@@ -331,7 +331,7 @@ final class ActionRequest
     static Result!(ActionRequest, DistributedError) deserialize(const ubyte[] data) @system
     {
         if (data.length < 32)
-            return Err!(ActionRequest, DistributedError)(new DistributedError("ActionRequest data too short"));
+            return Err!(ActionRequest, DistributedError)(DistributedErrors.protocol("ActionRequest data too short").build());
         
         size_t offset = 0;
         ubyte[] mutableData = cast(ubyte[])data.dup;
@@ -344,19 +344,19 @@ final class ActionRequest
             
             // Command string
             if (offset + 4 > data.length)
-                return Err!(ActionRequest, DistributedError)(new DistributedError("Command length truncated"));
+                return Err!(ActionRequest, DistributedError)(DistributedErrors.truncated("Command length").build());
             auto cmdLenSlice = mutableData[offset .. offset + 4];
             immutable cmdLen = cmdLenSlice.read!uint();
             offset += 4;
             
             if (offset + cmdLen > data.length)
-                return Err!(ActionRequest, DistributedError)(new DistributedError("Command data truncated"));
+                return Err!(ActionRequest, DistributedError)(DistributedErrors.truncated("Command data").build());
             auto command = cast(string)data[offset .. offset + cmdLen];
             offset += cmdLen;
             
             // Environment variables
             if (offset + 4 > data.length)
-                return Err!(ActionRequest, DistributedError)(new DistributedError("Env count truncated"));
+                return Err!(ActionRequest, DistributedError)(DistributedErrors.truncated("Env count").build());
             auto envCountSlice = mutableData[offset .. offset + 4];
             immutable envCount = envCountSlice.read!uint();
             offset += 4;
@@ -365,24 +365,24 @@ final class ActionRequest
             foreach (_; 0 .. envCount)
             {
                 if (offset + 4 > data.length)
-                    return Err!(ActionRequest, DistributedError)(new DistributedError("Env key length truncated"));
+                    return Err!(ActionRequest, DistributedError)(DistributedErrors.truncated("Env key length").build());
                 auto keyLenSlice = mutableData[offset .. offset + 4];
                 immutable keyLen = keyLenSlice.read!uint();
                 offset += 4;
                 
                 if (offset + keyLen > data.length)
-                    return Err!(ActionRequest, DistributedError)(new DistributedError("Env key truncated"));
+                    return Err!(ActionRequest, DistributedError)(DistributedErrors.truncated("Env key").build());
                 auto key = cast(string)data[offset .. offset + keyLen];
                 offset += keyLen;
                 
                 if (offset + 4 > data.length)
-                    return Err!(ActionRequest, DistributedError)(new DistributedError("Env value length truncated"));
+                    return Err!(ActionRequest, DistributedError)(DistributedErrors.truncated("Env value length").build());
                 auto valLenSlice = mutableData[offset .. offset + 4];
                 immutable valLen = valLenSlice.read!uint();
                 offset += 4;
                 
                 if (offset + valLen > data.length)
-                    return Err!(ActionRequest, DistributedError)(new DistributedError("Env value truncated"));
+                    return Err!(ActionRequest, DistributedError)(DistributedErrors.truncated("Env value").build());
                 auto value = cast(string)data[offset .. offset + valLen];
                 offset += valLen;
                 
@@ -391,7 +391,7 @@ final class ActionRequest
             
             // Input specs
             if (offset + 4 > data.length)
-                return Err!(ActionRequest, DistributedError)(new DistributedError("Input count truncated"));
+                return Err!(ActionRequest, DistributedError)(DistributedErrors.truncated("Input count").build());
             auto inputCountSlice = mutableData[offset .. offset + 4];
             immutable inputCount = inputCountSlice.read!uint();
             offset += 4;
@@ -401,23 +401,23 @@ final class ActionRequest
             foreach (_; 0 .. inputCount)
             {
                 if (offset + 32 > data.length)
-                    return Err!(ActionRequest, DistributedError)(new DistributedError("Input ID truncated"));
+                    return Err!(ActionRequest, DistributedError)(DistributedErrors.truncated("Input ID").build());
                 auto inputId = ArtifactId(data[offset .. offset + 32]);
                 offset += 32;
                 
                 if (offset + 4 > data.length)
-                    return Err!(ActionRequest, DistributedError)(new DistributedError("Input path length truncated"));
+                    return Err!(ActionRequest, DistributedError)(DistributedErrors.truncated("Input path length").build());
                 auto pathLenSlice = mutableData[offset .. offset + 4];
                 immutable pathLen = pathLenSlice.read!uint();
                 offset += 4;
                 
                 if (offset + pathLen > data.length)
-                    return Err!(ActionRequest, DistributedError)(new DistributedError("Input path truncated"));
+                    return Err!(ActionRequest, DistributedError)(DistributedErrors.truncated("Input path").build());
                 auto path = cast(string)data[offset .. offset + pathLen];
                 offset += pathLen;
                 
                 if (offset + 1 > data.length)
-                    return Err!(ActionRequest, DistributedError)(new DistributedError("Input executable flag truncated"));
+                    return Err!(ActionRequest, DistributedError)(DistributedErrors.truncated("Input executable flag").build());
                 auto execSlice = mutableData[offset .. offset + 1];
                 immutable executable = execSlice.read!ubyte() != 0;
                 offset += 1;
@@ -427,7 +427,7 @@ final class ActionRequest
             
             // Output specs
             if (offset + 4 > data.length)
-                return Err!(ActionRequest, DistributedError)(new DistributedError("Output count truncated"));
+                return Err!(ActionRequest, DistributedError)(DistributedErrors.truncated("Output count").build());
             auto outputCountSlice = mutableData[offset .. offset + 4];
             immutable outputCount = outputCountSlice.read!uint();
             offset += 4;
@@ -437,18 +437,18 @@ final class ActionRequest
             foreach (_; 0 .. outputCount)
             {
                 if (offset + 4 > data.length)
-                    return Err!(ActionRequest, DistributedError)(new DistributedError("Output path length truncated"));
+                    return Err!(ActionRequest, DistributedError)(DistributedErrors.truncated("Output path length").build());
                 auto pathLenSlice2 = mutableData[offset .. offset + 4];
                 immutable pathLen = pathLenSlice2.read!uint();
                 offset += 4;
                 
                 if (offset + pathLen > data.length)
-                    return Err!(ActionRequest, DistributedError)(new DistributedError("Output path truncated"));
+                    return Err!(ActionRequest, DistributedError)(DistributedErrors.truncated("Output path").build());
                 auto path = cast(string)data[offset .. offset + pathLen];
                 offset += pathLen;
                 
                 if (offset + 1 > data.length)
-                    return Err!(ActionRequest, DistributedError)(new DistributedError("Output optional flag truncated"));
+                    return Err!(ActionRequest, DistributedError)(DistributedErrors.truncated("Output optional flag").build());
                 auto optSlice = mutableData[offset .. offset + 1];
                 immutable optional = optSlice.read!ubyte() != 0;
                 offset += 1;
@@ -458,13 +458,13 @@ final class ActionRequest
             
             // Capabilities
             if (offset + 4 > data.length)
-                return Err!(ActionRequest, DistributedError)(new DistributedError("Capabilities length truncated"));
+                return Err!(ActionRequest, DistributedError)(DistributedErrors.truncated("Capabilities length").build());
             auto capsLenSlice = mutableData[offset .. offset + 4];
             immutable capsLen = capsLenSlice.read!uint();
             offset += 4;
             
             if (offset + capsLen > data.length)
-                return Err!(ActionRequest, DistributedError)(new DistributedError("Capabilities data truncated"));
+                return Err!(ActionRequest, DistributedError)(DistributedErrors.truncated("Capabilities data").build());
             auto capsResult = Capabilities.deserialize(data[offset .. offset + capsLen]);
             if (capsResult.isErr)
                 return Err!(ActionRequest, DistributedError)(cast(DistributedError)capsResult.unwrapErr());
@@ -473,14 +473,14 @@ final class ActionRequest
             
             // Priority
             if (offset + 1 > data.length)
-                return Err!(ActionRequest, DistributedError)(new DistributedError("Priority truncated"));
+                return Err!(ActionRequest, DistributedError)(DistributedErrors.truncated("Priority").build());
             auto priSlice = mutableData[offset .. offset + 1];
             immutable priority = cast(Priority)priSlice.read!ubyte();
             offset += 1;
             
             // Timeout
             if (offset + 8 > data.length)
-                return Err!(ActionRequest, DistributedError)(new DistributedError("Timeout truncated"));
+                return Err!(ActionRequest, DistributedError)(DistributedErrors.truncated("Timeout").build());
             auto timeSlice = mutableData[offset .. offset + 8];
             immutable timeout = timeSlice.read!long().msecs;
             
@@ -489,7 +489,7 @@ final class ActionRequest
         }
         catch (Exception e)
         {
-            return Err!(ActionRequest, DistributedError)(new DistributedError("Deserialization failed: " ~ e.msg));
+            return Err!(ActionRequest, DistributedError)(DistributedErrors.deserialize(e.msg).build());
         }
     }
 }
@@ -591,4 +591,105 @@ class WorkerError : DistributedError
 {
     this(string message, string file = __FILE__, size_t line = __LINE__) @safe =>
         super(ErrorCode.WorkerFailed, "Worker error: " ~ message, file, line);
+}
+
+/// Unified distributed error factory
+/// 
+/// Usage:
+///   DistributedErrors.protocol("Invalid message format")
+///       .withContext("parsing", "message header")
+///       .withSuggestion("Check protocol version compatibility")
+struct DistributedErrors
+{
+    @disable this();
+    
+    /// Generic distributed protocol error
+    static ErrorBuilder!DistributedError protocol(string message, string file = __FILE__, size_t line = __LINE__)
+    {
+        auto err = new DistributedError(message, file, line);
+        return ErrorBuilder!DistributedError(err);
+    }
+    
+    /// Distributed error with specific code
+    static ErrorBuilder!DistributedError withCode(ErrorCode code, string message, string file = __FILE__, size_t line = __LINE__)
+    {
+        auto err = new DistributedError(code, message, file, line);
+        return ErrorBuilder!DistributedError(err);
+    }
+    
+    /// Deserialization error
+    static ErrorBuilder!DistributedError deserialize(string context, string file = __FILE__, size_t line = __LINE__)
+    {
+        auto err = new DistributedError("Deserialization failed: " ~ context, file, line);
+        return ErrorBuilder!DistributedError(err);
+    }
+    
+    /// Data truncation error
+    static ErrorBuilder!DistributedError truncated(string field, string file = __FILE__, size_t line = __LINE__)
+    {
+        auto err = new DistributedError(field ~ " truncated", file, line);
+        return ErrorBuilder!DistributedError(err);
+    }
+    
+    /// Execution error
+    static ErrorBuilder!ExecutionError execution(string message, string file = __FILE__, size_t line = __LINE__)
+    {
+        auto err = new ExecutionError(message, file, line);
+        return ErrorBuilder!ExecutionError(err);
+    }
+    
+    /// Worker error
+    static ErrorBuilder!WorkerError worker(string message, string file = __FILE__, size_t line = __LINE__)
+    {
+        auto err = new WorkerError(message, file, line);
+        return ErrorBuilder!WorkerError(err);
+    }
+}
+
+/// ErrorBuilder support for DistributedError (allows wrapping existing instances)
+struct ErrorBuilder(T : DistributedError)
+{
+    private T error;
+    
+    this(T error) { this.error = error; }
+    
+    static ErrorBuilder create(Args...)(Args args)
+    {
+        ErrorBuilder builder;
+        builder.error = new T(args);
+        return builder;
+    }
+    
+    ref ErrorBuilder withContext(string operation, string details = "") return
+    {
+        error.addContext(ErrorContext(operation, details));
+        return this;
+    }
+    
+    ref ErrorBuilder withSuggestion(ErrorSuggestion suggestion) return
+    {
+        error.addSuggestion(suggestion);
+        return this;
+    }
+    
+    ref ErrorBuilder withSuggestion(string suggestion) return
+    {
+        error.addSuggestion(suggestion);
+        return this;
+    }
+    
+    ref ErrorBuilder withCommand(string description, string cmd) return
+    {
+        error.addSuggestion(ErrorSuggestion.command(description, cmd));
+        return this;
+    }
+    
+    ref ErrorBuilder withDocs(string description, string url = "") return
+    {
+        error.addSuggestion(ErrorSuggestion.docs(description, url));
+        return this;
+    }
+    
+    T build() { return error; }
+    alias build this;
 }

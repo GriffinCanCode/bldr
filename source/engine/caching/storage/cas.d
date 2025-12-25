@@ -83,8 +83,8 @@ final class ContentAddressableStorage
         }
         catch (Exception e)
         {
-            return Err!(ubyte[], BuildError)(new CacheError(
-                "Failed to read blob: " ~ e.msg, ErrorCode.CacheLoadFailed));
+            return Err!(ubyte[], BuildError)(Errors.cache(
+                "Failed to read blob: " ~ e.msg, ErrorCode.CacheLoadFailed).build());
         }
     }
     
@@ -132,8 +132,8 @@ final class ContentAddressableStorage
             {
                 // Check reference count
                 if (refCounts.get(hash, 0) > 0)
-                    return VoidBuildResult.err(new CacheError(
-                        "Cannot delete blob with active references", ErrorCode.CacheInUse));
+                    return VoidBuildResult.err(Errors.cache(
+                        "Cannot delete blob with active references", ErrorCode.CacheInUse).build());
                 
                 immutable blobPath = getBlobPath(hash);
                 if (exists(blobPath))
@@ -146,8 +146,8 @@ final class ContentAddressableStorage
         }
         catch (Exception e)
         {
-            return VoidBuildResult.err(new CacheError(
-                "Failed to delete blob: " ~ e.msg, ErrorCode.CacheDeleteFailed));
+            return VoidBuildResult.err(Errors.cache(
+                "Failed to delete blob: " ~ e.msg, ErrorCode.CacheDeleteFailed).build());
         }
     }
     

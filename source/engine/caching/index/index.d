@@ -54,8 +54,8 @@ final class CacheIndex
         // Open database with WAL mode
         auto rc = sqlite3_open(dbPath.toStringz, &db);
         if (rc != SQLITE_OK)
-            throw new CacheError("Failed to open cache index: " ~ fromStringz(sqlite3_errmsg(db)).idup, 
-                                ErrorCode.CacheLoadFailed);
+            throw Errors.cache("Failed to open cache index: " ~ fromStringz(sqlite3_errmsg(db)).idup, 
+                              ErrorCode.CacheLoadFailed).build();
         
         // Enable WAL mode for crash recovery and concurrent reads
         execSQL("PRAGMA journal_mode=WAL");
@@ -119,7 +119,7 @@ final class CacheIndex
             
             if (sqlite3_step(stmtTargetGet) != SQLITE_ROW)
                 return Err!(TargetIndexEntry, BuildError)(
-                    new CacheError("Target not found: " ~ key, ErrorCode.CacheNotFound));
+                    Errors.cache("Target not found: " ~ key, ErrorCode.CacheNotFound).build());
             
             TargetIndexEntry entry;
             entry.key = fromStringz(sqlite3_column_text(stmtTargetGet, 0)).idup;
@@ -154,8 +154,8 @@ final class CacheIndex
             sqlite3_bind_int(stmtTargetPut, 8, cast(int)entry.depCount);
             
             if (sqlite3_step(stmtTargetPut) != SQLITE_DONE)
-                throw new CacheError("Failed to insert target: " ~ fromStringz(sqlite3_errmsg(db)).idup,
-                                    ErrorCode.CacheWriteFailed);
+                throw Errors.cache("Failed to insert target: " ~ fromStringz(sqlite3_errmsg(db)).idup,
+                                  ErrorCode.CacheWriteFailed).build();
             
             // Mark journal entry as committed
             commitJournal();
@@ -281,7 +281,7 @@ final class CacheIndex
             
             if (sqlite3_step(stmtActionGet) != SQLITE_ROW)
                 return Err!(ActionIndexEntry, BuildError)(
-                    new CacheError("Action not found: " ~ key, ErrorCode.CacheNotFound));
+                    Errors.cache("Action not found: " ~ key, ErrorCode.CacheNotFound).build());
             
             ActionIndexEntry entry;
             entry.key = fromStringz(sqlite3_column_text(stmtActionGet, 0)).idup;
@@ -319,8 +319,8 @@ final class CacheIndex
             sqlite3_bind_int(stmtActionPut, 10, cast(int)entry.outputCount);
             
             if (sqlite3_step(stmtActionPut) != SQLITE_DONE)
-                throw new CacheError("Failed to insert action: " ~ fromStringz(sqlite3_errmsg(db)).idup,
-                                    ErrorCode.CacheWriteFailed);
+                throw Errors.cache("Failed to insert action: " ~ fromStringz(sqlite3_errmsg(db)).idup,
+                                  ErrorCode.CacheWriteFailed).build();
             
             commitJournal();
         }

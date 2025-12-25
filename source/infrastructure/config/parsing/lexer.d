@@ -293,11 +293,10 @@ struct Lexer
                     advance();
                     return ok(TokenType.AmpAmp, "&&", startLine, startCol);
                 }
-                auto error = new ParseError(filePath, 
-                    "Single '&' is not a valid operator (use '&&' for logical AND)",
-                    line, column, ErrorCode.ParseFailed);
-                error.extractSnippet();
-                return Err!(Token, BuildError)(error);
+                return Err!(Token, BuildError)(
+                    Errors.parseAt(filePath, "Single '&' is not a valid operator (use '&&' for logical AND)", line, column)
+                        .withSuggestion("Use '&&' for logical AND operations")
+                        .build());
             
             case '|':
                 advance();
@@ -341,15 +340,13 @@ struct Lexer
                     return scanIdentifier();
                 
                 // Unknown character
-                auto error = new ParseError(filePath, 
-                    "Unexpected character '" ~ c ~ "' in Builderfile",
-                    line, column, ErrorCode.ParseFailed);
-                error.extractSnippet();
-                error.addSuggestion("Check for invalid or special characters in the configuration");
-                error.addSuggestion("Ensure proper quoting for strings with special characters");
-                error.addSuggestion("Verify file encoding is UTF-8");
-                error.addSuggestion("See docs/architecture/dsl.md for valid syntax");
-                return Err!(Token, BuildError)(error);
+                return Err!(Token, BuildError)(
+                    Errors.parseAt(filePath, "Unexpected character '" ~ c ~ "' in Builderfile", line, column)
+                        .withSuggestion("Check for invalid or special characters in the configuration")
+                        .withSuggestion("Ensure proper quoting for strings with special characters")
+                        .withSuggestion("Verify file encoding is UTF-8")
+                        .withDocs("See valid syntax", "docs/architecture/dsl.md")
+                        .build());
         }
     }
     
@@ -393,17 +390,13 @@ struct Lexer
         }
         
         if (isAtEnd())
-        {
-            auto error = new ParseError(filePath, 
-                "Unterminated string literal - missing closing quote",
-                startLine, startCol, ErrorCode.ParseFailed);
-            error.extractSnippet();
-            error.addSuggestion("Add closing quote (" ~ [quote] ~ ") to match the opening quote");
-            error.addSuggestion("Check for unescaped quotes inside the string");
-            error.addSuggestion("Ensure the string doesn't span multiple lines without proper escaping");
-            error.addSuggestion("Use matching quote types (single or double)");
-            return Err!(Token, BuildError)(error);
-        }
+            return Err!(Token, BuildError)(
+                Errors.parseAt(filePath, "Unterminated string literal - missing closing quote", startLine, startCol)
+                    .withSuggestion("Add closing quote (" ~ [quote] ~ ") to match the opening quote")
+                    .withSuggestion("Check for unescaped quotes inside the string")
+                    .withSuggestion("Ensure the string doesn't span multiple lines without proper escaping")
+                    .withSuggestion("Use matching quote types (single or double)")
+                    .build());
         
         advance(); // Closing quote
         return ok(TokenType.String, builder.data, startLine, startCol);

@@ -225,11 +225,10 @@ struct BuildVerifier
         // Get topological ordering (constructive proof of acyclicity)
         auto sortResult = graph.topologicalSort();
         if (sortResult.isErr)
-        {
-            auto error = new GraphError("Acyclicity proof failed: graph contains cycles", ErrorCode.GraphCycle);
-            error.addSuggestion("Remove circular dependencies to make graph acyclic");
-            return BuildResult!AcyclicityProof.err(cast(BuildError) error);
-        }
+            return BuildResult!AcyclicityProof.err(
+                Errors.graph("Acyclicity proof failed: graph contains cycles", ErrorCode.GraphCycle)
+                    .withSuggestion("Remove circular dependencies to make graph acyclic")
+                    .build());
         
         auto sorted = sortResult.unwrap();
         proof.topoOrder = sorted.map!(n => n.id.toString()).array;
@@ -241,10 +240,8 @@ struct BuildVerifier
         proof.forwardEdges = verifyForwardEdges(sorted);
         
         if (!proof.isValid)
-        {
-            auto error = new GraphError("Acyclicity proof verification failed", ErrorCode.GraphInvalid);
-            return BuildResult!AcyclicityProof.err(cast(BuildError) error);
-        }
+            return BuildResult!AcyclicityProof.err(
+                Errors.graph("Acyclicity proof verification failed", ErrorCode.GraphInvalid).build());
         
         return BuildResult!AcyclicityProof.ok(proof);
     }
@@ -306,12 +303,11 @@ struct BuildVerifier
         proof.hermeticTargets = graph.nodes.keys;
         
         if (!proof.isValid)
-        {
-            auto error = new GraphError("Hermeticity proof failed: input and output sets overlap", ErrorCode.GraphInvalid);
-            error.addContext(ErrorContext("hermeticity", "I ∩ O ≠ ∅"));
-            error.addSuggestion("Ensure inputs and outputs do not overlap");
-            return BuildResult!HermeticityProof.err(cast(BuildError) error);
-        }
+            return BuildResult!HermeticityProof.err(
+                Errors.graph("Hermeticity proof failed: input and output sets overlap", ErrorCode.GraphInvalid)
+                    .withContext("hermeticity", "I ∩ O ≠ ∅")
+                    .withSuggestion("Ensure inputs and outputs do not overlap")
+                    .build());
         
         return BuildResult!HermeticityProof.ok(proof);
     }
@@ -349,10 +345,8 @@ struct BuildVerifier
         proof.complete = proof.specs.length == graph.nodes.length;
         
         if (!proof.isValid)
-        {
-            auto error = new GraphError("Determinism proof failed: incomplete specifications", ErrorCode.GraphInvalid);
-            return BuildResult!DeterminismProof.err(cast(BuildError) error);
-        }
+            return BuildResult!DeterminismProof.err(
+                Errors.graph("Determinism proof failed: incomplete specifications", ErrorCode.GraphInvalid).build());
         
         return BuildResult!DeterminismProof.ok(proof);
     }
@@ -408,12 +402,11 @@ struct BuildVerifier
         proof.disjointWrites = verifyDisjointWrites(graph);
         
         if (!proof.isValid)
-        {
-            auto error = new GraphError("Race-freedom proof failed", ErrorCode.GraphInvalid);
-            error.addContext(ErrorContext("concurrency", "potential data race detected"));
-            error.addSuggestion("Ensure all shared state uses atomic operations");
-            return BuildResult!RaceFreedomProof.err(cast(BuildError) error);
-        }
+            return BuildResult!RaceFreedomProof.err(
+                Errors.graph("Race-freedom proof failed", ErrorCode.GraphInvalid)
+                    .withContext("concurrency", "potential data race detected")
+                    .withSuggestion("Ensure all shared state uses atomic operations")
+                    .build());
         
         return BuildResult!RaceFreedomProof.ok(proof);
     }

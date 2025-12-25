@@ -155,14 +155,14 @@ final class ExecutionService : IExecutionService {
                     return Ok!(ReapiOperation, BuildError)(*op);
             } else {
                 return Err!(ReapiOperation, BuildError)(
-                    new DistributedError("Operation not found: " ~ operationName));
+                    DistributedErrors.protocol("Operation not found: " ~ operationName).build());
             }
             
             Thread.sleep(100.msecs);
         }
         
         return Err!(ReapiOperation, BuildError)(
-            new DistributedError("Operation timeout"));
+            DistributedErrors.protocol("Operation timeout").build());
     }
     
     /// Cancel operation
@@ -176,7 +176,7 @@ final class ExecutionService : IExecutionService {
         }
         
         return VoidBuildResult.err(
-            new DistributedError("Operation not found: " ~ operationName));
+            DistributedErrors.protocol("Operation not found: " ~ operationName).build());
     }
 }
 
@@ -201,7 +201,7 @@ final class ActionCacheService : IActionCacheService {
             return Ok!(ReapiActionResult, BuildError)(*result);
         
         return Err!(ReapiActionResult, BuildError)(
-            new CacheError("Action not found in cache", ErrorCode.CacheNotFound));
+            Errors.cache("Action not found in cache", ErrorCode.CacheNotFound).build());
     }
     
     BuildResult!ReapiActionResult updateActionResult(

@@ -87,10 +87,8 @@ final class CdnManager
     ) const @trusted
     {
         if (!config.enabled || config.provider != "cloudfront")
-        {
-            auto error = new GenericError("CloudFront not configured", ErrorCode.ConfigError);
-            return Err!(string, BuildError)(error);
-        }
+            return Err!(string, BuildError)(
+                Errors.config("CloudFront not configured", ErrorCode.ConfigError).build());
         
         immutable expiry = Clock.currStdTime() / 10_000_000 + validity.total!"seconds";
         
@@ -114,10 +112,8 @@ final class CdnManager
     ) const @trusted
     {
         if (!config.enabled || config.provider != "cloudflare")
-        {
-            auto error = new GenericError("Cloudflare not configured", ErrorCode.ConfigError);
-            return Err!(string, BuildError)(error);
-        }
+            return Err!(string, BuildError)(
+                Errors.config("Cloudflare not configured", ErrorCode.ConfigError).build());
         
         immutable expiry = Clock.currStdTime() / 10_000_000 + validity.total!"seconds";
         immutable baseUrl = "https://" ~ config.domain ~ path;
@@ -173,18 +169,14 @@ final class CdnManager
         // Check expiry
         immutable now = Clock.currStdTime() / 10_000_000;
         if (now > expiry)
-        {
-            auto error = new GenericError("Signed URL expired", ErrorCode.CacheUnauthorized);
-            return Err!(bool, BuildError)(error);
-        }
+            return Err!(bool, BuildError)(
+                Errors.cache("Signed URL expired", ErrorCode.CacheUnauthorized).build());
         
         // Verify signature
         immutable expected = signUrl(path ~ to!string(expiry));
         if (signature != expected)
-        {
-            auto error = new GenericError("Invalid signature", ErrorCode.CacheUnauthorized);
-            return Err!(bool, BuildError)(error);
-        }
+            return Err!(bool, BuildError)(
+                Errors.cache("Invalid signature", ErrorCode.CacheUnauthorized).build());
         
         return Ok!(bool, BuildError)(true);
     }
@@ -204,11 +196,8 @@ final class CdnManager
             case "fastly":
                 return purgeFastly(path);
             default:
-                auto error = new GenericError(
-                    "CDN provider '" ~ config.provider ~ "' not supported for purging",
-                    ErrorCode.NotSupported
-                );
-                return VoidBuildResult.err(error);
+                return VoidBuildResult.err(
+                    Errors.config("CDN provider '" ~ config.provider ~ "' not supported for purging", ErrorCode.NotSupported).build());
         }
     }
     
@@ -225,13 +214,8 @@ final class CdnManager
         import std.datetime.timezone : UTC;
         
         if (config.distributionId.length == 0 || config.apiKey.length == 0)
-        {
-            auto error = new GenericError(
-                "CloudFront distribution ID or API key not configured",
-                ErrorCode.ConfigError
-            );
-            return VoidBuildResult.err(error);
-        }
+            return VoidBuildResult.err(
+                Errors.config("CloudFront distribution ID or API key not configured", ErrorCode.ConfigError).build());
         
         // Create invalidation request
         JSONValue invalidation;
@@ -269,13 +253,8 @@ final class CdnManager
         import std.json : JSONValue, toJSON, parseJSON;
         
         if (config.distributionId.length == 0 || config.apiKey.length == 0)
-        {
-            auto error = new GenericError(
-                "Cloudflare zone ID or API key not configured",
-                ErrorCode.ConfigError
-            );
-            return VoidBuildResult.err(error);
-        }
+            return VoidBuildResult.err(
+                Errors.config("Cloudflare zone ID or API key not configured", ErrorCode.ConfigError).build());
         
         // Create purge request
         JSONValue request;
@@ -312,14 +291,14 @@ final class CdnManager
             {
                 auto errorMsg = "errors" in response ? response["errors"].toString() : "Unknown error";
                 Logger.error("Cloudflare purge failed: " ~ errorMsg);
-                auto error = new GenericError("Cloudflare purge failed: " ~ errorMsg, ErrorCode.NetworkError);
-                return VoidBuildResult.err(error);
+                return VoidBuildResult.err(
+                    Errors.generic("Cloudflare purge failed: " ~ errorMsg, ErrorCode.NetworkError).build());
             }
         }
         catch (Exception e)
         {
-            auto error = new GenericError("Failed to parse Cloudflare response: " ~ e.msg, ErrorCode.NetworkError);
-            return VoidBuildResult.err(error);
+            return VoidBuildResult.err(
+                Errors.generic("Failed to parse Cloudflare response: " ~ e.msg, ErrorCode.NetworkError).build());
         }
     }
     
@@ -327,13 +306,8 @@ final class CdnManager
     private VoidBuildResult purgeFastly(string path) @trusted
     {
         if (config.apiKey.length == 0)
-        {
-            auto error = new GenericError(
-                "Fastly API key not configured",
-                ErrorCode.ConfigError
-            );
-            return VoidBuildResult.err(error);
-        }
+            return VoidBuildResult.err(
+                Errors.config("Fastly API key not configured", ErrorCode.ConfigError).build());
         
         immutable url = format("https://api.fastly.com/purge/%s%s",
             config.domain, path);
@@ -367,14 +341,14 @@ final class CdnManager
             {
                 auto errorMsg = response.toString();
                 Logger.error("Fastly purge failed: " ~ errorMsg);
-                auto error = new GenericError("Fastly purge failed: " ~ errorMsg, ErrorCode.NetworkError);
-                return VoidBuildResult.err(error);
+                return VoidBuildResult.err(
+                    Errors.generic("Fastly purge failed: " ~ errorMsg, ErrorCode.NetworkError).build());
             }
         }
         catch (Exception e)
         {
-            auto error = new GenericError("Failed to parse Fastly response: " ~ e.msg, ErrorCode.NetworkError);
-            return VoidBuildResult.err(error);
+            return VoidBuildResult.err(
+                Errors.generic("Failed to parse Fastly response: " ~ e.msg, ErrorCode.NetworkError).build());
         }
     }
     
@@ -420,10 +394,8 @@ final class CdnManager
         // Parse URL
         auto urlParts = parseHttpUrl(url);
         if (urlParts.host.length == 0)
-        {
-            auto error = new GenericError("Invalid URL: " ~ url, ErrorCode.ConfigError);
-            return Err!(ubyte[], BuildError)(error);
-        }
+            return Err!(ubyte[], BuildError)(
+                Errors.config("Invalid URL: " ~ url, ErrorCode.ConfigError).build());
         
         try
         {
