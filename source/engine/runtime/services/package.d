@@ -58,3 +58,9 @@ public import engine.runtime.services.scheduling :
     SchedulingMode,
     SchedulingStats,
     BuildResult;
+
+// Provenance service
+public import engine.runtime.services.provenance :
+    IProvenanceService,
+    ProvenanceService,
+    NullProvenanceService;

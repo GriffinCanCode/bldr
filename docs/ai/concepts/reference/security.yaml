@@ -1,23 +1,38 @@
 topic: security
 category: concepts
-summary: "Security - Supply chain security features"
+summary: "Security - Supply chain security features including SLSA provenance"
 definition: |
-  Builder integrates security features to protect your software supply chain.
-  It ensures artifact integrity, validates hashes, and runs builds in isolated sandboxes.
+  Builder integrates comprehensive security features to protect your software supply chain.
+  It ensures artifact integrity, validates hashes, runs builds in isolated sandboxes,
+  and generates SLSA-compliant build provenance attestations.
 
 key_points:
   - "Artifact integrity: BLAKE3 hashing for all inputs/outputs"
   - "Sandboxing: Prevents malicious build scripts from affecting host"
   - "Lockfiles: Pins dependency versions and hashes"
+  - "Provenance: SLSA v1.0 signed attestations"
   - "Vulnerability scanning: Can integrate with scanners"
 
+provenance_support:
+  - "SLSA L1: Provenance exists (automatic)"
+  - "SLSA L2: Hosted platform (CI/CD)"
+  - "SLSA L3: Hardened hermetic builds"
+  - "BLAKE3-HMAC signed attestations"
+  - "In-toto compatible format"
+
 usage_examples:
-  - command: "builder audit"
+  - command: "bldr build --provenance"
+    description: "Build with provenance attestation"
+  - command: "bldr verify --provenance build.provenance.json"
+    description: "Verify build provenance"
+  - command: "bldr audit"
     description: "Check for known security issues (if enabled)"
 
-related: [blake3, hermetic, determinism]
+related: [blake3, hermetic, determinism, provenance, verification]
 
 next_steps: |
+  - Enable provenance: bldr build --provenance
   - Always use lockfiles for external dependencies
-  - Enable sandboxing for all builds
+  - Enable sandboxing (hermetic mode) for all builds
+  - See 'bldr explain provenance' for supply chain security
 

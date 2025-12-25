@@ -476,4 +476,5 @@ bldr build --hermetic --verbose
 - [Security Documentation](../security/security.md)
 - [Distributed Builds](distributed.md)
 - [Caching System](caching.md)
+- [Build Provenance](provenance.md) - Hermetic builds enable SLSA Level 3 attestations
 

@@ -479,4 +479,5 @@ If builds are deterministic but verification fails:
 - [Action-Level Caching](caching.md)
 - [Remote Execution](remote-execution.md)
 - [Security](../security/security.md)
+- [Build Provenance](provenance.md) - SLSA attestations capture determinism verification
 

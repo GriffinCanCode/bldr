@@ -422,12 +422,25 @@ Possible extensions:
 4. **Remote Verification**: Verify distributed builds
 5. **Proof Composition**: Combine proofs across workspaces
 
+## Integration with Provenance
+
+Verification proofs complement build provenance attestations:
+
+```d
+// Generate both proof and provenance
+auto proof = BuildVerifier.verify(graph).unwrap();
+auto provenance = ProvenanceGenerator.finalize().unwrap();
+
+// Proof certifies correctness, provenance certifies origin
+```
+
 ## Examples
 
 See:
 - `tests/unit/graph/verification.d` - Comprehensive test suite
 - `docs/examples/verification_example.d` - Usage examples
 - `examples/cpp-project/` - Real-world verification
+- [Build Provenance](provenance.md) - SLSA attestations
 
 ## References
 

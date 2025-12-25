@@ -1,0 +1,76 @@
+topic: provenance
+category: core
+summary: "SLSA-compliant build provenance attestations for software supply chain security"
+definition: |
+  Build provenance is a cryptographically signed attestation of how software artifacts
+  were built. It records materials (inputs), outputs, builder identity, and build
+  metadata to enable verification and auditability.
+  
+  Builder implements SLSA (Supply-chain Levels for Software Artifacts) v1.0 specification,
+  providing machine-verifiable evidence of build integrity.
+
+slsa_levels:
+  L0: "No provenance"
+  L1: "Provenance exists (automatic with bldr)"
+  L2: "Hosted build platform (CI/CD)"
+  L3: "Hardened builds (hermetic mode)"
+
+what_provenance_captures:
+  - "Subject: Output artifacts with content hashes (BLAKE3)"
+  - "Materials: All input files with digests"
+  - "Builder: Identity and version of build system"
+  - "Metadata: Timestamps, build ID, duration"
+  - "Build definition: Build type, parameters"
+
+key_points:
+  - "Automatic generation during builds"
+  - "BLAKE3-HMAC signatures (DSSE format)"
+  - "In-toto compatible statement format"
+  - "Non-intrusive: minimal performance impact"
+  - "Thread-safe collection for parallel builds"
+  - "Integrates with hermetic builds for L3"
+
+usage_examples:
+  - description: "Enable provenance generation"
+    code: |
+      bldr build --provenance
+      
+  - description: "Verify provenance"
+    code: |
+      bldr verify --provenance build.provenance.json
+      
+  - description: "Generate provenance programmatically"
+    code: |
+      auto gen = ProvenanceGenerator.create();
+      gen.startBuild(hermetic: true);
+      gen.addMaterial("src/main.d");
+      gen.addOutput("bin/app");
+      auto prov = gen.finalize().unwrap();
+
+configuration:
+  BLDR_PROVENANCE_ENABLED: "Enable/disable provenance (default: true)"
+  BLDR_PROVENANCE_SIGN: "Sign attestations (default: true)"
+  BLDR_SLSA_LEVEL: "Target SLSA level (L1, L2, L3)"
+  BLDR_SIGNING_KEY: "Path to custom signing key"
+
+output_formats:
+  slsa_json: "SLSA v1.0 provenance predicate"
+  dsse_envelope: "Dead Simple Signing Envelope (signed)"
+  summary: "Human-readable attestation summary"
+
+enterprise_benefits:
+  - "Supply chain security compliance (EO 14028)"
+  - "SBOM integration capability"
+  - "Artifact verification in registries"
+  - "Audit trail for builds"
+  - "Reproducibility evidence"
+
+related: [determinism, hermetic, blake3, security, verification, remote-execution]
+
+next_steps: |
+  - Enable provenance: bldr build --provenance
+  - Verify builds: bldr verify --provenance <file>
+  - See 'bldr explain hermetic' for SLSA L3 builds
+  - See 'bldr explain determinism' for reproducibility
+
+

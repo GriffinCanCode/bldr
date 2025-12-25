@@ -88,6 +88,8 @@ struct ExplainCommand
         writeln("  incremental      Module-level incremental compilation");
         writeln("  action-cache     Fine-grained action caching");
         writeln("  remote-cache     Distributed cache for teams/CI");
+        writeln("  provenance       SLSA-compliant build provenance for supply chain security");
+        writeln("  hermetic         Isolated sandboxed build environments");
         writeln();
         writeln("EXAMPLES:");
         writeln("  bldr explain blake3");

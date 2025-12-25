@@ -200,6 +200,11 @@ concepts:
     summary: "Plugin System - RPC-based plugins in any language (Python, Go, Rust, shell)"
     keywords: ["extension", "rpc", "custom", "hooks", "executable"]
 
+  provenance:
+    file: "concepts/core/provenance.yaml"
+    summary: "SLSA-compliant build provenance attestations for supply chain security"
+    keywords: ["slsa", "attestation", "supply chain", "signing", "sbom", "in-toto"]
+
   providers:
     file: "concepts/rules/providers.yaml"
     summary: "Providers - Data exchange between rules"
@@ -388,6 +393,11 @@ aliases:
   init: "wizard"
   infer: "wizard"
   setup: "wizard"
+  slsa: "provenance"
+  attestation: "provenance"
+  supply-chain: "provenance"
+  sbom: "provenance"
+  in-toto: "provenance"
 
 categories:
   - name: "core"

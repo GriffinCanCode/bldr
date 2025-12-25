@@ -11,6 +11,7 @@ import infrastructure.config.schema.schema;
 import engine.graph;
 import engine.runtime.hermetic.determinism;
 import engine.runtime.services;
+import engine.provenance;
 import infrastructure.utils.logging.logger;
 import frontend.cli.control.terminal;
 import frontend.cli.display.format;
@@ -48,6 +49,9 @@ struct VerifyCommand
         bool showRepairPlan = true;
         string outputDir = ".builder-verify";
         string strategy = "hash";
+        bool verifyProvenance = false;
+        string provenanceFile = "";
+        SLSALevel requiredLevel = SLSALevel.L1;
         
         size_t i = 1; // Skip "verify" command itself
         while (i < args.length)
@@ -99,6 +103,30 @@ struct VerifyCommand
                 strategy = args[i + 1];
                 i += 2;
             }
+            else if (arg == "--provenance" || arg == "-p")
+            {
+                verifyProvenance = true;
+                i++;
+            }
+            else if (arg == "--slsa-level")
+            {
+                if (i + 1 >= args.length)
+                {
+                    stderr.writeln("Error: --slsa-level requires a value (L1, L2, L3)");
+                    return 1;
+                }
+                auto levelStr = args[i + 1];
+                switch (levelStr)
+                {
+                    case "L1", "1": requiredLevel = SLSALevel.L1; break;
+                    case "L2", "2": requiredLevel = SLSALevel.L2; break;
+                    case "L3", "3": requiredLevel = SLSALevel.L3; break;
+                    default:
+                        stderr.writeln("Error: Invalid SLSA level: " ~ levelStr);
+                        return 1;
+                }
+                i += 2;
+            }
             else if (arg == "--help" || arg == "-h")
             {
                 printHelp();
@@ -115,6 +143,18 @@ struct VerifyCommand
                 stderr.writeln("Unknown option: " ~ arg);
                 return 1;
             }
+        }
+        
+        // Handle provenance verification mode
+        if (verifyProvenance)
+        {
+            if (targetSpec.empty)
+            {
+                stderr.writeln("Error: No provenance file specified");
+                stderr.writeln("Usage: bldr verify --provenance <file.provenance.json>");
+                return 1;
+            }
+            return executeProvenanceVerification(targetSpec, requiredLevel);
         }
         
         if (targetSpec.empty)
@@ -402,13 +442,70 @@ struct VerifyCommand
         }
     }
     
+    /// Execute provenance verification
+    private static int executeProvenanceVerification(string provenanceFile, SLSALevel requiredLevel) @system
+    {
+        writeln(formatter.header("Provenance Verification"));
+        writeln();
+        writeln("  File: " ~ provenanceFile);
+        writeln("  Required SLSA Level: L" ~ (cast(int)requiredLevel).to!string);
+        writeln();
+        
+        // Create verifier
+        auto verifier = ProvenanceVerifier.create(".", requiredLevel);
+        
+        // Verify file
+        auto result = verifier.verifyFile(provenanceFile);
+        if (result.isErr)
+        {
+            writeln(formatter.formatError("Verification failed: " ~ result.unwrapErr().message()));
+            return 1;
+        }
+        
+        auto verification = result.unwrap();
+        
+        // Print results
+        writeln(formatter.section("Verification Results"));
+        writeln();
+        
+        if (verification.passed())
+        {
+            writeln(formatter.green("✓ Provenance verification PASSED"));
+            writeln();
+            writeln("  Signature: " ~ (verification.signatureValid ? "✓ valid" : "✗ invalid"));
+            writeln("  Hash:      " ~ (verification.hashMatch ? "✓ matches" : "✗ mismatch"));
+            writeln("  SLSA:      L" ~ (cast(int)verification.actualLevel).to!string ~ 
+                   " (required: L" ~ (cast(int)requiredLevel).to!string ~ ")");
+            return 0;
+        }
+        else
+        {
+            writeln(formatter.formatError("✗ Provenance verification FAILED"));
+            writeln();
+            writeln("  Signature: " ~ (verification.signatureValid ? "✓ valid" : "✗ invalid"));
+            writeln("  Hash:      " ~ (verification.hashMatch ? "✓ matches" : "✗ mismatch"));
+            writeln("  SLSA:      L" ~ (cast(int)verification.actualLevel).to!string ~ 
+                   " (required: L" ~ (cast(int)requiredLevel).to!string ~ ")");
+            
+            if (verification.violations.length > 0)
+            {
+                writeln();
+                writeln("  Violations:");
+                foreach (v; verification.violations)
+                    writeln("    - " ~ v);
+            }
+            return 1;
+        }
+    }
+    
     private static void printHelp() @system
     {
         writeln("Usage: bldr verify <target> [options]");
+        writeln("       bldr verify --provenance <file.provenance.json>");
         writeln();
-        writeln("Verify build determinism by comparing outputs across multiple builds");
+        writeln("Verify build determinism or provenance attestations");
         writeln();
-        writeln("Options:");
+        writeln("Determinism Options:");
         writeln("  -n, --iterations N    Number of builds to compare (default: 2)");
         writeln("  -q, --quick           Quick check without building");
         writeln("  --strict              Fail if non-deterministic");
@@ -419,13 +516,20 @@ struct VerifyCommand
         writeln("                          bitwise - Bit-for-bit comparison");
         writeln("                          fuzzy - Ignore metadata");
         writeln("                          structural - Compare structure");
+        writeln();
+        writeln("Provenance Options:");
+        writeln("  -p, --provenance      Verify provenance file instead of determinism");
+        writeln("  --slsa-level LEVEL    Required SLSA level (L1, L2, L3, default: L1)");
+        writeln();
         writeln("  -h, --help            Show this help");
         writeln();
         writeln("Examples:");
         writeln("  bldr verify //main:app");
         writeln("  bldr verify //main:app --iterations 5");
         writeln("  bldr verify //main:app --quick");
-        writeln("  bldr verify //main:app --strict --strategy bitwise");
+        writeln("  bldr verify --provenance build.provenance.json");
+        writeln("  bldr verify --provenance build.provenance.json --slsa-level L2");
     }
 }
+
 
