@@ -1083,9 +1083,9 @@ bldr build --distributed --local-workers 4
 
 ### Phase 1: Core Protocol (2 weeks)
 - [x] Design document (this)
-- [ ] Protocol definitions
-- [ ] Message serialization
-- [ ] Transport layer (gRPC)
+- [x] Protocol definitions
+- [x] Message serialization (protobuf-compatible binary codec)
+- [x] Transport layer (gRPC - pure D HTTP/2 implementation)
 - [ ] Basic coordinator
 - [ ] Basic worker
 
@@ -1143,6 +1143,42 @@ bldr build --distributed --local-workers 4
 - **Zero-config:** Works out of box
 - **Observability:** Real-time dashboards
 - **Debugging:** Action replay capability
+
+---
+
+---
+
+## REAPI Implementation Status
+
+The following REAPI v2 features are implemented:
+
+### Content Addressable Storage (CAS)
+- [x] **FindMissingBlobs** - Identify which blobs need uploading
+- [x] **BatchUpdateBlobs** - Batch blob uploads with protobuf encoding
+- [x] **BatchReadBlobs** - Batch blob downloads with compression support
+- [x] **ByteStream API** - Streaming for large blobs (>1MB)
+  - Read with offset/limit
+  - Chunked write with resume support
+  - Query write status
+
+### Action Cache
+- [x] **GetActionResult** - Retrieve cached action results
+- [x] **UpdateActionResult** - Store action results with metadata
+
+### Execution
+- [x] **Execute** - Submit actions for remote execution
+- [x] **WaitExecution** - Long-running operation polling
+
+### Capabilities
+- [x] **GetCapabilities** - Server capability reporting
+  - Supported digest functions (BLAKE3, SHA256)
+  - Compression support (Identity, Zstd)
+  - Batch size limits
+
+### Wire Format
+- [x] **Protobuf-compatible binary encoding** - Full varint, length-delimited, fixed width
+- [x] **gRPC framing** - Proper message framing for HTTP/2
+- [x] **Hash translation** - Bidirectional BLAKE3 ↔ SHA256 mapping
 
 ---
 

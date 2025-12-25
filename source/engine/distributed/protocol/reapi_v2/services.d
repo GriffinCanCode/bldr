@@ -417,7 +417,98 @@ struct ReapiRouter {
             return routeOperation(method, path, body_);
         }
         
+        // ByteStream - read
+        if (path.indexOf("ByteStream/Read") >= 0) {
+            return routeByteStreamRead(body_);
+        }
+        
+        // ByteStream - write
+        if (path.indexOf("ByteStream/Write") >= 0) {
+            return routeByteStreamWrite(body_);
+        }
+        
+        // ByteStream - query write status
+        if (path.indexOf("ByteStream/QueryWriteStatus") >= 0) {
+            return routeByteStreamQueryStatus(body_);
+        }
+        
         return Err!(ubyte[], string)("Unknown endpoint: " ~ method ~ " " ~ path);
+    }
+    
+    private Result!(ubyte[], string) routeByteStreamRead(const ubyte[] body_) @trusted {
+        import engine.distributed.protocol.reapi_v2.stream;
+        
+        auto reqResult = ByteStreamCodec.decodeReadRequest(body_);
+        if (reqResult.isErr)
+            return Err!(ubyte[], string)("Invalid ByteStream Read request: " ~ reqResult.unwrapErr());
+        
+        auto request = reqResult.unwrap();
+        
+        // Parse resource and get blob from CAS
+        auto rnResult = ResourceName.parse(request.resourceName);
+        if (rnResult.isErr)
+            return Err!(ubyte[], string)(rnResult.unwrapErr());
+        
+        auto rn = rnResult.unwrap();
+        auto digest = rn.toDigest();
+        
+        auto data = (cast(ContentAddressableStorageService)services.cas).getBlob(digest);
+        if (data.length == 0)
+            return Err!(ubyte[], string)("Blob not found: " ~ request.resourceName);
+        
+        // Apply offset and limit
+        import std.algorithm : min;
+        auto startOffset = min(cast(size_t)request.readOffset, data.length);
+        auto endOffset = request.readLimit > 0
+            ? min(startOffset + cast(size_t)request.readLimit, data.length)
+            : data.length;
+        
+        ByteStreamReadResponse resp;
+        resp.data = data[startOffset .. endOffset];
+        
+        return Ok!(ubyte[], string)(ByteStreamCodec.encodeReadResponse(resp));
+    }
+    
+    private Result!(ubyte[], string) routeByteStreamWrite(const ubyte[] body_) @trusted {
+        import engine.distributed.protocol.reapi_v2.stream;
+        
+        auto reqResult = ByteStreamCodec.decodeWriteRequest(body_);
+        if (reqResult.isErr)
+            return Err!(ubyte[], string)("Invalid ByteStream Write request: " ~ reqResult.unwrapErr());
+        
+        auto request = reqResult.unwrap();
+        
+        // For single-chunk writes (simplified)
+        if (request.finishWrite && request.resourceName.length > 0) {
+            auto rnResult = ResourceName.parse(request.resourceName);
+            if (rnResult.isErr)
+                return Err!(ubyte[], string)(rnResult.unwrapErr());
+            
+            auto rn = rnResult.unwrap();
+            (cast(ContentAddressableStorageService)services.cas).putBlob(rn.toDigest(), request.data);
+        }
+        
+        ByteStreamWriteResponse resp;
+        resp.committedSize = request.data.length;
+        
+        return Ok!(ubyte[], string)(ByteStreamCodec.encodeWriteResponse(resp));
+    }
+    
+    private Result!(ubyte[], string) routeByteStreamQueryStatus(const ubyte[] body_) @trusted {
+        import engine.distributed.protocol.reapi_v2.stream;
+        
+        // Simplified - just return not complete
+        ByteStreamQueryWriteStatusResponse resp;
+        resp.committedSize = 0;
+        resp.complete = false;
+        
+        ubyte[] buf;
+        buf ~= ReapiV2Codec.makeTag(1, ReapiV2Codec.WireType.Varint);
+        buf ~= ReapiV2Codec.encodeVarint(resp.committedSize);
+        buf ~= ReapiV2Codec.makeTag(2, ReapiV2Codec.WireType.Varint);
+        buf ~= resp.complete ? 0x01 : 0x00;
+        
+        return Ok!(ubyte[], string)(buf);
     }
     
     private Result!(ubyte[], string) routeExecute(string instanceName, const ubyte[] body_) @trusted {
@@ -485,77 +576,66 @@ struct ReapiRouter {
     }
     
     private Result!(ubyte[], string) routeFindMissing(string instanceName, const ubyte[] body_) @trusted {
-        // Decode digests from request (simplified)
-        ReapiDigest[] requestDigests;
+        // Decode FindMissingBlobsRequest
+        auto reqResult = ReapiV2Codec.decodeFindMissingBlobsRequest(body_);
+        if (reqResult.isErr)
+            return Err!(ubyte[], string)("Invalid FindMissingBlobs request: " ~ reqResult.unwrapErr());
         
-        auto missing = services.cas.findMissingBlobs(instanceName, requestDigests);
+        auto request = reqResult.unwrap();
         
-        // Encode response
-        ubyte[] buf;
-        foreach (digest; missing) {
-            buf ~= ReapiV2Codec.makeTag(1, ReapiV2Codec.WireType.LengthDelimited);
-            auto digestBuf = ReapiV2Codec.encodeDigest(digest);
-            buf ~= ReapiV2Codec.encodeVarint(digestBuf.length);
-            buf ~= digestBuf;
-        }
+        // Find missing blobs via CAS service
+        auto missing = services.cas.findMissingBlobs(
+            request.instanceName.length > 0 ? request.instanceName : instanceName,
+            request.blobDigests
+        );
         
-        return Ok!(ubyte[], string)(buf);
+        // Encode response using proper protobuf format
+        ReapiFindMissingBlobsResponse response;
+        response.missingBlobDigests = missing;
+        
+        return Ok!(ubyte[], string)(ReapiV2Codec.encodeFindMissingBlobsResponse(response));
     }
     
     private Result!(ubyte[], string) routeBatchUpdate(string instanceName, const ubyte[] body_) @trusted {
-        // Decode requests (simplified)
-        ReapiBlobRequest[] requests;
+        // Decode BatchUpdateBlobsRequest
+        auto reqResult = ReapiV2Codec.decodeBatchUpdateBlobsRequest(body_);
+        if (reqResult.isErr)
+            return Err!(ubyte[], string)("Invalid BatchUpdateBlobs request: " ~ reqResult.unwrapErr());
         
-        auto responses = services.cas.batchUpdateBlobs(instanceName, requests);
+        auto request = reqResult.unwrap();
         
-        // Encode responses
-        ubyte[] buf;
-        foreach (resp; responses) {
-            // Encode BatchUpdateBlobsResponse.Response
-            ubyte[] respBuf;
-            respBuf ~= ReapiV2Codec.makeTag(1, ReapiV2Codec.WireType.LengthDelimited);
-            auto digestBuf = ReapiV2Codec.encodeDigest(resp.digest);
-            respBuf ~= ReapiV2Codec.encodeVarint(digestBuf.length);
-            respBuf ~= digestBuf;
-            
-            buf ~= ReapiV2Codec.makeTag(1, ReapiV2Codec.WireType.LengthDelimited);
-            buf ~= ReapiV2Codec.encodeVarint(respBuf.length);
-            buf ~= respBuf;
-        }
+        // Perform batch update
+        auto responses = services.cas.batchUpdateBlobs(
+            request.instanceName.length > 0 ? request.instanceName : instanceName,
+            request.requests
+        );
         
-        return Ok!(ubyte[], string)(buf);
+        // Encode response using proper protobuf format
+        ReapiBatchUpdateBlobsResponse response;
+        response.responses = responses;
+        
+        return Ok!(ubyte[], string)(ReapiV2Codec.encodeBatchUpdateBlobsResponse(response));
     }
     
     private Result!(ubyte[], string) routeBatchRead(string instanceName, const ubyte[] body_) @trusted {
-        // Decode digests (simplified)
-        ReapiDigest[] digests;
+        // Decode BatchReadBlobsRequest
+        auto reqResult = ReapiV2Codec.decodeBatchReadBlobsRequest(body_);
+        if (reqResult.isErr)
+            return Err!(ubyte[], string)("Invalid BatchReadBlobs request: " ~ reqResult.unwrapErr());
         
-        auto responses = services.cas.batchReadBlobs(instanceName, digests);
+        auto request = reqResult.unwrap();
         
-        // Encode responses
-        ubyte[] buf;
-        foreach (resp; responses) {
-            ubyte[] respBuf;
-            
-            // Field 1: digest
-            respBuf ~= ReapiV2Codec.makeTag(1, ReapiV2Codec.WireType.LengthDelimited);
-            auto digestBuf = ReapiV2Codec.encodeDigest(resp.digest);
-            respBuf ~= ReapiV2Codec.encodeVarint(digestBuf.length);
-            respBuf ~= digestBuf;
-            
-            // Field 2: data
-            if (resp.data.length > 0) {
-                respBuf ~= ReapiV2Codec.makeTag(2, ReapiV2Codec.WireType.LengthDelimited);
-                respBuf ~= ReapiV2Codec.encodeVarint(resp.data.length);
-                respBuf ~= resp.data;
-            }
-            
-            buf ~= ReapiV2Codec.makeTag(1, ReapiV2Codec.WireType.LengthDelimited);
-            buf ~= ReapiV2Codec.encodeVarint(respBuf.length);
-            buf ~= respBuf;
-        }
+        // Perform batch read
+        auto responses = services.cas.batchReadBlobs(
+            request.instanceName.length > 0 ? request.instanceName : instanceName,
+            request.digests
+        );
         
-        return Ok!(ubyte[], string)(buf);
+        // Encode response using proper protobuf format
+        ReapiBatchReadBlobsResponse response;
+        response.responses = responses;
+        
+        return Ok!(ubyte[], string)(ReapiV2Codec.encodeBatchReadBlobsResponse(response));
     }
     
     private Result!(ubyte[], string) routeBlobAccess(

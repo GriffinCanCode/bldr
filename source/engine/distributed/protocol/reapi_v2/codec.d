@@ -536,6 +536,68 @@ struct ReapiV2Codec {
         return buf;
     }
     
+    /// Decode FindMissingBlobsRequest message
+    static Result!(ReapiFindMissingBlobsRequest, string) decodeFindMissingBlobsRequest(
+        const ubyte[] data
+    ) @trusted {
+        ReapiFindMissingBlobsRequest req;
+        size_t offset = 0;
+        
+        while (offset < data.length) {
+            auto tagResult = decodeTag(data[offset .. $]);
+            if (tagResult.isErr) return Err!(ReapiFindMissingBlobsRequest, string)(tagResult.unwrapErr());
+            
+            auto tag = tagResult.unwrap();
+            offset += tag.bytesRead;
+            
+            switch (tag.fieldNumber) {
+                case 1:  // instance_name
+                    auto lenResult = decodeVarint(data[offset .. $]);
+                    if (lenResult.isErr) return Err!(ReapiFindMissingBlobsRequest, string)(lenResult.unwrapErr());
+                    offset += lenResult.unwrap().bytesRead;
+                    auto len = cast(size_t)lenResult.unwrap().value;
+                    req.instanceName = cast(string)data[offset .. offset + len];
+                    offset += len;
+                    break;
+                    
+                case 2:  // blob_digests (repeated)
+                    auto lenResult = decodeVarint(data[offset .. $]);
+                    if (lenResult.isErr) return Err!(ReapiFindMissingBlobsRequest, string)(lenResult.unwrapErr());
+                    offset += lenResult.unwrap().bytesRead;
+                    auto msgLen = cast(size_t)lenResult.unwrap().value;
+                    auto digestResult = decodeDigest(data[offset .. offset + msgLen]);
+                    if (digestResult.isOk)
+                        req.blobDigests ~= digestResult.unwrap();
+                    offset += msgLen;
+                    break;
+                    
+                default:
+                    auto skipResult = skipField(data[offset .. $], tag.wireType);
+                    if (skipResult.isErr) return Err!(ReapiFindMissingBlobsRequest, string)(skipResult.unwrapErr());
+                    offset += skipResult.unwrap();
+                    break;
+            }
+        }
+        
+        return Ok!(ReapiFindMissingBlobsRequest, string)(req);
+    }
+    
+    /// Encode FindMissingBlobsResponse message
+    static ubyte[] encodeFindMissingBlobsResponse(ReapiFindMissingBlobsResponse resp) @trusted {
+        ubyte[] buf;
+        buf.reserve(resp.missingBlobDigests.length * 64);
+        
+        // Field 1: missing_blob_digests (repeated)
+        foreach (digest; resp.missingBlobDigests) {
+            buf ~= makeTag(1, WireType.LengthDelimited);
+            auto digestBuf = encodeDigest(digest);
+            buf ~= encodeVarint(digestBuf.length);
+            buf ~= digestBuf;
+        }
+        
+        return buf;
+    }
+    
     /// Decode FindMissingBlobsResponse message
     static Result!(ReapiFindMissingBlobsResponse, string) decodeFindMissingBlobsResponse(
         const ubyte[] data
@@ -572,6 +634,304 @@ struct ReapiV2Codec {
         }
         
         return Ok!(ReapiFindMissingBlobsResponse, string)(resp);
+    }
+    
+    /// Decode BatchUpdateBlobsRequest message
+    static Result!(ReapiBatchUpdateBlobsRequest, string) decodeBatchUpdateBlobsRequest(
+        const ubyte[] data
+    ) @trusted {
+        ReapiBatchUpdateBlobsRequest req;
+        size_t offset = 0;
+        
+        while (offset < data.length) {
+            auto tagResult = decodeTag(data[offset .. $]);
+            if (tagResult.isErr) return Err!(ReapiBatchUpdateBlobsRequest, string)(tagResult.unwrapErr());
+            
+            auto tag = tagResult.unwrap();
+            offset += tag.bytesRead;
+            
+            switch (tag.fieldNumber) {
+                case 1:  // instance_name
+                    auto lenResult = decodeVarint(data[offset .. $]);
+                    if (lenResult.isErr) break;
+                    offset += lenResult.unwrap().bytesRead;
+                    auto len = cast(size_t)lenResult.unwrap().value;
+                    req.instanceName = cast(string)data[offset .. offset + len];
+                    offset += len;
+                    break;
+                    
+                case 2:  // requests (repeated Request)
+                    auto lenResult = decodeVarint(data[offset .. $]);
+                    if (lenResult.isErr) break;
+                    offset += lenResult.unwrap().bytesRead;
+                    auto msgLen = cast(size_t)lenResult.unwrap().value;
+                    auto blobReqResult = decodeBlobRequest(data[offset .. offset + msgLen]);
+                    if (blobReqResult.isOk)
+                        req.requests ~= blobReqResult.unwrap();
+                    offset += msgLen;
+                    break;
+                    
+                default:
+                    auto skipResult = skipField(data[offset .. $], tag.wireType);
+                    if (skipResult.isErr) break;
+                    offset += skipResult.unwrap();
+                    break;
+            }
+        }
+        
+        return Ok!(ReapiBatchUpdateBlobsRequest, string)(req);
+    }
+    
+    /// Decode single blob request within batch
+    private static Result!(ReapiBlobRequest, string) decodeBlobRequest(const ubyte[] data) @trusted {
+        ReapiBlobRequest req;
+        size_t offset = 0;
+        
+        while (offset < data.length) {
+            auto tagResult = decodeTag(data[offset .. $]);
+            if (tagResult.isErr) break;
+            
+            auto tag = tagResult.unwrap();
+            offset += tag.bytesRead;
+            
+            switch (tag.fieldNumber) {
+                case 1:  // digest
+                    auto lenResult = decodeVarint(data[offset .. $]);
+                    if (lenResult.isErr) break;
+                    offset += lenResult.unwrap().bytesRead;
+                    auto msgLen = cast(size_t)lenResult.unwrap().value;
+                    auto digestResult = decodeDigest(data[offset .. offset + msgLen]);
+                    if (digestResult.isOk)
+                        req.digest = digestResult.unwrap();
+                    offset += msgLen;
+                    break;
+                    
+                case 2:  // data
+                    auto lenResult = decodeVarint(data[offset .. $]);
+                    if (lenResult.isErr) break;
+                    offset += lenResult.unwrap().bytesRead;
+                    auto len = cast(size_t)lenResult.unwrap().value;
+                    req.data = data[offset .. offset + len].dup;
+                    offset += len;
+                    break;
+                    
+                case 3:  // compressor
+                    auto valResult = decodeVarint(data[offset .. $]);
+                    if (valResult.isErr) break;
+                    offset += valResult.unwrap().bytesRead;
+                    req.compressor = cast(Compressor)valResult.unwrap().value;
+                    break;
+                    
+                default:
+                    auto skipResult = skipField(data[offset .. $], tag.wireType);
+                    if (skipResult.isErr) break;
+                    offset += skipResult.unwrap();
+                    break;
+            }
+        }
+        
+        return Ok!(ReapiBlobRequest, string)(req);
+    }
+    
+    /// Encode BatchUpdateBlobsResponse message
+    static ubyte[] encodeBatchUpdateBlobsResponse(ReapiBatchUpdateBlobsResponse resp) @trusted {
+        ubyte[] buf;
+        buf.reserve(resp.responses.length * 64);
+        
+        // Field 1: responses (repeated Response)
+        foreach (blobResp; resp.responses) {
+            ubyte[] respBuf;
+            
+            // Response.digest (field 1)
+            respBuf ~= makeTag(1, WireType.LengthDelimited);
+            auto digestBuf = encodeDigest(blobResp.digest);
+            respBuf ~= encodeVarint(digestBuf.length);
+            respBuf ~= digestBuf;
+            
+            // Response.status (field 2)
+            if (!blobResp.status.isOk) {
+                respBuf ~= makeTag(2, WireType.LengthDelimited);
+                auto statusBuf = encodeStatus(blobResp.status);
+                respBuf ~= encodeVarint(statusBuf.length);
+                respBuf ~= statusBuf;
+            }
+            
+            buf ~= makeTag(1, WireType.LengthDelimited);
+            buf ~= encodeVarint(respBuf.length);
+            buf ~= respBuf;
+        }
+        
+        return buf;
+    }
+    
+    /// Decode BatchReadBlobsRequest message
+    static Result!(ReapiBatchReadBlobsRequest, string) decodeBatchReadBlobsRequest(
+        const ubyte[] data
+    ) @trusted {
+        ReapiBatchReadBlobsRequest req;
+        size_t offset = 0;
+        
+        while (offset < data.length) {
+            auto tagResult = decodeTag(data[offset .. $]);
+            if (tagResult.isErr) return Err!(ReapiBatchReadBlobsRequest, string)(tagResult.unwrapErr());
+            
+            auto tag = tagResult.unwrap();
+            offset += tag.bytesRead;
+            
+            switch (tag.fieldNumber) {
+                case 1:  // instance_name
+                    auto lenResult = decodeVarint(data[offset .. $]);
+                    if (lenResult.isErr) break;
+                    offset += lenResult.unwrap().bytesRead;
+                    auto len = cast(size_t)lenResult.unwrap().value;
+                    req.instanceName = cast(string)data[offset .. offset + len];
+                    offset += len;
+                    break;
+                    
+                case 2:  // digests (repeated)
+                    auto lenResult = decodeVarint(data[offset .. $]);
+                    if (lenResult.isErr) break;
+                    offset += lenResult.unwrap().bytesRead;
+                    auto msgLen = cast(size_t)lenResult.unwrap().value;
+                    auto digestResult = decodeDigest(data[offset .. offset + msgLen]);
+                    if (digestResult.isOk)
+                        req.digests ~= digestResult.unwrap();
+                    offset += msgLen;
+                    break;
+                    
+                case 3:  // acceptable_compressors (packed enum)
+                    auto lenResult = decodeVarint(data[offset .. $]);
+                    if (lenResult.isErr) break;
+                    offset += lenResult.unwrap().bytesRead;
+                    auto packedLen = cast(size_t)lenResult.unwrap().value;
+                    auto packedEnd = offset + packedLen;
+                    while (offset < packedEnd) {
+                        auto valResult = decodeVarint(data[offset .. $]);
+                        if (valResult.isErr) break;
+                        offset += valResult.unwrap().bytesRead;
+                        req.acceptableCompressors ~= cast(Compressor)valResult.unwrap().value;
+                    }
+                    break;
+                    
+                default:
+                    auto skipResult = skipField(data[offset .. $], tag.wireType);
+                    if (skipResult.isErr) break;
+                    offset += skipResult.unwrap();
+                    break;
+            }
+        }
+        
+        return Ok!(ReapiBatchReadBlobsRequest, string)(req);
+    }
+    
+    /// Encode BatchReadBlobsResponse message
+    static ubyte[] encodeBatchReadBlobsResponse(ReapiBatchReadBlobsResponse resp) @trusted {
+        ubyte[] buf;
+        
+        // Field 1: responses (repeated Response)
+        foreach (blobResp; resp.responses) {
+            ubyte[] respBuf;
+            
+            // Response.digest (field 1)
+            respBuf ~= makeTag(1, WireType.LengthDelimited);
+            auto digestBuf = encodeDigest(blobResp.digest);
+            respBuf ~= encodeVarint(digestBuf.length);
+            respBuf ~= digestBuf;
+            
+            // Response.data (field 2)
+            if (blobResp.data.length > 0) {
+                respBuf ~= makeTag(2, WireType.LengthDelimited);
+                respBuf ~= encodeVarint(blobResp.data.length);
+                respBuf ~= blobResp.data;
+            }
+            
+            // Response.compressor (field 3)
+            if (blobResp.compressor != Compressor.Identity) {
+                respBuf ~= makeTag(3, WireType.Varint);
+                respBuf ~= encodeVarint(blobResp.compressor);
+            }
+            
+            // Response.status (field 4)
+            if (!blobResp.status.isOk) {
+                respBuf ~= makeTag(4, WireType.LengthDelimited);
+                auto statusBuf = encodeStatus(blobResp.status);
+                respBuf ~= encodeVarint(statusBuf.length);
+                respBuf ~= statusBuf;
+            }
+            
+            buf ~= makeTag(1, WireType.LengthDelimited);
+            buf ~= encodeVarint(respBuf.length);
+            buf ~= respBuf;
+        }
+        
+        return buf;
+    }
+    
+    /// Encode GetActionResultRequest message
+    static ubyte[] encodeGetActionResultRequest(ReapiGetActionResultRequest req) @trusted {
+        ubyte[] buf;
+        buf.reserve(128);
+        
+        // Field 1: instance_name
+        if (req.instanceName.length > 0) {
+            buf ~= makeTag(1, WireType.LengthDelimited);
+            buf ~= encodeVarint(req.instanceName.length);
+            buf ~= cast(ubyte[])req.instanceName;
+        }
+        
+        // Field 2: action_digest
+        buf ~= makeTag(2, WireType.LengthDelimited);
+        auto digestBuf = encodeDigest(req.actionDigest);
+        buf ~= encodeVarint(digestBuf.length);
+        buf ~= digestBuf;
+        
+        // Field 3: inline_stdout
+        if (req.inlineStdout) {
+            buf ~= makeTag(3, WireType.Varint);
+            buf ~= 0x01;
+        }
+        
+        // Field 4: inline_stderr
+        if (req.inlineStderr) {
+            buf ~= makeTag(4, WireType.Varint);
+            buf ~= 0x01;
+        }
+        
+        // Field 5: inline_output_files (repeated)
+        foreach (path; req.inlineOutputFiles) {
+            buf ~= makeTag(5, WireType.LengthDelimited);
+            buf ~= encodeVarint(path.length);
+            buf ~= cast(ubyte[])path;
+        }
+        
+        return buf;
+    }
+    
+    /// Encode UpdateActionResultRequest message
+    static ubyte[] encodeUpdateActionResultRequest(ReapiUpdateActionResultRequest req) @trusted {
+        ubyte[] buf;
+        buf.reserve(4096);
+        
+        // Field 1: instance_name
+        if (req.instanceName.length > 0) {
+            buf ~= makeTag(1, WireType.LengthDelimited);
+            buf ~= encodeVarint(req.instanceName.length);
+            buf ~= cast(ubyte[])req.instanceName;
+        }
+        
+        // Field 2: action_digest
+        buf ~= makeTag(2, WireType.LengthDelimited);
+        auto digestBuf = encodeDigest(req.actionDigest);
+        buf ~= encodeVarint(digestBuf.length);
+        buf ~= digestBuf;
+        
+        // Field 3: action_result
+        buf ~= makeTag(3, WireType.LengthDelimited);
+        auto resultBuf = encodeActionResult(req.actionResult);
+        buf ~= encodeVarint(resultBuf.length);
+        buf ~= resultBuf;
+        
+        return buf;
     }
     
     /// Decode ServerCapabilities message

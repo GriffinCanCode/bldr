@@ -53,6 +53,8 @@ public import engine.distributed.protocol.reapi_v2.codec;
 public import engine.distributed.protocol.reapi_v2.adapter;
 public import engine.distributed.protocol.reapi_v2.services;
 public import engine.distributed.protocol.reapi_v2.hash;
+public import engine.distributed.protocol.reapi_v2.stream;
+public import engine.distributed.protocol.reapi_v2.client;
 
 // Re-export common types for convenience
 public import engine.distributed.protocol.reapi_v2.types :
@@ -75,3 +77,15 @@ public import engine.distributed.protocol.reapi_v2.adapter :
 public import engine.distributed.protocol.reapi_v2.hash :
     HashTranslator,
     HashFormat;
+
+public import engine.distributed.protocol.reapi_v2.stream :
+    ByteStreamService,
+    ByteStreamCodec,
+    ByteStreamReadRequest,
+    ByteStreamWriteRequest,
+    ResourceName;
+
+public import engine.distributed.protocol.reapi_v2.client :
+    StreamingCasClient,
+    CasUploader,
+    BlobData;
