@@ -23,9 +23,15 @@ mixin template CachingHandlerMixin(string languageName)
         actionCache = new ActionCache(".builder-cache/actions/" ~ languageName, cacheConfig);
     }
     
-    ~this()
+    ~this() nothrow
     {
-        // Let GC handle ActionCache cleanup
+        import core.memory : GC;
+        // Only attempt cleanup if not in GC finalizer to avoid allocation errors
+        if (actionCache && !GC.inFinalizer())
+        {
+            try { actionCache.close(); }
+            catch (Exception) {}
+        }
     }
     
     /// Get access to the action cache

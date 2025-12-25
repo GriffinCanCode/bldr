@@ -35,12 +35,14 @@ unittest
 
 unittest
 {
+    import core.exception : AssertError;
+    
     writeln("\x1b[36m[TEST]\x1b[0m errors.result - Unwrap on error throws");
     
     auto result = Err!(int, string)("Error");
     
     void unwrapErr() { result.unwrap(); }
-    Assert.throws!Exception(unwrapErr());
+    Assert.throws!AssertError(unwrapErr());
     
     writeln("\x1b[32m  ✓ Unwrap on error throws correctly\x1b[0m");
 }
@@ -82,7 +84,7 @@ unittest
     {
         result.expect("Critical operation");
     }
-    catch (Exception e)
+    catch (Throwable e)
     {
         caughtException = true;
         exceptionMessage = e.msg;

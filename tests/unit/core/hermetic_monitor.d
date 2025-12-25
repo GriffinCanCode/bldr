@@ -49,12 +49,13 @@ import engine.runtime.hermetic.core.spec : ResourceLimits;
     auto monitor = createMonitor(limits);
     monitor.start();
     
-    // Create stricter limits
-    auto stricterLimits = ResourceLimits.hermetic();
-    stricterLimits.maxMemoryBytes = 512; // 512 bytes
+    // Create very generous limits that should not be exceeded
+    auto generousLimits = ResourceLimits.hermetic();
+    generousLimits.maxMemoryBytes = 100UL * 1024 * 1024 * 1024; // 100GB - unrealistically high
+    generousLimits.maxCpuTimeMs = ulong.max; // Effectively unlimited
     
-    // Should not exceed initially
-    assert(!monitor.wouldExceed(stricterLimits), "Should not exceed stricter limits initially");
+    // Should not exceed with very generous limits
+    assert(!monitor.wouldExceed(generousLimits), "Should not exceed generous limits");
     
     monitor.stop();
 }

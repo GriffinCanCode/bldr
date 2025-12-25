@@ -1026,36 +1026,18 @@ final class BuildGraph
     }
     
     /// Calculate critical path length (longest chain)
+    /// Uses the already-computed depth values from nodes to avoid redundant computation
     private size_t calculateCriticalPathLength() @system
     {
         if (nodes.empty)
             return 0;
         
+        // Critical path is the maximum depth across all nodes
+        // Each node's depth is computed via the depth() method which tracks the
+        // longest path from that node to any leaf (node with no dependencies)
         size_t maxPath = 0;
-        bool[string] visited;
-        
-        size_t dfs(BuildNode node)
-        {
-            auto nodeKey = node.id.toString();
-            if (nodeKey in visited)
-                return 0;
-            
-            visited[nodeKey] = true;
-            
-            size_t maxDepPath = 0;
-            foreach (depId; node.dependencyIds)
-            {
-                auto depKey = depId.toString();
-                if (depKey in nodes)
-                    maxDepPath = max(maxDepPath, dfs(nodes[depKey]));
-            }
-            
-            return 1 + maxDepPath;
-        }
-        
         foreach (node; nodes.values)
-            maxPath = max(maxPath, dfs(node));
-        
+            maxPath = max(maxPath, node.depth(this));
         return maxPath;
     }
 }

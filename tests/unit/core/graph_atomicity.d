@@ -3,7 +3,7 @@ module tests.unit.core.graph_atomicity;
 import std.stdio : writeln;
 import std.datetime : Duration, seconds, msecs, MonoTime;
 import std.conv : to;
-import std.algorithm : map, filter, sort, canFind, sum;
+import std.algorithm : map, filter, sort, canFind, sum, countUntil;
 import std.array : array;
 import std.range : iota;
 import std.parallelism : parallel;
@@ -12,8 +12,9 @@ import core.atomic;
 import core.sync.mutex : Mutex;
 
 import tests.harness : Assert;
+import tests.fixtures : TargetBuilder;
 import engine.graph.core.graph : BuildGraph, BuildNode, BuildStatus, ValidationMode;
-import infrastructure.config.schema.schema : Target, TargetType, TargetId, TargetBuilder;
+import infrastructure.config.schema.schema : Target, TargetType, TargetId;
 import infrastructure.errors;
 
 // ============================================================================

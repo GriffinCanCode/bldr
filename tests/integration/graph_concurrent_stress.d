@@ -14,9 +14,9 @@ import core.sync.mutex : Mutex;
 import core.sync.rwmutex : ReadWriteMutex;
 
 import tests.harness : Assert;
-import tests.fixtures : TempDir;
+import tests.fixtures : TempDir, TargetBuilder;
 import engine.graph.core.graph : BuildGraph, BuildNode, BuildStatus, ValidationMode;
-import infrastructure.config.schema.schema : Target, TargetType, TargetId, TargetBuilder;
+import infrastructure.config.schema.schema : Target, TargetType, TargetId;
 import infrastructure.errors;
 import infrastructure.utils.logging.logger;
 

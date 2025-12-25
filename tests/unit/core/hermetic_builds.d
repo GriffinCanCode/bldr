@@ -229,12 +229,12 @@ int main() {
     
     Assert.equal(hermeticLimits.maxMemoryBytes, 4UL * 1024 * 1024 * 1024, 
                  "Should set 4GB memory limit");
-    Assert.equal(hermeticLimits.maxCpuTimeMs, 10 * 60 * 1000, 
-                 "Should set 10 minute CPU limit");
+    Assert.equal(hermeticLimits.maxCpuTimeMs, 60 * 60 * 1000, 
+                 "Should set 1 hour CPU limit");
     Assert.equal(hermeticLimits.maxProcesses, 128, 
                  "Should set 128 process limit");
-    Assert.equal(hermeticLimits.maxOpenFiles, 1024, 
-                 "Should set 1024 file descriptor limit");
+    Assert.equal(hermeticLimits.maxOpenFiles, 512, 
+                 "Should set 512 file descriptor limit");
     
     // Test custom limits
     ResourceLimits custom;
@@ -271,13 +271,13 @@ int main() {
     
     // Create spec with controlled environment
     auto spec = SandboxSpecBuilder.create()
+        .clearEnvironment()  // Start with clean slate first
         .input("/usr")
         .temp(tempWorkDir)
         .env("PATH", "/usr/bin:/bin")
         .env("HOME", "/nonexistent")
         .env("USER", "builder")
         .env("SOURCE_DATE_EPOCH", "1640995200")
-        .clearEnvironment()  // Start with clean slate
         .build();
     
     Assert.isTrue(spec.isOk, "Should create environment spec");

@@ -8,7 +8,7 @@ import std.array;
 import std.conv;
 import std.random;
 import std.string;
-import std.range : iota;
+import std.range : iota, repeat;
 import std.datetime : Duration, seconds, msecs, MonoTime;
 import core.thread;
 import core.atomic;
@@ -369,24 +369,24 @@ private:
             case 0: // Insert random character
                 auto pos = uniform(0, entry.length + 1, rng);
                 auto c = cast(char)uniform(32, 127, rng);
-                return entry[0 .. pos] ~ c ~ entry[pos .. $];
+                return (entry[0 .. pos] ~ c ~ entry[pos .. $]).idup;
             
             case 1: // Delete random character
                 if (entry.length > 1)
                 {
                     auto pos = uniform(0, entry.length, rng);
-                    return entry[0 .. pos] ~ entry[min(pos + 1, entry.length) .. $];
+                    return (entry[0 .. pos] ~ entry[min(pos + 1, entry.length) .. $]).idup;
                 }
-                return entry;
+                return entry.idup;
             
             case 2: // Replace random character
                 if (entry.length > 0)
                 {
                     auto pos = uniform(0, entry.length, rng);
                     auto c = cast(char)uniform(32, 127, rng);
-                    return entry[0 .. pos] ~ c ~ entry[min(pos + 1, entry.length) .. $];
+                    return (entry[0 .. pos] ~ c ~ entry[min(pos + 1, entry.length) .. $]).idup;
                 }
-                return entry;
+                return entry.idup;
             
             case 3: // Duplicate chunk
                 if (entry.length > 5)
@@ -394,9 +394,9 @@ private:
                     auto start = uniform(0, entry.length - 5, rng);
                     auto len = uniform(1, min(10, entry.length - start), rng);
                     auto chunk = entry[start .. start + len];
-                    return entry[0 .. start] ~ chunk ~ chunk ~ entry[start .. $];
+                    return (entry[0 .. start] ~ chunk ~ chunk ~ entry[start .. $]).idup;
                 }
-                return entry;
+                return entry.idup;
             
             case 4: // Swap adjacent characters
                 if (entry.length > 2)
@@ -537,7 +537,7 @@ unittest
     
     foreach (i; 0 .. iterations)
     {
-        auto dsl = fuzzer.generateSyntaxError(i);
+        auto dsl = fuzzer.generateSyntaxError(cast(int)i);
         auto buildfilePath = buildPath(workspacePath, "Builderfile" ~ i.to!string);
         
         try
@@ -584,7 +584,7 @@ unittest
     
     foreach (i; 0 .. iterations)
     {
-        auto dsl = fuzzer.generateSemanticError(i);
+        auto dsl = fuzzer.generateSemanticError(cast(int)i);
         auto buildfilePath = buildPath(workspacePath, "Builderfile" ~ i.to!string);
         
         try

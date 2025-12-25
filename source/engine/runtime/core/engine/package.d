@@ -84,9 +84,15 @@ final class ExecutionEngine
         }
     }
     
-    ~this()
+    ~this() nothrow
     {
-        shutdown();
+        import core.memory : GC;
+        // Only call shutdown if not in GC finalizer to avoid allocation errors
+        if (!GC.inFinalizer())
+        {
+            try { shutdown(); }
+            catch (Exception) {}
+        }
     }
     
     /// Shutdown engine and cleanup resources

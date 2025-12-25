@@ -606,7 +606,7 @@ unittest
     auto config = PropertyConfig(numTests: 30);
     
     // Map operators to expected token types
-    static immutable string[][2] operatorMap = [
+    static immutable string[2][] operatorMap = [
         ["+", "Plus"],
         ["-", "Minus"],
         ["*", "Star"],

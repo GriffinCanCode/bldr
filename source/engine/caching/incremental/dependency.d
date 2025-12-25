@@ -283,13 +283,10 @@ final class DependencyCache
         }
     }
     
-    ~this()
+    ~this() @nogc nothrow
     {
-        if (dirty)
-        {
-            try { flush(); }
-            catch (Exception) {}
-        }
+        // Don't attempt to flush in destructor - allocation is not allowed during GC
+        // Users should call flush() explicitly before the cache goes out of scope
     }
 }
 
