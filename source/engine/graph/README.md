@@ -8,6 +8,7 @@ The graph module provides the core dependency graph infrastructure for Builder's
 graph/
 ├── core/          Core graph data structures
 ├── caching/       High-performance graph caching
+├── persistence/   SQLite-backed crash-safe storage
 ├── dynamic/       Runtime graph extension
 └── verification/  Formal correctness proofs
 ```
@@ -47,6 +48,63 @@ High-performance graph caching subsystem:
 **Cache Location:**
 - `.builder-cache/graph.bin` - Binary graph data
 - `.builder-cache/graph-metadata.bin` - Validation metadata
+
+### Persistence (`engine.graph.persistence`)
+
+SQLite-backed graph storage for crash safety and efficient queries:
+
+- **GraphIndex** - WAL-mode SQLite storage layer
+- **GraphQuery** - High-level query interface
+- **GraphAdapter** - Bridge between BuildGraph and GraphIndex
+
+**Key Features:**
+- WAL mode for crash recovery
+- Partial graph queries without full memory load
+- Transitive dependency/dependent queries via recursive CTE
+- Impact analysis (what rebuilds if X changes)
+- Bottleneck detection
+- Build order optimization
+- Thread-safe mutex-protected operations
+
+**Storage Location:**
+- `.builder-cache/graph.db` - SQLite database with WAL
+
+**Query Capabilities:**
+- `getTransitiveDeps()` - All ancestors of a node
+- `getTransitiveDependents()` - All descendants of a node
+- `getCriticalPath()` - Longest dependency chain
+- `queryByStatus()` - Find nodes by build status
+- `getSubgraph()` - Load partial graph for analysis
+
+**Usage:**
+
+```d
+import engine.graph.persistence;
+
+// Create index
+auto index = new GraphIndex(".builder-cache");
+
+// Store nodes and edges
+index.putNode(GraphNodeEntry(...));
+index.addEdge(fromId, toId);
+
+// Query without loading full graph
+auto deps = index.getTransitiveDeps(nodeId);
+auto impact = index.getTransitiveDependents(nodeId);
+auto path = index.getCriticalPath();
+
+// High-level queries
+auto query = GraphQuery(index);
+auto ready = query.getReadyNodes();
+auto bottlenecks = query.findBottlenecks();
+
+// Adapter for BuildGraph integration
+auto adapter = GraphAdapter(index);
+adapter.persist(graph);           // Save to SQLite
+auto restored = adapter.restore(); // Load from SQLite
+
+index.close();
+```
 
 ### Dynamic (`engine.graph.dynamic`)
 
@@ -161,6 +219,12 @@ This is the **first build system** to provide:
 - All public methods are synchronized
 - Safe for concurrent access from multiple build threads
 
+### GraphIndex
+- Uses internal `Mutex` for SQLite operations
+- WAL mode enables concurrent reads
+- Prepared statements for thread safety
+- Crash-safe journal for consistency
+
 ### DynamicBuildGraph
 - Synchronized mutation operations
 - Thread-safe node/edge additions
@@ -180,6 +244,9 @@ This is the **first build system** to provide:
 | Depth calculation | O(V+E) | Memoized per-node |
 | Cache validation | O(1) | Metadata check only |
 | Cache save/load | O(V+E) | Binary serialization |
+| Persist to SQLite | O(V+E) | Full graph save |
+| Transitive deps | O(V+E) | Recursive CTE query |
+| Point lookup | O(1) | Prepared statement |
 | Dynamic mutation | O(1) | Per node/edge addition |
 | Verification | O(V+E) | Proof generation |
 
@@ -191,9 +258,10 @@ BuildNode uses `TargetId[]` instead of `BuildNode[]` for dependencies to avoid G
 
 1. **Use deferred validation** for large graphs (>1000 nodes)
 2. **Cache graphs** between builds for 10-50x speedup
-3. **Enable verification** in CI/CD for correctness guarantees
-4. **Use dynamic discovery** for runtime dependencies
-5. **Profile verification** overhead and enable selectively
+3. **Use SQLite persistence** for crash safety and partial queries
+4. **Enable verification** in CI/CD for correctness guarantees
+5. **Use dynamic discovery** for runtime dependencies
+6. **Profile verification** overhead and enable selectively
 
 ## Examples
 

@@ -126,7 +126,7 @@ cache_hierarchy:
             ├─ SOME HITS → Partial rebuild (medium)
             └─ ALL MISSES → Full rebuild (slow)
 
-related: [blake3, determinism, action-cache, remote-cache, incremental, content-addressable-storage]
+related: [blake3, determinism, action-cache, remote-cache, incremental, content-addressable-storage, graph-persistence]
 
 common_issues:
   - problem: "Cache always misses"

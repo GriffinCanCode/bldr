@@ -17,6 +17,13 @@ module engine.graph;
 /// - GraphStorage: SIMD-accelerated binary serialization
 /// - Schema definitions for versioned binary format
 /// 
+/// ### Persistence (`engine.graph.persistence`)
+/// SQLite-backed graph storage for crash safety:
+/// - GraphIndex: WAL-mode SQLite storage layer
+/// - GraphQuery: Efficient partial graph queries
+/// - Transitive dependency/dependent queries
+/// - Impact analysis and bottleneck detection
+/// 
 /// ### Dynamic (`engine.graph.dynamic`)
 /// Runtime graph extension and discovery:
 /// - DynamicBuildGraph: Runtime dependency discovery
@@ -34,12 +41,14 @@ module engine.graph;
 /// - Graph construction: O(V+E) with deferred validation
 /// - Cache hits: 10-50x speedup, sub-millisecond validation
 /// - Binary format: ~10x faster than JSON, ~40% smaller
+/// - Persistence: SQLite WAL for crash recovery
 /// - Thread-safe: atomic operations for concurrent execution
 /// - Verification: O(V+E) proof generation
 /// 
 /// ## Thread Safety
 /// - BuildNode: Atomic status fields for concurrent reads/writes
 /// - GraphCache: Mutex-protected cache operations
+/// - GraphIndex: Mutex-protected SQLite operations
 /// - DynamicBuildGraph: Synchronized mutation operations
 /// - BuildVerifier: Immutable proofs, no shared state
 
@@ -48,6 +57,9 @@ public import engine.graph.core;
 
 // Caching subsystem
 public import engine.graph.caching;
+
+// SQLite persistence
+public import engine.graph.persistence;
 
 // Dynamic discovery
 public import engine.graph.dynamic;

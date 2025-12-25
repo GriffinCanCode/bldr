@@ -296,6 +296,16 @@ writefln("Hit rate: %.1f%%", stats.hitRate);
 - WAL mode allows concurrent readers
 - Single-writer with readers doesn't block
 
+## Related: Graph Persistence
+
+The build graph itself can also be persisted to SQLite using the same patterns:
+
+- **Location**: `engine.graph.persistence`
+- **Storage**: `.builder-cache/graph.db` (separate from cache index)
+- **Features**: Transitive queries, impact analysis, crash recovery
+
+See `source/engine/graph/README.md` for details.
+
 ## Future Enhancements
 
 Potential improvements for future versions:

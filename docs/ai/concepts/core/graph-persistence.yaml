@@ -1,0 +1,133 @@
+topic: graph-persistence
+category: concepts
+summary: "SQLite-backed graph storage for crash safety and efficient queries"
+definition: |
+  Graph persistence stores the build dependency graph in SQLite with WAL mode
+  for crash recovery. Enables partial graph queries without loading everything
+  into memory, supporting impact analysis, bottleneck detection, and efficient
+  incremental rebuilds.
+
+architecture:
+  components:
+    - name: "GraphIndex"
+      location: ".builder-cache/graph.db"
+      purpose: "SQLite storage layer with prepared statements"
+      features:
+        - "WAL mode for crash recovery"
+        - "Normalized schema (nodes + edges tables)"
+        - "Journal-based consistency"
+        - "Thread-safe mutex protection"
+      
+    - name: "GraphQuery"
+      purpose: "High-level semantic query interface"
+      queries:
+        - "getReadyNodes() - Nodes ready to build"
+        - "getImpact() - What rebuilds if X changes"
+        - "findBottlenecks() - Parallelism blockers"
+        - "getMinimalRebuild() - Minimal rebuild set"
+      
+    - name: "GraphAdapter"
+      purpose: "Bridge between BuildGraph and SQLite"
+      operations:
+        - "persist() - Save BuildGraph to SQLite"
+        - "restore() - Load BuildGraph from SQLite"
+        - "syncStatus() - Incremental status updates"
+
+how_it_works:
+  storage: |
+    1. Nodes stored in graph_nodes table (id, type, status, depth, hash)
+    2. Edges stored in graph_edges table (from_node, to_node)
+    3. Foreign keys with CASCADE for automatic cleanup
+    4. Indexes on status, depth, type for fast queries
+    
+  queries: |
+    Transitive queries use SQLite recursive CTEs:
+    WITH RECURSIVE deps(node_id) AS (
+      SELECT to_node FROM graph_edges WHERE from_node = ?
+      UNION
+      SELECT e.to_node FROM graph_edges e
+      JOIN deps d ON e.from_node = d.node_id
+    ) SELECT * FROM deps
+    
+  crash_recovery: |
+    1. WAL mode ensures atomic writes
+    2. Journal tracks uncommitted operations
+    3. On startup: replay journal, checkpoint WAL
+    4. No data loss on power failure or crash
+
+key_points:
+  - "Crash-safe: WAL mode survives power failures"
+  - "Memory-efficient: Query without full graph load"
+  - "Fast queries: O(V+E) transitive closure via CTE"
+  - "Point lookups: O(1) via prepared statements"
+  - "Thread-safe: Mutex-protected SQLite access"
+  - "Incremental: Sync single nodes during build"
+
+query_capabilities:
+  - name: "getTransitiveDeps(nodeId)"
+    description: "All ancestors (what this target depends on)"
+    complexity: "O(V+E)"
+    
+  - name: "getTransitiveDependents(nodeId)"
+    description: "All descendants (what depends on this target)"
+    complexity: "O(V+E)"
+    
+  - name: "getCriticalPath()"
+    description: "Longest dependency chain"
+    complexity: "O(V)"
+    
+  - name: "queryByStatus(status)"
+    description: "Find nodes by build status"
+    complexity: "O(matches)"
+    
+  - name: "getSubgraph(nodeId)"
+    description: "Load partial graph for analysis"
+    complexity: "O(subgraph size)"
+
+performance_impact:
+  - "Point lookup: <1ms via prepared statement"
+  - "Transitive query: 10-50ms for 10k nodes"
+  - "Full persist: O(V+E), ~100ms for 10k nodes"
+  - "Status update: <1ms single row"
+  - "Crash recovery: <10ms WAL checkpoint"
+
+usage_examples:
+  - description: "Store graph to SQLite"
+    code: |
+      auto index = new GraphIndex(".builder-cache");
+      auto adapter = GraphAdapter(index);
+      adapter.persist(buildGraph);
+      index.close();
+  
+  - description: "Query transitive dependencies"
+    code: |
+      auto deps = index.getTransitiveDeps("//lib:core");
+      // Returns all targets //lib:core depends on
+  
+  - description: "Impact analysis"
+    code: |
+      auto query = GraphQuery(index);
+      auto impact = query.getImpact("//lib:utils");
+      // Returns all targets that need rebuild if utils changes
+  
+  - description: "Find build bottlenecks"
+    code: |
+      auto bottlenecks = query.findBottlenecks(5);
+      // Top 5 targets blocking parallelism
+
+related: [build-graph, caching, incremental, critical-path, dependency-graph]
+
+common_issues:
+  - problem: "Graph database growing large"
+    cause: "Many old builds accumulated"
+    solution: "Call index.clear() periodically or set retention policy"
+  
+  - problem: "Slow transitive queries"
+    cause: "Very deep dependency chains"
+    solution: "Use maxDepth parameter to limit traversal"
+
+next_steps: |
+  - See 'bldr explain build-graph' for graph structure
+  - See 'bldr explain caching' for overall cache architecture
+  - See 'bldr explain critical-path' for build optimization
+
