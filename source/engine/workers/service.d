@@ -4,36 +4,59 @@ import std.algorithm;
 import std.array;
 import std.conv;
 import std.datetime;
-import core.time : Duration, MonoTime, seconds, minutes;
+import core.time : Duration, MonoTime, seconds, minutes, msecs;
 import core.atomic;
 import core.thread : Thread;
 import engine.workers.protocol;
 import engine.workers.pool;
 import engine.workers.pool.recycler : WarmthLevel;
+import engine.workers.base;
 import engine.workers.jvm;
 import engine.workers.typescript;
+import engine.workers.rust;
+import engine.workers.go;
+import engine.workers.python;
 import infrastructure.errors;
 import infrastructure.utils.logging.logger;
 
 /// Persistent Worker Service
 /// 
-/// High-level service that manages persistent workers and integrates
-/// with the build system's execution pipeline.
+/// High-level service managing persistent workers for all supported languages.
+/// Integrates with build system execution pipeline.
+/// 
+/// Supported Languages:
+/// - JVM: javac, kotlinc, scalac, groovyc (10-50x speedup)
+/// - TypeScript: tsc, swc, esbuild, bun (5-20x speedup)
+/// - Rust: cargo build/check, rustc, clippy (3-15x speedup)
+/// - Go: go build/test/vet/fmt (2-5x speedup)
+/// - Python: mypy, ruff, pylint, black, pytest (3-20x speedup)
 /// 
 /// Features:
 /// - Automatic worker lifecycle management
 /// - Health monitoring and recovery
-/// - Metrics collection
-/// - Integration hooks for language handlers
+/// - Warmth-aware worker selection
+/// - Memory monitoring with OOM prevention
+/// - Metrics collection and speedup tracking
 
 /// Worker service configuration
 struct WorkerServiceConfig
 {
     WorkerPoolConfig poolConfig;
+    
+    // Language toggles
     bool enableJVMWorkers = true;
     bool enableTSWorkers = true;
+    bool enableRustWorkers = true;
+    bool enableGoWorkers = true;
+    bool enablePythonWorkers = true;
+    
+    // Language-specific configs
     JVMWorkerConfig jvmConfig;
     TSWorkerConfig tsConfig;
+    RustWorkerConfig rustConfig;
+    GoWorkerConfig goConfig;
+    PythonWorkerConfig pythonConfig;
+    
     Duration metricsInterval = seconds(30);
     bool enableAutoRecovery = true;
 }
@@ -44,20 +67,23 @@ enum WorkerServiceStatus
     Stopped,
     Starting,
     Running,
-    Degraded,  // Some workers failed
+    Degraded,
     Stopping
 }
 
-/// Service metrics (extended with recycling and memory stats)
+/// Service metrics with per-language breakdown
 struct WorkerServiceMetrics
 {
     size_t totalCompilations;
     size_t successfulCompilations;
     size_t failedCompilations;
-    Duration totalSavedTime;        // Estimated time saved vs cold starts
+    Duration totalSavedTime;
     float averageSpeedupFactor;
     WorkerPoolStats poolStats;
     MonoTime lastUpdated;
+    
+    // Per-language stats
+    LanguageMetrics[string] byLanguage;
     
     // Recycling stats
     size_t warmWorkers;
@@ -67,13 +93,16 @@ struct WorkerServiceMetrics
     // Memory stats
     size_t workersAtOOMRisk;
     size_t oomRestarts;
-    
-    /// Estimate total time saved
-    Duration estimateSavedTime(size_t compilations, Duration avgColdStart, Duration avgWarmStart) const pure @safe
-    {
-        auto savedPerCompilation = avgColdStart > avgWarmStart ? avgColdStart - avgWarmStart : Duration.zero;
-        return savedPerCompilation * compilations;
-    }
+}
+
+/// Per-language metrics
+struct LanguageMetrics
+{
+    size_t compilations;
+    size_t successes;
+    long avgExecutionMs;
+    long coldStartMs;
+    float speedup;
 }
 
 /// Persistent Worker Service
@@ -86,11 +115,6 @@ final class PersistentWorkerService
     private Thread metricsThread;
     private shared bool running;
     
-    // Cold start baselines for speedup calculation (in milliseconds)
-    private immutable long jvmColdStartMs = 800;
-    private immutable long kotlinColdStartMs = 2000;
-    private immutable long tscColdStartMs = 400;
-    
     this(WorkerServiceConfig config = WorkerServiceConfig.init) @trusted
     {
         this.config = config;
@@ -98,73 +122,118 @@ final class PersistentWorkerService
         this.status = WorkerServiceStatus.Stopped;
     }
     
-    /// Start the worker service
+    /// Start the worker service with all configured languages
     void start() @trusted
     {
-        if (status != WorkerServiceStatus.Stopped)
-            return;
+        if (status != WorkerServiceStatus.Stopped) return;
         
         status = WorkerServiceStatus.Starting;
         Logger.info("Starting persistent worker service");
         
-        // Register worker factories
-        if (config.enableJVMWorkers)
-        {
-            // Register javac worker
-            auto javacConfig = config.jvmConfig;
-            javacConfig.compiler = JVMCompiler.Javac;
-            pool.registerFactory(new JVMWorkerFactory(javacConfig));
-            
-            // Register kotlinc worker
-            auto kotlincConfig = config.jvmConfig;
-            kotlincConfig.compiler = JVMCompiler.Kotlinc;
-            pool.registerFactory(new JVMWorkerFactory(kotlincConfig));
-            
-            // Register scalac worker
-            auto scalacConfig = config.jvmConfig;
-            scalacConfig.compiler = JVMCompiler.Scalac;
-            pool.registerFactory(new JVMWorkerFactory(scalacConfig));
-            
-            Logger.info("Registered JVM worker factories (javac, kotlinc, scalac)");
-        }
+        registerJVMWorkers();
+        registerTypeScriptWorkers();
+        registerRustWorkers();
+        registerGoWorkers();
+        registerPythonWorkers();
         
-        if (config.enableTSWorkers)
-        {
-            // Register tsc worker
-            auto tscConfig = config.tsConfig;
-            tscConfig.compiler = TSCompilerType.TSC;
-            pool.registerFactory(new TypeScriptWorkerFactory(tscConfig));
-            
-            // Register swc worker
-            auto swcConfig = config.tsConfig;
-            swcConfig.compiler = TSCompilerType.SWC;
-            pool.registerFactory(new TypeScriptWorkerFactory(swcConfig));
-            
-            // Register esbuild worker
-            auto esbuildConfig = config.tsConfig;
-            esbuildConfig.compiler = TSCompilerType.ESBuild;
-            pool.registerFactory(new TypeScriptWorkerFactory(esbuildConfig));
-            
-            Logger.info("Registered TypeScript worker factories (tsc, swc, esbuild)");
-        }
-        
-        // Start the pool
         pool.start();
         
-        // Start metrics collection
         atomicStore(running, true);
         metricsThread = new Thread(&metricsLoop);
         metricsThread.start();
         
         status = WorkerServiceStatus.Running;
-        Logger.info("Persistent worker service started");
+        
+        auto langs = [
+            config.enableJVMWorkers ? "JVM" : null,
+            config.enableTSWorkers ? "TypeScript" : null,
+            config.enableRustWorkers ? "Rust" : null,
+            config.enableGoWorkers ? "Go" : null,
+            config.enablePythonWorkers ? "Python" : null
+        ].filter!(l => l !is null).array;
+        
+        Logger.info("Persistent worker service started (" ~ langs.join(", ") ~ ")");
+    }
+    
+    /// Register JVM worker factories
+    private void registerJVMWorkers() @trusted
+    {
+        if (!config.enableJVMWorkers) return;
+        
+        foreach (compiler; [JVMCompiler.Javac, JVMCompiler.Kotlinc, JVMCompiler.Scalac, JVMCompiler.Groovyc])
+        {
+            auto cfg = config.jvmConfig;
+            cfg.compiler = compiler;
+            pool.registerFactory(new JVMWorkerFactory(cfg));
+        }
+        
+        Logger.debugLog("Registered JVM workers (javac, kotlinc, scalac, groovyc)");
+    }
+    
+    /// Register TypeScript worker factories
+    private void registerTypeScriptWorkers() @trusted
+    {
+        if (!config.enableTSWorkers) return;
+        
+        foreach (compiler; [TSCompilerType.TSC, TSCompilerType.SWC, TSCompilerType.ESBuild, TSCompilerType.Bun])
+        {
+            auto cfg = config.tsConfig;
+            cfg.compiler = compiler;
+            pool.registerFactory(new TypeScriptWorkerFactory(cfg));
+        }
+        
+        Logger.debugLog("Registered TypeScript workers (tsc, swc, esbuild, bun)");
+    }
+    
+    /// Register Rust worker factories
+    private void registerRustWorkers() @trusted
+    {
+        if (!config.enableRustWorkers) return;
+        
+        foreach (compiler; [RustCompiler.Cargo, RustCompiler.CargoCheck, RustCompiler.Rustc, RustCompiler.Clippy])
+        {
+            auto cfg = config.rustConfig;
+            cfg.compiler = compiler;
+            pool.registerFactory(new RustWorkerFactory(cfg));
+        }
+        
+        Logger.debugLog("Registered Rust workers (cargo, cargo-check, rustc, clippy)");
+    }
+    
+    /// Register Go worker factories
+    private void registerGoWorkers() @trusted
+    {
+        if (!config.enableGoWorkers) return;
+        
+        foreach (compiler; [GoCompiler.Build, GoCompiler.Test, GoCompiler.Vet, GoCompiler.Fmt])
+        {
+            auto cfg = config.goConfig;
+            cfg.compiler = compiler;
+            pool.registerFactory(new GoWorkerFactory(cfg));
+        }
+        
+        Logger.debugLog("Registered Go workers (build, test, vet, fmt)");
+    }
+    
+    /// Register Python worker factories
+    private void registerPythonWorkers() @trusted
+    {
+        if (!config.enablePythonWorkers) return;
+        
+        foreach (tool; [PythonTool.Mypy, PythonTool.Ruff, PythonTool.Pylint, PythonTool.Black, PythonTool.Pytest])
+        {
+            auto cfg = config.pythonConfig;
+            cfg.tool = tool;
+            pool.registerFactory(new PythonWorkerFactory(cfg));
+        }
+        
+        Logger.debugLog("Registered Python workers (mypy, ruff, pylint, black, pytest)");
     }
     
     /// Stop the worker service
     void stop() @trusted
     {
-        if (status == WorkerServiceStatus.Stopped)
-            return;
+        if (status == WorkerServiceStatus.Stopped) return;
         
         status = WorkerServiceStatus.Stopping;
         Logger.info("Stopping persistent worker service");
@@ -183,104 +252,199 @@ final class PersistentWorkerService
         Logger.info("Persistent worker service stopped");
     }
     
-    /// Compile Java sources using persistent worker
+    // ==================== JVM Compilation ====================
+    
     Result!(CompilationResult, WorkerError) compileJava(
-        string[] sources,
-        string outputDir,
-        string[] classpath = [],
-        string[] options = []
+        string[] sources, string outputDir,
+        string[] classpath = [], string[] options = []
     ) @trusted
     {
         if (status != WorkerServiceStatus.Running)
-            return Err!(CompilationResult, WorkerError)(
-                new WorkerError("Service not running", WorkerErrorCode.Unknown));
+            return serviceNotRunningError!(CompilationResult)();
         
         auto result = compileWithJVMWorker(pool, JVMCompiler.Javac, sources, outputDir, classpath, options);
-        recordMetrics(result);
+        recordCompilationMetrics("jvm-javac", result);
         return result;
     }
     
-    /// Compile Kotlin sources using persistent worker
     Result!(CompilationResult, WorkerError) compileKotlin(
-        string[] sources,
-        string outputDir,
-        string[] classpath = [],
-        string[] options = []
+        string[] sources, string outputDir,
+        string[] classpath = [], string[] options = []
     ) @trusted
     {
         if (status != WorkerServiceStatus.Running)
-            return Err!(CompilationResult, WorkerError)(
-                new WorkerError("Service not running", WorkerErrorCode.Unknown));
+            return serviceNotRunningError!(CompilationResult)();
         
         auto result = compileWithJVMWorker(pool, JVMCompiler.Kotlinc, sources, outputDir, classpath, options);
-        recordMetrics(result);
+        recordCompilationMetrics("jvm-kotlinc", result);
         return result;
     }
     
-    /// Compile Scala sources using persistent worker
     Result!(CompilationResult, WorkerError) compileScala(
-        string[] sources,
-        string outputDir,
-        string[] classpath = [],
-        string[] options = []
+        string[] sources, string outputDir,
+        string[] classpath = [], string[] options = []
     ) @trusted
     {
         if (status != WorkerServiceStatus.Running)
-            return Err!(CompilationResult, WorkerError)(
-                new WorkerError("Service not running", WorkerErrorCode.Unknown));
+            return serviceNotRunningError!(CompilationResult)();
         
         auto result = compileWithJVMWorker(pool, JVMCompiler.Scalac, sources, outputDir, classpath, options);
-        recordMetrics(result);
+        recordCompilationMetrics("jvm-scalac", result);
         return result;
     }
     
-    /// Compile TypeScript sources using persistent worker
+    // ==================== TypeScript Compilation ====================
+    
     Result!(TSCompilationResult, WorkerError) compileTypeScript(
-        string[] sources,
-        string outDir,
+        string[] sources, string outDir,
         TSCompileOptions options = TSCompileOptions.init
     ) @trusted
     {
         if (status != WorkerServiceStatus.Running)
-            return Err!(TSCompilationResult, WorkerError)(
-                new WorkerError("Service not running", WorkerErrorCode.Unknown));
+            return serviceNotRunningError!(TSCompilationResult)();
         
         auto result = compileWithTSWorker(pool, TSCompilerType.TSC, sources, outDir, options);
-        recordTSMetrics(result);
+        recordTSMetrics("ts-tsc", result);
         return result;
     }
     
-    /// Compile TypeScript with SWC (faster, no type checking)
-    Result!(TSCompilationResult, WorkerError) compileTypeScriptWithSWC(
-        string[] sources,
-        string outDir,
+    Result!(TSCompilationResult, WorkerError) compileWithSWC(
+        string[] sources, string outDir,
         TSCompileOptions options = TSCompileOptions.init
     ) @trusted
     {
         if (status != WorkerServiceStatus.Running)
-            return Err!(TSCompilationResult, WorkerError)(
-                new WorkerError("Service not running", WorkerErrorCode.Unknown));
+            return serviceNotRunningError!(TSCompilationResult)();
         
         auto result = compileWithTSWorker(pool, TSCompilerType.SWC, sources, outDir, options);
-        recordTSMetrics(result);
+        recordTSMetrics("ts-swc", result);
         return result;
     }
     
-    /// Get current service status
-    WorkerServiceStatus getStatus() const @safe
+    // ==================== Rust Compilation ====================
+    
+    Result!(RustCompilationResult, WorkerError) buildRust(
+        string manifestPath, string[] options = []
+    ) @trusted
     {
-        return status;
+        if (status != WorkerServiceStatus.Running)
+            return serviceNotRunningError!(RustCompilationResult)();
+        
+        auto result = compileWithRustWorker(pool, RustCompiler.Cargo, manifestPath, options);
+        recordRustMetrics("rust-cargo", result);
+        return result;
     }
     
-    /// Get service metrics (includes recycler and memory stats)
+    Result!(RustCompilationResult, WorkerError) checkRust(
+        string manifestPath, string[] options = []
+    ) @trusted
+    {
+        if (status != WorkerServiceStatus.Running)
+            return serviceNotRunningError!(RustCompilationResult)();
+        
+        auto result = compileWithRustWorker(pool, RustCompiler.CargoCheck, manifestPath, options);
+        recordRustMetrics("rust-cargo-check", result);
+        return result;
+    }
+    
+    Result!(RustCompilationResult, WorkerError) lintRust(
+        string manifestPath, string[] options = []
+    ) @trusted
+    {
+        if (status != WorkerServiceStatus.Running)
+            return serviceNotRunningError!(RustCompilationResult)();
+        
+        auto result = compileWithRustWorker(pool, RustCompiler.Clippy, manifestPath, options);
+        recordRustMetrics("rust-clippy", result);
+        return result;
+    }
+    
+    // ==================== Go Compilation ====================
+    
+    Result!(GoCompilationResult, WorkerError) buildGo(
+        string[] packages, string outputPath = "", string[] options = []
+    ) @trusted
+    {
+        if (status != WorkerServiceStatus.Running)
+            return serviceNotRunningError!(GoCompilationResult)();
+        
+        auto result = compileWithGoWorker(pool, GoCompiler.Build, packages, outputPath, options);
+        recordGoMetrics("go-build", result);
+        return result;
+    }
+    
+    Result!(GoCompilationResult, WorkerError) testGo(
+        string[] packages, string[] options = []
+    ) @trusted
+    {
+        if (status != WorkerServiceStatus.Running)
+            return serviceNotRunningError!(GoCompilationResult)();
+        
+        auto result = compileWithGoWorker(pool, GoCompiler.Test, packages, "", options);
+        recordGoMetrics("go-test", result);
+        return result;
+    }
+    
+    Result!(GoCompilationResult, WorkerError) vetGo(
+        string[] packages, string[] options = []
+    ) @trusted
+    {
+        if (status != WorkerServiceStatus.Running)
+            return serviceNotRunningError!(GoCompilationResult)();
+        
+        auto result = compileWithGoWorker(pool, GoCompiler.Vet, packages, "", options);
+        recordGoMetrics("go-vet", result);
+        return result;
+    }
+    
+    // ==================== Python Tools ====================
+    
+    Result!(PythonToolResult, WorkerError) typecheckPython(
+        string[] paths, string[] options = []
+    ) @trusted
+    {
+        if (status != WorkerServiceStatus.Running)
+            return serviceNotRunningError!(PythonToolResult)();
+        
+        auto result = runPythonTool(pool, PythonTool.Mypy, paths, options);
+        recordPythonMetrics("python-mypy", result);
+        return result;
+    }
+    
+    Result!(PythonToolResult, WorkerError) lintPython(
+        string[] paths, string[] options = []
+    ) @trusted
+    {
+        if (status != WorkerServiceStatus.Running)
+            return serviceNotRunningError!(PythonToolResult)();
+        
+        auto result = runPythonTool(pool, PythonTool.Ruff, paths, options);
+        recordPythonMetrics("python-ruff", result);
+        return result;
+    }
+    
+    Result!(PythonToolResult, WorkerError) testPython(
+        string[] paths, string[] options = []
+    ) @trusted
+    {
+        if (status != WorkerServiceStatus.Running)
+            return serviceNotRunningError!(PythonToolResult)();
+        
+        auto result = runPythonTool(pool, PythonTool.Pytest, paths, options);
+        recordPythonMetrics("python-pytest", result);
+        return result;
+    }
+    
+    // ==================== Status & Metrics ====================
+    
+    WorkerServiceStatus getStatus() const @safe => status;
+    
     WorkerServiceMetrics getMetrics() @trusted
     {
         metrics.poolStats = pool.getStats();
         metrics.lastUpdated = MonoTime.currTime;
         
-        // Get recycler stats
-        auto recycler = pool.getRecycler();
-        if (recycler !is null)
+        if (auto recycler = pool.getRecycler())
         {
             auto rStats = recycler.getStats();
             metrics.warmWorkers = rStats.byLevel.get(WarmthLevel.Warm, 0);
@@ -288,9 +452,7 @@ final class PersistentWorkerService
             metrics.warmthSpeedup = recycler.estimatedSpeedup();
         }
         
-        // Get memory stats
-        auto memMonitor = pool.getMemoryMonitor();
-        if (memMonitor !is null)
+        if (auto memMonitor = pool.getMemoryMonitor())
         {
             auto mStats = memMonitor.getStats();
             metrics.workersAtOOMRisk = mStats.atRisk + mStats.critical;
@@ -300,41 +462,34 @@ final class PersistentWorkerService
         return metrics;
     }
     
-    /// Get estimated speedup factor for a compiler type
+    /// Get speedup factor for specific compiler type
     float getSpeedupFactor(string compilerType) @trusted
     {
-        auto stats = pool.getStats();
-        
-        long coldStartMs;
-        if (compilerType.startsWith("jvm-javac"))
-            coldStartMs = jvmColdStartMs;
-        else if (compilerType.startsWith("jvm-kotlin"))
-            coldStartMs = kotlinColdStartMs;
-        else if (compilerType.startsWith("ts-"))
-            coldStartMs = tscColdStartMs;
-        else
-            coldStartMs = 500;  // Default estimate
-        
-        return stats.estimatedSpeedup(compilerType, coldStartMs);
+        if (compilerType !in metrics.byLanguage) return 1.0f;
+        return metrics.byLanguage[compilerType].speedup;
     }
     
-    /// Record compilation metrics
-    private void recordMetrics(Result!(CompilationResult, WorkerError) result) @trusted
+    /// Get worker pool (for advanced usage)
+    WorkerPool getPool() @safe => pool;
+    
+    // ==================== Private Helpers ====================
+    
+    private static Result!(T, WorkerError) serviceNotRunningError(T)() @trusted
+    {
+        return Err!(T, WorkerError)(new WorkerError("Service not running", WorkerErrorCode.Unknown));
+    }
+    
+    private void recordCompilationMetrics(string workerType, Result!(CompilationResult, WorkerError) result) @trusted
     {
         metrics.totalCompilations++;
         
         if (result.isOk)
         {
             auto r = result.unwrap();
-            if (r.success)
-                metrics.successfulCompilations++;
-            else
-                metrics.failedCompilations++;
+            if (r.success) metrics.successfulCompilations++;
+            else metrics.failedCompilations++;
             
-            // Estimate time saved
-            auto savedMs = jvmColdStartMs - r.executionTimeMs;
-            if (savedMs > 0)
-                metrics.totalSavedTime += msecs(savedMs);
+            updateLanguageMetrics(workerType, r.success, r.executionTimeMs);
         }
         else
         {
@@ -344,23 +499,17 @@ final class PersistentWorkerService
         updateAverageSpeedup();
     }
     
-    /// Record TypeScript compilation metrics
-    private void recordTSMetrics(Result!(TSCompilationResult, WorkerError) result) @trusted
+    private void recordTSMetrics(string workerType, Result!(TSCompilationResult, WorkerError) result) @trusted
     {
         metrics.totalCompilations++;
         
         if (result.isOk)
         {
             auto r = result.unwrap();
-            if (r.success)
-                metrics.successfulCompilations++;
-            else
-                metrics.failedCompilations++;
+            if (r.success) metrics.successfulCompilations++;
+            else metrics.failedCompilations++;
             
-            // Estimate time saved
-            auto savedMs = tscColdStartMs - r.executionTimeMs;
-            if (savedMs > 0)
-                metrics.totalSavedTime += msecs(savedMs);
+            updateLanguageMetrics(workerType, r.success, r.executionTimeMs);
         }
         else
         {
@@ -370,7 +519,114 @@ final class PersistentWorkerService
         updateAverageSpeedup();
     }
     
-    /// Update average speedup calculation
+    private void recordRustMetrics(string workerType, Result!(RustCompilationResult, WorkerError) result) @trusted
+    {
+        metrics.totalCompilations++;
+        
+        if (result.isOk)
+        {
+            auto r = result.unwrap();
+            if (r.success) metrics.successfulCompilations++;
+            else metrics.failedCompilations++;
+            
+            updateLanguageMetrics(workerType, r.success, r.executionTimeMs);
+        }
+        else
+        {
+            metrics.failedCompilations++;
+        }
+        
+        updateAverageSpeedup();
+    }
+    
+    private void recordGoMetrics(string workerType, Result!(GoCompilationResult, WorkerError) result) @trusted
+    {
+        metrics.totalCompilations++;
+        
+        if (result.isOk)
+        {
+            auto r = result.unwrap();
+            if (r.success) metrics.successfulCompilations++;
+            else metrics.failedCompilations++;
+            
+            updateLanguageMetrics(workerType, r.success, r.executionTimeMs);
+        }
+        else
+        {
+            metrics.failedCompilations++;
+        }
+        
+        updateAverageSpeedup();
+    }
+    
+    private void recordPythonMetrics(string workerType, Result!(PythonToolResult, WorkerError) result) @trusted
+    {
+        metrics.totalCompilations++;
+        
+        if (result.isOk)
+        {
+            auto r = result.unwrap();
+            if (r.success) metrics.successfulCompilations++;
+            else metrics.failedCompilations++;
+            
+            updateLanguageMetrics(workerType, r.success, r.executionTimeMs);
+        }
+        else
+        {
+            metrics.failedCompilations++;
+        }
+        
+        updateAverageSpeedup();
+    }
+    
+    private void updateLanguageMetrics(string workerType, bool success, long execMs) @trusted
+    {
+        if (workerType !in metrics.byLanguage)
+        {
+            metrics.byLanguage[workerType] = LanguageMetrics(0, 0, 0, getColdStartMs(workerType), 1.0f);
+        }
+        
+        auto m = &metrics.byLanguage[workerType];
+        m.compilations++;
+        if (success) m.successes++;
+        
+        // Update rolling average
+        m.avgExecutionMs = (m.avgExecutionMs * (m.compilations - 1) + execMs) / m.compilations;
+        
+        // Calculate speedup
+        if (m.avgExecutionMs > 0)
+            m.speedup = cast(float)m.coldStartMs / m.avgExecutionMs;
+        
+        // Update total saved time
+        auto savedMs = m.coldStartMs - execMs;
+        if (savedMs > 0)
+            metrics.totalSavedTime += msecs(savedMs);
+    }
+    
+    private static long getColdStartMs(string workerType) pure nothrow @safe @nogc
+    {
+        // Cold start estimates by worker type
+        if (workerType.startsWith("jvm-javac")) return 800;
+        if (workerType.startsWith("jvm-kotlinc")) return 2000;
+        if (workerType.startsWith("jvm-scalac")) return 1500;
+        if (workerType.startsWith("jvm-groovyc")) return 1000;
+        if (workerType.startsWith("ts-tsc")) return 400;
+        if (workerType.startsWith("ts-swc")) return 50;
+        if (workerType.startsWith("ts-esbuild")) return 30;
+        if (workerType.startsWith("ts-bun")) return 20;
+        if (workerType.startsWith("rust-cargo")) return 800;
+        if (workerType.startsWith("rust-cargo-check")) return 400;
+        if (workerType.startsWith("rust-rustc")) return 200;
+        if (workerType.startsWith("rust-clippy")) return 600;
+        if (workerType.startsWith("go-")) return 100;
+        if (workerType.startsWith("python-mypy")) return 1500;
+        if (workerType.startsWith("python-ruff")) return 50;
+        if (workerType.startsWith("python-pylint")) return 800;
+        if (workerType.startsWith("python-black")) return 200;
+        if (workerType.startsWith("python-pytest")) return 400;
+        return 500;
+    }
+    
     private void updateAverageSpeedup() @trusted
     {
         if (metrics.totalCompilations == 0)
@@ -379,39 +635,38 @@ final class PersistentWorkerService
             return;
         }
         
-        // Calculate based on saved time
-        auto avgColdMs = (jvmColdStartMs + tscColdStartMs) / 2;
-        auto totalExpectedMs = metrics.totalCompilations * avgColdMs;
-        auto actualMs = totalExpectedMs - metrics.totalSavedTime.total!"msecs";
+        float totalSpeedup = 0;
+        size_t count = 0;
         
-        if (actualMs > 0)
-            metrics.averageSpeedupFactor = cast(float)totalExpectedMs / actualMs;
-        else
-            metrics.averageSpeedupFactor = 1.0f;
+        foreach (ref m; metrics.byLanguage)
+        {
+            if (m.compilations > 0)
+            {
+                totalSpeedup += m.speedup * m.compilations;
+                count += m.compilations;
+            }
+        }
+        
+        metrics.averageSpeedupFactor = count > 0 ? totalSpeedup / count : 1.0f;
     }
     
-    /// Metrics collection loop
     private void metricsLoop() @trusted
     {
         while (atomicLoad(running))
         {
             Thread.sleep(config.metricsInterval);
+            if (!atomicLoad(running)) break;
             
-            if (!atomicLoad(running))
-                break;
-            
-            // Update metrics
             auto stats = pool.getStats();
             metrics.poolStats = stats;
             metrics.lastUpdated = MonoTime.currTime;
             
-            // Log periodic stats
-            Logger.debugLog("Worker service stats: " ~ 
+            Logger.debugLog("Worker service: " ~
                 metrics.totalCompilations.to!string ~ " compilations, " ~
                 metrics.averageSpeedupFactor.to!string ~ "x avg speedup, " ~
-                metrics.totalSavedTime.total!"seconds".to!string ~ "s total saved");
+                metrics.totalSavedTime.total!"seconds".to!string ~ "s saved");
             
-            // Check for degraded state
+            // Check degraded state
             if (stats.totalFailures > stats.totalStartups / 4)
             {
                 status = WorkerServiceStatus.Degraded;
@@ -425,20 +680,17 @@ final class PersistentWorkerService
     }
 }
 
-/// Global worker service instance (optional singleton pattern)
+// ==================== Global Service ====================
+
 private __gshared PersistentWorkerService globalService;
 
-/// Get or create the global worker service
 PersistentWorkerService getWorkerService() @trusted
 {
     if (globalService is null)
-    {
         globalService = new PersistentWorkerService();
-    }
     return globalService;
 }
 
-/// Initialize the global worker service with custom config
 void initWorkerService(WorkerServiceConfig config) @trusted
 {
     if (globalService !is null)
@@ -448,7 +700,6 @@ void initWorkerService(WorkerServiceConfig config) @trusted
     globalService.start();
 }
 
-/// Shutdown the global worker service
 void shutdownWorkerService() @trusted
 {
     if (globalService !is null)

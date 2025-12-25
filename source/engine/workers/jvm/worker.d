@@ -10,23 +10,20 @@ import std.string;
 import core.time : Duration, seconds, minutes;
 import engine.workers.protocol;
 import engine.workers.pool;
+import engine.workers.base;
 import infrastructure.errors;
 import infrastructure.utils.logging.logger;
 
 /// JVM Persistent Worker Factory
 /// 
 /// Creates persistent workers for JVM-based compilers (javac, kotlinc, scalac).
-/// These workers keep the JVM warm, avoiding the ~500ms-2s JVM startup overhead
-/// that typically dominates small compilation times.
+/// Keeps JVM warm to avoid ~500ms-2s startup overhead per compilation.
 /// 
 /// Speedup: 10-50x for incremental compilations
 /// 
 /// Protocol: Bazel-compatible persistent worker protocol
 /// - Input: JSON WorkRequest on stdin (newline-delimited)
 /// - Output: JSON WorkResponse on stdout (newline-delimited)
-/// 
-/// Worker wrapper scripts handle the protocol translation for compilers
-/// that don't natively support persistent worker mode.
 
 /// JVM compiler type
 enum JVMCompiler
@@ -41,30 +38,39 @@ enum JVMCompiler
 struct JVMWorkerConfig
 {
     JVMCompiler compiler = JVMCompiler.Javac;
-    string javaHome;              /// JAVA_HOME path
-    string compilerPath;          /// Override compiler path
-    string[] jvmArgs;             /// JVM arguments (-Xmx, -XX:, etc.)
-    string[] compilerArgs;        /// Default compiler arguments
+    string javaHome;                       /// JAVA_HOME path
+    string compilerPath;                   /// Override compiler path
+    string[] jvmArgs;                      /// JVM arguments (-Xmx, -XX:, etc.)
+    string[] compilerArgs;                 /// Default compiler arguments
     Duration startupTimeout = seconds(30);
     Duration requestTimeout = minutes(5);
-    size_t maxHeapMB = 2048;      /// Max heap size
+    size_t maxHeapMB = 2048;               /// Max heap size
     bool enableIncrementalCompilation = true;
     string annotationProcessorPath;
 }
 
-/// JVM Persistent Worker Factory
-final class JVMWorkerFactory : IWorkerFactory
+/// JVM Persistent Worker Factory - extends base with JVM-specific logic
+final class JVMWorkerFactory : BasePersistentWorkerFactory
 {
     private JVMWorkerConfig config;
     private string workerWrapperPath;
     
     this(JVMWorkerConfig config = JVMWorkerConfig.init) @trusted
     {
+        // Configure base with JVM-appropriate settings
+        BaseWorkerConfig baseCfg;
+        baseCfg.startupTimeout = config.startupTimeout;
+        baseCfg.requestTimeout = config.requestTimeout;
+        baseCfg.idleTimeout = minutes(5);
+        baseCfg.maxRequests = 5000;
+        baseCfg.coldStartMs = coldStartFor(config.compiler);
+        
+        super(baseCfg);
         this.config = config;
         this.workerWrapperPath = findOrCreateWorkerWrapper();
     }
     
-    string workerType() const pure nothrow @safe
+    override string workerType() const pure nothrow @safe
     {
         final switch (config.compiler)
         {
@@ -75,78 +81,21 @@ final class JVMWorkerFactory : IWorkerFactory
         }
     }
     
-    PersistentWorkerConfig defaultConfig() const @safe
+    override PersistentWorkerConfig defaultConfig() const @safe
     {
-        PersistentWorkerConfig cfg;
+        auto cfg = super.defaultConfig();
         cfg.executable = workerWrapperPath;
         cfg.baseArgs = buildWorkerArgs();
-        cfg.startupTimeout = config.startupTimeout;
-        cfg.requestTimeout = config.requestTimeout;
         cfg.idleTimeout = minutes(5);
         cfg.maxRequests = 5000;
         return cfg;
     }
     
-    Result!(PersistentWorker, WorkerError) createWorker(WorkerId id) @trusted
-    {
-        auto cfg = defaultConfig();
-        
-        // Build environment with JAVA_HOME
-        string[string] env;
-        if (!config.javaHome.empty)
-            env["JAVA_HOME"] = config.javaHome;
-        
-        // Add compiler-specific env vars
-        final switch (config.compiler)
-        {
-            case JVMCompiler.Javac:
-                // Standard javac
-                break;
-            case JVMCompiler.Kotlinc:
-                // Kotlin daemon integration
-                env["KOTLIN_COMPILER_ENVIRONMENT_KEEPALIVE"] = "1";
-                break;
-            case JVMCompiler.Scalac:
-                // Scala compile server
-                env["SCALA_COMPILER_PERSISTENCE"] = "1";
-                break;
-            case JVMCompiler.Groovyc:
-                break;
-        }
-        
-        // Spawn worker process
-        auto spawnResult = spawnWorkerTransport(
-            cfg.executable,
-            cfg.baseArgs,
-            cfg.workDir,
-            env
-        );
-        
-        if (spawnResult.isErr)
-            return Err!(PersistentWorker, WorkerError)(spawnResult.unwrapErr());
-        
-        auto transport = spawnResult.unwrap();
-        auto worker = new PersistentWorker(id, cfg, transport);
-        
-        // Wait for worker to signal ready
-        auto readyResult = waitForWorkerReady(transport, cfg.startupTimeout);
-        if (readyResult.isErr)
-        {
-            transport.close();
-            return Err!(PersistentWorker, WorkerError)(readyResult.unwrapErr());
-        }
-        
-        worker.markReady();
-        Logger.info("JVM worker ready: " ~ id.toString());
-        
-        return Ok!(PersistentWorker, WorkerError)(worker);
-    }
-    
-    private string[] buildWorkerArgs() const @trusted
+    protected override string[] buildWorkerArgs() const @trusted
     {
         string[] args;
         
-        // JVM arguments
+        // JVM memory settings
         args ~= "-Xmx" ~ config.maxHeapMB.to!string ~ "m";
         
         // Tiered compilation for faster startup
@@ -155,6 +104,9 @@ final class JVMWorkerFactory : IWorkerFactory
         
         // Class data sharing for faster startup
         args ~= "-Xshare:auto";
+        
+        // GC logging for memory monitoring
+        args ~= "-Xlog:gc*:stderr:time";
         
         // User-provided JVM args
         args ~= config.jvmArgs;
@@ -168,10 +120,52 @@ final class JVMWorkerFactory : IWorkerFactory
         return args;
     }
     
+    protected override string getExecutable() const @trusted
+    {
+        return workerWrapperPath.length > 0 ? workerWrapperPath : getCompilerPath();
+    }
+    
+    protected override string[string] buildEnvironment() const @trusted
+    {
+        auto env = super.buildEnvironment();
+        
+        // Set JAVA_HOME if configured
+        if (!config.javaHome.empty)
+            env["JAVA_HOME"] = config.javaHome;
+        
+        // Compiler-specific env vars
+        final switch (config.compiler)
+        {
+            case JVMCompiler.Javac:
+                break;
+            case JVMCompiler.Kotlinc:
+                env["KOTLIN_COMPILER_ENVIRONMENT_KEEPALIVE"] = "1";
+                break;
+            case JVMCompiler.Scalac:
+                env["SCALA_COMPILER_PERSISTENCE"] = "1";
+                break;
+            case JVMCompiler.Groovyc:
+                break;
+        }
+        
+        return env;
+    }
+    
+    /// Cold start time estimate for speedup calculation
+    private static long coldStartFor(JVMCompiler compiler) pure nothrow @safe @nogc
+    {
+        final switch (compiler)
+        {
+            case JVMCompiler.Javac: return 800;
+            case JVMCompiler.Kotlinc: return 2000;
+            case JVMCompiler.Scalac: return 1500;
+            case JVMCompiler.Groovyc: return 1000;
+        }
+    }
+    
     /// Find or create the worker wrapper script/JAR
     private string findOrCreateWorkerWrapper() @trusted
     {
-        // Look for bundled worker wrapper
         auto possiblePaths = [
             buildPath(thisExePath().dirName, "jvm-worker.jar"),
             buildPath(thisExePath().dirName, "..", "lib", "jvm-worker.jar"),
@@ -179,13 +173,10 @@ final class JVMWorkerFactory : IWorkerFactory
         ];
         
         foreach (path; possiblePaths)
-        {
             if (exists(path))
                 return path;
-        }
         
         // Fall back to direct compiler invocation
-        // (works with Kotlin's built-in daemon mode)
         return getCompilerPath();
     }
     
@@ -211,34 +202,12 @@ final class JVMWorkerFactory : IWorkerFactory
             if (exists(path)) return path;
         }
         
-        // Fall back to PATH
         return compilerName;
-    }
-    
-    /// Wait for worker to be ready
-    private Result!WorkerError waitForWorkerReady(StdioWorkerTransport transport, Duration timeout) @trusted
-    {
-        // Send a no-op request to verify worker is alive
-        WorkRequest pingRequest;
-        pingRequest.requestId = 0;
-        pingRequest.arguments = ["--version"];  // Most compilers support this
-        
-        auto sendResult = transport.sendRequest(pingRequest);
-        if (sendResult.isErr)
-            return Result!WorkerError.err(sendResult.unwrapErr());
-        
-        auto recvResult = transport.receiveResponse(timeout);
-        if (recvResult.isErr)
-            return Result!WorkerError.err(recvResult.unwrapErr());
-        
-        return Result!WorkerError.ok();
     }
 }
 
 /// Compile sources using JVM persistent worker
-/// 
-/// This is the main entry point for JVM compilation with warm workers.
-/// Call this instead of spawning javac/kotlinc directly for 10-50x speedup.
+/// Main entry point for JVM compilation with warm workers - 10-50x speedup
 Result!(CompilationResult, WorkerError) compileWithJVMWorker(
     WorkerPool pool,
     JVMCompiler compiler,
@@ -248,7 +217,6 @@ Result!(CompilationResult, WorkerError) compileWithJVMWorker(
     string[] options = []
 ) @trusted
 {
-    // Build worker type string
     string workerType;
     final switch (compiler)
     {
@@ -259,35 +227,20 @@ Result!(CompilationResult, WorkerError) compileWithJVMWorker(
     }
     
     // Build arguments
-    string[] args;
+    string[] args = ["-d", outputDir];
     
-    // Output directory
-    args ~= ["-d", outputDir];
-    
-    // Classpath
     if (classpath.length > 0)
         args ~= ["-cp", classpath.join(pathSeparator.to!string)];
     
-    // User options
     args ~= options;
-    
-    // Source files
     args ~= sources;
     
     // Build input files for caching
-    InputFile[] inputs;
-    foreach (src; sources)
-    {
-        if (exists(src))
-        {
-            InputFile f;
-            f.path = src;
-            // Could compute digest here for caching
-            inputs ~= f;
-        }
-    }
+    InputFile[] inputs = sources
+        .filter!(src => exists(src))
+        .map!(src => InputFile(src, ""))
+        .array;
     
-    // Execute on worker
     auto result = pool.execute(workerType, args, inputs);
     
     if (result.isErr)
@@ -295,13 +248,13 @@ Result!(CompilationResult, WorkerError) compileWithJVMWorker(
     
     auto response = result.unwrap();
     
-    CompilationResult compResult;
-    compResult.success = response.success;
-    compResult.output = response.output;
-    compResult.executionTimeMs = response.executionTimeMs;
-    compResult.wasCached = response.wasCached;
-    
-    return Ok!(CompilationResult, WorkerError)(compResult);
+    return Ok!(CompilationResult, WorkerError)(CompilationResult(
+        response.success,
+        response.output,
+        response.executionTimeMs,
+        response.wasCached,
+        []
+    ));
 }
 
 /// Compilation result
@@ -314,13 +267,7 @@ struct CompilationResult
     string[] outputFiles;
 }
 
-/// Path separator for classpath (platform-specific)
-version(Windows)
-{
-    enum pathSeparator = ";";
-}
-else
-{
-    enum pathSeparator = ":";
-}
+/// Path separator for classpath
+version(Windows) { enum pathSeparator = ";"; }
+else { enum pathSeparator = ":"; }
 

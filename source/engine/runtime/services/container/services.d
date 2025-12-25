@@ -587,8 +587,8 @@ final class BuildServices : IServiceContainer
         return _remoteService !is null;
     }
     
-    /// Initialize persistent worker service for JVM/TypeScript compilation
-    /// Provides 10-50x speedup by keeping compilers warm
+    /// Initialize persistent worker service for multi-language compilation
+    /// Provides 3-50x speedup by keeping compilers warm
     private void _initializePersistentWorkers(BuildOptions options) @trusted
     {
         import std.process : environment;
@@ -604,14 +604,18 @@ final class BuildServices : IServiceContainer
         
         try
         {
-            // Configure worker pool based on available cores
             import std.parallelism : totalCPUs;
             
             WorkerServiceConfig config;
             config.poolConfig.maxWorkersPerType = totalCPUs > 4 ? 4 : 2;
             config.poolConfig.idleTimeout = minutes(5);
-            config.enableJVMWorkers = true;
-            config.enableTSWorkers = true;
+            
+            // Enable language-specific workers (can be overridden by env vars)
+            config.enableJVMWorkers = environment.get("BUILDER_JVM_WORKERS", "1") != "0";
+            config.enableTSWorkers = environment.get("BUILDER_TS_WORKERS", "1") != "0";
+            config.enableRustWorkers = environment.get("BUILDER_RUST_WORKERS", "1") != "0";
+            config.enableGoWorkers = environment.get("BUILDER_GO_WORKERS", "1") != "0";
+            config.enablePythonWorkers = environment.get("BUILDER_PYTHON_WORKERS", "1") != "0";
             
             // Create and start service
             _persistentWorkers = new PersistentWorkerService(config);
@@ -620,7 +624,7 @@ final class BuildServices : IServiceContainer
             // Also initialize global service for integration layer
             initWorkerService(config);
             
-            Logger.debugLog("Persistent workers initialized (JVM/TypeScript 10-50x speedup)");
+            Logger.debugLog("Persistent workers initialized (JVM/TS/Rust/Go/Python 3-50x speedup)");
         }
         catch (Exception e)
         {

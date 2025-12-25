@@ -1,18 +1,32 @@
 # Persistent Worker Protocol
 
-Implements a Bazel-compatible persistent worker protocol for JVM and TypeScript compilation, reducing per-action overhead by **10-50x** for warm compilers.
+Multi-language persistent worker system that keeps compilers warm across builds, reducing per-action overhead by **3-50x** depending on language.
+
+## Supported Languages
+
+| Language   | Tools                              | Speedup   |
+|------------|-----------------------------------|-----------|
+| JVM        | javac, kotlinc, scalac, groovyc   | **10-50x** |
+| TypeScript | tsc, swc, esbuild, bun            | **5-20x**  |
+| Rust       | cargo build/check, rustc, clippy  | **3-15x**  |
+| Go         | go build/test/vet/fmt             | **2-5x**   |
+| Python     | mypy, ruff, pylint, black, pytest | **3-20x**  |
 
 ## Overview
 
 Persistent workers keep compiler processes running **across builds** (not just actions), avoiding startup overhead that typically dominates small compilation times:
 
-| Compiler | Cold Start | Warm Worker | Hot Worker | Speedup |
-|----------|------------|-------------|------------|---------|
-| javac    | ~800ms     | ~50ms       | ~15ms      | **16-50x** |
-| kotlinc  | ~2000ms    | ~100ms      | ~30ms      | **20-67x** |
-| scalac   | ~1500ms    | ~80ms       | ~25ms      | **19-60x** |
-| tsc      | ~400ms     | ~30ms       | ~10ms      | **13-40x** |
-| swc      | ~50ms      | ~5ms        | ~2ms       | **10-25x** |
+| Compiler     | Cold Start | Warm Worker | Hot Worker | Speedup    |
+|--------------|------------|-------------|------------|------------|
+| javac        | ~800ms     | ~50ms       | ~15ms      | **16-53x** |
+| kotlinc      | ~2000ms    | ~100ms      | ~30ms      | **20-67x** |
+| scalac       | ~1500ms    | ~80ms       | ~25ms      | **19-60x** |
+| tsc          | ~400ms     | ~30ms       | ~10ms      | **13-40x** |
+| swc          | ~50ms      | ~5ms        | ~2ms       | **10-25x** |
+| cargo check  | ~400ms     | ~80ms       | ~30ms      | **5-13x**  |
+| go build     | ~100ms     | ~40ms       | ~20ms      | **2-5x**   |
+| mypy         | ~1500ms    | ~100ms      | ~30ms      | **15-50x** |
+| ruff         | ~50ms      | ~10ms       | ~5ms       | **5-10x**  |
 
 ### Warmth Levels
 
@@ -20,41 +34,42 @@ Workers progress through warmth levels as they process requests:
 
 - **Cold**: Just started, no JIT optimization
 - **Warming**: Initial compilations done, JIT warming up
-- **Warm**: Steady state, good performance (10-20x speedup)
-- **Hot**: Fully optimized, peak performance (20-50x speedup)
+- **Warm**: Steady state, good performance (3-20x speedup)
+- **Hot**: Fully optimized, peak performance (10-50x speedup)
 
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                       Build System                                │
-│  ┌─────────────────────────────────────────────────────────────┐ │
-│  │                PersistentWorkerService                       │ │
-│  │  ┌─────────────┐  ┌──────────────┐  ┌──────────────────────┐│ │
-│  │  │ WorkerPool  │  │HealthMonitor│  │      Metrics         ││ │
-│  │  │ ┌─────────┐ │  │ (memory-    │  │ (warmth tracking)    ││ │
-│  │  │ │Recycler │ │  │  aware)     │  │                      ││ │
-│  │  │ │(warmth) │ │  └──────────────┘  └──────────────────────┘│ │
-│  │  │ ├─────────┤ │                                            │ │
-│  │  │ │ Memory  │ │  SOC: Each component has single concern    │ │
-│  │  │ │ Monitor │ │  - recycler.d: warmth tracking only        │ │
-│  │  │ └─────────┘ │  - memory.d: OOM detection only            │ │
-│  │  └──────┬──────┘  - manager.d: coordination only            │ │
-│  └─────────┼────────────────────────────────────────────────────┘ │
-│            │                                                       │
-│  ┌─────────┴────────────────────────────────────────────────────┐ │
-│  │                     Worker Factories                          │ │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐        │ │
-│  │  │ JVM Factory  │  │  TS Factory  │  │ Scala Factory│        │ │
-│  │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘        │ │
-│  └─────────┼─────────────────┼─────────────────┼────────────────┘ │
-└────────────┼─────────────────┼─────────────────┼─────────────────┘
-             │                 │                 │
-     ┌───────▼───────┐ ┌───────▼───────┐ ┌───────▼───────┐
-     │  javac/kotlinc│ │    tsc/swc    │ │    scalac     │
-     │  (warm JVM)   │ │  (warm V8)    │ │   (warm JVM)  │
-     │  Hot: 50x ⚡  │ │  Hot: 40x ⚡  │ │   Hot: 60x ⚡ │
-     └───────────────┘ └───────────────┘ └───────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              Build System                                        │
+│  ┌────────────────────────────────────────────────────────────────────────────┐ │
+│  │                        PersistentWorkerService                              │ │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌───────────────────────────────────┐ │ │
+│  │  │  WorkerPool  │  │HealthMonitor│  │           Metrics                  │ │ │
+│  │  │ ┌──────────┐ │  │ (memory-    │  │ (per-language speedup tracking)   │ │ │
+│  │  │ │ Recycler │ │  │  aware)     │  │                                   │ │ │
+│  │  │ │ (warmth) │ │  └──────────────┘  └───────────────────────────────────┘ │ │
+│  │  │ ├──────────┤ │                                                          │ │
+│  │  │ │ Memory   │ │  SOC: Each component has single concern                  │ │
+│  │  │ │ Monitor  │ │  - recycler.d: warmth tracking only                      │ │
+│  │  │ └──────────┘ │  - memory.d: OOM detection only                          │ │
+│  │  └──────┬───────┘  - manager.d: coordination only                          │ │
+│  └─────────┼───────────────────────────────────────────────────────────────────┘ │
+│            │                                                                      │
+│  ┌─────────┴─────────────────────────────────────────────────────────────────┐  │
+│  │                        Worker Factories (BasePersistentWorkerFactory)      │  │
+│  │ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐               │  │
+│  │ │   JVM   │ │TypeScript│ │  Rust   │ │   Go    │ │ Python  │               │  │
+│  │ │ Factory │ │ Factory │ │ Factory │ │ Factory │ │ Factory │               │  │
+│  │ └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘               │  │
+│  └──────┼──────────┼──────────┼──────────┼──────────┼───────────────────────┘  │
+└─────────┼──────────┼──────────┼──────────┼──────────┼────────────────────────────┘
+          │          │          │          │          │
+   ┌──────▼──────┐ ┌─▼────────┐ ┌▼─────────┐ ┌─▼──────┐ ┌▼────────┐
+   │javac/kotlinc│ │  tsc/swc │ │cargo/rustc│ │go build│ │mypy/ruff│
+   │ (warm JVM)  │ │(warm V8) │ │(warm incr)│ │(cached)│ │(daemon) │
+   │ Hot: 50x ⚡ │ │Hot: 40x ⚡│ │Hot: 15x ⚡ │ │Hot: 5x │ │Hot: 50x │
+   └─────────────┘ └──────────┘ └───────────┘ └────────┘ └─────────┘
 ```
 
 ## Protocol
@@ -94,42 +109,67 @@ Workers communicate via stdin/stdout using newline-delimited JSON (Bazel-compati
 ```d
 import engine.workers;
 
-// Initialize workers at build system startup
-initializePersistentWorkers();
+// Initialize service with all languages
+auto service = new PersistentWorkerService(WorkerServiceConfig.init);
+service.start();
 
-// Compile Java with warm worker (16x faster)
-auto result = JavaWorkerIntegration.compile(
-    ["src/Main.java"],
-    "bin/",
-    ["lib/deps.jar"],
-    ["-source", "17"]
-);
+// JVM: Compile Java (16x faster)
+auto javaResult = service.compileJava(["src/Main.java"], "bin/", ["lib/deps.jar"]);
 
-if (result.isOk) {
-    auto r = result.unwrap();
-    writeln("Compiled in ", r.executionTimeMs, "ms");
-    writeln("Speedup: ", r.estimatedSpeedup(), "x");
-}
+// JVM: Compile Kotlin (20x faster)
+auto kotlinResult = service.compileKotlin(["src/App.kt"], "bin/");
 
-// Compile TypeScript with warm worker (13x faster)
-auto tsResult = TypeScriptWorkerIntegration.compile(
-    ["src/app.ts"],
-    "dist/",
-    TSWorkerCompileOptions(target: "ES2022", sourceMap: true)
-);
+// TypeScript: Type-check with tsc (13x faster)
+auto tsResult = service.compileTypeScript(["src/app.ts"], "dist/");
 
-// Cleanup at shutdown
-shutdownPersistentWorkers();
+// TypeScript: Ultra-fast transpile with SWC (10x faster)
+auto swcResult = service.compileWithSWC(["src/app.ts"], "dist/");
+
+// Rust: cargo build (5x faster)
+auto rustResult = service.buildRust("Cargo.toml");
+
+// Rust: cargo check (10x faster - type checking only)
+auto checkResult = service.checkRust("Cargo.toml");
+
+// Rust: clippy linting
+auto clippyResult = service.lintRust("Cargo.toml");
+
+// Go: go build (2-5x faster)
+auto goResult = service.buildGo(["./..."]);
+
+// Go: go test
+auto testResult = service.testGo(["./..."], ["-v"]);
+
+// Python: mypy type checking (15x faster)
+auto mypyResult = service.typecheckPython(["src/"]);
+
+// Python: ruff linting (5x faster)
+auto ruffResult = service.lintPython(["src/"]);
+
+// Python: pytest
+auto pytestResult = service.testPython(["tests/"]);
+
+// Get metrics
+auto metrics = service.getMetrics();
+writeln("Speedup: ", metrics.averageSpeedupFactor, "x");
+writeln("Time saved: ", metrics.totalSavedTime.total!"seconds", "s");
+
+service.stop();
 ```
 
-### Advanced Configuration
+### Configuration
 
 ```d
 WorkerServiceConfig config;
 config.poolConfig.maxWorkersPerType = 4;
 config.poolConfig.idleTimeout = minutes(10);
+
+// Enable/disable languages
 config.enableJVMWorkers = true;
 config.enableTSWorkers = true;
+config.enableRustWorkers = true;
+config.enableGoWorkers = true;
+config.enablePythonWorkers = true;
 
 // JVM-specific config
 config.jvmConfig.maxHeapMB = 4096;
@@ -139,30 +179,26 @@ config.jvmConfig.jvmArgs = ["-XX:+UseG1GC"];
 config.tsConfig.incremental = true;
 config.tsConfig.maxOldSpaceMB = 8192;
 
+// Rust-specific config
+config.rustConfig.incremental = true;
+config.rustConfig.release = false;
+
+// Go-specific config
+config.goConfig.race = false;
+config.goConfig.trimpath = true;
+
+// Python-specific config
+config.pythonConfig.daemon = true;  // mypy daemon mode
+config.pythonConfig.incremental = true;
+
 initWorkerService(config);
 ```
 
-### Health Monitoring
-
-```d
-// Setup health alerts
-auto service = getWorkerService();
-auto health = new WorkerHealthMonitor(service.pool);
-
-health.setAlertHandler((alert) {
-    if (alert.severity >= AlertSeverity.Warning)
-        Logger.warn(alert.message);
-});
-
-health.start();
-
-// Check health status
-auto summary = health.getSummary();
-writeln("Worker health: ", summary.healthPercentage(), "%");
-writeln("Avg response time: ", summary.avgResponseTimeMs, "ms");
-```
-
 ## Components
+
+### Base (`base.d`)
+- `BasePersistentWorkerFactory` - Abstract base class for all worker factories
+- Common lifecycle management, logging, and telemetry hooks
 
 ### Protocol (`protocol/`)
 - `types.d` - WorkRequest, WorkResponse, InputFile, OutputFile types
@@ -173,11 +209,15 @@ writeln("Avg response time: ", summary.avgResponseTimeMs, "ms");
 - `recycler.d` - Warmth tracking and recycling policy (SOC)
 - `memory.d` - Memory metrics and OOM detection (SOC)
 
-### JVM Workers (`jvm/`)
-- `worker.d` - JVM worker factory for javac, kotlinc, scalac, groovyc
+### Language Workers
 
-### TypeScript Workers (`typescript/`)
-- `worker.d` - TypeScript worker factory for tsc, swc, esbuild, bun
+| Directory     | Contents                                   |
+|---------------|--------------------------------------------|
+| `jvm/`        | javac, kotlinc, scalac, groovyc factories  |
+| `typescript/` | tsc, swc, esbuild, bun factories           |
+| `rust/`       | cargo, rustc, clippy factories             |
+| `go/`         | go build/test/vet/fmt factories            |
+| `python/`     | mypy, ruff, pylint, black, pytest factories|
 
 ### Service (`service.d`)
 - High-level service integrating all components
@@ -195,7 +235,6 @@ Workers persist across builds with intelligent recycling:
 ### Warmth-Aware Eviction
 
 ```d
-// Cold workers evicted first, hot workers preserved
 config.recyclingPolicy.preferWarmWorkers = true;
 config.recyclingPolicy.keepHotAcrossBuilds = true;
 config.recyclingPolicy.hotWorkerBonus = minutes(5);  // Extra idle time for hot workers
@@ -204,11 +243,9 @@ config.recyclingPolicy.hotWorkerBonus = minutes(5);  // Extra idle time for hot 
 ### Memory Monitoring & OOM Prevention
 
 ```d
-// Automatic restart when memory pressure detected
 config.enableMemoryMonitor = true;
 config.memoryThresholds.highMax = 0.95f;  // Restart at 95% heap
 
-// Check memory status
 auto memStats = pool.getMemoryMonitor().getStats();
 writeln("Workers at OOM risk: ", memStats.atRisk);
 ```
@@ -232,21 +269,41 @@ writeln("Estimated speedup: ", recycler.estimatedSpeedup(), "x");
 3. **Idle Timeout**: Use longer timeouts (10+ min) to keep workers warm across builds
 4. **Hot Workers**: Enable `keepHotAcrossBuilds` for continuous development
 5. **OOM Prevention**: Enable memory monitoring for large heap allocations
+6. **Language-specific**:
+   - **Rust**: Enable incremental compilation, use `cargo check` for faster type checking
+   - **Go**: Enable `trimpath` for reproducible builds
+   - **Python**: Use mypy daemon mode for fastest type checking
 
 ## Compatibility
 
 - **Bazel Protocol**: Compatible with Bazel's persistent worker protocol
-- **JVM**: Works with OpenJDK 11+, GraalVM
-- **Node.js**: Requires Node.js 16+ (uses ES modules)
-- **TypeScript**: Works with tsc 4.0+, SWC 1.0+, esbuild 0.14+
+- **JVM**: OpenJDK 11+, GraalVM
+- **Node.js**: Node.js 16+ (ES modules)
+- **TypeScript**: tsc 4.0+, SWC 1.0+, esbuild 0.14+
+- **Rust**: rustc 1.60+, cargo 1.60+
+- **Go**: go 1.18+
+- **Python**: Python 3.8+, mypy 0.900+, ruff 0.1+
 
 ## Metrics
 
 Track performance with built-in metrics:
 
 ```d
-auto metrics = getWorkerPerformanceMetrics();
-writeln(metrics.toString());
-// Output: "Persistent Workers: 142 compilations, 98% success, 14.2x avg speedup, 87s total saved"
+auto metrics = service.getMetrics();
+
+// Overall stats
+writeln("Total compilations: ", metrics.totalCompilations);
+writeln("Average speedup: ", metrics.averageSpeedupFactor, "x");
+writeln("Time saved: ", metrics.totalSavedTime.total!"seconds", "s");
+
+// Per-language breakdown
+foreach (lang, m; metrics.byLanguage) {
+    writeln(lang, ": ", m.compilations, " compilations, ", m.speedup, "x speedup");
+}
+
+// Worker health
+writeln("Warm workers: ", metrics.warmWorkers);
+writeln("Hot workers: ", metrics.hotWorkers);
+writeln("OOM restarts: ", metrics.oomRestarts);
 ```
 
