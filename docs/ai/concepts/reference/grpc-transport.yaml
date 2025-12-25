@@ -1,0 +1,98 @@
+topic: grpc-transport
+category: reference
+summary: "gRPC Transport - HTTP/2 streaming protocol for remote execution"
+definition: |
+  gRPC transport layer provides high-performance communication for distributed builds.
+  Uses Protocol Buffers for serialization and HTTP/2 for multiplexed, bidirectional streaming.
+
+key_points:
+  - "Streaming: Bidirectional streams for progress updates and heartbeats"
+  - "Retry: Automatic retry with exponential backoff"
+  - "Deadlines: Deadline propagation for timeout handling"
+  - "TLS: Secure communication with mutual TLS support"
+  - "REAPI: Wire-compatible with Bazel Remote Execution API"
+  - "Interop: Works with Buildbarn, Buildfarm, and other REAPI servers"
+
+architecture: |
+  ┌─────────────────────────────────────────────────────────┐
+  │                 Transport Layer                          │
+  │                                                          │
+  │  ┌──────────────┐     ┌──────────────┐                 │
+  │  │ HttpTransport │     │ GrpcTransport │                 │
+  │  │  (HTTP/1.1)   │     │  (HTTP/2)     │                 │
+  │  └──────┬───────┘     └──────┬───────┘                 │
+  │         │                     │                          │
+  │         └─────────┬───────────┘                          │
+  │                   │                                      │
+  │         ┌─────────▼─────────┐                           │
+  │         │ UnifiedTransport  │                           │
+  │         │     Factory       │                           │
+  │         └─────────┬─────────┘                           │
+  │                   │                                      │
+  │         ┌─────────▼─────────┐                           │
+  │         │   Transport       │  (common interface)       │
+  │         │   Interface       │                           │
+  │         └───────────────────┘                           │
+  └─────────────────────────────────────────────────────────┘
+
+usage_examples:
+  - description: "Configure gRPC transport"
+    code: |
+      remote:
+        address: "grpc://build-farm:8980"
+        transport: grpc
+  - description: "gRPC with TLS"
+    code: |
+      remote:
+        address: "grpcs://build-farm:8980"
+        tls:
+          cert: "client.crt"
+          key: "client.key"
+  - description: "Programmatic usage"
+    code: |
+      auto config = GrpcConfig.secure("farm:8980", rootCerts);
+      auto transport = new GrpcTransport(config);
+  - description: "Using UnifiedTransportFactory"
+    code: |
+      auto config = TransportConfig.fromUrl("grpc://farm:8980");
+      auto result = UnifiedTransportFactory.create(config);
+
+configuration:
+  - name: target
+    type: string
+    desc: "Target endpoint (host:port)"
+  - name: useTls
+    type: bool
+    desc: "Enable TLS encryption"
+  - name: rootCerts
+    type: string
+    desc: "Root CA certificates (PEM)"
+  - name: clientCert
+    type: string
+    desc: "Client certificate (PEM) for mutual TLS"
+  - name: clientKey
+    type: string
+    desc: "Client private key (PEM)"
+  - name: connectTimeout
+    type: Duration
+    desc: "Connection timeout (default: 30s)"
+  - name: callTimeout
+    type: Duration
+    desc: "Default call timeout (default: 60s)"
+  - name: maxMessageSize
+    type: size_t
+    desc: "Max message size (default: 4MB)"
+  - name: enableRetry
+    type: bool
+    desc: "Enable automatic retry (default: true)"
+  - name: maxRetries
+    type: size_t
+    desc: "Max retry attempts (default: 3)"
+
+related: [distributed, remote-execution, remote-cache, hermetic]
+
+next_steps: |
+  - bldr explain remote-execution
+  - bldr explain distributed
+  - See source/engine/distributed/protocol/grpc/README.md
+

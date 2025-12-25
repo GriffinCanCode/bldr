@@ -1,0 +1,415 @@
+// Bazel Remote Execution API (REAPI) compatibility definitions
+// Wire-compatible with build.bazel.remote.execution.v2
+// Enables Builder to work with existing RE infrastructure (BuildBuddy, BuildBarn, etc.)
+
+syntax = "proto3";
+
+package build.bazel.remote.execution.v2;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+import "google/rpc/status.proto";
+import "google/longrunning/operations.proto";
+
+option go_package = "github.com/bazelbuild/remote-apis/build/bazel/remote/execution/v2;remoteexecution";
+option java_package = "build.bazel.remote.execution.v2";
+option java_multiple_files = true;
+
+// =============================================================================
+// Core Types
+// =============================================================================
+
+// Content-addressed blob digest
+message Digest {
+  // BLAKE3 hash (Builder uses BLAKE3, REAPI typically uses SHA-256)
+  // Builder maps between these in the adapter layer
+  string hash = 1;
+  
+  // Size in bytes
+  int64 size_bytes = 2;
+}
+
+// Execution platform requirements
+message Platform {
+  message Property {
+    string name = 1;
+    string value = 2;
+  }
+  repeated Property properties = 1;
+}
+
+// Directory structure (Merkle tree node)
+message Directory {
+  repeated FileNode files = 1;
+  repeated DirectoryNode directories = 2;
+  repeated SymlinkNode symlinks = 3;
+  repeated NodeProperty node_properties = 4;
+}
+
+message FileNode {
+  string name = 1;
+  Digest digest = 2;
+  bool is_executable = 3;
+  repeated NodeProperty node_properties = 4;
+}
+
+message DirectoryNode {
+  string name = 1;
+  Digest digest = 2;
+}
+
+message SymlinkNode {
+  string name = 1;
+  string target = 2;
+  repeated NodeProperty node_properties = 3;
+}
+
+message NodeProperty {
+  string name = 1;
+  string value = 2;
+}
+
+// =============================================================================
+// Action Definition
+// =============================================================================
+
+// Command to execute
+message Command {
+  repeated string arguments = 1;
+  
+  message EnvironmentVariable {
+    string name = 1;
+    string value = 2;
+  }
+  repeated EnvironmentVariable environment_variables = 2;
+  
+  repeated string output_files = 3;
+  repeated string output_directories = 4;
+  repeated string output_paths = 5;
+  Platform platform = 6;
+  string working_directory = 7;
+  repeated string output_node_properties = 8;
+}
+
+// Action to execute (references Command and input tree)
+message Action {
+  Digest command_digest = 1;
+  Digest input_root_digest = 2;
+  google.protobuf.Duration timeout = 3;
+  bool do_not_cache = 4;
+  string salt = 5;
+  Platform platform = 6;
+}
+
+// =============================================================================
+// Execution Results
+// =============================================================================
+
+message ActionResult {
+  repeated OutputFile output_files = 1;
+  repeated OutputFileSymlink output_file_symlinks = 2;
+  repeated OutputSymlink output_symlinks = 3;
+  repeated OutputDirectory output_directories = 4;
+  repeated OutputDirectorySymlink output_directory_symlinks = 5;
+  int32 exit_code = 6;
+  bytes stdout_raw = 7;
+  Digest stdout_digest = 8;
+  bytes stderr_raw = 9;
+  Digest stderr_digest = 10;
+  ExecutedActionMetadata execution_metadata = 11;
+}
+
+message OutputFile {
+  string path = 1;
+  Digest digest = 2;
+  bool is_executable = 4;
+  bytes contents = 5;
+  repeated NodeProperty node_properties = 6;
+}
+
+message OutputFileSymlink {
+  string path = 1;
+  string target = 2;
+  repeated NodeProperty node_properties = 3;
+}
+
+message OutputSymlink {
+  string path = 1;
+  string target = 2;
+  repeated NodeProperty node_properties = 3;
+}
+
+message OutputDirectory {
+  string path = 1;
+  Digest tree_digest = 2;
+  bool is_topologically_sorted = 3;
+  Digest root_directory_digest = 4;
+}
+
+message OutputDirectorySymlink {
+  string path = 1;
+  string target = 2;
+}
+
+message Tree {
+  Directory root = 1;
+  repeated Directory children = 2;
+}
+
+message ExecutedActionMetadata {
+  string worker = 1;
+  google.protobuf.Timestamp queued_timestamp = 2;
+  google.protobuf.Timestamp worker_start_timestamp = 3;
+  google.protobuf.Timestamp worker_completed_timestamp = 4;
+  google.protobuf.Timestamp input_fetch_start_timestamp = 5;
+  google.protobuf.Timestamp input_fetch_completed_timestamp = 6;
+  google.protobuf.Timestamp execution_start_timestamp = 7;
+  google.protobuf.Timestamp execution_completed_timestamp = 8;
+  google.protobuf.Timestamp output_upload_start_timestamp = 9;
+  google.protobuf.Timestamp output_upload_completed_timestamp = 10;
+  google.protobuf.Timestamp virtual_execution_duration = 11;
+  repeated google.protobuf.Any auxiliary_metadata = 12;
+}
+
+// =============================================================================
+// Capabilities
+// =============================================================================
+
+message ServerCapabilities {
+  CacheCapabilities cache_capabilities = 1;
+  ExecutionCapabilities execution_capabilities = 2;
+  google.protobuf.Timestamp deprecated_api_version = 3;
+  string low_api_version = 4;
+  string high_api_version = 5;
+}
+
+message CacheCapabilities {
+  repeated DigestFunction.Value digest_functions = 1;
+  ActionCacheUpdateCapabilities action_cache_update_capabilities = 2;
+  CachePriorityCapabilities cache_priority_capabilities = 3;
+  int64 max_batch_total_size_bytes = 4;
+  SymlinkAbsolutePathStrategy.Value symlink_absolute_path_strategy = 5;
+  repeated Compressor.Value supported_compressors = 6;
+  repeated BatchUpdateBlobsRequest.Request.UploadType supported_batch_update_blob_request_upload_types = 7;
+}
+
+message DigestFunction {
+  enum Value {
+    UNKNOWN = 0;
+    SHA256 = 1;
+    SHA1 = 2;
+    MD5 = 3;
+    VSO = 4;
+    SHA384 = 5;
+    SHA512 = 6;
+    MURMUR3 = 7;
+    SHA256TREE = 8;
+    BLAKE3 = 9;  // Builder's native hash
+  }
+}
+
+message ActionCacheUpdateCapabilities {
+  bool update_enabled = 1;
+}
+
+message CachePriorityCapabilities {
+  repeated PriorityRange priorities = 1;
+}
+
+message PriorityRange {
+  int32 min_priority = 1;
+  int32 max_priority = 2;
+}
+
+message SymlinkAbsolutePathStrategy {
+  enum Value {
+    UNKNOWN = 0;
+    DISALLOWED = 1;
+    ALLOWED = 2;
+  }
+}
+
+message Compressor {
+  enum Value {
+    IDENTITY = 0;
+    ZSTD = 1;
+    DEFLATE = 2;
+  }
+}
+
+message ExecutionCapabilities {
+  DigestFunction.Value digest_function = 1;
+  bool exec_enabled = 2;
+  ExecutionPriorityCapabilities execution_priority_capabilities = 3;
+  repeated string supported_node_properties = 4;
+  DigestFunction.Value digest_function_override = 5;
+}
+
+message ExecutionPriorityCapabilities {
+  repeated PriorityRange priorities = 1;
+}
+
+// =============================================================================
+// Execution Service
+// =============================================================================
+
+message ExecuteRequest {
+  string instance_name = 1;
+  bool skip_cache_lookup = 2;
+  Digest action_digest = 3;
+  ExecutionPolicy execution_policy = 4;
+  ResultsCachePolicy results_cache_policy = 5;
+}
+
+message ExecutionPolicy {
+  int32 priority = 1;
+}
+
+message ResultsCachePolicy {
+  int32 priority = 1;
+}
+
+message ExecuteResponse {
+  ActionResult result = 1;
+  bool cached_result = 2;
+  google.rpc.Status status = 3;
+  string message = 4;
+}
+
+message WaitExecutionRequest {
+  string name = 1;
+}
+
+// =============================================================================
+// Action Cache Service
+// =============================================================================
+
+message GetActionResultRequest {
+  string instance_name = 1;
+  Digest action_digest = 2;
+  bool inline_stdout = 3;
+  bool inline_stderr = 4;
+  repeated string inline_output_files = 5;
+}
+
+message UpdateActionResultRequest {
+  string instance_name = 1;
+  Digest action_digest = 2;
+  ActionResult action_result = 3;
+  ResultsCachePolicy results_cache_policy = 4;
+}
+
+// =============================================================================
+// Content Addressable Storage (CAS) Service
+// =============================================================================
+
+message FindMissingBlobsRequest {
+  string instance_name = 1;
+  repeated Digest blob_digests = 2;
+}
+
+message FindMissingBlobsResponse {
+  repeated Digest missing_blob_digests = 1;
+}
+
+message BatchUpdateBlobsRequest {
+  string instance_name = 1;
+  
+  message Request {
+    Digest digest = 1;
+    bytes data = 2;
+    Compressor.Value compressor = 3;
+    
+    enum UploadType {
+      UPLOAD_TYPE_UNSPECIFIED = 0;
+      INLINE_DATA = 1;
+    }
+  }
+  repeated Request requests = 2;
+}
+
+message BatchUpdateBlobsResponse {
+  message Response {
+    Digest digest = 1;
+    google.rpc.Status status = 2;
+  }
+  repeated Response responses = 1;
+}
+
+message BatchReadBlobsRequest {
+  string instance_name = 1;
+  repeated Digest digests = 2;
+  repeated Compressor.Value acceptable_compressors = 3;
+}
+
+message BatchReadBlobsResponse {
+  message Response {
+    Digest digest = 1;
+    bytes data = 2;
+    Compressor.Value compressor = 3;
+    google.rpc.Status status = 4;
+  }
+  repeated Response responses = 1;
+}
+
+message GetTreeRequest {
+  string instance_name = 1;
+  Digest root_digest = 2;
+  int32 page_size = 3;
+  string page_token = 4;
+}
+
+message GetTreeResponse {
+  repeated Directory directories = 1;
+  string next_page_token = 2;
+}
+
+// =============================================================================
+// Services
+// =============================================================================
+
+// Main execution service
+service Execution {
+  // Execute an action remotely
+  // Returns a long-running Operation with ExecuteResponse as result
+  rpc Execute(ExecuteRequest) returns (google.longrunning.Operation);
+  
+  // Wait for an executing operation
+  rpc WaitExecution(WaitExecutionRequest) returns (stream google.longrunning.Operation);
+}
+
+// Action cache service  
+service ActionCache {
+  // Get cached action result
+  rpc GetActionResult(GetActionResultRequest) returns (ActionResult);
+  
+  // Update action cache
+  rpc UpdateActionResult(UpdateActionResultRequest) returns (ActionResult);
+}
+
+// Content addressable storage service
+service ContentAddressableStorage {
+  // Find which blobs are missing
+  rpc FindMissingBlobs(FindMissingBlobsRequest) returns (FindMissingBlobsResponse);
+  
+  // Upload blobs in batch
+  rpc BatchUpdateBlobs(BatchUpdateBlobsRequest) returns (BatchUpdateBlobsResponse);
+  
+  // Download blobs in batch
+  rpc BatchReadBlobs(BatchReadBlobsRequest) returns (BatchReadBlobsResponse);
+  
+  // Get directory tree
+  rpc GetTree(GetTreeRequest) returns (stream GetTreeResponse);
+}
+
+// Server capabilities service
+service Capabilities {
+  // Get server capabilities
+  rpc GetCapabilities(GetCapabilitiesRequest) returns (ServerCapabilities);
+}
+
+message GetCapabilitiesRequest {
+  string instance_name = 1;
+}
+

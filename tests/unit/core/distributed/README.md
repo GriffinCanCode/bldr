@@ -90,6 +90,40 @@ Tests for arena allocators and object pools:
 
 **Test Count**: 22 unit tests
 
+### `grpc.d` - gRPC Transport Tests
+Tests for gRPC transport layer and protobuf codec:
+
+#### GrpcConfig Tests
+- **Insecure Creation**: Create insecure client config
+- **Secure Creation**: Create TLS-enabled config
+- **Default Values**: Verify default timeouts and settings
+
+#### TransportConfig Tests
+- **URL Parsing**: Parse grpc://, grpcs://, http://, https://
+- **Factory Methods**: grpcInsecure, grpcSecure helpers
+- **Transport Types**: Http, Grpc, Auto enum values
+
+#### GrpcCodec Tests
+- **HeartBeat Encoding**: Encode worker heartbeat messages
+- **StealRequest Encoding**: Encode work-stealing requests
+- **StealResponse Encoding**: Encode steal responses with actions
+- **ActionRequest Encoding**: Full action request with inputs/outputs
+- **Capabilities Encoding**: Path lists, resource limits
+- **Varint Encoding**: Small and large number encoding
+- **Decode Edge Cases**: Empty data, malformed input handling
+
+#### GrpcServer Tests
+- **Server Creation**: Create server instances
+- **Start/Stop**: Server lifecycle management
+- **Configuration**: Verify bound address, TLS settings
+
+#### Transport Pool Tests
+- **Pool Creation**: Create with different strategies
+- **Endpoint Management**: Add multiple endpoints
+- **Error Handling**: Empty pool returns error
+
+**Test Count**: 40 unit tests
+
 ## Running Tests
 
 ### Run All Distributed Tests
@@ -105,6 +139,7 @@ dub test -- tests.unit.core.distributed.peers
 dub test -- tests.unit.core.distributed.steal
 dub test -- tests.unit.core.distributed.storage
 dub test -- tests.unit.core.distributed.memory
+dub test -- tests.unit.core.distributed.grpc
 ```
 
 ## Test Coverage
@@ -117,7 +152,8 @@ dub test -- tests.unit.core.distributed.memory
 | Steal | 16 | Work-stealing strategies, metrics |
 | Storage | 16 | Content-addressable storage, eviction |
 | Memory | 22 | Arenas, object pools, buffers |
-| **Total** | **111** | Comprehensive distributed system coverage |
+| gRPC | 40 | Transport, codec, server, config |
+| **Total** | **151** | Comprehensive distributed system coverage |
 
 ## Test Patterns
 
@@ -172,10 +208,12 @@ These tests run as part of the Builder test suite:
 Planned test expansions:
 - [ ] Coordinator scheduler tests
 - [ ] Worker sandbox tests
-- [ ] Protocol transport tests
+- [x] Protocol transport tests (gRPC)
 - [ ] End-to-end integration tests
 - [ ] Chaos/fault injection tests
 - [ ] Performance regression tests
+- [ ] gRPC streaming tests (requires grpc-core)
+- [ ] REAPI compatibility tests
 
 ## Contributing
 

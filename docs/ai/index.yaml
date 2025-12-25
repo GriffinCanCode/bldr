@@ -129,6 +129,11 @@ concepts:
     file: "concepts/languages/go-support.yaml"
     summary: "Go Support - Building Go code"
 
+  grpc-transport:
+    file: "concepts/reference/grpc-transport.yaml"
+    summary: "gRPC Transport - HTTP/2 streaming for remote execution with REAPI compatibility"
+    keywords: ["grpc", "http2", "streaming", "remote", "reapi", "bazel"]
+
   hermetic:
     file: "concepts/core/hermetic.yaml"
     summary: "Isolated build execution with sandboxed environments"
@@ -339,6 +344,9 @@ aliases:
   actions: "action-cache"
   remote: "remote-cache"
   dist: "distributed"
+  grpc: "grpc-transport"
+  http2: "grpc-transport"
+  reapi: "remote-execution"
   incremental-compilation: "incremental-compilation"
   sandbox: "hermetic"
   isolation: "hermetic"

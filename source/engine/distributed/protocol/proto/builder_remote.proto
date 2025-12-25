@@ -1,0 +1,299 @@
+// Protocol Buffer definitions for Builder Remote Execution
+// Maps directly to types in engine.distributed.protocol.protocol
+
+syntax = "proto3";
+
+package builder.remote.v1;
+
+option go_package = "builder/remote/v1;remotev1";
+option java_package = "io.builder.remote.v1";
+option java_multiple_files = true;
+
+// =============================================================================
+// Core Identifiers
+// =============================================================================
+
+// Content-addressed action identifier (32-byte BLAKE3 hash)
+message ActionId {
+  bytes hash = 1;  // 32 bytes
+}
+
+// Content-addressed artifact identifier (same as ActionId)
+message ArtifactId {
+  bytes hash = 1;  // 32 bytes
+}
+
+// Unique worker identifier
+message WorkerId {
+  uint64 value = 1;
+}
+
+// Unique message identifier for correlation/deduplication
+message MessageId {
+  uint64 value = 1;
+}
+
+// =============================================================================
+// Enums
+// =============================================================================
+
+// Worker finite state machine
+enum WorkerState {
+  WORKER_STATE_UNSPECIFIED = 0;
+  WORKER_STATE_IDLE = 1;
+  WORKER_STATE_EXECUTING = 2;
+  WORKER_STATE_STEALING = 3;
+  WORKER_STATE_UPLOADING = 4;
+  WORKER_STATE_FAILED = 5;
+  WORKER_STATE_DRAINING = 6;
+}
+
+// Action execution outcome
+enum ResultStatus {
+  RESULT_STATUS_UNSPECIFIED = 0;
+  RESULT_STATUS_SUCCESS = 1;
+  RESULT_STATUS_FAILURE = 2;
+  RESULT_STATUS_TIMEOUT = 3;
+  RESULT_STATUS_CANCELLED = 4;
+  RESULT_STATUS_ERROR = 5;
+}
+
+// Scheduling priority (higher = more urgent)
+enum Priority {
+  PRIORITY_UNSPECIFIED = 0;
+  PRIORITY_LOW = 1;
+  PRIORITY_NORMAL = 50;
+  PRIORITY_HIGH = 100;
+  PRIORITY_CRITICAL = 200;
+}
+
+// Message compression algorithm
+enum Compression {
+  COMPRESSION_NONE = 0;
+  COMPRESSION_ZSTD = 1;
+  COMPRESSION_LZ4 = 2;
+}
+
+// =============================================================================
+// Security & Capabilities
+// =============================================================================
+
+// Security capabilities for hermetic execution
+message Capabilities {
+  bool network = 1;                      // Network access allowed?
+  bool write_home = 2;                   // Write to $HOME allowed?
+  bool write_tmp = 3;                    // Write to /tmp allowed?
+  repeated string read_paths = 4;        // Readable paths
+  repeated string write_paths = 5;       // Writable paths
+  uint64 max_cpu = 6;                    // Max CPU cores (0 = unlimited)
+  uint64 max_memory = 7;                 // Max memory bytes (0 = unlimited)
+  int64 timeout_ms = 8;                  // Execution timeout in milliseconds
+}
+
+// =============================================================================
+// Artifact Specifications
+// =============================================================================
+
+// Input artifact specification
+message InputSpec {
+  ArtifactId id = 1;         // Artifact identifier
+  string path = 2;           // Mounted path in sandbox
+  bool executable = 3;       // Executable bit?
+}
+
+// Output artifact specification
+message OutputSpec {
+  string path = 1;           // Path in sandbox
+  bool optional = 2;         // Failure if missing?
+}
+
+// =============================================================================
+// Resource Metrics
+// =============================================================================
+
+// Resource usage after action execution
+message ResourceUsage {
+  int64 cpu_time_ms = 1;      // Total CPU time in milliseconds
+  uint64 peak_memory = 2;     // Peak memory usage (bytes)
+  uint64 disk_read = 3;       // Disk bytes read
+  uint64 disk_write = 4;      // Disk bytes written
+  uint64 network_tx = 5;      // Network bytes sent
+  uint64 network_rx = 6;      // Network bytes received
+}
+
+// System metrics for health monitoring
+message SystemMetrics {
+  float cpu_usage = 1;        // CPU utilization [0.0, 1.0]
+  float memory_usage = 2;     // Memory utilization [0.0, 1.0]
+  float disk_usage = 3;       // Disk utilization [0.0, 1.0]
+  uint64 queue_depth = 4;     // Local queue size
+  uint64 active_actions = 5;  // Currently executing
+}
+
+// =============================================================================
+// Messages (Coordinator <-> Worker)
+// =============================================================================
+
+// Build action request (coordinator → worker)
+message ActionRequest {
+  ActionId id = 1;                       // Unique action identifier
+  string command = 2;                    // Shell command to execute
+  map<string, string> env = 3;           // Environment variables
+  repeated InputSpec inputs = 4;         // Input artifacts
+  repeated OutputSpec outputs = 5;       // Expected outputs
+  Capabilities capabilities = 6;         // Security sandbox
+  Priority priority = 7;                 // Scheduling priority
+  int64 timeout_ms = 8;                  // Max execution time in ms
+}
+
+// Build action result (worker → coordinator)
+message ActionResult {
+  ActionId id = 1;                       // Which action
+  ResultStatus status = 2;               // Outcome
+  int64 duration_ms = 3;                 // Execution time in ms
+  repeated ArtifactId outputs = 4;       // Generated artifacts
+  string stdout = 5;                     // Captured stdout
+  string stderr = 6;                     // Captured stderr
+  int32 exit_code = 7;                   // Process exit code
+  ResourceUsage resources = 8;           // Resource consumption
+}
+
+// Heartbeat message (worker → coordinator)
+message HeartBeat {
+  WorkerId worker = 1;                   // Worker identifier
+  WorkerState state = 2;                 // Current state
+  SystemMetrics metrics = 3;             // System metrics
+  int64 timestamp_unix_ms = 4;           // When sent (Unix millis)
+}
+
+// Shutdown command (coordinator → worker)
+message Shutdown {
+  bool graceful = 1;                     // Finish current work?
+  int64 timeout_ms = 2;                  // Max wait time in ms
+}
+
+// =============================================================================
+// Work Stealing Protocol
+// =============================================================================
+
+// Work steal request (worker → worker)
+message StealRequest {
+  WorkerId thief = 1;                    // Who wants work
+  WorkerId victim = 2;                   // Who has work
+  Priority min_priority = 3;             // Only steal if >= this
+}
+
+// Work steal response (worker → worker)
+message StealResponse {
+  WorkerId victim = 1;                   // Who responded
+  WorkerId thief = 2;                    // Who asked
+  bool has_work = 3;                     // Work available?
+  ActionRequest action = 4;              // Stolen action (if has_work)
+}
+
+// =============================================================================
+// Message Envelope (wraps all messages for transport)
+// =============================================================================
+
+message Envelope {
+  uint32 version = 1;                    // Protocol version (1)
+  MessageId id = 2;                      // Unique message ID
+  WorkerId sender = 3;                   // Who sent
+  WorkerId recipient = 4;                // Who receives
+  int64 timestamp_unix_ms = 5;           // When sent
+  Compression compression = 6;           // Compression algorithm
+  
+  // Payload (exactly one)
+  oneof payload {
+    ActionRequest action_request = 10;
+    ActionResult action_result = 11;
+    HeartBeat heartbeat = 12;
+    Shutdown shutdown = 13;
+    StealRequest steal_request = 14;
+    StealResponse steal_response = 15;
+  }
+}
+
+// =============================================================================
+// Service Definitions
+// =============================================================================
+
+// Coordinator service (main entry point for clients)
+service CoordinatorService {
+  // Submit action for execution
+  rpc Execute(ActionRequest) returns (ActionResult);
+  
+  // Stream execution with progress updates
+  rpc ExecuteStream(ActionRequest) returns (stream ExecutionProgress);
+  
+  // Batch submit multiple actions
+  rpc ExecuteBatch(BatchExecuteRequest) returns (stream ActionResult);
+  
+  // Get action result from cache
+  rpc GetActionResult(ActionId) returns (ActionResult);
+  
+  // Worker registration
+  rpc RegisterWorker(RegisterWorkerRequest) returns (RegisterWorkerResponse);
+  
+  // Heartbeat stream (bidirectional)
+  rpc Heartbeat(stream HeartBeat) returns (stream CoordinatorCommand);
+}
+
+// Worker-to-worker service for work stealing
+service WorkerService {
+  // Attempt to steal work
+  rpc Steal(StealRequest) returns (StealResponse);
+  
+  // Receive pushed work
+  rpc PushWork(ActionRequest) returns (PushWorkResponse);
+}
+
+// =============================================================================
+// Supporting Messages for Services
+// =============================================================================
+
+message ExecutionProgress {
+  ActionId action_id = 1;
+  enum Stage {
+    STAGE_UNSPECIFIED = 0;
+    STAGE_QUEUED = 1;
+    STAGE_INPUT_FETCH = 2;
+    STAGE_EXECUTING = 3;
+    STAGE_OUTPUT_UPLOAD = 4;
+    STAGE_COMPLETE = 5;
+  }
+  Stage stage = 2;
+  float progress = 3;                    // 0.0 - 1.0
+  string message = 4;
+}
+
+message BatchExecuteRequest {
+  repeated ActionRequest actions = 1;
+  bool wait_for_all = 2;                 // Wait for all to complete?
+}
+
+message RegisterWorkerRequest {
+  WorkerId worker_id = 1;
+  string address = 2;                    // Worker's listen address
+  Capabilities capabilities = 3;         // Worker capabilities
+  uint32 max_concurrent = 4;             // Max concurrent actions
+}
+
+message RegisterWorkerResponse {
+  bool accepted = 1;
+  string message = 2;
+  repeated WorkerId peers = 3;           // Known peer workers
+}
+
+message CoordinatorCommand {
+  oneof command {
+    Shutdown shutdown = 1;
+    ActionRequest action = 2;            // Pushed work
+  }
+}
+
+message PushWorkResponse {
+  bool accepted = 1;
+  string reason = 2;                     // Rejection reason if not accepted
+}
+

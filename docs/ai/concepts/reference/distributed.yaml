@@ -10,16 +10,32 @@ key_points:
   - "Scalability: Scale from one to hundreds of cores"
   - "Transparency: Works without code changes"
   - "Protocol: Uses standard Remote Execution API (REAPI)"
+  - "Transport: Supports HTTP/1.1 (default) or gRPC/HTTP2"
+  - "gRPC benefits: Streaming, automatic retry, deadline propagation"
 
 usage_examples:
-  - description: "Configure remote execution"
+  - description: "Configure remote execution with HTTP (default)"
+    code: |
+      remote:
+        address: "http://build-farm.example.com:9000"
+  - description: "Configure remote execution with gRPC"
     code: |
       remote:
         address: "grpc://build-farm.example.com:8980"
+        transport: grpc
+  - description: "Configure gRPC with TLS"
+    code: |
+      remote:
+        address: "grpcs://build-farm.example.com:8980"
+        tls:
+          cert: "/path/to/client.crt"
+          key: "/path/to/client.key"
+          ca: "/path/to/ca.crt"
 
-related: [remote-cache, hermetic, action-cache]
+related: [remote-cache, hermetic, action-cache, grpc-transport]
 
 next_steps: |
   - Set up a REAPI-compatible build farm
   - Configure remote endpoint in builder.yml
+  - Use gRPC for Bazel REAPI interoperability
 

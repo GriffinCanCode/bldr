@@ -25,6 +25,7 @@ import engine.runtime.remote.providers.kubernetes : KubernetesProvider;
 import engine.runtime.remote.monitoring.health : RemoteServiceHealthMonitor;
 import engine.runtime.remote.monitoring.metrics : RemoteServiceMetricsCollector, ServiceMetrics;
 import engine.runtime.hermetic;
+import engine.distributed.protocol.grpc.factory : UnifiedTransportFactory, TransportConfig, TransportType;
 import infrastructure.errors;
 import infrastructure.utils.logging.logger;
 
@@ -66,6 +67,13 @@ struct ProviderConfig
     string k8sKubeconfig = "";
 }
 
+/// Transport type for remote communication
+enum RemoteTransportType {
+    Http,       // HTTP/1.1 (default, no external dependencies)
+    Grpc,       // gRPC/HTTP2 (requires grpc-core, enables REAPI compatibility)
+    Auto        // Auto-detect best available transport
+}
+
 /// Remote execution service configuration
 struct RemoteServiceConfig
 {
@@ -82,9 +90,17 @@ struct RemoteServiceConfig
     // Provider settings
     ProviderConfig providerConfig;
     
+    // Transport settings
+    RemoteTransportType transportType = RemoteTransportType.Auto;  // Transport layer
+    bool enableTls = false;                 // Use TLS for transport?
+    string tlsCertPath;                     // TLS certificate path
+    string tlsKeyPath;                      // TLS key path
+    string tlsCaPath;                       // TLS CA certificate path
+    
     // Service settings
     bool enableReapi = true;                // Expose REAPI endpoint?
     ushort reapiPort = 9001;                // REAPI service port
+    bool enableGrpcReapi = false;           // Use gRPC for true REAPI compatibility?
     
     Duration healthCheckInterval = 10.seconds;
     bool enableMetrics = true;
@@ -175,8 +191,15 @@ final class RemoteExecutionService : IRemoteExecutionService
         // REAPI adapter (if enabled)
         if (config.enableReapi)
         {
-            immutable remoteUrl = "http://" ~ config.coordinatorHost ~ ":" ~ config.coordinatorPort.to!string;
+            // Build URL based on transport type
+            string protocol = config.enableGrpcReapi ? "grpc" : "http";
+            if (config.enableTls) protocol ~= "s";
+            immutable remoteUrl = protocol ~ "://" ~ config.coordinatorHost ~ ":" ~ config.coordinatorPort.to!string;
             this.reapiAdapter = new ReapiAdapter(remoteUrl);
+            
+            // Log transport type
+            if (config.transportType == RemoteTransportType.Grpc || config.enableGrpcReapi)
+                Logger.info("Using gRPC transport for remote execution");
         }
         
         // Initialize dedicated monitoring components
@@ -455,6 +478,31 @@ struct RemoteServiceBuilder
     ref RemoteServiceBuilder enableMetrics(bool enabled = true) return pure nothrow @safe @nogc
     {
         config.enableMetrics = enabled;
+        return this;
+    }
+    
+    /// Set transport type (Http, Grpc, or Auto)
+    ref RemoteServiceBuilder transport(RemoteTransportType type) return pure nothrow @safe @nogc
+    {
+        config.transportType = type;
+        return this;
+    }
+    
+    /// Enable gRPC transport (shorthand)
+    ref RemoteServiceBuilder useGrpc() return pure nothrow @safe @nogc
+    {
+        config.transportType = RemoteTransportType.Grpc;
+        config.enableGrpcReapi = true;
+        return this;
+    }
+    
+    /// Enable TLS for transport
+    ref RemoteServiceBuilder enableTls(string certPath, string keyPath, string caPath = "") return pure nothrow @safe
+    {
+        config.enableTls = true;
+        config.tlsCertPath = certPath;
+        config.tlsKeyPath = keyPath;
+        config.tlsCaPath = caPath;
         return this;
     }
     

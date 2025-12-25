@@ -10,16 +10,43 @@ key_points:
   - "Inputs: Transfers only necessary inputs to worker"
   - "Outputs: Downloads results from worker"
   - "Platform properties: Select workers by OS/arch"
+  - "Transport options: HTTP/1.1 (lightweight) or gRPC (full REAPI compat)"
+  - "Streaming: gRPC enables progress streaming during execution"
+
+transport_options:
+  http:
+    - "Default transport, no external dependencies"
+    - "Good for Builder-native clusters"
+    - "Simple configuration"
+  grpc:
+    - "Full Bazel REAPI wire compatibility"
+    - "Bidirectional streaming for progress updates"
+    - "Automatic retry with backoff"
+    - "Deadline propagation"
+    - "Works with Buildbarn, Buildfarm, etc."
 
 usage_examples:
-  - description: "Configuration"
+  - description: "Basic gRPC configuration"
     code: |
       remote_execution:
-        address: "grpc://..."
+        address: "grpc://build-cluster:8980"
         properties: { "OSFamily": "Linux" }
+  - description: "HTTP transport (default)"
+    code: |
+      remote_execution:
+        address: "http://coordinator:9000"
+        transport: http
+  - description: "gRPC with full REAPI"
+    code: |
+      remote_execution:
+        address: "grpc://build-cluster:8980"
+        transport: grpc
+        enable_reapi: true
 
-related: [distributed, remote-cache, hermetic]
+related: [distributed, remote-cache, hermetic, grpc-transport]
 
 next_steps: |
   - Requires a compatible backend (Buildbarn, Buildfarm, etc.)
+  - Use gRPC transport for standard REAPI endpoints
+  - Use HTTP transport for Builder-native clusters
 
