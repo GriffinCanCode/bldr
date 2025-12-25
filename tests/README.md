@@ -26,14 +26,39 @@ tests/
 ├── harness.d         # Assertions and test framework
 ├── fixtures.d        # Test fixtures (TempDir, MockWorkspace, etc.)
 ├── mocks.d           # Mock objects and spies
-├── unit/             # Unit tests mirroring source/
-│   └── core/
-│       ├── hermetic.d           # Core hermetic execution tests
-│       ├── hermetic_builds.d    # Comprehensive hermetic build tests
-│       └── hermetic_advanced.d  # Advanced hermetic scenarios
+├── property.d        # Property-based testing utilities
+├── adapters/         # Test adapters for build components
+├── unit/             # Unit tests organized by module
+│   ├── analysis/     # Dependency analysis tests
+│   ├── caching/      # Cache system tests
+│   ├── cli/          # CLI and rendering tests
+│   ├── compilation/  # Incremental compilation tests
+│   ├── config/       # DSL and configuration tests
+│   ├── core/         # Core engine tests
+│   │   ├── caching/  # Build cache tests
+│   │   ├── distributed/ # Distributed build tests
+│   │   ├── hermetic*.d  # Hermetic build tests
+│   │   └── ...       # Other core tests
+│   ├── errors/       # Error handling tests
+│   ├── graph/        # Build graph tests
+│   ├── languages/    # Language handler tests
+│   ├── lsp/          # LSP implementation tests
+│   ├── migration/    # Build system migration tests
+│   ├── parsing/      # Parser and tree-sitter tests
+│   ├── properties/   # Property-based invariant tests
+│   ├── repository/   # Repository rules tests
+│   ├── services/     # Build services tests
+│   └── utils/        # Utility function tests
 ├── integration/      # End-to-end integration tests
-│   └── hermetic_real_world.d    # Real-world hermetic build scenarios
+│   ├── build.d       # Full build pipeline tests
+│   ├── distributed_*.d  # Distributed system tests
+│   ├── hermetic_*.d  # Hermetic integration tests
+│   ├── *_chaos.d     # Chaos and stress tests
+│   └── ...           # Various scenario tests
 └── bench/            # Performance benchmarks
+    ├── comparative/  # Comparative analysis vs other tools
+    ├── *_bench.d     # Individual benchmark suites
+    └── suite.d       # Benchmark framework
 ```
 
 ## Key Features
@@ -47,7 +72,7 @@ tests/
 
 ## Writing Tests
 
-See [docs/TESTING.md](/docs/TESTING.md) for comprehensive guide.
+See [docs/user-guides/TESTING.md](../docs/user-guides/TESTING.md) for comprehensive guide.
 
 ### Example
 

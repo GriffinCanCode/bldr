@@ -481,7 +481,7 @@ bldr test --shards 16
 
 ## API Reference
 
-See [Test API Documentation](../api/testing.md) for programmatic usage.
+See [Testing User Guide](../user-guides/TESTING.md) for programmatic usage.
 
 ## Migration Guide
 

@@ -179,7 +179,7 @@ Plugins can implement various capabilities:
 
 ## Resources
 
-- **Architecture**: [Plugin Architecture Documentation](../../docs/architecture/plugins.md)
+- **Architecture**: [Plugin Architecture Documentation](../../docs/architecture/PLUGINS.md)
 - **Distribution**: [Homebrew Formulas](../../distribution/homebrew/plugins/)
 - **SDK**: [Python SDK](sdk/python/) | [Testing Utils](sdk/testing/)
 - **Examples**: All plugins in this directory

@@ -436,8 +436,8 @@ bldr telemetry export > telemetry-$(date +%Y-%m).json
 
 ## See Also
 
-- [PERFORMANCE.md](PERFORMANCE.md) - Performance optimization guide
-- [CLI.md](CLI.md) - Command-line interface reference
-- [CACHING.md](CONCURRENCY.md) - Build caching strategies
-- [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture
+- [Performance](./performance.md) - Performance optimization guide
+- [CLI](../user-guides/CLI.md) - Command-line interface reference
+- [Caching](./caching.md) - Build caching strategies
+- [Architecture](../architecture/overview.md) - System architecture
 

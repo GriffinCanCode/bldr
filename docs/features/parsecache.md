@@ -392,16 +392,16 @@ Run tests:
 ## Related Documentation
 
 - [DSL.md](../architecture/DSL.md) - DSL syntax and parsing architecture
-- [ACTION_CACHE_DESIGN.md](../architecture/ACTION_CACHE_DESIGN.md) - Build action caching
-- [PERFORMANCE.md](PERFORMANCE.md) - Overall performance optimizations
+- [Cache Design](../architecture/cachedesign.md) - Build action caching
+- [Performance](./performance.md) - Overall performance optimizations
 
 ## Implementation Files
 
-- `source/config/caching/parse.d` - Main ParseCache class
-- `source/config/caching/storage.d` - Binary AST serialization
-- `source/config/caching/package.d` - Module exports
-- `source/config/interpretation/dsl.d` - Integration with parseDSL()
-- `source/config/parsing/parser.d` - Integration with ConfigParser
+- `source/infrastructure/config/caching/parse.d` - Main ParseCache class
+- `source/infrastructure/config/caching/storage.d` - Binary AST serialization
+- `source/infrastructure/config/caching/package.d` - Module exports
+- `source/infrastructure/config/parsing/unified.d` - Integration with parseDSL()
+- `source/infrastructure/config/parsing/parser.d` - Integration with ConfigParser
 - `tests/unit/config/parse_cache.d` - Comprehensive test suite
 
 **Total**: ~1,200 lines of sophisticated, production-ready code.

@@ -6,19 +6,30 @@ Comprehensive C/C++ build support with advanced compiler, build system, and tool
 
 ```
 source/languages/compiled/cpp/
-├── package.d          # Public exports
-├── handler.d          # Main build handler
-├── config.d           # Configuration types and enums
-├── toolchain.d        # Compiler detection and management
-├── analysis.d         # Header dependency and template analysis
-├── tools.d            # Static analysis, formatting, sanitizers
-└── builders/          # Build strategies
-    ├── package.d      # Builder exports
-    ├── base.d         # Builder interface and factory
-    ├── direct.d       # Direct compiler invocation
-    ├── cmake.d        # CMake integration
-    ├── make.d         # Make integration
-    └── ninja.d        # Ninja integration
+├── package.d             # Public exports
+├── README.md             # This file
+├── core/                 # Core handler and configuration
+│   ├── handler.d         # Main build handler
+│   ├── config.d          # Configuration types and enums
+│   └── package.d         # Core module exports
+├── analysis/             # Dependency analysis
+│   ├── analysis.d        # Header dependency and template analysis
+│   ├── incremental.d     # Incremental compilation analysis
+│   └── package.d         # Analysis module exports
+├── tooling/              # Compiler and tool detection
+│   ├── tools.d           # Static analysis, formatting, sanitizers
+│   └── package.d         # Tooling module exports
+└── builders/             # Build strategies
+    ├── package.d         # Builder exports
+    ├── base.d            # Builder interface and factory
+    ├── direct.d          # Direct compiler invocation
+    ├── cmake.d           # CMake integration
+    ├── make.d            # Make integration
+    ├── ninja.d           # Ninja integration
+    ├── bazel.d           # Bazel integration
+    ├── meson.d           # Meson integration
+    ├── xmake.d           # xmake integration
+    └── incremental.d     # Incremental build support
 ```
 
 ## Features

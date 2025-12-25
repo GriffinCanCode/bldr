@@ -155,10 +155,10 @@ dub build --compiler=ldc2 --build=tsan
 ==================
 WARNING: ThreadSanitizer: data race (pid=12345)
   Write of size 4 at 0x7fff12345678 by thread T1:
-    #0 BuildNode.status (source/core/graph/graph.d:42)
+    #0 BuildNode.status (source/engine/graph/core/graph.d:42)
     
   Previous read of size 4 at 0x7fff12345678 by main thread:
-    #0 BuildNode.isReady (source/core/graph/graph.d:50)
+    #0 BuildNode.isReady (source/engine/graph/core/graph.d:50)
     
 SUMMARY: ThreadSanitizer: data race
 ==================
@@ -245,7 +245,7 @@ Parallel build performance (8 cores):
 
 ## See Also
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) - Overall system design
-- [PERFORMANCE.md](PERFORMANCE.md) - Performance optimization techniques
-- [TESTING.md](TESTING.md) - Testing practices
+- [Architecture](../architecture/overview.md) - Overall system design
+- [Performance](./performance.md) - Performance optimization techniques
+- [Testing](../user-guides/TESTING.md) - Testing practices
 

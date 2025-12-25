@@ -180,7 +180,7 @@ Builder loads ignore patterns at startup. Restart the build or re-run the comman
 
 ## Related
 
-- [CLI Documentation](CLI.md) - Command-line interface
-- [Configuration](DSL.md) - Builderfile syntax
-- [Performance](PERFORMANCE.md) - Performance optimization guide
+- [CLI Documentation](./CLI.md) - Command-line interface
+- [Configuration](../architecture/DSL.md) - Builderfile syntax
+- [Performance](../features/performance.md) - Performance optimization guide
 

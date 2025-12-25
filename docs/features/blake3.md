@@ -392,7 +392,7 @@ SIMD Optimized       | Yes           | Partially
 - [BLAKE3 Official Repo](https://github.com/BLAKE3-team/BLAKE3)
 - [BLAKE3 Paper](https://github.com/BLAKE3-team/BLAKE3-specs/blob/master/blake3.pdf)
 - [Performance Comparison](https://blake3.io/)
-- [Builder Performance Guide](PERFORMANCE.md)
+- [Builder Performance Guide](./performance.md)
 
 ## Future Enhancements
 

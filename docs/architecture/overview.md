@@ -6,7 +6,7 @@ Builder is a smart build system designed for mixed-language monorepos, leveragin
 
 ## Core Components
 
-### 1. Build Graph (`core/graph.d`)
+### 1. Build Graph (`engine/graph/`)
 
 The build graph is the central data structure representing all targets and their dependencies.
 
@@ -21,22 +21,22 @@ The build graph is the central data structure representing all targets and their
 - Calculates depth for each node to enable wave-based parallel execution
 - Detects cycles before adding edges to maintain DAG property
 
-### 2. Build Cache (`core/cache.d`)
+### 2. Build Cache (`engine/caching/`)
 
 High-performance incremental build cache with advanced optimizations.
 
 **Cache Strategy:**
-- Two-tier hashing: metadata (mtime+size) + SHA-256 content hash
+- Two-tier hashing: metadata (mtime+size) + BLAKE3 content hash
 - Binary serialization: 5-10x faster than JSON, 30% smaller
 - Lazy writes: batch updates, write once per build
 - LRU eviction with configurable size limits
 - Dependency-aware invalidation
 
 **Performance Optimizations:**
-- **Two-Tier Hashing** (`utils/hash.d`): Check fast metadata hash (1μs) before expensive content hash (1ms). Achieves 1000x speedup for unchanged files.
-- **Binary Storage** (`core/storage.d`): Custom binary format with magic number validation. Serializes 5-10x faster than JSON.
+- **Two-Tier Hashing** (`infrastructure/utils/files/hash.d`): Check fast metadata hash (1μs) before expensive content hash (1ms). Achieves 1000x speedup for unchanged files.
+- **Binary Storage** (`engine/caching/storage/`): Custom binary format with magic number validation. Serializes 5-10x faster than JSON.
 - **Lazy Writes**: Defers all writes until `flush()` call at build end. For 100 targets: 100x I/O reduction.
-- **LRU Eviction** (`core/eviction.d`): Automatic cache management with hybrid strategy (LRU + age-based + size-based).
+- **LRU Eviction** (`engine/caching/policies/eviction.d`): Automatic cache management with hybrid strategy (LRU + age-based + size-based).
 
 **Cache Configuration:**
 ```bash
@@ -51,7 +51,7 @@ BUILDER_CACHE_MAX_AGE_DAYS=30           # 30 days default
 - Automatic eviction when limits exceeded
 - Manual invalidation via `bldr clean`
 
-### 3. Build Executor (`core/executor.d`)
+### 3. Build Executor (`engine/runtime/core/`)
 
 Orchestrates the actual build process.
 
@@ -68,17 +68,17 @@ Orchestrates the actual build process.
 4. Update node status
 5. Repeat until all nodes built or error
 
-### 4. Dependency Analysis (`analysis/`)
+### 4. Dependency Analysis (`infrastructure/analysis/`)
 
 **True compile-time metaprogramming architecture** with strongly typed domain objects.
 
 **Components:**
-- `types.d`: Strongly typed domain objects (Import, Dependency, FileAnalysis, TargetAnalysis)
-- `spec.d`: Language specification registry with compile-time validation
-- `metagen.d`: Compile-time code generation using templates and mixins
-- `analyzer.d`: Main analyzer using generated code
-- `scanner.d`: Fast file scanning with parallel support
-- `resolver.d`: O(1) import-to-target resolution with indexed lookups
+- `targets/types.d`: Strongly typed domain objects (Import, Dependency, FileAnalysis, TargetAnalysis)
+- `targets/spec.d`: Language specification registry with compile-time validation
+- `metadata/metagen.d`: Compile-time code generation using templates and mixins
+- `inference/analyzer.d`: Main analyzer using generated code
+- `scanning/scanner.d`: Fast file scanning with parallel support
+- `resolution/resolver.d`: O(1) import-to-target resolution with indexed lookups
 
 **Language Support:**
 All languages configured via data-driven `LanguageSpec` system (20+ languages):
@@ -115,7 +115,7 @@ Import patterns:
 - **Mixin injection**: `LanguageAnalyzer` mixin generates analysis methods
 - **CTFE optimization**: Language specs initialized in `shared static this()`
 
-### 5. Language Handlers (`languages/`)
+### 5. Language Handlers (`source/languages/`)
 
 Pluggable language-specific build logic.
 
@@ -206,7 +206,7 @@ The TypeScript handler provides a type-first architecture with multiple compiler
 **Extension:**
 Add new languages by implementing `LanguageHandler` interface. Each handler is ~150-200 lines following consistent patterns. Language-specific configuration is supported via the `config` field in Builderfile.
 
-### 6. Configuration System (`config/`)
+### 6. Configuration System (`infrastructure/config/`)
 
 Modern D-based DSL with JSON backward compatibility.
 
@@ -223,11 +223,11 @@ target("target-name") {
 ```
 
 **Architecture:**
-- **Lexer** (`lexer.d`): Zero-allocation tokenization with comprehensive error tracking
-- **AST** (`ast.d`): Strongly-typed AST nodes with tagged unions
-- **Parser** (`dsl.d`): Recursive descent parser with parser combinator patterns
-- **Semantic Analysis** (`dsl.d`): Type checking and validation with Result monads
-- **Integration** (`parser.d`): Automatic JSON/DSL detection and fallback
+- **Lexer** (`parsing/lexer.d`): Zero-allocation tokenization with comprehensive error tracking
+- **AST** (`workspace/ast.d`): Strongly-typed AST nodes with tagged unions
+- **Parser** (`parsing/unified.d`): Recursive descent parser with parser combinator patterns
+- **Semantic Analysis** (`analysis/semantic.d`): Type checking and validation with Result monads
+- **Integration** (`parsing/parser.d`): Automatic JSON/DSL detection and fallback
 
 **Features:**
 - Clean, readable syntax with comment support (// /* */ #)
@@ -267,7 +267,7 @@ Unlike Bazel's rule-based approach, Builder uses a pure dependency graph:
 
 **Two-Tier Hashing:**
 - **Tier 1**: Fast metadata check (mtime + size) - 1μs per file
-- **Tier 2**: Content hash (SHA-256) only if metadata changed - 1ms per file
+- **Tier 2**: Content hash (BLAKE3) only if metadata changed - 1ms per file
 - Best of both worlds: timestamp speed + content hash reliability
 - Achieves 1000x speedup for unchanged files
 
@@ -335,14 +335,19 @@ Unlike Bazel's rule-based approach, Builder uses a pure dependency graph:
 - Massive dependency graphs (>50k targets)
 
 **Optimizations:**
-- **Intelligent size-tiered hashing** (`utils/hash.d`):
+- **Intelligent size-tiered hashing** (`infrastructure/utils/files/hash.d`):
   - Tiny files (<4KB): Direct hash
   - Small files (<1MB): Chunked reading
   - Medium files (<100MB): Sampled hashing (head + tail + samples) - 50-100x faster
   - Large files (>100MB): Aggressive sampling with mmap - 200-500x faster
-- **Parallel file scanning** (`utils/glob.d`): Work-stealing parallel directory traversal - 4-8x faster
-- **Content-defined chunking** (`utils/chunking.d`): Rabin fingerprinting for incremental updates - only rehash changed chunks
-- **Three-tier metadata checking** (`utils/metadata.d`):
+- **Async I/O for cold cache** (`infrastructure/utils/io/`):
+  - Linux 5.1+: io_uring with batch syscalls and zero-copy - 8-9x faster
+  - Other platforms: Thread pool fallback - 4-5x faster
+  - Best for: Many small files on cold page cache (first build, CI cold starts)
+  - `FastHash.hashFilesAsync(paths)` - simple API for batch hashing
+- **Parallel file scanning** (`infrastructure/utils/files/glob.d`): Work-stealing parallel directory traversal - 4-8x faster
+- **Content-defined chunking** (`infrastructure/utils/files/chunking.d`): Rabin fingerprinting for incremental updates - only rehash changed chunks
+- **Three-tier metadata checking** (`infrastructure/utils/files/metadata.d`):
   - Quick check (size only): 1 nanosecond
   - Fast check (size + mtime): 10 nanoseconds
   - Full check (includes inode): 100 nanoseconds

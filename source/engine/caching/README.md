@@ -17,43 +17,80 @@ This provides the best of both worlds:
 ## Directory Structure
 
 ```
-caching/
+engine/caching/
 ├── package.d              # Root module with overview
 ├── README.md              # This file
 │
-├── index/                 # SQLite-backed metadata index (NEW)
-│   ├── package.d          # Index module exports
+├── index/                 # SQLite-backed metadata index
 │   ├── index.d            # CacheIndex implementation
 │   ├── sqlite.d           # SQLite C bindings
 │   └── schema.sql         # Database schema
 │
 ├── targets/               # Target-level caching
-│   ├── package.d          # Target caching overview
 │   ├── cache.d            # BuildCache implementation
+│   ├── discovery.d        # Cache discovery utilities
+│   ├── schema.d           # Cache schema definitions
 │   └── storage.d          # Binary serialization for targets
 │
 ├── actions/               # Action-level caching (fine-grained)
-│   ├── package.d          # Action caching overview
 │   ├── action.d           # ActionCache, ActionId, ActionEntry
+│   ├── schema.d           # Action schema definitions
 │   └── storage.d          # Binary serialization for actions
 │
 ├── policies/              # Cache eviction policies
-│   ├── package.d          # Eviction policy overview
 │   └── eviction.d         # LRU + age + size-based eviction
 │
 ├── coordinator/           # Unified cache orchestration
-│   ├── package.d          # Coordinator module
 │   └── coordinator.d      # CacheCoordinator with shared index
 │
-└── distributed/           # Distributed caching
-    ├── package.d          # Distributed caching overview
-    ├── coordinator.d      # DistributedCache coordinator
-    └── remote/            # Remote cache client/server
-        ├── package.d      # Remote caching overview
-        ├── client.d       # HTTP client for remote cache
-        ├── server.d       # HTTP server for cache hosting
-        ├── protocol.d     # Cache protocol definitions
-        └── transport.d    # HTTP transport implementation
+├── distributed/           # Distributed caching
+│   ├── coordinator.d      # DistributedCache coordinator
+│   └── remote/            # Remote cache client/server
+│       ├── artifact.d     # Artifact transfer
+│       ├── cdn.d          # CDN integration
+│       ├── client.d       # HTTP client for remote cache
+│       ├── compress.d     # Compression utilities
+│       ├── limiter.d      # Rate limiting
+│       ├── metrics.d      # Cache metrics
+│       ├── protocol.d     # Cache protocol definitions
+│       ├── schema.d       # Remote cache schema
+│       ├── server.d       # HTTP server for cache hosting
+│       ├── tls.d          # TLS configuration
+│       ├── transport.d    # HTTP transport implementation
+│       └── unified.d      # Unified remote cache API
+│
+├── incremental/           # Incremental caching
+│   ├── ast_dependency.d   # AST-level dependency tracking
+│   ├── ast_storage.d      # AST storage
+│   ├── dependency.d       # Dependency tracking
+│   ├── filter.d           # Cache filtering
+│   ├── schema.d           # Incremental cache schema
+│   └── storage.d          # Incremental storage
+│
+├── dedup/                 # Content deduplication
+│   ├── blobindex.d        # Blob indexing
+│   ├── dedup.d            # Deduplication logic
+│   ├── manifest.d         # Manifest tracking
+│   └── store.d            # Dedup storage
+│
+├── storage/               # Content-addressable storage
+│   ├── cas.d              # CAS implementation
+│   ├── gc.d               # Garbage collection
+│   ├── mapped.d           # Memory-mapped storage
+│   ├── materialization.d  # Artifact materialization
+│   ├── source_ref.d       # Source references
+│   ├── source_repository.d # Source repository
+│   └── source_tracker.d   # Source tracking
+│
+├── metrics/               # Cache metrics
+│   ├── collector.d        # Metrics collection
+│   └── stats.d            # Statistics tracking
+│
+├── helpers/               # Cache helpers
+│   └── action.d           # Action cache helpers
+│
+└── events/                # Cache events
+    └── package.d          # Event definitions
 ```
 
 ## Module Organization

@@ -451,8 +451,8 @@ bldr test --coverage --coverage-format html
 
 ## See Also
 
-- [CLI Guide](CLI.md) - General command-line usage
+- [CLI Guide](./CLI.md) - General command-line usage
 - [Builderfile Syntax](../architecture/DSL.md) - Target configuration
-- [Language Support](../README.md) - Supported languages
-- [Examples](EXAMPLES.md) - Example projects
+- [Language Support](../features/languages.md) - Supported languages
+- [Examples](./EXAMPLES.md) - Example projects
 

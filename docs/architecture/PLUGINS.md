@@ -254,29 +254,22 @@ builder sonar analyze   # Handled by builder-plugin-sonar
 ### Core Modules
 
 ```
-source/plugins/
+source/infrastructure/plugins/
 ├── discovery/
 │   ├── scanner.d       # Plugin discovery and caching
 │   ├── validator.d     # Plugin validation and security
 │   └── package.d
 ├── protocol/
-│   ├── rpc.d           # JSON-RPC 2.0 implementation
-│   ├── types.d         # Protocol message types
 │   ├── codec.d         # Serialization/deserialization
+│   ├── types.d         # Protocol message types
 │   └── package.d
 ├── manager/
 │   ├── registry.d      # Plugin registry
 │   ├── loader.d        # Plugin loading and execution
-│   ├── lifecycle.d     # Hook lifecycle management
-│   └── package.d
-├── security/
-│   ├── sandbox.d       # Plugin sandboxing (future)
-│   ├── permissions.d   # Permission system (future)
+│   ├── lifecycle.d     # Hook lifecycle management with circuit breaker
 │   └── package.d
 ├── sdk/
-│   ├── template.d      # Plugin template generator
-│   ├── testing.d       # Plugin testing utilities
-│   └── package.d
+│   └── templates.d     # Plugin template generator
 └── package.d
 ```
 

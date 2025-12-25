@@ -417,9 +417,9 @@ brew install builder-plugin-docker
 
 ## Further Reading
 
-- [Tier 1 Documentation](../../source/config/scripting/README.md)
-- [Tier 2 Documentation](../../source/config/macros/README.md)
-- [Tier 3 Documentation](../../docs/architecture/plugins.md)
+- [Tier 1 Documentation](../../source/infrastructure/config/scripting/README.md)
+- [Tier 2 Documentation](../../source/infrastructure/config/macros/README.md)
+- [Tier 3 Documentation](../../docs/architecture/PLUGINS.md)
 - [Architecture Overview](../../docs/architecture/programmability.md)
 
 ## Questions?

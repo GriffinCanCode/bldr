@@ -15,7 +15,7 @@ Dependency graph caching eliminates the overhead of re-analyzing the full build 
 
 ### Components
 
-#### 1. **GraphStorage** (`source/core/graph/storage.d`)
+#### 1. **GraphStorage** (`source/engine/graph/caching/storage.d`)
 
 Binary serialization for `BuildGraph` with custom format:
 
@@ -45,7 +45,7 @@ struct GraphStorage
 [VALIDATION_MODE:1][VALIDATED:1]
 ```
 
-#### 2. **GraphCache** (`source/core/graph/cache.d`)
+#### 2. **GraphCache** (`source/engine/graph/caching/cache.d`)
 
 High-performance cache with two-tier validation:
 
@@ -344,10 +344,10 @@ Track via telemetry:
 
 ## Related Documentation
 
-- [Architecture Overview](../architecture/ARCHITECTURE.md)
-- [Parse Cache](./PARSE_CACHE.md) - AST caching
-- [Action Cache](./ACTION_CACHING.md) - Build action caching
-- [Performance Guide](./PERFORMANCE.md) - Optimization strategies
+- [Architecture Overview](../architecture/overview.md)
+- [Parse Cache](./parsecache.md) - AST caching
+- [Action Cache](./caching.md) - Build action caching
+- [Performance Guide](./performance.md) - Optimization strategies
 
 ---
 

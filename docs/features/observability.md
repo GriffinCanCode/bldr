@@ -905,8 +905,8 @@ mkdir -p .builder-cache/recordings
 
 ## See Also
 
-- [TELEMETRY.md](TELEMETRY.md) - Build telemetry and analytics
-- [PERFORMANCE.md](PERFORMANCE.md) - Performance optimization guide
-- [CONCURRENCY.md](CONCURRENCY.md) - Parallel build execution
-- [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) - System architecture
+- [Telemetry](./telemetry.md) - Build telemetry and analytics
+- [Performance](./performance.md) - Performance optimization guide
+- [Concurrency](./concurrency.md) - Parallel build execution
+- [Architecture](../architecture/overview.md) - System architecture
 

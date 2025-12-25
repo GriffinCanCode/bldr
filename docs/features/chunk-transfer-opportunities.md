@@ -79,7 +79,7 @@ class GraphCache
 
 ### 2. Parse Cache (AST Storage) 🟡 MEDIUM IMPACT
 
-**Location:** `source/config/caching/parse.d`, `source/config/caching/storage.d`
+**Location:** `source/infrastructure/config/caching/parse.d`, `source/infrastructure/config/caching/storage.d`
 
 **Current Approach:**
 ```d

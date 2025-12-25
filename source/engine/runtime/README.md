@@ -149,27 +149,46 @@ auto result = orchestrator.withRetry(
 ## Module Organization
 
 ```
-core/execution/
+engine/runtime/
 ├── package.d              # Root exports
 ├── README.md              # This file
-├── core/                  # Main engine
-│   ├── package.d
-│   └── engine.d
+├── core/                  # Main execution engine
+│   └── engine/
+│       ├── coordinator.d  # Build coordination
+│       ├── discovery.d    # Target discovery
+│       ├── executor.d     # Task execution
+│       └── lifecycle.d    # Build lifecycle
 ├── services/              # Service layer
-│   ├── package.d
-│   ├── scheduling.d
-│   ├── cache.d
-│   ├── observability.d
-│   ├── resilience.d
-│   └── registry.d
+│   ├── scheduling/        # Task scheduling
+│   ├── caching/           # Cache integration
+│   ├── observability/     # Events and tracing
+│   ├── resilience/        # Fault tolerance
+│   ├── registry/          # Language handler registry
+│   ├── container/         # Service container with DI
+│   └── provenance/        # Build provenance
 ├── watchmode/             # File watching
-│   ├── package.d
-│   └── watch.d
-└── recovery/              # Checkpoint/resume
-    ├── package.d
-    ├── checkpoint.d
-    ├── resume.d
-    └── retry.d
+│   └── watch.d            # Watch mode service
+├── recovery/              # Checkpoint/resume
+│   ├── checkpoint.d       # Build state persistence
+│   ├── resume.d           # Resume planning
+│   └── retry.d            # Retry orchestration
+├── hermetic/              # Hermetic execution
+│   ├── core/              # Core hermetic spec
+│   ├── sandbox/           # Sandbox implementations
+│   ├── platforms/         # Platform-specific isolation
+│   ├── determinism/       # Determinism enforcement
+│   ├── security/          # Security policies
+│   └── monitoring/        # Resource monitoring
+├── remote/                # Remote execution
+│   ├── core/              # Remote execution core
+│   ├── pool/              # Connection pooling
+│   ├── protocol/          # Protocol implementations
+│   ├── providers/         # Execution providers
+│   ├── artifacts/         # Artifact transfer
+│   ├── monitoring/        # Remote monitoring
+│   └── serialization/     # Data serialization
+└── shutdown/              # Graceful shutdown
+    └── shutdown.d         # Shutdown coordination
 ```
 
 ## Testing

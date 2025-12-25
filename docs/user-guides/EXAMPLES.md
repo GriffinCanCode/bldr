@@ -585,5 +585,5 @@ Want to add an example? Create a new directory under `examples/` with:
 - `Builderfile` configuration
 - README explaining the example
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines.
 

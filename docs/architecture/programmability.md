@@ -414,16 +414,17 @@ target("docker-image") {
 
 ### Phase 1: Core Infrastructure (Foundation)
 
-**Module: `source/config/scripting/`**
+**Module: `source/infrastructure/config/scripting/`**
 
 ```d
-source/config/scripting/
+source/infrastructure/config/scripting/
 ├── package.d              // Public API
 ├── evaluator.d            // Expression evaluator
-├── scope.d                // Symbol table & scoping
+├── scopemanager.d         // Symbol table & scoping
 ├── types.d                // Type system
 ├── builtins.d             // Built-in functions
 ├── expander.d             // Macro expander
+├── interpreter.d          // Statement interpreter
 └── README.md              // Documentation
 ```
 
@@ -461,7 +462,7 @@ source/config/scripting/
 
 ### Phase 2: DSL Parser Extensions
 
-**Module: `source/config/parsing/`**
+**Module: `source/infrastructure/config/parsing/`**
 
 Extend existing lexer and parser:
 
@@ -484,14 +485,15 @@ Extend existing lexer and parser:
 
 ### Phase 3: D Macro System
 
-**Module: `source/config/macros/`**
+**Module: `source/infrastructure/config/macros/`**
 
 ```d
-source/config/macros/
+source/infrastructure/config/macros/
 ├── package.d              // Public API
+├── api.d                  // Macro API and builders
 ├── compiler.d             // D code compilation
-├── interpreter.d          // Runtime D evaluation
 ├── ctfe.d                 // Compile-time function execution
+├── loader.d               // Macro registry and loading
 └── README.md
 ```
 

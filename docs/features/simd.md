@@ -381,8 +381,8 @@ Speedup: 3.80x
 - [BLAKE3 Specification](https://github.com/BLAKE3-team/BLAKE3-specs)
 - [Intel Intrinsics Guide](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html)
 - [ARM NEON Programmer's Guide](https://developer.arm.com/architectures/instruction-sets/simd-isas/neon)
-- [Builder Performance Guide](PERFORMANCE.md)
-- [Builder BLAKE3 Integration](BLAKE3.md)
+- [Builder Performance Guide](./performance.md)
+- [Builder BLAKE3 Integration](./blake3.md)
 
 ## Conclusion
 

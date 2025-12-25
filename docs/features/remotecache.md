@@ -701,8 +701,8 @@ rm -rf .cache-storage/*  # Nuclear option
 
 ## References
 
-- [Action Cache Design](./ACTION_CACHE_DESIGN.md)
-- [Performance Benchmarks](./PERFORMANCE.md)
+- [Cache Design](../architecture/cachedesign.md)
+- [Performance Benchmarks](./performance.md)
 - [Security Best Practices](../security/SECURITY.md)
 - [Bazel Remote Caching](https://bazel.build/remote/caching)
 - [Buck2 Architecture](https://buck2.build/docs/concepts/action_cache/)

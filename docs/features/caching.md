@@ -13,13 +13,13 @@ Action-level caching provides finer granularity than traditional target-level ca
 
 ### Components
 
-1. **ActionCache** (`source/core/caching/action.d`)
+1. **ActionCache** (`source/engine/caching/actions/action.d`)
    - Fine-grained cache for individual build actions
    - Tracks inputs, outputs, and execution context per action
    - BLAKE3-based security with HMAC signatures
    - LRU eviction policy
 
-2. **ActionStorage** (`source/core/caching/actionstore.d`)
+2. **ActionStorage** (`source/engine/caching/actions/storage.d`)
    - Binary serialization for action cache entries
    - SIMD-accelerated operations
    - Buffer pooling for reduced GC pressure
@@ -369,8 +369,8 @@ Action-level caching is optional:
 
 ## References
 
-- [Target-Level Caching](./PERFORMANCE.md#caching)
-- [BLAKE3 Security](./BLAKE3.md)
-- [Language Handler Guide](../api/language_handlers.md)
-- [Build Optimization](./PERFORMANCE.md)
+- [Target-Level Caching](./performance.md#caching)
+- [BLAKE3 Security](./blake3.md)
+- [Language Handler Base](../../source/languages/base/base.d)
+- [Build Optimization](./performance.md)
 

@@ -154,7 +154,7 @@ Subscribes to cache events and aggregates statistics.
 `CacheService` now uses `CacheCoordinator` internally:
 
 ```d
-// source/core/execution/services/cache.d
+// source/engine/runtime/services/caching/service.d
 final class CacheService : ICacheService
 {
     private CacheCoordinator coordinator;
@@ -496,8 +496,7 @@ The coordinator is integration tested via `CacheService` tests.
 
 ## References
 
-- [Action Caching](./ACTION_CACHING.md)
-- [Remote Caching](./REMOTE_CACHING.md)
-- [Telemetry System](../core/telemetry/README.md)
-- [Event System](../../cli/events/README.md)
+- [Action Caching](./caching.md)
+- [Remote Caching](./remote-caching.md)
+- [Telemetry System](../../source/infrastructure/telemetry/README.md)
 

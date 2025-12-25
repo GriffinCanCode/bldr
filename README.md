@@ -503,21 +503,19 @@ target("tests") {
 
 The codebase follows clean architectural principles with modular separation:
 
-- `source/runtime/` - Execution engine with service architecture
-- `source/caching/` - Multi-tier caching with distributed support
-- `source/analysis/` - Dependency analysis and incremental tracking
+- `source/engine/runtime/` - Execution engine with service architecture
+- `source/engine/caching/` - Multi-tier caching with distributed support
+- `source/engine/graph/` - Build graph with dynamic discovery
+- `source/engine/distributed/` - Distributed build coordination
+- `source/infrastructure/analysis/` - Dependency analysis and incremental tracking
+- `source/infrastructure/config/` - DSL parsing, AST, scripting, macros
+- `source/infrastructure/telemetry/` - Observability and analytics
+- `source/infrastructure/plugins/` - Process-based plugin system
+- `source/infrastructure/errors/` - Type-safe error handling with Result monads
+- `source/infrastructure/utils/` - SIMD, crypto (BLAKE3), concurrency primitives
+- `source/frontend/cli/` - Event-driven CLI rendering
+- `source/frontend/lsp/` - Complete Language Server Protocol
 - `source/languages/` - Language handlers (28 languages)
-- `source/config/` - DSL parsing, AST, scripting, macros
-- `source/cli/` - Event-driven CLI rendering
-- `source/testframework/` - Advanced test execution
-- `source/distributed/` - Distributed build coordination
-- `source/telemetry/` - Observability and analytics
-- `source/plugins/` - Process-based plugin system
-- `source/query/` - Query language implementation
-- `source/errors/` - Type-safe error handling with Result monads
-- `source/graph/` - Build graph with dynamic discovery
-- `source/utils/` - SIMD, crypto (BLAKE3), concurrency primitives
-- `source/lsp/` - Complete Language Server Protocol
 
 ## Documentation
 

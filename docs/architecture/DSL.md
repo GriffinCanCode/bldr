@@ -538,12 +538,12 @@ Run tests:
 ## Implementation
 
 Source files:
-- `source/config/lexer.d` - Lexical analyzer (419 lines)
-- `source/config/ast.d` - AST node types (232 lines)
-- `source/config/dsl.d` - Parser and semantic analyzer (551 lines)
-- `source/config/parser.d` - Integration (updated)
+- `source/infrastructure/config/parsing/lexer.d` - Lexical analyzer
+- `source/infrastructure/config/workspace/ast.d` - AST node types
+- `source/infrastructure/config/parsing/unified.d` - Unified DSL parser
+- `source/infrastructure/config/parsing/parser.d` - Integration
 
-Total: ~1,200 lines of sophisticated, production-ready code.
+See `source/infrastructure/config/` for the complete configuration system.
 
 ## Builderspace Files
 

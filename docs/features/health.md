@@ -498,9 +498,9 @@ void buildWithHealth()
 
 ## See Also
 
-- [TELEMETRY.md](TELEMETRY.md) - Build telemetry system
-- [OBSERVABILITY.md](OBSERVABILITY.md) - Complete observability guide
-- [PERFORMANCE.md](PERFORMANCE.md) - Performance optimization
+- [Telemetry](./telemetry.md) - Build telemetry system
+- [Observability](./observability.md) - Complete observability guide
+- [Performance](./performance.md) - Performance optimization
 
 ---
 
