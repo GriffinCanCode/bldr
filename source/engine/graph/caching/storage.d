@@ -58,6 +58,7 @@ struct GraphStorage
     /// Safety: @system due to:
     /// - BuildGraph construction with deferred validation
     /// - Atomic stores to shared fields
+    /// - Arena allocation for reduced GC pressure
     /// 
     /// Throws: Exception on format errors
     static BuildGraph deserialize(scope ubyte[] data) @system
@@ -73,8 +74,11 @@ struct GraphStorage
         
         auto serializable = result.unwrap();
         
-        // Create graph with deferred validation
-        auto graph = new BuildGraph(cast(ValidationMode)serializable.validationMode);
+        // Create graph with arena pre-sized for known node count
+        auto graph = new BuildGraph(
+            cast(ValidationMode)serializable.validationMode,
+            serializable.nodes.length  // Arena-allocate for exact count
+        );
         
         // Reconstruct nodes
         BuildNode[string] nodeMap;
@@ -88,7 +92,8 @@ struct GraphStorage
             auto targetId = idResult.unwrap();
             auto target = fromSerializableTarget!Target(serialNode.target);
             
-            auto node = new BuildNode(targetId, target);
+            // Use graph's arena allocation
+            auto node = graph.createNode(targetId, target);
             node.hash = serialNode.hash;
             node.lastError = serialNode.lastError;
             
