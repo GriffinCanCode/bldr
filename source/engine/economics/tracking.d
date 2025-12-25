@@ -152,3 +152,81 @@ private string formatDuration(Duration d) pure @safe
     return (totalSeconds / 3600).to!string ~ "h " ~ ((totalSeconds % 3600) / 60).to!string ~ "m";
 }
 
+// ==================== Worker Startup Savings ====================
+
+/// Worker startup savings tracking
+/// Integrates persistent worker pool economics with build cost tracking
+struct WorkerStartupSavings
+{
+    long jvmSavedMs;      /// Milliseconds saved from warm JVM workers
+    long goSavedMs;       /// Milliseconds saved from warm Go workers  
+    long pythonSavedMs;   /// Milliseconds saved from warm Python workers
+    size_t warmExecutions;
+    size_t coldFallbacks;
+    
+    /// Total time saved from persistent workers
+    long totalSavedMs() const pure nothrow @safe @nogc =>
+        jvmSavedMs + goSavedMs + pythonSavedMs;
+    
+    /// Estimated cost savings (assuming $0.05/core-minute)
+    float estimatedCostSavings() const pure nothrow @safe @nogc =>
+        (totalSavedMs() / 60_000.0f) * 0.05f;
+    
+    /// Format for display
+    string format() const @safe
+    {
+        import std.format : format;
+        return format(
+            "Worker Startup Savings:\n" ~
+            "  JVM (Java/Kotlin/Scala): %.1fs\n" ~
+            "  Go: %.1fs\n" ~
+            "  Python (mypy/ruff): %.1fs\n" ~
+            "  Warm executions: %d\n" ~
+            "  Cold fallbacks: %d\n" ~
+            "  Est. cost savings: $%.2f",
+            jvmSavedMs / 1000.0,
+            goSavedMs / 1000.0,
+            pythonSavedMs / 1000.0,
+            warmExecutions,
+            coldFallbacks,
+            estimatedCostSavings()
+        );
+    }
+}
+
+/// Track worker startup savings
+/// Call this from persistent worker pool after execution
+void trackWorkerSavings(
+    ref WorkerStartupSavings savings,
+    string workerType,
+    bool usedWarm,
+    long savedMs
+) @safe
+{
+    if (usedWarm)
+    {
+        savings.warmExecutions++;
+        if (workerType.canFind("jvm"))
+            savings.jvmSavedMs += savedMs;
+        else if (workerType.canFind("go"))
+            savings.goSavedMs += savedMs;
+        else if (workerType.canFind("python"))
+            savings.pythonSavedMs += savedMs;
+    }
+    else
+    {
+        savings.coldFallbacks++;
+    }
+}
+
+private bool canFind(string haystack, string needle) pure nothrow @safe @nogc
+{
+    if (needle.length > haystack.length) return false;
+    
+    foreach (i; 0 .. haystack.length - needle.length + 1)
+        if (haystack[i .. i + needle.length] == needle)
+            return true;
+    
+    return false;
+}
+

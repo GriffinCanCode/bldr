@@ -8,6 +8,7 @@ import engine.economics.optimizer;
 import engine.economics.estimator;
 import engine.economics.strategies;
 import engine.economics.tracking;
+import engine.economics.tracking : WorkerStartupSavings, trackWorkerSavings;
 import engine.graph : BuildGraph;
 import engine.distributed.coordinator.profile : ProfileGuidedScheduler, createProfiledScheduler;
 import infrastructure.config.schema.schema : EconomicsConfig;
@@ -25,6 +26,7 @@ final class EconomicsIntegration
     private ExecutionHistory history;
     private PricingConfig pricingConfig;
     private bool enabled;
+    private WorkerStartupSavings workerSavings;
     
     this(EconomicsConfig config, string cacheDir) @trusted
     {
@@ -125,6 +127,16 @@ final class EconomicsIntegration
         return scheduler;
     }
     
+    /// Track worker startup savings from persistent worker pool
+    void trackWorkerStartupSavings(string workerType, bool usedWarm, long savedMs) @safe
+    {
+        if (!enabled) return;
+        trackWorkerSavings(workerSavings, workerType, usedWarm, savedMs);
+    }
+    
+    /// Get accumulated worker startup savings
+    WorkerStartupSavings getWorkerSavings() const @safe nothrow @nogc => workerSavings;
+    
     /// Display plan to user
     void displayPlan(const BuildPlan plan) const @trusted
     {
@@ -144,7 +156,13 @@ final class EconomicsIntegration
     VoidBuildResult shutdown() @trusted
     {
         if (!enabled) return Ok!BuildError();
+        
         Logger.info("\n" ~ tracker.getSummary().format());
+        
+        // Display worker startup savings if any
+        if (workerSavings.warmExecutions > 0)
+            Logger.info("\n" ~ workerSavings.format());
+        
         return tracker.save();
     }
 }

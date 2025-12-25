@@ -70,7 +70,7 @@ module engine.workers;
 // Core protocol and types
 public import engine.workers.protocol;
 
-// Pool management
+// Pool management (includes PersistentWorkerPool)
 public import engine.workers.pool;
 
 // Base factory
@@ -91,4 +91,20 @@ public import engine.workers.typescript;
 public import engine.workers.rust;
 public import engine.workers.go;
 public import engine.workers.python;
+
+// Tracing integration
+public import engine.workers.tracing;
+
+// Re-export key types for convenience
+public import engine.workers.pool.persistent : 
+    PersistentWorkerPool,
+    PersistentPoolConfig,
+    WorkerExecutionResult,
+    WorkerLanguage,
+    WorkerEconomics,
+    getPersistentPool,
+    initPersistentPool,
+    shutdownPersistentPool,
+    supportsPersistentWorker,
+    estimatedColdStartMs;
 
