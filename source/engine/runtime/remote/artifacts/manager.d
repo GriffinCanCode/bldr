@@ -6,8 +6,12 @@ import engine.distributed.protocol.protocol : ArtifactId, ActionId, InputSpec, O
 import engine.runtime.hermetic : SandboxSpec;
 import engine.caching.distributed.remote.client : RemoteCacheClient;
 import infrastructure.utils.files.chunking : ChunkTransfer, TransferStats;
+import infrastructure.utils.memory.mmap : MmapRegion, MapMode;
 import infrastructure.errors;
 import infrastructure.utils.logging.logger;
+
+/// Size threshold for mmap reads (>1MB uses mmap)
+private enum size_t ARTIFACT_MMAP_THRESHOLD = 1_048_576;
 
 /// Artifact manager - single responsibility: manage artifact upload/download
 /// 
@@ -203,9 +207,7 @@ final class ArtifactManager
         return Ok!BuildError();
     }
     
-    /// Read artifact from filesystem
-    /// 
-    /// Responsibility: Read file/directory contents
+    /// Read artifact from filesystem (uses mmap for large files)
     private Result!(ubyte[], string) readArtifact(string path) @trusted
     {
         if (!exists(path))
@@ -213,8 +215,21 @@ final class ArtifactManager
         
         try
         {
-            auto data = cast(ubyte[])read(path);
-            return Ok!(ubyte[], string)(data);
+            immutable size = getSize(path);
+            
+            // Large files: memory-mapped read (zero kernel-to-user copy)
+            if (size >= ARTIFACT_MMAP_THRESHOLD)
+            {
+                auto region = MmapRegion.map(path, MapMode.ReadOnly);
+                if (region !is null)
+                {
+                    scope(exit) region.unmap();
+                    return Ok!(ubyte[], string)(region[].dup);
+                }
+            }
+            
+            // Small files or mmap fallback: standard read
+            return Ok!(ubyte[], string)(cast(ubyte[])read(path));
         }
         catch (Exception e)
         {

@@ -1,14 +1,18 @@
 module engine.caching.storage.cas;
 
-import std.file : exists, read, write, remove, mkdirRecurse, dirEntries, SpanMode;
+import std.file : exists, read, write, remove, mkdirRecurse, dirEntries, SpanMode, getSize;
 import std.path : buildPath, dirName;
 import std.algorithm : map, filter, sum;
 import std.array : array;
 import std.conv : to;
 import core.sync.mutex : Mutex;
 import infrastructure.utils.files.hash : FastHash;
+import infrastructure.utils.memory.mmap : MmapRegion, MapMode;
 import infrastructure.errors;
 import infrastructure.errors.helpers;
+
+/// Size threshold for memory-mapped reads (files larger than this use mmap)
+private enum size_t CAS_MMAP_THRESHOLD = 256 * 1024;  // 256 KB
 
 /// Content-addressable storage with automatic deduplication
 /// Stores blobs by content hash, enabling zero-copy artifact sharing
@@ -65,6 +69,7 @@ final class ContentAddressableStorage
     }
     
     /// Retrieve blob by content hash
+    /// Uses mmap for large blobs to reduce memory copies
     BuildResult!(ubyte[]) getBlob(string hash) @system
     {
         try
@@ -78,7 +83,19 @@ final class ContentAddressableStorage
                         createCacheError("Blob not found: " ~ hash, ErrorCode.CacheNotFound, blobPath)
                     );
                 
-                return Ok!(ubyte[], BuildError)(cast(ubyte[])read(blobPath));
+                immutable size = getSize(blobPath);
+                
+                // Small blobs: standard read
+                if (size < CAS_MMAP_THRESHOLD)
+                    return Ok!(ubyte[], BuildError)(cast(ubyte[])read(blobPath));
+                
+                // Large blobs: memory-mapped read (zero kernel-to-user copy)
+                auto region = MmapRegion.map(blobPath, MapMode.ReadOnly);
+                if (region is null)
+                    return Ok!(ubyte[], BuildError)(cast(ubyte[])read(blobPath)); // Fallback
+                
+                scope(exit) region.unmap();
+                return Ok!(ubyte[], BuildError)(region[].dup);
             }
         }
         catch (Exception e)

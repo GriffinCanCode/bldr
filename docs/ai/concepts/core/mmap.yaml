@@ -1,0 +1,140 @@
+name: Memory-Mapped I/O
+category: core
+description: >
+  Zero-copy memory-mapped I/O for graph persistence and large artifact handling.
+  Provides efficient blob access without heap allocation overhead.
+
+files:
+  - source/infrastructure/utils/memory/mmap.d
+  - source/engine/caching/storage/mapped.d
+  - source/engine/graph/caching/mapped.d
+  - tests/unit/utils/mmap.d
+
+key_concepts:
+  mmap_region:
+    description: >
+      RAII wrapper for memory-mapped regions. Provides automatic cleanup
+      and platform-abstracted interface over POSIX mmap/Windows MapViewOfFile.
+    key_features:
+      - Zero-copy file access via kernel page cache
+      - Automatic unmap on scope exit
+      - Support for read-only, read-write, and copy-on-write modes
+      - Kernel hints for access pattern optimization (madvise)
+      - Page locking for latency-sensitive operations
+    safety: >
+      @system due to raw pointer management and syscalls.
+      All operations are bounds-checked where possible.
+
+  mapped_blob_store:
+    description: >
+      Zero-copy blob storage replacing ContentAddressableStorage for large files.
+      Uses memory mapping for files >= 256KB, standard I/O for smaller files.
+    key_features:
+      - Automatic size-based strategy selection
+      - Content-addressed deduplication
+      - MappedBlob handle for true zero-copy access
+      - MappedBlobStream for processing files larger than RAM
+    thresholds:
+      mmap_threshold: 256KB
+
+  mapped_graph_storage:
+    description: >
+      Memory-mapped graph persistence using fixed-size records for direct access.
+      Eliminates deserialization overhead for graph loading.
+    layout: |
+      [Header: 96 bytes]
+      [Node Table: nodeCount * 96 bytes]
+      [Edge Table: edgeCount * 8 bytes]
+      [String Table: variable]
+    key_features:
+      - Zero deserialization for read-only access (MappedGraphView)
+      - Full graph restoration when mutation needed
+      - Content hash for integrity verification
+      - String table deduplication
+
+architecture:
+  design_principles:
+    - Zero-copy access through kernel page cache
+    - Lazy loading via page faults (demand paging)
+    - Cross-process sharing of cached data
+    - RAII resource management
+    - Platform-agnostic interface (POSIX/Windows)
+
+  memory_model: |
+    Traditional I/O:
+      File -> Kernel Buffer -> User Buffer -> Processing
+      (2 copies, heap allocation required)
+
+    Memory-Mapped I/O:
+      File -> Kernel Page Cache <- Direct Access
+      (0 copies, no heap allocation)
+
+  performance_benefits:
+    - No heap allocation for large file access
+    - Shared page cache across processes
+    - Kernel-managed memory lifecycle
+    - Lazy loading reduces startup latency
+    - Better memory utilization for large datasets
+
+usage_patterns:
+  read_only_blob:
+    description: Zero-copy read of large artifact
+    code: |
+      auto store = new MappedBlobStore();
+      auto result = store.getMappedBlob(hash);
+      if (result.isOk) {
+          auto blob = result.unwrap();
+          auto data = blob.data();  // Zero-copy slice
+          // Process data directly from mapped memory
+      }
+
+  streaming_large_file:
+    description: Process file larger than available RAM
+    code: |
+      auto stream = MappedBlobStream.open(path, 64 * 1024 * 1024);
+      while (!stream.eof()) {
+          auto chunk = stream.read();  // 64MB window
+          processChunk(chunk);
+          // Previous window automatically unmapped
+      }
+
+  graph_quick_load:
+    description: Fast graph loading without full deserialization
+    code: |
+      auto storage = new MappedGraphStorage();
+      auto viewResult = storage.load();
+      if (viewResult.isOk) {
+          auto view = viewResult.unwrap();
+          // Access nodes directly via memory mapping
+          foreach (i, node; view) {
+              auto targetId = view.nodeTargetId(i);
+              // Process node without full graph reconstruction
+          }
+      }
+
+integration_points:
+  content_addressable_storage:
+    replaces: engine.caching.storage.cas for large blobs
+    threshold: 256KB
+
+  graph_persistence:
+    complements: engine.graph.persistence for SQLite queries
+    use_case: Fast bulk graph loading vs. query-based access
+
+  artifact_handling:
+    integration: engine.distributed.storage.artifacts
+    benefit: Zero-copy artifact streaming for remote execution
+
+related_concepts:
+  - name: Arena Allocator
+    file: source/engine/graph/core/graph.d
+    relationship: Arenas for nodes, mmap for blobs
+
+  - name: Content Chunking
+    file: source/infrastructure/utils/files/chunking.d
+    relationship: Chunk-based processing with mmap windows
+
+  - name: BLAKE3 Hashing
+    file: source/infrastructure/utils/crypto/blake3.d
+    relationship: Content addressing for mapped blobs
+

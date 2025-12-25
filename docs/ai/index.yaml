@@ -190,6 +190,11 @@ concepts:
     file: "concepts/rules/macros.yaml"
     summary: "Macros - Reusable Starlark functions"
 
+  mmap:
+    file: "concepts/core/mmap.yaml"
+    summary: "Memory-Mapped I/O - Zero-copy file access for blobs and graph persistence"
+    keywords: ["mmap", "zero-copy", "blob", "mapped", "graph", "persistence"]
+
   migration:
     file: "concepts/ecosystem/migration.yaml"
     summary: "Migration Tools - Moving to Builder"

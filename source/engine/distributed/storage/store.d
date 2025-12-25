@@ -1,6 +1,6 @@
 module engine.distributed.storage.store;
 
-import std.file : exists, read, write, mkdirRecurse, remove;
+import std.file : exists, read, write, mkdirRecurse, remove, getSize;
 import std.path : buildPath, dirName;
 import std.algorithm : min, filter, sort, sum;
 import std.array : array;
@@ -9,6 +9,10 @@ import core.sync.mutex : Mutex;
 import engine.distributed.protocol.protocol;
 import engine.distributed.protocol.protocol : DistributedError;
 import infrastructure.errors : BuildError, Result, Ok, Err;
+import infrastructure.utils.memory.mmap : MmapRegion, MapMode;
+
+/// Size threshold for mmap reads (files larger use mmap)
+private enum size_t ARTIFACT_MMAP_THRESHOLD = 256 * 1024;  // 256 KB
 
 /// Helper function to convert hex character to value
 private ubyte hexCharToValue(char c) pure @safe
@@ -84,9 +88,21 @@ final class LocalArtifactStore : ArtifactStore
             
             try
             {
-                auto data = cast(ubyte[])read(path);
                 if (auto entry = id in entries) entry.lastAccess = Clock.currTime;
-                return Ok!(ubyte[], DistributedError)(data);
+                
+                immutable size = getSize(path);
+                
+                // Small artifacts: standard read
+                if (size < ARTIFACT_MMAP_THRESHOLD)
+                    return Ok!(ubyte[], DistributedError)(cast(ubyte[])read(path));
+                
+                // Large artifacts: memory-mapped (reduces kernel-to-user copies)
+                auto region = MmapRegion.map(path, MapMode.ReadOnly);
+                if (region is null)
+                    return Ok!(ubyte[], DistributedError)(cast(ubyte[])read(path)); // Fallback
+                
+                scope(exit) region.unmap();
+                return Ok!(ubyte[], DistributedError)(region[].dup);
             }
             catch (Exception e)
             {

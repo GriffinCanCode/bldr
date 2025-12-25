@@ -14,7 +14,11 @@ import infrastructure.utils.files.hash;
 import infrastructure.utils.simd.hash;
 import infrastructure.utils.security.integrity;
 import infrastructure.utils.files.directories : ensureDirectoryWithGitignore;
+import infrastructure.utils.memory.mmap : MmapRegion, MapMode;
 import infrastructure.errors;
+
+/// Size threshold for mmap graph loading (>1MB uses mmap)
+private enum size_t GRAPH_MMAP_THRESHOLD = 1024 * 1024;
 
 /// High-performance dependency graph cache with incremental invalidation
 /// 
@@ -407,24 +411,37 @@ final class GraphCache
     
     private BuildGraph loadGraph() @system
     {
-        // Read file data
-        auto fileData = cast(ubyte[])std.file.read(cacheFilePath);
+        // Use mmap for large graph files (reduces memory copies)
+        immutable fileSize = getSize(cacheFilePath);
+        ubyte[] fileData;
+        MmapRegion region;
+        
+        if (fileSize >= GRAPH_MMAP_THRESHOLD)
+        {
+            region = MmapRegion.map(cacheFilePath, MapMode.ReadOnly);
+            if (region !is null)
+                fileData = region[].dup;  // Copy for signature verification
+            else
+                fileData = cast(ubyte[])std.file.read(cacheFilePath);
+        }
+        else
+        {
+            fileData = cast(ubyte[])std.file.read(cacheFilePath);
+        }
+        
+        scope(exit) if (region !is null) region.unmap();
         
         // Deserialize signed data
         auto signed = SignedData.deserialize(fileData);
         
         // Verify integrity signature
         if (!validator.verifyWithMetadata(signed))
-        {
             throw new Exception("Graph cache signature verification failed");
-        }
         
         // Check expiration (30 days)
         import core.time : days;
         if (IntegrityValidator.isExpired(signed, 30.days))
-        {
             throw new Exception("Graph cache expired");
-        }
         
         // Deserialize graph
         return GraphStorage.deserialize(signed.data);

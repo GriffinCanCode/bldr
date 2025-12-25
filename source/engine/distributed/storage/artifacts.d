@@ -1,6 +1,6 @@
 module engine.distributed.storage.artifacts;
 
-import std.file : read, write, exists, mkdirRecurse, remove;
+import std.file : read, write, exists, mkdirRecurse, remove, getSize;
 import std.path : buildPath, dirName, baseName;
 import std.digest : toHexString;
 import std.string : toLower;
@@ -12,6 +12,10 @@ import infrastructure.errors;
 import infrastructure.errors.formatting.format : formatError = format;
 import infrastructure.utils.logging.logger;
 import infrastructure.utils.crypto.blake3 : Blake3;
+import infrastructure.utils.memory.mmap : MmapRegion, MapMode;
+
+/// Size threshold for mmap artifact reads (>256KB uses mmap)
+private enum size_t ARTIFACT_MMAP_THRESHOLD = 256 * 1024;
 
 /// Artifact with data
 struct InputArtifact
@@ -58,7 +62,7 @@ final class ArtifactStore
         }
     }
     
-    /// Fetch artifact by ID
+    /// Fetch artifact by ID (uses mmap for large files)
     BuildResult!InputArtifact fetch(InputSpec spec) @trusted
     {
         InputArtifact artifact;
@@ -72,6 +76,22 @@ final class ArtifactStore
         {
             try
             {
+                immutable size = getSize(localPath);
+                
+                // Large artifacts: memory-mapped read
+                if (size >= ARTIFACT_MMAP_THRESHOLD)
+                {
+                    auto region = MmapRegion.map(localPath, MapMode.ReadOnly);
+                    if (region !is null)
+                    {
+                        scope(exit) region.unmap();
+                        artifact.data = region[].dup;
+                        Logger.debugLog("Artifact fetched from local cache (mmap): " ~ spec.id.toString());
+                        return Ok!(InputArtifact, BuildError)(artifact);
+                    }
+                }
+                
+                // Small artifacts or mmap fallback: standard read
                 artifact.data = cast(ubyte[])read(localPath);
                 Logger.debugLog("Artifact fetched from local cache: " ~ spec.id.toString());
                 return Ok!(InputArtifact, BuildError)(artifact);

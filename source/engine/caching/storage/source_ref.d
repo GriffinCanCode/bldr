@@ -1,9 +1,13 @@
 module engine.caching.storage.source_ref;
 
-import std.file : exists, read;
+import std.file : exists, read, getSize;
 import std.path : buildPath;
 import infrastructure.utils.files.hash : FastHash;
+import infrastructure.utils.memory.mmap : MmapRegion, MapMode;
 import infrastructure.errors;
+
+/// Size threshold for mmap reads (>256KB uses mmap)
+private enum size_t SOURCE_MMAP_THRESHOLD = 256 * 1024;
 
 /// Content-addressed source file reference (git-like)
 /// Stores only hash, enables deduplication across branches/history
@@ -13,7 +17,7 @@ struct SourceRef
     string originalPath;   // Original path for debugging/display
     ulong size;           // File size in bytes
     
-    /// Create from file path (computes hash)
+    /// Create from file path (computes hash, uses mmap for large files)
     static BuildResult!SourceRef fromFile(string path) @system
     {
         try
@@ -25,7 +29,28 @@ struct SourceRef
                         .build()
                 );
             
-            auto content = cast(ubyte[])read(path);
+            immutable fileSize = getSize(path);
+            ubyte[] content;
+            
+            // Large files: memory-mapped read (zero kernel-to-user copy)
+            if (fileSize >= SOURCE_MMAP_THRESHOLD)
+            {
+                auto region = MmapRegion.map(path, MapMode.ReadOnly);
+                if (region !is null)
+                {
+                    scope(exit) region.unmap();
+                    immutable hash = FastHash.hashBytes(region[]);
+                    
+                    SourceRef ref_;
+                    ref_.hash = hash;
+                    ref_.originalPath = path;
+                    ref_.size = fileSize;
+                    return Ok!(SourceRef, BuildError)(ref_);
+                }
+            }
+            
+            // Small files or mmap fallback: standard read
+            content = cast(ubyte[])read(path);
             immutable hash = FastHash.hashBytes(content);
             
             SourceRef ref_;

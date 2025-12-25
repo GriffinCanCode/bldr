@@ -27,4 +27,5 @@ module engine.graph.caching;
 public import engine.graph.caching.cache;
 public import engine.graph.caching.storage;
 public import engine.graph.caching.schema;
+public import engine.graph.caching.mapped;
 

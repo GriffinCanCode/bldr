@@ -11,12 +11,16 @@ import std.typecons : tuple;
 import core.sync.mutex;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.simd.hash;
+import infrastructure.utils.memory.mmap : MmapRegion, MapMode;
 import engine.caching.targets.storage;
 import engine.caching.policies.eviction;
 import engine.caching.index : CacheIndex, TargetIndexEntry;
 import infrastructure.utils.security.integrity;
 import infrastructure.utils.concurrency.lockfree;
 import infrastructure.errors;
+
+/// Size threshold for mmap cache loading (>512KB uses mmap)
+private enum size_t CACHE_MMAP_THRESHOLD = 512 * 1024;
 
 /// High-performance build cache with lazy writes and LRU eviction
 /// 
@@ -450,8 +454,25 @@ final class BuildCache
         
         try
         {
-            // Read file data - ubyte[] is automatically allocated by read()
-            auto fileData = cast(ubyte[])std.file.read(cacheFilePath);
+            // Use mmap for large cache files (reduces memory copies)
+            immutable fileSize = getSize(cacheFilePath);
+            ubyte[] fileData;
+            MmapRegion region;
+            
+            if (fileSize >= CACHE_MMAP_THRESHOLD)
+            {
+                region = MmapRegion.map(cacheFilePath, MapMode.ReadOnly);
+                if (region !is null)
+                    fileData = region[].dup;  // Copy for signature verification
+                else
+                    fileData = cast(ubyte[])std.file.read(cacheFilePath);
+            }
+            else
+            {
+                fileData = cast(ubyte[])std.file.read(cacheFilePath);
+            }
+            
+            scope(exit) if (region !is null) region.unmap();
             
             // Deserialize signed data
             auto signed = SignedData.deserialize(fileData);
