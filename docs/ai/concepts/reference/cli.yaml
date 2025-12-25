@@ -1,29 +1,149 @@
 topic: cli
-category: concepts
+category: reference
 summary: "Command Line Interface - The primary way to interact with Builder"
 definition: |
   The Builder CLI provides a unified interface for all build, test, and management operations.
-  It follows a consistent `bldr <command> [subcommand] [flags]` structure.
+  It follows a consistent `bldr <command> [options] [target]` structure.
 
 key_points:
   - "Unified entry point: One tool for all languages"
   - "Consistent syntax: Standardized flags across commands"
-  - "Rich output: Color-coded, structured output"
+  - "Rich output: Color-coded, structured output with multiple render modes"
   - "Intelligent defaults: Zero-config for most common tasks"
+  - "Watch mode: Auto-rebuild on file changes"
+  - "Remote execution: Distributed builds across worker pools"
+
+commands:
+  - name: "build"
+    description: "Build targets in the workspace"
+    flags:
+      - "--verbose|-v: Enable verbose output"
+      - "--graph|-g: Show dependency graph"
+      - "--watch|-w: Watch mode - rebuild on file changes"
+      - "--remote: Enable remote execution on worker pool"
+      - "--budget: Maximum budget in USD"
+      - "--time-limit: Maximum time limit in seconds"
+      - "--optimize: Optimization mode (cost, time, balanced)"
+      - "--mode|-m: CLI mode (auto, interactive, plain, verbose, quiet)"
+    example: "bldr build //app:main --verbose"
+
+  - name: "test"
+    description: "Run tests for targets"
+    example: "bldr test //lib:tests"
+
+  - name: "watch"
+    description: "Watch mode - continuously rebuild on file changes"
+    flags:
+      - "--clear: Clear screen between builds (default: true)"
+      - "--debounce: Debounce delay in milliseconds (default: 300)"
+    example: "bldr watch //app:main"
+
+  - name: "clean"
+    description: "Remove build artifacts and cache"
+    example: "bldr clean"
+
+  - name: "graph"
+    description: "Visualize dependency graph"
+    example: "bldr graph //app:main"
+
+  - name: "init"
+    description: "Initialize a new Builder workspace"
+    flags:
+      - "--force|-f: Force overwrite existing files"
+    example: "bldr init"
+
+  - name: "infer"
+    description: "Auto-detect project structure and generate configuration"
+    example: "bldr infer"
+
+  - name: "wizard"
+    description: "Interactive project scaffolding and configuration"
+    example: "bldr wizard"
+
+  - name: "migrate"
+    description: "Migrate from other build systems (Make, CMake, etc.)"
+    example: "bldr migrate"
+
+  - name: "query"
+    description: "Query the build graph with BldrQuery expressions"
+    flags:
+      - "--format: Output format (pretty, list, json, dot)"
+    example: "bldr query 'deps(//app:main)' --format=json"
+
+  - name: "verify"
+    description: "Verify build determinism and reproducibility"
+    aliases: ["verify-determinism"]
+    example: "bldr verify //app:main"
+
+  - name: "resume"
+    description: "Resume a build from the last checkpoint"
+    example: "bldr resume"
+
+  - name: "telemetry"
+    description: "View build telemetry and statistics"
+    subcommands: ["summary", "cache"]
+    example: "bldr telemetry cache"
+
+  - name: "plugin"
+    description: "Manage Builder plugins"
+    example: "bldr plugin list"
+
+  - name: "explain"
+    description: "AI-optimized documentation system"
+    subcommands: ["list", "search <query>", "example <topic>", "workflow <name>"]
+    example: "bldr explain caching"
+
+  - name: "cache-server"
+    description: "Run a remote cache server"
+    example: "bldr cache-server --port=8080"
+
+  - name: "coordinator"
+    description: "Run a distributed build coordinator"
+    example: "bldr coordinator --port=9000"
+
+  - name: "worker"
+    description: "Run a distributed build worker"
+    example: "bldr worker --coordinator=http://localhost:9000"
+
+  - name: "install-extension"
+    description: "Install VS Code extension for Builder"
+    example: "bldr install-extension"
+
+  - name: "help"
+    description: "Show help for commands"
+    example: "bldr help build"
+
+  - name: "version"
+    description: "Show version information"
+    example: "bldr version"
+
+global_flags:
+  - "--verbose|-v: Enable verbose output"
+  - "--mode|-m: CLI render mode (auto, interactive, plain, verbose, quiet)"
+  - "--cpu-info: Show detailed CPU and SIMD information"
 
 usage_examples:
   - command: "bldr build"
     description: "Build the current project"
-  
-  - command: "bldr test"
-    description: "Run all tests"
+
+  - command: "bldr build //app:main --watch"
+    description: "Build with watch mode enabled"
+
+  - command: "bldr test --verbose"
+    description: "Run all tests with verbose output"
+
+  - command: "bldr query 'rdeps(//lib:utils)'"
+    description: "Find all targets that depend on //lib:utils"
 
   - command: "bldr explain list"
     description: "List all documentation topics"
 
-related: [workspace, targets, wizard]
+  - command: "bldr verify --verbose"
+    description: "Verify build reproducibility"
+
+related: [workspace, targets, wizard, bldrquery, watch]
 
 next_steps: |
   - Run 'bldr --help' to see all available commands
   - Try 'bldr explain <command>' for specific command help
-
+  - Use 'bldr wizard' for interactive project setup

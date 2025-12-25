@@ -1,26 +1,109 @@
 topic: watch
-category: concepts
+category: reference
 summary: "Watch Mode - Intelligent auto-rebuild on file changes"
 definition: |
-  Watch mode monitors your source files and automatically triggers rebuilds or test runs
-  when changes are detected. It uses efficient file system events rather than polling.
+  Watch mode monitors your source files and automatically triggers rebuilds
+  when changes are detected. It uses efficient file system events (inotify, FSEvents, 
+  kqueue) rather than polling for low CPU usage and immediate response.
 
 key_points:
-  - "Event-driven: Low CPU usage, immediate response"
+  - "Event-driven: Uses native OS file watchers (inotify, FSEvents, kqueue)"
+  - "Polling fallback: Falls back to polling when native watchers unavailable"
   - "Smart debouncing: Groups rapid changes into single builds"
   - "Incremental: Only rebuilds what changed"
   - "Resilient: Continues watching even after build errors"
+  - "Screen control: Optionally clears screen between builds"
+
+implementation:
+  native_watchers:
+    linux: "inotifywait (inotify-tools)"
+    macos: "FSEvents"
+    fallback: "Polling with configurable interval"
+
+  features:
+    debouncing:
+      description: "Groups rapid file changes to avoid multiple rebuilds"
+      default: "300ms"
+      configurable: true
+
+    filtering:
+      description: "Ignores build artifacts, hidden files, and cache directories"
+      patterns:
+        - ".builder-cache/**"
+        - "bin/**"
+        - ".git/**"
+        - "node_modules/**"
+
+cli_usage:
+  command: "bldr watch [target]"
+  alternative: "bldr build --watch [target]"
+
+  flags:
+    - name: "--clear"
+      description: "Clear screen between builds"
+      default: "true"
+
+    - name: "--debounce"
+      description: "Debounce delay in milliseconds"
+      default: "300"
+
+    - name: "--verbose|-v"
+      description: "Enable verbose output"
+
+    - name: "--graph|-g"
+      description: "Show dependency graph on each build"
+
+    - name: "--mode|-m"
+      description: "CLI render mode (auto, interactive, plain, verbose, quiet)"
+
+    - name: "--remote"
+      description: "Enable remote execution (available but not typical for watch)"
 
 usage_examples:
   - command: "bldr watch"
-    description: "Watch and rebuild on change"
-  
-  - command: "bldr watch --test"
-    description: "Watch and run tests on change"
+    description: "Watch and rebuild on any change"
 
-related: [cli, incremental, caching]
+  - command: "bldr watch //app:main"
+    description: "Watch and rebuild specific target"
+
+  - command: "bldr build --watch"
+    description: "Alternative syntax using build command"
+
+  - command: "bldr watch --debounce=500"
+    description: "Custom debounce delay of 500ms"
+
+  - command: "bldr watch --clear=false"
+    description: "Keep previous build output visible"
+
+  - command: "bldr watch --verbose"
+    description: "Watch with verbose output"
+
+workflow:
+  startup: |
+    1. Parse workspace configuration
+    2. Perform initial build
+    3. Initialize file watcher
+    4. Display "Watching for changes..." message
+
+  on_change: |
+    1. Detect file change event
+    2. Wait for debounce period (collect more changes)
+    3. Optionally clear screen
+    4. Display build header with timestamp
+    5. Perform incremental rebuild
+    6. Report success/failure
+    7. Resume watching
+
+  termination: |
+    Press Ctrl+C to stop watch mode gracefully
+
+build_numbering:
+  description: "Each rebuild is numbered for easy reference"
+  format: "Build #N completed successfully / failed"
+
+related: [cli, incremental, caching, build-graph]
 
 next_steps: |
   - Use 'bldr watch' during active development
-  - Combine with 'bldr test' for TDD workflows
-
+  - Combine with CI for continuous integration workflows
+  - Use '--verbose' to debug build issues

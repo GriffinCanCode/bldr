@@ -1,23 +1,104 @@
 topic: wizard
-category: concepts
+category: reference
 summary: "Project Wizard - Interactive project scaffolding and configuration"
 definition: |
-  The Wizard is an interactive CLI tool that helps you set up new projects, 
-  configure existing ones, or add new languages and targets.
+  The Wizard is an interactive CLI tool that helps you set up new projects,
+  configure existing ones, or add new languages and targets. It detects existing
+  code structure and generates idiomatic Builder configuration.
 
 key_points:
   - "Interactive: Asks questions to guide configuration"
-  - "Smart detection: Detects existing code and structure"
+  - "Smart detection: Auto-detects existing code, languages, and project structure"
   - "Best practices: Generates idiomatic configuration"
-  - "Multi-language: Supports all Builder languages"
+  - "Multi-language: Supports all 25+ Builder-supported languages"
+  - "Separate command: Use 'bldr wizard' for full interactive mode"
+
+commands:
+  wizard:
+    command: "bldr wizard"
+    description: "Full interactive wizard with prompts and guidance"
+    use_case: "Complex projects or when you want guided setup"
+
+  init:
+    command: "bldr init"
+    description: "Quick initialization with auto-detection"
+    flags:
+      - "--force|-f: Force overwrite existing files"
+    use_case: "Simple projects or when structure is already clear"
+
+  infer:
+    command: "bldr infer"
+    description: "Analyze project and suggest configuration"
+    use_case: "Existing codebases to understand before configuring"
+
+detection_capabilities:
+  languages:
+    - "C/C++ (source files, CMakeLists.txt, Makefile)"
+    - "D (source files, dub.json/dub.sdl)"
+    - "Rust (Cargo.toml)"
+    - "Go (go.mod, *.go files)"
+    - "Java (pom.xml, build.gradle)"
+    - "Kotlin (build.gradle.kts)"
+    - "Python (setup.py, pyproject.toml, requirements.txt)"
+    - "JavaScript/TypeScript (package.json, tsconfig.json)"
+    - "And 15+ more languages"
+
+  project_types:
+    - "Binary/executable"
+    - "Library"
+    - "Test suite"
+    - "Web application"
+    - "Mixed/polyglot"
+
+  build_systems:
+    - "Make, CMake, Ninja, Meson"
+    - "Maven, Gradle, Ant"
+    - "Cargo"
+    - "npm, yarn, pnpm"
+    - "Poetry, pip"
+    - "And more..."
 
 usage_examples:
-  - command: "bldr init"
-    description: "Start the wizard for a new or existing project"
+  - command: "bldr wizard"
+    description: "Start full interactive wizard"
 
-related: [cli, workspace, languages]
+  - command: "bldr init"
+    description: "Quick initialization with auto-detection"
+
+  - command: "bldr init --force"
+    description: "Initialize and overwrite existing config"
+
+  - command: "bldr infer"
+    description: "Analyze project without making changes"
+
+workflow:
+  wizard_flow: |
+    1. Detect existing code structure
+    2. Identify languages and frameworks
+    3. Ask clarifying questions (if needed)
+    4. Generate Builderspace configuration
+    5. Generate target definitions
+    6. Optionally create additional config files
+
+  init_flow: |
+    1. Detect existing code structure
+    2. Auto-select best configuration
+    3. Generate Builderspace configuration
+    4. Report what was created
+
+generated_files:
+  - name: "Builderspace"
+    description: "Main workspace configuration"
+    location: "Project root"
+
+  - name: "Builderfile"
+    description: "Target definitions (if needed)"
+    location: "Project root or subdirectories"
+
+related: [cli, workspace, builderfile, languages, init]
 
 next_steps: |
-  - Run 'bldr init' in an empty directory to start a new project
-  - Run 'bldr init' in an existing codebase to generate a builder.yml
-
+  - Run 'bldr wizard' in an empty directory to start a new project
+  - Run 'bldr init' in an existing codebase to generate configuration
+  - Run 'bldr infer' to analyze project structure before configuring
+  - Review generated files and customize as needed

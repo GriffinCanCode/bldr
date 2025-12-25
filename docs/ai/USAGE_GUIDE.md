@@ -31,6 +31,8 @@ bldr explain <topic>
 **Example:**
 ```bash
 bldr explain blake3
+bldr explain caching
+bldr explain java-support
 ```
 
 **Output structure:**
@@ -61,7 +63,8 @@ bldr explain search "<query>"
 ```bash
 bldr explain search "fast builds"
 bldr explain search "cache"
-bldr explain search "reproducible"
+bldr explain search "maven"
+bldr explain search "python"
 ```
 
 **Searches in:**
@@ -79,7 +82,8 @@ bldr explain example <topic>
 **Example:**
 ```bash
 bldr explain example caching
-bldr explain example blake3
+bldr explain example java-support
+bldr explain example watch
 ```
 
 **Output:** Numbered examples with descriptions and copy-paste ready code
@@ -97,6 +101,22 @@ bldr explain example blake3
 - **workspace** - Project configuration (Builderspace)
 - **targets** - Build targets and dependencies
 
+### Reference
+- **cli** - All CLI commands (build, test, watch, query, verify, etc.)
+- **watch** - Auto-rebuild on file changes with debouncing
+- **plugins** - RPC-based plugin system (any language)
+- **wizard** - Interactive project setup (init, infer commands)
+- **bldrquery** - Query language for build graph
+
+### Languages (25+ supported)
+- **languages** - Overview of all 25+ supported languages
+- **java-support** - Maven, Gradle, JUnit, JAR/WAR/native-image
+- **dynamic-languages** - Python, Ruby, PHP, Perl, Lua, R, Go, Elixir, Gleam
+- **cpp-support** - C/C++ with CMake, Make, Ninja, etc.
+- **rust-support** - Rust with Cargo
+- **go-support** - Go modules
+- **python-support** - Python with pip, poetry, uv
+
 ### Aliases
 These shortcuts map to main topics:
 - `hash` → blake3
@@ -105,6 +125,9 @@ These shortcuts map to main topics:
 - `sandbox` → hermetic
 - `builderspace` → workspace
 - `target` → targets
+- `init` → wizard
+- `maven`, `gradle`, `jvm` → java-support
+- `ruby`, `php`, `lua`, `elixir` → dynamic-languages
 
 ## Typical Workflows
 
@@ -122,7 +145,34 @@ bldr explain remote-cache
 bldr explain example caching
 ```
 
-### Workflow 2: Solving a Problem
+### Workflow 2: Setting Up a Project
+```bash
+# Learn about project setup
+bldr explain wizard
+
+# Check language-specific info
+bldr explain java-support
+# or
+bldr explain languages
+
+# Initialize project
+bldr init
+```
+
+### Workflow 3: Exploring CLI Commands
+```bash
+# Get full CLI reference
+bldr explain cli
+
+# Learn about specific features
+bldr explain watch
+bldr explain query
+
+# Get examples
+bldr explain example cli
+```
+
+### Workflow 4: Solving a Problem
 ```bash
 # Search for relevant topics
 bldr explain search "slow builds"
@@ -133,16 +183,6 @@ bldr explain caching
 
 # Get working examples
 bldr explain example incremental
-```
-
-### Workflow 3: Exploring Features
-```bash
-# See all available topics
-bldr explain list
-
-# Pick interesting ones
-bldr explain determinism
-bldr explain remote-cache
 ```
 
 ## Best Practices
@@ -193,24 +233,45 @@ NEXT STEPS:
   What to read or do next
 ```
 
-## Integration with Builder
+## Full CLI Commands Reference
 
-The explain system is **independent** from the main documentation:
+For quick reference, here are all Builder commands:
 
-- **Human docs** (`docs/`): Long-form guides, architecture, tutorials
-- **AI docs** (`docs/ai/`): Structured, queryable, instant answers
+```bash
+# Build commands
+bldr build [target]           # Build targets
+bldr build --watch            # Build with watch mode
+bldr test [target]            # Run tests
+bldr clean                    # Remove build artifacts
 
-Use `bldr explain` for:
-- Quick definitions
-- Working examples
-- Discovery of features
-- Command-line reference
+# Analysis commands
+bldr graph [target]           # Visualize dependency graph
+bldr query '<expr>'           # Query build graph
+bldr verify                   # Verify build determinism
 
-Use human docs for:
-- Deep dives
-- Architecture understanding
-- Migration guides
-- Detailed tutorials
+# Setup commands
+bldr init                     # Initialize workspace
+bldr wizard                   # Interactive setup
+bldr infer                    # Auto-detect project structure
+bldr migrate                  # Migrate from other build systems
+
+# Watch and development
+bldr watch [target]           # Watch and rebuild on changes
+
+# Remote and distributed
+bldr cache-server             # Run remote cache server
+bldr coordinator              # Run build coordinator
+bldr worker                   # Run build worker
+
+# Utilities
+bldr explain <topic>          # AI documentation
+bldr plugin <cmd>             # Manage plugins
+bldr telemetry <cmd>          # View build stats
+bldr resume                   # Resume from checkpoint
+bldr install-extension        # Install VS Code extension
+bldr help [command]           # Get help
+bldr version                  # Show version
+```
 
 ## Performance
 
@@ -244,64 +305,6 @@ bldr explain search "keyword"
 ### Need more detail than explain provides
 **Solution:** Check the "references" or "next_steps" field in the topic for links to full docs
 
-## Example Session
-
-```bash
-# I want to make my builds faster
-$ bldr explain search "fast"
-Search Results for: fast
-  blake3
-    BLAKE3 cryptographic hash function - 3-5x faster than SHA-256
-  
-  caching
-    Multi-tier caching system: target-level, action-level, and remote
-  
-  incremental
-    Module-level incremental compilation - only rebuild affected files
-
-Found 3 topic(s).
-
-# Let me learn about caching
-$ bldr explain caching
-CACHING
-────────────────
-
-SUMMARY:
-  Multi-tier caching system: target-level, action-level, and remote
-
-DEFINITION:
-  Builder's caching system stores build outputs to avoid redundant work...
-  [detailed explanation]
-
-KEY POINTS:
-  • Content-addressable: Cache keys are BLAKE3 hashes of inputs
-  • Deterministic: Same inputs must produce same outputs
-  • Validated: Outputs are re-hashed to detect corruption
-  ...
-
-RELATED:
-  blake3, determinism, action-cache, remote-cache, incremental
-
-NEXT STEPS:
-  - See 'bldr explain action-cache' for fine-grained caching
-  - See 'bldr explain remote-cache' for team collaboration setup
-
-# Let me check action-cache
-$ bldr explain action-cache
-[detailed info about action-cache]
-
-# Now get some examples
-$ bldr explain example caching
-EXAMPLES: caching
-────────────────
-
-EXAMPLE 1:
-  Check if build is cached
-  Command: bldr build //target
-  [output example]
-...
-```
-
 ## Summary
 
 `bldr explain` is your **instant documentation assistant**. Use it to:
@@ -311,4 +314,3 @@ EXAMPLE 1:
 4. Get command syntax
 
 It's designed specifically for AI assistants to get the information they need in a single command.
-

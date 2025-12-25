@@ -45,7 +45,8 @@ concepts:
 
   cli:
     file: "concepts/reference/cli.yaml"
-    summary: "Command Line Interface - The primary way to interact with Builder"
+    summary: "Command Line Interface - build, test, watch, query, verify, and 15+ more commands"
+    keywords: ["command", "terminal", "shell", "flags", "options"]
 
   concurrency:
     file: "concepts/core/concurrency.yaml"
@@ -101,7 +102,8 @@ concepts:
 
   dynamic-languages:
     file: "concepts/languages/dynamic-languages.yaml"
-    summary: "Dynamic Languages - Support for interpreted languages"
+    summary: "Dynamic Languages - Python, Ruby, PHP, Perl, Lua, R, Go, Elixir, Gleam"
+    keywords: ["scripting", "interpreted", "runtime", "pip", "bundler", "composer"]
 
   ecosystem:
     file: "concepts/ecosystem/ecosystem.yaml"
@@ -141,11 +143,13 @@ concepts:
 
   java-support:
     file: "concepts/languages/java-support.yaml"
-    summary: "Java Support - Building Java code"
+    summary: "Java Support - Maven, Gradle, JUnit, JAR/WAR/EAR, GraalVM native-image"
+    keywords: ["maven", "gradle", "jar", "war", "junit", "jvm", "javac"]
 
   languages:
     file: "concepts/languages/languages.yaml"
-    summary: "Supported Languages - Multi-language build support"
+    summary: "Supported Languages - 25+ languages: C++, D, Rust, Go, Java, Python, TypeScript, etc."
+    keywords: ["polyglot", "multi-language", "compilation", "handlers"]
 
   license-checking:
     file: "concepts/ecosystem/license-checking.yaml"
@@ -193,7 +197,8 @@ concepts:
 
   plugins:
     file: "concepts/reference/plugins.yaml"
-    summary: "Plugin System - Extend Builder with custom logic"
+    summary: "Plugin System - RPC-based plugins in any language (Python, Go, Rust, shell)"
+    keywords: ["extension", "rpc", "custom", "hooks", "executable"]
 
   providers:
     file: "concepts/rules/providers.yaml"
@@ -294,7 +299,8 @@ concepts:
 
   watch:
     file: "concepts/reference/watch.yaml"
-    summary: "Watch Mode - Intelligent auto-rebuild on file changes"
+    summary: "Watch Mode - Auto-rebuild with inotify/FSEvents, debouncing, incremental builds"
+    keywords: ["auto-rebuild", "file-watch", "live", "development", "hot-reload"]
 
   windows-support:
     file: "concepts/config/windows-support.yaml"
@@ -302,7 +308,8 @@ concepts:
 
   wizard:
     file: "concepts/reference/wizard.yaml"
-    summary: "Project Wizard - Interactive project scaffolding and configuration"
+    summary: "Project Wizard - Interactive setup, auto-detection, and configuration generation"
+    keywords: ["init", "setup", "scaffold", "new project", "configuration"]
 
   workspace:
     file: "concepts/core/workspace.yaml"
@@ -357,6 +364,30 @@ aliases:
   rs: "rust-support"
   sh: "shell-support"
   shell: "shell-support"
+  kotlin: "java-support"
+  scala: "java-support"
+  jvm: "java-support"
+  csharp: "languages"
+  cs: "languages"
+  fsharp: "languages"
+  fs: "languages"
+  dotnet: "languages"
+  zig: "languages"
+  nim: "languages"
+  swift: "languages"
+  haskell: "languages"
+  ocaml: "languages"
+  elixir: "dynamic-languages"
+  gleam: "dynamic-languages"
+  lua: "dynamic-languages"
+  php: "dynamic-languages"
+  perl: "dynamic-languages"
+  r: "dynamic-languages"
+  ruby: "dynamic-languages"
+  rb: "dynamic-languages"
+  init: "wizard"
+  infer: "wizard"
+  setup: "wizard"
 
 categories:
   - name: "core"

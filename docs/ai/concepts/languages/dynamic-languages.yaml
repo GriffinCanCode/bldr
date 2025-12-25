@@ -1,26 +1,169 @@
 topic: dynamic-languages
-category: concepts
-summary: "Dynamic Languages - Support for interpreted languages"
+category: languages
+summary: "Dynamic Languages - Support for interpreted and scripting languages"
 definition: |
-  Support for languages like Python, Ruby, and JavaScript where 'building'
-  often means packaging, linting, or testing rather than compiling.
+  Support for interpreted languages where 'building' typically means packaging, 
+  linting, testing, type checking, or managing dependencies rather than compilation.
+  Builder provides native handlers for Python, Ruby, PHP, Perl, Lua, R, Go, Elixir, and Gleam.
 
 key_points:
-  - "Runtime management: Can manage interpreters/virtualenvs"
-  - "Dependency locking: Integrates with pip, npm, bundler"
-  - "Test integration: Runs standard test runners"
+  - "Runtime management: Can manage interpreters, virtualenvs, and toolchains"
+  - "Dependency locking: Integrates with pip, bundler, composer, cpan, luarocks, etc."
+  - "Test integration: Runs standard test runners (pytest, rspec, phpunit, etc.)"
+  - "Type checking: Optional static analysis for typed variants"
+  - "Multiple package managers: Support for alternative tools per language"
+
+supported_languages:
+  python:
+    handler: "languages.scripting.python"
+    package_managers:
+      - "pip"
+      - "poetry"
+      - "uv"
+      - "conda"
+    virtual_envs: ["venv", "virtualenv", "conda"]
+    test_runners: ["pytest", "unittest", "nose"]
+    type_checkers: ["mypy", "pyright"]
+
+  ruby:
+    handler: "languages.scripting.ruby"
+    package_managers:
+      - "bundler"
+      - "rubygems"
+    test_runners: ["rspec", "minitest"]
+    formatters: ["rubocop"]
+
+  php:
+    handler: "languages.scripting.php"
+    package_managers:
+      - "composer"
+    test_runners: ["phpunit", "pest"]
+    static_analysis: ["phpstan", "psalm"]
+
+  perl:
+    handler: "languages.scripting.perl"
+    package_managers:
+      - "cpanm"
+      - "carton"
+    test_runners: ["prove", "Test::More"]
+
+  lua:
+    handler: "languages.scripting.lua"
+    package_managers:
+      - "luarocks"
+    runtimes: ["lua", "luajit"]
+    test_runners: ["busted"]
+
+  r:
+    handler: "languages.scripting.r"
+    package_managers:
+      - "renv"
+      - "pak"
+      - "install.packages()"
+    test_runners: ["testthat"]
+
+  go:
+    handler: "languages.scripting.go"
+    package_managers:
+      - "go mod"
+    build_modes: ["binary", "library", "test"]
+    test_runner: "go test"
+    formatters: ["gofmt", "goimports"]
+
+  elixir:
+    handler: "languages.scripting.elixir"
+    package_managers:
+      - "hex"
+      - "mix"
+    test_runner: "mix test"
+    formatters: ["mix format"]
+
+  gleam:
+    handler: "languages.scripting.gleam"
+    build_tool: "gleam build"
+    targets: ["erlang", "javascript"]
+    test_runner: "gleam test"
 
 usage_examples:
-  - description: "Python target"
+  - description: "Python target with venv"
     code: |
-      python_binary(
-        name="app",
-        main="main.py",
-        deps=[":lib"]
-      )
+      targets:
+        app:
+          type: python_binary
+          main: "main.py"
+          deps: [":lib"]
+          options:
+            venv: true
+            requirements: "requirements.txt"
 
-related: [languages, ecosystem, plugins]
+  - description: "Ruby target with bundler"
+    code: |
+      targets:
+        web:
+          type: ruby_binary
+          main: "app.rb"
+          options:
+            bundler: true
+
+  - description: "Go binary target"
+    code: |
+      targets:
+        server:
+          type: go_binary
+          srcs: ["cmd/server/main.go"]
+          deps: [":lib"]
+
+  - description: "PHP target with composer"
+    code: |
+      targets:
+        api:
+          type: php_binary
+          main: "index.php"
+          options:
+            composer: true
+
+  - description: "Elixir Mix project"
+    code: |
+      targets:
+        phoenix_app:
+          type: elixir_binary
+          srcs: ["lib/**/*.ex"]
+          options:
+            mix: true
+
+  - description: "R package target"
+    code: |
+      targets:
+        analysis:
+          type: r_binary
+          main: "analysis.R"
+          options:
+            renv: true
+
+common_operations:
+  dependency_installation:
+    python: "pip install -r requirements.txt"
+    ruby: "bundle install"
+    php: "composer install"
+    go: "go mod download"
+    elixir: "mix deps.get"
+
+  testing:
+    python: "pytest"
+    ruby: "rspec"
+    php: "phpunit"
+    go: "go test ./..."
+    elixir: "mix test"
+
+  formatting:
+    python: "black, ruff"
+    ruby: "rubocop"
+    go: "gofmt"
+    elixir: "mix format"
+
+related: [languages, python-support, go-support, ecosystem, plugins]
 
 next_steps: |
-  - Use specific rules for your dynamic language
-
+  - Run 'bldr infer' to detect your project type
+  - Use specific handlers for advanced configuration
+  - See 'bldr explain <language>-support' for language-specific details

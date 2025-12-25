@@ -1,15 +1,168 @@
 topic: languages
-category: concepts
-summary: "Supported Languages - Multi-language build support"
+category: languages
+summary: "Supported Languages - Multi-language build support for 25+ languages"
 definition: |
-  Builder is a polyglot build system. It natively supports compilation, linking,
-  and dependency management for a wide range of programming languages.
+  Builder is a polyglot build system with native support for over 25 programming languages.
+  It handles compilation, linking, dependency management, testing, and packaging for each.
 
 key_points:
-  - "Native support: C, C++, D, Rust, Go, Python, JavaScript/TypeScript"
+  - "Native support: Full compilation and toolchain integration"
   - "Cross-compilation: Build for different architectures"
   - "Mixed builds: Seamlessly link C++ with D or Rust"
-  - "Unified config: Manage all languages in one builder.yml"
+  - "Unified config: Manage all languages in one workspace"
+  - "Auto-detection: Infers language from file extensions and project structure"
+
+supported_languages:
+  compiled:
+    - name: "C++"
+      handler: "languages.compiled.cpp"
+      extensions: [".cpp", ".cc", ".cxx", ".c", ".h", ".hpp"]
+      tools: ["GCC", "Clang", "MSVC", "CMake", "Make", "Ninja", "Meson", "xmake", "Bazel"]
+
+    - name: "D"
+      handler: "languages.compiled.d"
+      extensions: [".d"]
+      tools: ["DMD", "LDC", "GDC", "DUB"]
+
+    - name: "Rust"
+      handler: "languages.compiled.rust"
+      extensions: [".rs"]
+      tools: ["Cargo", "rustc"]
+
+    - name: "Zig"
+      handler: "languages.compiled.zig"
+      extensions: [".zig"]
+      tools: ["zig build"]
+
+    - name: "Nim"
+      handler: "languages.compiled.nim"
+      extensions: [".nim"]
+      tools: ["Nimble", "nim c"]
+
+    - name: "Haskell"
+      handler: "languages.compiled.haskell"
+      extensions: [".hs", ".lhs"]
+      tools: ["GHC", "Cabal", "Stack"]
+
+    - name: "OCaml"
+      handler: "languages.compiled.ocaml"
+      extensions: [".ml", ".mli"]
+      tools: ["ocamlc", "ocamlopt", "dune"]
+
+    - name: "Swift"
+      handler: "languages.compiled.swift"
+      extensions: [".swift"]
+      tools: ["SwiftPM", "swiftc"]
+
+    - name: "Protobuf"
+      handler: "languages.compiled.protobuf"
+      extensions: [".proto"]
+      tools: ["protoc"]
+
+  jvm:
+    - name: "Java"
+      handler: "languages.jvm.java"
+      extensions: [".java"]
+      tools: ["Maven", "Gradle", "Ant", "javac"]
+
+    - name: "Kotlin"
+      handler: "languages.jvm.kotlin"
+      extensions: [".kt", ".kts"]
+      tools: ["Gradle", "Maven", "kotlinc"]
+
+    - name: "Scala"
+      handler: "languages.jvm.scala"
+      extensions: [".scala", ".sc"]
+      tools: ["sbt", "Maven", "Gradle", "scalac"]
+
+  dotnet:
+    - name: "C#"
+      handler: "languages.dotnet.csharp"
+      extensions: [".cs"]
+      tools: ["dotnet CLI", "MSBuild", "NuGet"]
+
+    - name: "F#"
+      handler: "languages.dotnet.fsharp"
+      extensions: [".fs", ".fsx"]
+      tools: ["dotnet CLI", "MSBuild"]
+
+  scripting:
+    - name: "Go"
+      handler: "languages.scripting.go"
+      extensions: [".go"]
+      tools: ["go build", "go mod"]
+
+    - name: "Python"
+      handler: "languages.scripting.python"
+      extensions: [".py"]
+      tools: ["pip", "poetry", "uv", "conda", "venv"]
+
+    - name: "Ruby"
+      handler: "languages.scripting.ruby"
+      extensions: [".rb"]
+      tools: ["Bundler", "RubyGems"]
+
+    - name: "PHP"
+      handler: "languages.scripting.php"
+      extensions: [".php"]
+      tools: ["Composer"]
+
+    - name: "Perl"
+      handler: "languages.scripting.perl"
+      extensions: [".pl", ".pm"]
+      tools: ["cpanm"]
+
+    - name: "Lua"
+      handler: "languages.scripting.lua"
+      extensions: [".lua"]
+      tools: ["LuaRocks"]
+
+    - name: "R"
+      handler: "languages.scripting.r"
+      extensions: [".R", ".r"]
+      tools: ["renv", "pak"]
+
+    - name: "Elixir"
+      handler: "languages.scripting.elixir"
+      extensions: [".ex", ".exs"]
+      tools: ["Mix", "Hex"]
+
+    - name: "Gleam"
+      handler: "languages.scripting.gleam"
+      extensions: [".gleam"]
+      tools: ["gleam build"]
+
+  web:
+    - name: "JavaScript"
+      handler: "languages.web.javascript"
+      extensions: [".js", ".mjs", ".cjs"]
+      tools: ["npm", "yarn", "pnpm", "bun", "esbuild", "webpack", "rollup", "vite"]
+
+    - name: "TypeScript"
+      handler: "languages.web.typescript"
+      extensions: [".ts", ".tsx"]
+      tools: ["tsc", "esbuild", "swc"]
+
+    - name: "Elm"
+      handler: "languages.web.elm"
+      extensions: [".elm"]
+      tools: ["elm make"]
+
+    - name: "CSS"
+      handler: "languages.web.css"
+      extensions: [".css", ".scss", ".sass", ".less"]
+      tools: ["PostCSS", "Sass", "Less"]
+
+  custom:
+    - name: "Shell"
+      handler: "languages.custom.shell"
+      extensions: [".sh", ".bash", ".zsh"]
+      description: "Shell scripts and tests"
+
+dynamic_specs:
+  description: "Additional languages via JSON spec files"
+  location: "source/languages/specs/"
+  examples: ["Crystal", "Dart", "V"]
 
 usage_examples:
   - description: "Defining a C++ target"
@@ -19,9 +172,28 @@ usage_examples:
           type: c++_binary
           srcs: ["main.cpp"]
 
-related: [targets, workspace, wizard]
+  - description: "Defining a Go target"
+    code: |
+      targets:
+        server:
+          type: go_binary
+          srcs: ["cmd/server/main.go"]
+
+  - description: "Mixed language project"
+    code: |
+      targets:
+        cpp_lib:
+          type: c++_library
+          srcs: ["lib/*.cpp"]
+        
+        rust_wrapper:
+          type: rust_binary
+          srcs: ["src/main.rs"]
+          deps: [":cpp_lib"]
+
+related: [targets, workspace, wizard, cpp-support, java-support, python-support, go-support, rust-support]
 
 next_steps: |
-  - Check 'bldr explain list' for specific language guides (if available)
+  - Run 'bldr infer' to auto-detect languages in your project
   - Use 'bldr init' to set up language support
-
+  - See specific language guides: 'bldr explain <language>-support'

@@ -1,26 +1,161 @@
 topic: java-support
-category: concepts
-summary: "Java Support - Building Java code"
+category: languages
+summary: "Java Support - Building Java code with Maven, Gradle, and direct compilation"
 definition: |
-  Support for Java compilation, JAR creation, and JVM execution.
-  Handles classpaths and strict dependency checking.
+  Builder provides comprehensive Java build support with automatic detection of 
+  Maven and Gradle projects, JUnit testing integration, and multiple output modes
+  including JAR, WAR, EAR, and GraalVM native images.
 
 key_points:
-  - "java_library: Compiles .class files"
-  - "java_binary: Creates executable JAR"
-  - "strict_deps: Enforces declaring all direct deps"
+  - "Auto-detection: Recognizes pom.xml, build.gradle, and direct Java projects"
+  - "Build tools: Maven, Gradle, Ant, or direct javac compilation"
+  - "Wrapper support: Uses mvnw/gradlew when available"
+  - "Testing: JUnit 4 and JUnit 5 integration"
+  - "Static analysis: SpotBugs, PMD, Checkstyle integration"
+  - "Formatting: google-java-format, spotless support"
+  - "Output modes: JAR, WAR, EAR, Fat JAR, GraalVM Native Image"
+
+build_tools:
+  maven:
+    detection: "pom.xml in project root"
+    wrapper: "mvnw (preferred when available)"
+    features:
+      - "Automatic dependency installation"
+      - "Test execution with surefire"
+      - "Package lifecycle integration"
+    config:
+      auto_install: true
+      skip_tests: false
+
+  gradle:
+    detection: "build.gradle or build.gradle.kts in project root"
+    wrapper: "gradlew (preferred when available)"
+    features:
+      - "Automatic dependency resolution"
+      - "Test task integration"
+      - "Build task execution"
+    config:
+      auto_install: true
+      skip_tests: false
+
+  direct:
+    description: "Direct javac compilation without build tool"
+    use_case: "Simple projects or when build tools unavailable"
+
+build_modes:
+  - name: "JAR"
+    description: "Standard Java Archive"
+    output: "*.jar"
+
+  - name: "FatJAR"
+    description: "Uber JAR with all dependencies bundled"
+    output: "*.jar"
+
+  - name: "WAR"
+    description: "Web Application Archive"
+    output: "*.war"
+
+  - name: "EAR"
+    description: "Enterprise Application Archive"
+    output: "*.ear"
+
+  - name: "NativeImage"
+    description: "GraalVM native executable"
+    output: "binary (no extension on Unix)"
+    requires: "GraalVM with native-image"
+
+testing:
+  junit4:
+    detection: "org.junit imports in test files"
+    runner: "JUnit 4 console runner"
+
+  junit5:
+    detection: "org.junit.jupiter imports"
+    runner: "JUnit Platform Console Launcher"
+
+  classpath:
+    sources:
+      - "target/classes"
+      - "target/test-classes"
+      - "build/classes/java/main"
+      - "build/classes/java/test"
+      - "~/.m2/repository (for dependencies)"
+
+static_analysis:
+  analyzers:
+    - "SpotBugs"
+    - "PMD"
+    - "Checkstyle"
+  config:
+    enabled: false
+    fail_on_errors: true
+    fail_on_warnings: false
+
+formatting:
+  formatters:
+    - "google-java-format"
+    - "spotless"
+  config:
+    auto_format: false
+    check_only: false
 
 usage_examples:
-  - description: "Java App"
+  - description: "Java target with Maven"
     code: |
-      java_binary(
-        name = "server",
-        main_class = "com.example.Main",
-        runtime_deps = [":lib"],
-      )
+      targets:
+        server:
+          type: java_binary
+          srcs: ["src/main/java/**/*.java"]
+          main_class: "com.example.Main"
+          build_tool: maven
 
-related: [languages, ecosystem, toolchains]
+  - description: "Java library target"
+    code: |
+      targets:
+        lib:
+          type: java_library
+          srcs: ["src/main/java/**/*.java"]
+
+  - description: "Java test target"
+    code: |
+      targets:
+        tests:
+          type: java_test
+          srcs: ["src/test/java/**/*.java"]
+          deps: [":lib"]
+
+  - description: "Fat JAR with dependencies"
+    code: |
+      targets:
+        app:
+          type: java_binary
+          srcs: ["src/**/*.java"]
+          main_class: "com.example.App"
+          options:
+            mode: fat_jar
+
+  - description: "GraalVM native image"
+    code: |
+      targets:
+        native_app:
+          type: java_binary
+          srcs: ["src/**/*.java"]
+          main_class: "com.example.App"
+          options:
+            mode: native_image
+
+configuration:
+  java_version:
+    source: "Java source compatibility version"
+    target: "Java target bytecode version"
+
+  packaging:
+    main_class: "Entry point for executable JARs"
+    manifest_entries: "Custom MANIFEST.MF entries"
+
+related: [languages, kotlin-support, scala-support, toolchains, testing]
 
 next_steps: |
-  - Use java_import for external JARs
-
+  - Run 'bldr infer' to auto-detect your Java project structure
+  - Place pom.xml or build.gradle in project root for automatic detection
+  - Use 'bldr test' to run JUnit tests

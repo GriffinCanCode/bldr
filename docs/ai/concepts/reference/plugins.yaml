@@ -1,29 +1,138 @@
 topic: plugins
-category: concepts
-summary: "Plugin System - Extend Builder with custom logic"
+category: reference
+summary: "Plugin System - Extend Builder with RPC-based plugins in any language"
 definition: |
-  Builder's plugin system allows you to extend functionality using Python scripts.
-  Plugins can define new build steps, custom validation, or integration with external tools.
+  Builder's plugin system allows extending functionality using executable plugins
+  that communicate via JSON-RPC over stdin/stdout. Plugins can be written in any 
+  language and provide custom build steps, validation, or tool integration.
 
 key_points:
-  - "Python API: Write plugins in standard Python"
-  - "Hooks: Intercept build events (pre-build, post-build)"
-  - "Custom Rules: Define new target types"
-  - "Sandboxed: Plugins run in a controlled environment"
+  - "Language agnostic: Write plugins in Python, Go, Rust, shell scripts, or any language"
+  - "RPC protocol: JSON-RPC over stdin/stdout for communication"
+  - "Discoverable: Auto-discovered from plugins directory"
+  - "Timeout controlled: Configurable execution timeout (default 30s)"
+  - "Process isolation: Each plugin runs as separate process"
+
+architecture:
+  communication:
+    protocol: "JSON-RPC 2.0"
+    transport: "stdin/stdout"
+    encoding: "JSON"
+
+  lifecycle:
+    discovery: "Scans plugins/ directory for executables"
+    execution: "Spawns process, sends request, reads response"
+    timeout: "Configurable timeout (default 30 seconds)"
+
+  components:
+    loader: "PluginLoader - executes plugins and handles RPC"
+    scanner: "PluginScanner - discovers available plugins"
+    protocol: "RPCRequest/RPCResponse - message format"
+
+rpc_protocol:
+  request:
+    fields:
+      - "jsonrpc: '2.0'"
+      - "id: unique request identifier"
+      - "method: method name to invoke"
+      - "params: method parameters (object)"
+
+  response:
+    success:
+      - "jsonrpc: '2.0'"
+      - "id: matching request id"
+      - "result: method result"
+    error:
+      - "jsonrpc: '2.0'"
+      - "id: matching request id"
+      - "error: {code, message, data}"
+
+  example_request: |
+    {"jsonrpc":"2.0","id":1,"method":"build","params":{"target":"//app:main"}}
+
+  example_response: |
+    {"jsonrpc":"2.0","id":1,"result":{"success":true,"outputs":["bin/app"]}}
+
+plugin_structure:
+  location: "plugins/ directory in workspace root"
+  requirements:
+    - "Must be executable"
+    - "Must read JSON-RPC request from stdin"
+    - "Must write JSON-RPC response to stdout"
+    - "Should exit with code 0 on success"
 
 usage_examples:
-  - description: "Plugin definition structure"
+  - description: "Python plugin example"
     code: |
-      def build(ctx):
-          ctx.action(
-              inputs=["src/main.custom"],
-              outputs=["bin/app"],
-              cmd="custom-compiler $1 -o $2"
-          )
+      #!/usr/bin/env python3
+      import json
+      import sys
+      
+      def main():
+          request = json.loads(sys.stdin.readline())
+          
+          method = request.get('method')
+          params = request.get('params', {})
+          request_id = request.get('id')
+          
+          # Handle the method
+          if method == 'build':
+              result = {'success': True, 'message': 'Built successfully'}
+          else:
+              result = {'error': f'Unknown method: {method}'}
+          
+          response = {
+              'jsonrpc': '2.0',
+              'id': request_id,
+              'result': result
+          }
+          
+          print(json.dumps(response))
+      
+      if __name__ == '__main__':
+          main()
 
-related: [workspace, targets, languages]
+  - description: "Shell plugin example"
+    code: |
+      #!/bin/bash
+      read request
+      method=$(echo "$request" | jq -r '.method')
+      id=$(echo "$request" | jq -r '.id')
+      
+      if [ "$method" = "lint" ]; then
+          result='{"success":true}'
+      else
+          result='{"error":"unknown method"}'
+      fi
+      
+      echo "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":$result}"
+
+  - description: "Using the plugin CLI"
+    command: "bldr plugin list"
+    description: "List all discovered plugins"
+
+cli_commands:
+  - command: "bldr plugin list"
+    description: "List available plugins"
+
+  - command: "bldr plugin run <name> <method>"
+    description: "Execute a plugin method"
+
+configuration:
+  timeout:
+    description: "Plugin execution timeout"
+    default: "30 seconds"
+    configurable: true
+
+  discovery:
+    paths:
+      - "plugins/ (workspace root)"
+      - "~/.config/bldr/plugins/ (global)"
+
+related: [workspace, targets, languages, cli]
 
 next_steps: |
-  - Create a 'plugins' directory in your workspace
-  - Add a .py file with your plugin logic
-
+  - Create a 'plugins' directory in your workspace root
+  - Add an executable file with your plugin logic
+  - Use 'bldr plugin list' to verify discovery
+  - Run 'bldr plugin run <name> <method>' to test
