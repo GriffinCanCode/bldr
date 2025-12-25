@@ -438,7 +438,7 @@ class AutoDetector
                 auto detected = detector.detect();
                 allToolchains ~= detected;
                 
-                Logger.info("Detected " ~ detected.length.to!string ~ 
+                Logger.debugLog("Detected " ~ detected.length.to!string ~ 
                           " toolchain(s) via " ~ detector.name());
             }
             catch (Exception e)

@@ -59,7 +59,7 @@ final class ExecutionEngine
         if (enableDynamicGraph)
         {
             this.dynamicGraph = new DynamicBuildGraph(graph);
-            Logger.info("Dynamic graph support enabled");
+            Logger.debugLog("Dynamic graph support enabled");
         }
         
         // Initialize lifecycle
@@ -106,9 +106,9 @@ final class ExecutionEngine
             auto stats = dynamicGraph.getDiscoveryStats();
             if (stats.targetsDiscovered > 0)
             {
-                Logger.info("Dynamic Discovery Summary:");
-                Logger.info("  Targets discovered: " ~ stats.targetsDiscovered.to!string);
-                Logger.info("  Total discoveries: " ~ stats.totalDiscoveries.to!string);
+                Logger.debugLog("Dynamic Discovery Summary:");
+                Logger.debugLog("  Targets discovered: " ~ stats.targetsDiscovered.to!string);
+                Logger.debugLog("  Total discoveries: " ~ stats.totalDiscoveries.to!string);
             }
         }
         

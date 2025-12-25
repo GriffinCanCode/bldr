@@ -41,7 +41,7 @@ class ToolchainRegistry
         if (initialized)
             return;
         
-        Logger.info("Initializing toolchain registry...");
+        Logger.debugLog("Initializing toolchain registry...");
         
         // Auto-detect toolchains
         auto detected = detector.detectAll();
@@ -51,7 +51,7 @@ class ToolchainRegistry
             register(tc);
         }
         
-        Logger.info("Registered " ~ toolchains.length.to!string ~ " toolchain(s)");
+        Logger.debugLog("Registered " ~ toolchains.length.to!string ~ " toolchain(s)");
         initialized = true;
     }
     
@@ -208,7 +208,7 @@ class ToolchainRegistry
     /// Provision toolchains from providers (fetch if needed)
     void provision() @system
     {
-        Logger.info("Provisioning toolchains from providers...");
+        Logger.debugLog("Provisioning toolchains from providers...");
         
         foreach (provider; providers)
         {
@@ -231,7 +231,7 @@ class ToolchainRegistry
                     register(tc);
                 }
                 
-                Logger.info("Provisioned " ~ tcs.length.to!string ~ 
+                Logger.debugLog("Provisioned " ~ tcs.length.to!string ~ 
                           " toolchain(s) from " ~ provider.name());
             }
             catch (Exception e)

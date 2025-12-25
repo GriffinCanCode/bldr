@@ -1,0 +1,80 @@
+topic: verbose-output
+summary: "Verbose mode output - detailed debug information with --verbose flag"
+category: reference
+
+definition: |
+  Verbose mode provides detailed debug output during builds. By default, bldr 
+  shows minimal output for clean terminal experience. Enable with --verbose or -v 
+  to see internal details useful for debugging and optimization.
+
+key_points:
+  - "Default output is minimal: start, target count, summary, errors"
+  - "Verbose mode shows toolchain detection, cache stats, execution details"
+  - "Enable with --verbose or -v flag"
+  - "SIMD/CPU banner only shows in verbose mode"
+  - "Cache performance stats help identify optimization opportunities"
+
+usage_examples:
+  - description: "Enable verbose output"
+    command: "bldr build --verbose"
+  - description: "Short form"
+    command: "bldr build -v"
+  - description: "Verbose with graph visualization"
+    command: "bldr build --verbose --graph"
+
+default_output:
+  - "Starting build..."
+  - "Found X targets"
+  - "Build Summary (built/cached/failed/time)"
+  - "Build completed successfully! / Build failed!"
+  - "Error messages"
+
+verbose_output:
+  toolchain:
+    - "Initializing toolchain registry..."
+    - "Registered X toolchain(s)"
+    - "Detected X toolchain(s) via <detector>"
+    - "Provisioning toolchains from providers..."
+  
+  engine:
+    - "Dynamic graph support enabled"
+    - "Max parallelism: X jobs"
+    - "Analyzing dependencies..."
+  
+  cache:
+    - "Cache Performance (entries, size, hit rates)"
+    - "Action-Level Cache stats"
+    - "Hash cache saves"
+  
+  discovery:
+    - "Dynamic Discovery Summary"
+    - "Targets discovered / Total discoveries"
+  
+  remote:
+    - "Remote execution enabled"
+    - "Remote execution service started"
+    - "Coordinator and worker config"
+  
+  execution:
+    - "Using local/distributed/premium execution"
+    - "Worker and core counts"
+  
+  services:
+    - "Shutting down services..."
+    - "Services shutdown complete"
+
+related:
+  - "cli"
+  - "observability"
+  - "performance"
+  - "troubleshooting"
+
+next_steps: |
+  Use verbose mode when:
+  - Debugging build failures
+  - Analyzing cache performance
+  - Investigating slow builds
+  - Debugging remote execution
+  
+  For CPU/SIMD details: bldr --cpu-info
+

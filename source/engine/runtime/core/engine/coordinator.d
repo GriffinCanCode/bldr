@@ -54,7 +54,7 @@ struct EngineCoordinator
         // Mark discoverable targets
         DiscoveryMarker.markCodeGenTargets(dynamicGraph);
         
-        Logger.info("Dynamic graph support enabled");
+        Logger.debugLog("Dynamic graph support enabled");
     }
     
     /// Execute the build
@@ -134,7 +134,7 @@ struct EngineCoordinator
         size_t built = 0;
         size_t cached = 0;
         
-        Logger.info("Max parallelism: " ~ scheduling.workerCount().to!string ~ " jobs");
+        Logger.debugLog("Max parallelism: " ~ scheduling.workerCount().to!string ~ " jobs");
         
         // Initialize pending dependency counters
         foreach (node; sorted)
@@ -406,34 +406,34 @@ struct EngineCoordinator
         Logger.info("  Failed: " ~ failed.to!string);
         Logger.info("  Time: " ~ elapsed.total!"msecs".to!string ~ "ms");
         
-        // Print cache performance
+        // Print cache performance (verbose mode only)
         auto cacheStats = cache.getStats();
         if (cacheStats.metadataHits + cacheStats.contentHashes > 0)
         {
-            Logger.info("Cache Performance:");
-            Logger.info("  Total entries: " ~ cacheStats.totalEntries.to!string);
-            Logger.info("  Cache size: " ~ formatSize(cacheStats.totalSize));
-            Logger.info("  Metadata hit rate: " ~ formatPercent(cacheStats.metadataHitRate));
+            Logger.debugLog("Cache Performance:");
+            Logger.debugLog("  Total entries: " ~ cacheStats.totalEntries.to!string);
+            Logger.debugLog("  Cache size: " ~ formatSize(cacheStats.totalSize));
+            Logger.debugLog("  Metadata hit rate: " ~ formatPercent(cacheStats.metadataHitRate));
             
             if (cacheStats.hashCacheHits + cacheStats.hashCacheMisses > 0)
             {
-                Logger.info("  Hash cache hit rate: " ~ formatPercent(cacheStats.hashCacheHitRate));
-                Logger.info("  Hash cache saves: " ~ cacheStats.hashCacheHits.to!string ~ " duplicate hashes avoided");
+                Logger.debugLog("  Hash cache hit rate: " ~ formatPercent(cacheStats.hashCacheHitRate));
+                Logger.debugLog("  Hash cache saves: " ~ cacheStats.hashCacheHits.to!string ~ " duplicate hashes avoided");
             }
         }
         
-        // Print action cache stats
+        // Print action cache stats (verbose mode only)
         if (cacheStats.actionEntries > 0)
         {
-            Logger.info("Action-Level Cache:");
-            Logger.info("  Total actions: " ~ cacheStats.actionEntries.to!string);
-            Logger.info("  Cache size: " ~ formatSize(cacheStats.actionSize));
+            Logger.debugLog("Action-Level Cache:");
+            Logger.debugLog("  Total actions: " ~ cacheStats.actionEntries.to!string);
+            Logger.debugLog("  Cache size: " ~ formatSize(cacheStats.actionSize));
             if (cacheStats.actionHits + cacheStats.actionMisses > 0)
             {
-                Logger.info("  Hit rate: " ~ formatPercent(cacheStats.actionHitRate));
+                Logger.debugLog("  Hit rate: " ~ formatPercent(cacheStats.actionHitRate));
             }
-            Logger.info("  Successful actions: " ~ cacheStats.successfulActions.to!string);
-            Logger.info("  Failed actions: " ~ cacheStats.failedActions.to!string);
+            Logger.debugLog("  Successful actions: " ~ cacheStats.successfulActions.to!string);
+            Logger.debugLog("  Failed actions: " ~ cacheStats.failedActions.to!string);
         }
     }
     

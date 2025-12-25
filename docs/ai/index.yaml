@@ -279,6 +279,11 @@ concepts:
     file: "concepts/reference/troubleshooting.yaml"
     summary: "Troubleshooting - Diagnosing common issues"
 
+  verbose-output:
+    file: "concepts/reference/verbose-output.yaml"
+    summary: "Verbose mode output - detailed debug information with --verbose flag"
+    keywords: ["debug", "logging", "output", "verbose", "quiet"]
+
   verification:
     file: "concepts/reference/verification.yaml"
     summary: "Build Verification - Ensure build correctness and reproducibility"
@@ -309,6 +314,10 @@ concepts:
 
 
 aliases:
+  verbose: "verbose-output"
+  debug: "verbose-output"
+  logging: "verbose-output"
+  quiet: "verbose-output"
   hash: "blake3"
   hashing: "blake3"
   cache: "caching"

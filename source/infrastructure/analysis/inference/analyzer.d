@@ -83,7 +83,7 @@ class DependencyAnalyzer
     /// Returns: Ok with BuildGraph on success, Err with BuildError on validation failure
     Result!(BuildGraph, BuildError) analyze(in string targetFilter = "") @trusted
     {
-        Logger.info("Analyzing dependencies...");
+        Logger.debugLog("Analyzing dependencies...");
         auto sw = StopWatch(AutoStart.yes);
         
         // Collect all configuration files for cache validation
