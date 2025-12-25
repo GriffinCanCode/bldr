@@ -187,6 +187,16 @@ struct Tree {
         ptr = null;
         return temp;
     }
+    
+    /// Apply edit for incremental parsing
+    void edit(ref const TSInputEdit inputEdit) @system nothrow @nogc {
+        if (ptr) ts_tree_edit(ptr, &inputEdit);
+    }
+    
+    /// Create a copy of this tree
+    Tree copy() @system nothrow @nogc {
+        return Tree(ptr ? ts_tree_copy(ptr) : null);
+    }
 }
 
 struct Cursor {

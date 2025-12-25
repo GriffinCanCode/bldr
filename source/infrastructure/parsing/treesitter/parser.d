@@ -12,65 +12,118 @@ import engine.caching.incremental.ast_dependency;
 import infrastructure.analysis.ast.parser;
 import infrastructure.parsing.treesitter.bindings;
 import infrastructure.parsing.treesitter.config;
+import infrastructure.parsing.treesitter.incremental;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.logging.logger;
 import infrastructure.errors;
 
 /// Universal tree-sitter based AST parser
 /// Works with any language that has a tree-sitter grammar
+/// Supports incremental parsing for watch mode performance
 final class TreeSitterParser : BaseASTParser {
     private const(TSLanguage)* grammar;
     private LanguageConfig config;
     private Regex!char publicNameRegex;
     private Regex!char privateNameRegex;
+    private bool incrementalEnabled;
     
-    this(const(TSLanguage)* grammar, LanguageConfig config) @system {
+    this(const(TSLanguage)* grammar, LanguageConfig config, bool enableIncremental = true) @system {
         super(config.displayName, config.extensions.dup);
         this.grammar = grammar;
         this.config = config;
+        this.incrementalEnabled = enableIncremental;
         
         // Compile visibility patterns
         if (!config.visibility.publicNamePattern.empty)
             publicNameRegex = regex(config.visibility.publicNamePattern);
         if (!config.visibility.privateNamePattern.empty)
             privateNameRegex = regex(config.visibility.privateNamePattern);
+        
+        // Register grammar with incremental cache
+        if (enableIncremental)
+            incrementalTreeCache().registerGrammar(config.languageId, grammar);
+    }
+    
+    /// Check if incremental parsing is enabled
+    bool isIncrementalEnabled() const pure nothrow @nogc { 
+        return incrementalEnabled; 
+    }
+    
+    /// Get language ID
+    string languageId() const @safe { 
+        return config.languageId; 
     }
     
     override BuildResult!FileAST parseFile(string filePath) @system {
         if (!exists(filePath) || !isFile(filePath))
             return BuildResult!FileAST.err(
-                new GenericError("File not found: " ~ filePath, ErrorCode.FileNotFound));
+                Errors.generic("File not found: " ~ filePath, ErrorCode.FileNotFound)
+                    .withLocation(__FILE__, __LINE__)
+                    .build());
         
         try {
             auto content = readText(filePath);
             return parseContent(content, filePath);
         } catch (Exception e) {
             return BuildResult!FileAST.err(
-                new GenericError("Failed to read file: " ~ filePath ~ " - " ~ e.msg,
-                               ErrorCode.FileReadFailed));
+                Errors.generic("Failed to read file: " ~ filePath ~ " - " ~ e.msg, ErrorCode.FileReadFailed)
+                    .withLocation(__FILE__, __LINE__)
+                    .build());
         }
     }
     
     override BuildResult!FileAST parseContent(string content, string filePath) @system {
+        return parseContentWithEdits(content, filePath, null);
+    }
+    
+    /// Parse content with incremental edits for watch mode performance
+    /// When edits are provided and a cached tree exists, uses tree-sitter's
+    /// incremental parsing which can be 10-100x faster than full re-parse
+    BuildResult!FileAST parseContentWithEdits(
+        string content,
+        string filePath,
+        const TextEdit[] edits
+    ) @system {
         try {
-            // Create parser
-            auto parser = Parser(grammar);
-            if (!parser.handle())
-                return BuildResult!FileAST.err(
-                    new GenericError("Failed to create parser", ErrorCode.InternalError));
+            TSNode root;
             
-            // Parse content
-            auto tree = Tree(ts_parser_parse_string(
-                parser.handle(), null, content.ptr, cast(uint)content.length));
+            if (incrementalEnabled) {
+                // Use incremental cache for efficient re-parsing
+                auto result = incrementalTreeCache().parseIncremental(
+                    filePath, content, config.languageId, edits);
+                
+                if (result.isErr)
+                    return BuildResult!FileAST.err(result.unwrapErr());
+                
+                auto parsed = result.unwrap();
+                root = parsed.root();
+            } else {
+                // Fallback to full parse
+                auto parser = Parser(grammar);
+                if (!parser.handle())
+                    return BuildResult!FileAST.err(
+                        Errors.generic("Failed to create parser", ErrorCode.InternalError)
+                            .withLocation(__FILE__, __LINE__)
+                            .build());
+                
+                auto treeWrapper = Tree(ts_parser_parse_string(
+                    parser.handle(), null, content.ptr, cast(uint)content.length));
+                
+                if (!treeWrapper.handle())
+                    return BuildResult!FileAST.err(
+                        Errors.generic("Failed to parse: " ~ filePath, ErrorCode.ParseFailed)
+                            .withLocation(__FILE__, __LINE__)
+                            .build());
+                
+                root = treeWrapper.root();
+                // Note: treeWrapper owns the tree, will be freed on scope exit
+            }
             
-            if (!tree.handle())
-                return BuildResult!FileAST.err(
-                    new GenericError("Failed to parse: " ~ filePath, ErrorCode.ParseFailed));
-            
-            auto root = tree.root();
             if (ts_node_is_null(root))
                 return BuildResult!FileAST.err(
-                    new GenericError("Invalid parse tree for: " ~ filePath, ErrorCode.ParseFailed));
+                    Errors.generic("Invalid parse tree for: " ~ filePath, ErrorCode.ParseFailed)
+                        .withLocation(__FILE__, __LINE__)
+                        .build());
             
             // Build AST
             FileAST ast;
@@ -91,9 +144,40 @@ final class TreeSitterParser : BaseASTParser {
             return BuildResult!FileAST.ok(ast);
         } catch (Exception e) {
             return BuildResult!FileAST.err(
-                new GenericError("Parse error: " ~ filePath ~ " - " ~ e.msg,
-                               ErrorCode.ParseFailed));
+                Errors.generic("Parse error: " ~ filePath ~ " - " ~ e.msg, ErrorCode.ParseFailed)
+                    .withLocation(__FILE__, __LINE__)
+                    .build());
         }
+    }
+    
+    /// Parse file with incremental edits
+    BuildResult!FileAST parseFileWithEdits(string filePath, const TextEdit[] edits) @system {
+        if (!exists(filePath) || !isFile(filePath))
+            return BuildResult!FileAST.err(
+                Errors.generic("File not found: " ~ filePath, ErrorCode.FileNotFound)
+                    .withLocation(__FILE__, __LINE__)
+                    .build());
+        
+        try {
+            auto content = readText(filePath);
+            return parseContentWithEdits(content, filePath, edits);
+        } catch (Exception e) {
+            return BuildResult!FileAST.err(
+                Errors.generic("Failed to read file: " ~ filePath ~ " - " ~ e.msg, ErrorCode.FileReadFailed)
+                    .withLocation(__FILE__, __LINE__)
+                    .build());
+        }
+    }
+    
+    /// Invalidate cached parse tree for a file
+    void invalidateCache(string filePath) @system {
+        if (incrementalEnabled)
+            incrementalTreeCache().invalidate([filePath]);
+    }
+    
+    /// Get incremental parsing statistics
+    IncrementalTreeCache.Stats getIncrementalStats() @system {
+        return incrementalTreeCache().getStats();
     }
     
     /// Extract all symbols from the tree

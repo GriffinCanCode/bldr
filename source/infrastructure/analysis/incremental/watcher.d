@@ -10,27 +10,31 @@ import infrastructure.utils.files.watch;
 import infrastructure.utils.logging.logger;
 import infrastructure.analysis.incremental.interface_;
 import infrastructure.config.schema.schema;
+import infrastructure.parsing.treesitter.adapter;
 import infrastructure.errors;
 
 /// Proactive analysis cache updater using file watching
 /// Automatically invalidates and updates cache when files change
-/// Now uses dependency injection with IIncrementalAnalyzer
+/// Uses incremental parsing for efficient re-analysis
 final class AnalysisWatcher
 {
     private IIncrementalAnalyzer analyzer;
     private IFileWatcher watcher;
     private WorkspaceConfig config;
+    private IncrementalParseAdapter parseAdapter;
     private bool active;
     
     // Statistics
     private size_t filesInvalidated;
     private size_t eventsProcessed;
+    private size_t incrementalParses;
     
     this(IIncrementalAnalyzer analyzer, WorkspaceConfig config) @system
     {
         this.analyzer = analyzer;
         this.config = config;
         this.watcher = FileWatcherFactory.create();
+        this.parseAdapter = new IncrementalParseAdapter(true);
     }
     
     /// Start watching for file changes
@@ -74,6 +78,7 @@ final class AnalysisWatcher
             return;
         
         watcher.stop();
+        parseAdapter.clear();
         active = false;
         
         Logger.info("Incremental analysis watcher stopped");
@@ -90,15 +95,23 @@ final class AnalysisWatcher
     {
         size_t filesInvalidated;
         size_t eventsProcessed;
+        size_t incrementalParses;
+        float incrementalRate;
         bool isActive;
     }
     
-    Stats getStats() const @system
+    Stats getStats() @system
     {
         Stats stats;
         stats.filesInvalidated = filesInvalidated;
         stats.eventsProcessed = eventsProcessed;
+        stats.incrementalParses = incrementalParses;
         stats.isActive = active;
+        
+        // Get incremental parsing stats
+        auto parseStats = parseAdapter.getStats();
+        stats.incrementalRate = parseStats.treeStats.incrementalRate;
+        
         return stats;
     }
     
@@ -109,14 +122,15 @@ final class AnalysisWatcher
         
         eventsProcessed += events.length;
         
-        // Collect affected source files
+        // Filter to source file events
+        FileEvent[] sourceEvents;
         string[] affectedFiles;
         
         foreach (ref event; events)
         {
-            // Only care about source files in targets
             if (isSourceFile(event.path))
             {
+                sourceEvents ~= event;
                 affectedFiles ~= event.path;
                 
                 Logger.debugLog("File change detected: " ~ event.path ~ 
@@ -127,9 +141,17 @@ final class AnalysisWatcher
         if (affectedFiles.empty)
             return;
         
-        // Invalidate cache for affected files
+        // Use incremental parsing for efficient re-analysis
         try
         {
+            // Process changes with incremental parser
+            auto updatedASTs = parseAdapter.processChanges(sourceEvents);
+            incrementalParses += updatedASTs.length;
+            
+            Logger.debugLog("Incrementally parsed " ~ updatedASTs.length.to!string ~ 
+                           " file(s)");
+            
+            // Invalidate analyzer cache for affected files
             analyzer.invalidate(affectedFiles);
             filesInvalidated += affectedFiles.length;
             
@@ -138,7 +160,7 @@ final class AnalysisWatcher
         }
         catch (Exception e)
         {
-            Logger.error("Failed to invalidate cache: " ~ e.msg);
+            Logger.error("Failed to process file changes: " ~ e.msg);
         }
     }
     
