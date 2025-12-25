@@ -404,6 +404,9 @@ void buildCommand(
     // Cleanup and persist telemetry
     services.shutdown();
     
+    // Cleanup config cache (checkpoint WAL)
+    ConfigParser.closeConfigIndex();
+    
     // Shutdown economics and display cost summary
     if (econConfig.enabled && services.economics !is null)
     {
@@ -617,6 +620,9 @@ void resumeCommand(in string modeStr) @system
     
     // Cleanup and persist telemetry
     services.shutdown();
+    
+    // Cleanup config cache
+    ConfigParser.closeConfigIndex();
     
     Logger.success("Build resumed and completed successfully!");
 }
