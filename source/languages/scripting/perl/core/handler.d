@@ -82,6 +82,7 @@ final class PerlHandler : BaseLanguageHandler
                 return runTests(target, config, perlConfig);
                 
             case TargetType.Custom:
+            case TargetType.Shell:
                 return buildCustom(target, config, perlConfig);
         }
     }

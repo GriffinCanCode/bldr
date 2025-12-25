@@ -45,10 +45,22 @@ class BuildZigBuilder : ZigBuilder
     {
         ZigCompileResult result;
         
-        // Determine working directory
-        string workDir = workspace.root;
-        if (!sources.empty)
+        // Determine working directory - respect target.root if specified
+        string workDir;
+        if (!target.root.empty)
+        {
+            // Use target.root relative to workspace root
+            workDir = target.root.isAbsolute ? target.root : buildPath(workspace.root, target.root);
+            Logger.debugLog("Using target root: " ~ workDir);
+        }
+        else if (!sources.empty)
+        {
             workDir = dirName(sources[0]);
+        }
+        else
+        {
+            workDir = workspace.root;
+        }
         
         // Find build.zig
         string buildZigPath = config.buildZig.path;
@@ -57,7 +69,7 @@ class BuildZigBuilder : ZigBuilder
             buildZigPath = BuildZigParser.findBuildZig(workDir);
             if (buildZigPath.empty)
             {
-                result.error = "build.zig not found in project";
+                result.error = "build.zig not found in project. Try setting 'root:' to the directory containing build.zig";
                 return result;
             }
             workDir = dirName(buildZigPath);

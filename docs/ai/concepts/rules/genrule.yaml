@@ -1,28 +1,69 @@
 topic: genrule
 category: concepts
-summary: "Genrule - Generic build rule (Planned)"
+summary: "Genrule/Shell - Run arbitrary shell commands"
 definition: |
   A flexible rule to run arbitrary shell commands to generate outputs.
-  Useful when no specific rule exists for a task.
+  Useful for integrating languages not natively supported or running custom tooling.
   
-  NOTE: This feature is currently in planning.
+  Use `type: shell` or `type: genrule` in your Builderfile.
 
 key_points:
-  - "Bash: Runs in bash shell"
-  - "Inputs/Outputs: Must be explicitly declared"
-  - "Tools: Can depend on other executable targets"
+  - "command: Shell command to execute"
+  - "workdir: Working directory for execution"
+  - "sources: Input files (for cache invalidation)"
+  - "output: Expected output path"
+  - "env: Environment variables to set"
+
+fields:
+  - name: "command"
+    required: true
+    desc: "Shell command to execute"
+  - name: "workdir"
+    required: false
+    desc: "Working directory (defaults to workspace root)"
+  - name: "sources"
+    required: false
+    desc: "Input files - triggers rebuild when changed"
+  - name: "output"
+    required: false
+    desc: "Expected output file/directory"
+  - name: "env"
+    required: false
+    desc: "Environment variables as map"
 
 usage_examples:
-  - description: "Generate a header"
+  - description: "Build Gleam project"
     code: |
-      genrule(
-        name = "version_h",
-        outs = ["version.h"],
-        cmd = "echo '#define VERSION 1' > $@",
-      )
+      target("gleam-build") {
+          type: shell;
+          command: "gleam build";
+          workdir: "./gleam-project";
+          sources: ["gleam-project/src/**/*.gleam"];
+      }
 
-related: [targets, plugins, starlark]
+  - description: "Code generation"
+    code: |
+      target("codegen") {
+          type: genrule;
+          command: "python3 generate.py --out=src/generated";
+          sources: ["schemas/*.yaml"];
+          output: "src/generated";
+      }
+
+  - description: "Custom build with environment"
+    code: |
+      target("custom-build") {
+          type: shell;
+          command: "npm run build";
+          workdir: "frontend";
+          env: {
+              "NODE_ENV": "production"
+          };
+      }
+
+related: [targets, shell-support, dynamic-languages]
 
 next_steps: |
-  - Use specialized rules over genrule when possible
+  - Use specialized language handlers when available
+  - See 'bldr explain shell-support' for more examples
 

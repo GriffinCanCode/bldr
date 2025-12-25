@@ -31,7 +31,10 @@ struct InitCommand
     }
     
     /// Execute the init command
-    static void execute(string projectDir = ".")
+    /// Params:
+    ///   projectDir = Directory to initialize (default: current directory)
+    ///   force = Overwrite existing files if true
+    static void execute(string projectDir = ".", bool force = false)
     {
         init();
         
@@ -50,7 +53,7 @@ struct InitCommand
         bool builderspaceExists = std.file.exists(builderspacePath);
         bool builderignoreExists = std.file.exists(builderignorePath);
         
-        if (builderfileExists && builderspaceExists && builderignoreExists)
+        if (builderfileExists && builderspaceExists && builderignoreExists && !force)
         {
             terminal.writeColored("⚠️  ", Color.Yellow);
             terminal.writeColored("Project Already Initialized", Color.Yellow, Style.Bold);
@@ -71,6 +74,14 @@ struct InitCommand
             terminal.writeln();
             terminal.flush();
             return;
+        }
+        
+        // If force mode, we'll overwrite all files
+        if (force)
+        {
+            builderfileExists = false;
+            builderspaceExists = false;
+            builderignoreExists = false;
         }
         
         // Detect project structure with enhanced manifest parsing

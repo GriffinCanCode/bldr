@@ -55,56 +55,55 @@ final class BuildServices
     /// Create services with production configuration
     this(WorkspaceConfig config, BuildOptions options)
     {
-        writeln("[DEBUG] BuildServices: Starting constructor"); stdout.flush();
+        Logger.debugLog("BuildServices: Starting constructor");
         this._config = config;
         this._renderMode = RenderMode.Auto;
         
         // Initialize SIMD capabilities early (detect hardware once)
-        writeln("[DEBUG] BuildServices: Initializing SIMD"); stdout.flush();
+        Logger.debugLog("BuildServices: Initializing SIMD");
         this._initializeSIMD();
         
         // Initialize observability (tracing and structured logging)
-        writeln("[DEBUG] BuildServices: Initializing observability"); stdout.flush();
+        Logger.debugLog("BuildServices: Initializing observability");
         this._initializeObservability();
         
         // Initialize shutdown coordinator (non-singleton, DI-based)
-        // Created after SIMD/observability for semantic consistency
-        writeln("[DEBUG] BuildServices: Creating ShutdownCoordinator"); stdout.flush();
+        Logger.debugLog("BuildServices: Creating ShutdownCoordinator");
         this._shutdownCoordinator = new ShutdownCoordinator();
         
         // Initialize event system (must be before cache service)
-        writeln("[DEBUG] BuildServices: Creating EventPublisher"); stdout.flush();
+        Logger.debugLog("BuildServices: Creating EventPublisher");
         this._publisher = new SimpleEventPublisher();
         
         // Initialize handler registry (handlers loaded lazily on-demand)
-        writeln("[DEBUG] BuildServices: Creating HandlerRegistry"); stdout.flush();
+        Logger.debugLog("BuildServices: Creating HandlerRegistry");
         this._registry = new HandlerRegistry();
         
         // Initialize cache (using coordinator for unified caching)
         import engine.runtime.services.caching : CacheService;
-        writeln("[DEBUG] BuildServices: Creating CacheService"); stdout.flush();
+        Logger.debugLog("BuildServices: Creating CacheService");
         auto cacheService = new CacheService(options.cacheDir, this._publisher);
         this._cache = cacheService.getInternalCache();
         this._shutdownCoordinator.registerCache(this._cache);
         
         // Initialize incremental analyzer with dependency injection
-        writeln("[DEBUG] BuildServices: Creating IncrementalAnalyzer with DI"); stdout.flush();
+        Logger.debugLog("BuildServices: Creating IncrementalAnalyzer with DI");
         this._initializeIncrementalAnalyzer(config, options.cacheDir);
         
         // Initialize analyzer with injected incremental analyzer
-        writeln("[DEBUG] BuildServices: Creating DependencyAnalyzer"); stdout.flush();
+        Logger.debugLog("BuildServices: Creating DependencyAnalyzer");
         this._analyzer = new DependencyAnalyzer(config, this._incrementalAnalyzer, options.cacheDir);
         
         // Initialize economics (if enabled)
-        writeln("[DEBUG] BuildServices: Initializing economics"); stdout.flush();
+        Logger.debugLog("BuildServices: Initializing economics");
         this._economics = new EconomicsIntegration(options.economics, options.cacheDir);
         
         // Initialize remote execution service (if enabled)
-        writeln("[DEBUG] BuildServices: Initializing remote execution"); stdout.flush();
+        Logger.debugLog("BuildServices: Initializing remote execution");
         this._initializeRemoteExecution(config, options);
         
         // Initialize telemetry
-        writeln("[DEBUG] BuildServices: Initializing telemetry"); stdout.flush();
+        Logger.debugLog("BuildServices: Initializing telemetry");
         auto telemetryConfig = TelemetryConfig.fromEnvironment();
         this._telemetryEnabled = telemetryConfig.enabled;
         if (this._telemetryEnabled)
@@ -115,13 +114,13 @@ final class BuildServices
         }
         
         // Log initialization (after _structuredLogger is initialized)
-        writeln("[DEBUG] BuildServices: Finalizing constructor"); stdout.flush();
+        Logger.debugLog("BuildServices: Finalizing constructor");
         if (this._structuredLogger !is null)
             this._structuredLogger.info("Build services initialized", [
                 "cache_dir": options.cacheDir,
                 "telemetry_enabled": this._telemetryEnabled.to!string
             ]);
-        writeln("[DEBUG] BuildServices: Constructor complete"); stdout.flush();
+        Logger.debugLog("BuildServices: Constructor complete");
     }
     
     /// Initialize SIMD capabilities (hardware detection and dispatch)
@@ -404,7 +403,7 @@ final class BuildServices
     /// Explicitly flushes all caches and persists state before termination
     void shutdown() @trusted
     {
-        Logger.info("Shutting down services...");
+        Logger.debugLog("Shutting down services...");
         
         // Stop remote execution service
         if (_remoteService !is null)
@@ -438,7 +437,7 @@ final class BuildServices
         if (_simdCapabilities !is null)
             _simdCapabilities.shutdown();
         
-        Logger.info("Services shutdown complete");
+        Logger.debugLog("Services shutdown complete");
     }
     
     /// Initialize remote execution service (if enabled)
@@ -494,9 +493,9 @@ final class BuildServices
             }
             else
             {
-                Logger.info("Remote execution service started");
-                Logger.info("  Coordinator: " ~ distConfig.coordinatorUrl);
-                Logger.info("  Workers: " ~ distConfig.minWorkers.to!string ~
+                Logger.debugLog("Remote execution service started");
+                Logger.debugLog("  Coordinator: " ~ distConfig.coordinatorUrl);
+                Logger.debugLog("  Workers: " ~ distConfig.minWorkers.to!string ~
                           "-" ~ distConfig.maxWorkers.to!string ~
                           " (autoscale: " ~ distConfig.enableAutoScale.to!string ~ ")");
             }

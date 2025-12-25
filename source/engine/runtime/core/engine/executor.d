@@ -96,8 +96,18 @@ struct EngineExecutor
                 return result;
             }
             
-            // Get language handler
-            auto handler = handlers.get(target.language);
+            // Get handler - use ShellHandler for Shell targets, otherwise language handler
+            LanguageHandler handler;
+            if (target.type == TargetType.Shell)
+            {
+                import languages.custom.shell : ShellHandler;
+                handler = new ShellHandler();
+            }
+            else
+            {
+                handler = handlers.get(target.language);
+            }
+            
             if (handler is null)
             {
                 result.error = "No language handler found for: " ~ target.language.to!string;

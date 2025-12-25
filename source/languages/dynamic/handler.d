@@ -58,6 +58,7 @@ class SpecBasedHandler : BaseLanguageHandler
                 result = runTests(target, config);
                 break;
             case TargetType.Custom:
+            case TargetType.Shell:
                 result = buildCustom(target, config);
                 break;
         }

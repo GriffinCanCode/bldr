@@ -82,6 +82,7 @@ int runBuilder(string[] args)
     float budget = float.infinity;
     float timeLimit = float.infinity;
     string optimize = "";
+    bool force = false;
     
     auto helpInfo = getopt(
         args,
@@ -96,7 +97,8 @@ int runBuilder(string[] args)
         "remote", "Enable remote execution on worker pool", &remoteExecution,
         "budget", "Maximum budget in USD (e.g., --budget=5.00)", &budget,
         "time-limit", "Maximum time limit in seconds (e.g., --time-limit=120)", &timeLimit,
-        "optimize", "Optimization mode: cost, time, balanced", &optimize
+        "optimize", "Optimization mode: cost, time, balanced", &optimize,
+        "force|f", "Force overwrite existing files (for init command)", &force
     );
     
     if (showVersion)
@@ -171,7 +173,7 @@ int runBuilder(string[] args)
                 graphCommand(target);
                 break;
             case "init":
-                InitCommand.execute();
+                InitCommand.execute(".", force);
                 break;
             case "infer":
                 InferCommand.execute();
@@ -267,7 +269,7 @@ void buildCommand(
     
     if (remoteExecution)
     {
-        Logger.info("Remote execution enabled");
+        Logger.debugLog("Remote execution enabled");
     }
     
     // Parse configuration with error handling
@@ -348,7 +350,7 @@ void buildCommand(
         {
             Logger.warning("Failed to compute optimal plan: " ~ 
                          planResult.unwrapErr().message());
-            Logger.info("Falling back to default strategy");
+            Logger.debugLog("Falling back to default strategy");
         }
         else
         {
@@ -362,20 +364,20 @@ void buildCommand(
             {
                 case ExecutionStrategy.Local:
                     maxParallelism = plan.strategy.cores;
-                    Logger.info("Using local execution with " ~ maxParallelism.to!string ~ " cores");
+                    Logger.debugLog("Using local execution with " ~ maxParallelism.to!string ~ " cores");
                     break;
                     
                 case ExecutionStrategy.Cached:
                     // Cache-optimized: minimal parallel overhead
                     maxParallelism = 4;
-                    Logger.info("Using cache-optimized execution");
+                    Logger.debugLog("Using cache-optimized execution");
                     break;
                     
                 case ExecutionStrategy.Distributed:
                     maxParallelism = plan.strategy.workers * plan.strategy.cores;
                     useWorkStealing = true;  // Better for distributed workloads
                     useRemoteExecution = true;
-                    Logger.info("Using distributed execution: " ~ 
+                    Logger.debugLog("Using distributed execution: " ~ 
                               plan.strategy.workers.to!string ~ " workers × " ~
                               plan.strategy.cores.to!string ~ " cores = " ~
                               maxParallelism.to!string ~ " total cores");
@@ -385,7 +387,7 @@ void buildCommand(
                     maxParallelism = plan.strategy.workers * plan.strategy.cores;
                     useWorkStealing = true;
                     useRemoteExecution = true;
-                    Logger.info("Using premium execution: " ~ 
+                    Logger.debugLog("Using premium execution: " ~ 
                               plan.strategy.workers.to!string ~ " premium workers × " ~
                               plan.strategy.cores.to!string ~ " cores = " ~
                               maxParallelism.to!string ~ " total cores");

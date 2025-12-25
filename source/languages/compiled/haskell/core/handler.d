@@ -92,6 +92,7 @@ class HaskellHandler : BaseLanguageHandler
                 result = runTests(target, config, hsConfig);
                 break;
             case TargetType.Custom:
+            case TargetType.Shell:
                 result = buildCustom(target, config, hsConfig);
                 break;
         }

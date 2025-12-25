@@ -161,6 +161,32 @@ struct SemanticAnalyzer
             target.toolchain = toolResult.unwrap();
         }
         
+        // Shell target fields
+        if (auto cmdField = decl.getField("command"))
+        {
+            auto cmdResult = extractString(cmdField.value);
+            if (cmdResult.isErr)
+                return Err!(Target, BuildError)(cmdResult.unwrapErr());
+            target.command = cmdResult.unwrap();
+        }
+        
+        if (auto workdirField = decl.getField("workdir"))
+        {
+            auto workdirResult = extractString(workdirField.value);
+            if (workdirResult.isErr)
+                return Err!(Target, BuildError)(workdirResult.unwrapErr());
+            target.workdir = workdirResult.unwrap();
+        }
+        
+        // Root directory for language toolchains (e.g., where build.zig is located)
+        if (auto rootField = decl.getField("root"))
+        {
+            auto rootResult = extractString(rootField.value);
+            if (rootResult.isErr)
+                return Err!(Target, BuildError)(rootResult.unwrapErr());
+            target.root = rootResult.unwrap();
+        }
+        
         // Parse language-specific config blocks (e.g., javascript:, go:, python:, etc.)
         // These are stored in target.langConfig as JSON strings
         foreach (field; decl.fields)
@@ -254,10 +280,11 @@ struct SemanticAnalyzer
             case "library": return Ok!(TargetType, BuildError)(TargetType.Library);
             case "test": return Ok!(TargetType, BuildError)(TargetType.Test);
             case "custom": return Ok!(TargetType, BuildError)(TargetType.Custom);
+            case "shell", "genrule": return Ok!(TargetType, BuildError)(TargetType.Shell);
             default:
             {
                 import infrastructure.errors.types.types : unknownFieldError;
-                const string[] validTypes = ["executable", "library", "test", "custom"];
+                const string[] validTypes = ["executable", "library", "test", "custom", "shell", "genrule"];
                 auto err = unknownFieldError(filePath, typeStr, validTypes);
                 return Err!(TargetType, BuildError)(err);
             }

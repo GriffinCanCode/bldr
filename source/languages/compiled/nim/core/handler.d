@@ -94,6 +94,7 @@ class NimHandler : BaseLanguageHandler
                 result = runTests(target, config, nimConfig);
                 break;
             case TargetType.Custom:
+            case TargetType.Shell:
                 result = buildCustom(target, config, nimConfig);
                 break;
         }

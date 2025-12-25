@@ -201,7 +201,8 @@ enum TargetType
     Executable,
     Library,
     Test,
-    Custom
+    Custom,
+    Shell  /// Shell/genrule target - runs arbitrary shell commands
 }
 
 /// Supported languages
@@ -266,6 +267,15 @@ struct Target
     /// Language-specific configuration stored as JSON
     /// This allows each language handler to define its own config schema
     string[string] langConfig;
+    
+    /// Shell command to execute (for Shell target type)
+    string command;
+    
+    /// Working directory for build execution (relative to workspace root)
+    string workdir;
+    
+    /// Root directory for language toolchains (e.g., where build.zig is located)
+    string root;
     
     /// Strongly-typed target identifier (lazily computed)
     private TargetId _id;

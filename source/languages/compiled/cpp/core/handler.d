@@ -106,6 +106,7 @@ class CppHandler : BaseLanguageHandler
                 result = runTests(target, config, cppConfig);
                 break;
             case TargetType.Custom:
+            case TargetType.Shell:
                 result = buildCustom(target, config, cppConfig);
                 break;
         }

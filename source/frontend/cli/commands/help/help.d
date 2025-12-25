@@ -876,6 +876,10 @@ struct HelpCommand
         terminal.writeln();
         terminal.writeln();
         
+        printSectionHeader("OPTIONS");
+        printOption("--force, -f", "Overwrite existing files instead of skipping");
+        terminal.writeln();
+        
         printSectionHeader("GENERATED FILES");
         printDocLink("Builderfile", "Build configuration with detected targets");
         printDocLink("Builderspace", "Workspace-level configuration");
@@ -884,6 +888,7 @@ struct HelpCommand
         
         printSectionHeader("EXAMPLES");
         printExample("bldr init", "Initialize in current directory");
+        printExample("bldr init --force", "Regenerate all config files");
         printExample("cd my-project && bldr init", "Initialize in specific directory");
         terminal.writeln();
         

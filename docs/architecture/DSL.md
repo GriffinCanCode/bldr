@@ -43,6 +43,7 @@ type: executable;  // Produces an executable binary
 type: library;     // Produces a library
 type: test;        // Produces a test target
 type: custom;      // Custom build logic
+type: shell;       // Run arbitrary shell commands (alias: genrule)
 ```
 
 **`sources`** - Source files (required)
@@ -136,6 +137,27 @@ This field allows passing language-specific configuration as a map. Each languag
 - **Python**: Virtual environment, package manager settings
 - **Go**: Build tags, GOOS, GOARCH
 - **Rust**: Cargo features, target triple
+
+**`command`** - Shell command to execute (for shell/genrule targets)
+```d
+command: "gleam build";
+command: "npm run build";
+command: "cargo build --release && cp target/release/myapp ./bin/";
+```
+
+**`workdir`** - Working directory for command execution
+```d
+workdir: "frontend";
+workdir: "./packages/core";
+```
+
+**`root`** - Root directory for language toolchains
+```d
+root: "./scorer";         // For Zig projects in subdirectories
+root: "packages/backend"; // Find build.zig relative to this path
+```
+
+This field is useful when your project files (like `build.zig`) are in a subdirectory.
 
 ## Data Types
 
@@ -281,6 +303,44 @@ target("tests") {
     env: {
         "TEST_MODE": "1"
     };
+}
+```
+
+### Shell/Genrule Target (Arbitrary Commands)
+
+Use `type: shell` (or `type: genrule`) to run arbitrary shell commands. This is useful for integrating languages not natively supported:
+
+```d
+target("gleam-build") {
+    type: shell;
+    command: "gleam build";
+    workdir: "./gleam-project";
+    sources: ["gleam-project/src/**/*.gleam"];
+    output: "gleam-project/build";
+}
+```
+
+```d
+target("custom-codegen") {
+    type: genrule;
+    command: "python3 scripts/generate.py --out=src/generated";
+    sources: ["schemas/*.yaml"];
+    output: "src/generated";
+    deps: [":schemas"];
+}
+```
+
+### Zig Subdirectory Project
+
+Use the `root` field when build.zig is in a subdirectory:
+
+```d
+target("scorer") {
+    type: executable;
+    language: zig;
+    root: "./scorer";              // Directory containing build.zig
+    sources: ["scorer/src/**/*.zig"];
+    output: "bin/scorer";
 }
 ```
 

@@ -129,6 +129,7 @@ class DHandler : BaseLanguageHandler
                 result = runTests(target, config, dConfig);
                 break;
             case TargetType.Custom:
+            case TargetType.Shell:
                 result = buildCustom(target, config, dConfig);
                 break;
         }

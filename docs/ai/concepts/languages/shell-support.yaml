@@ -1,26 +1,71 @@
 topic: shell-support
 category: concepts
-summary: "Shell Support - Shell scripts and tests"
+summary: "Shell/Genrule Support - Run arbitrary shell commands"
 definition: |
-  Support for wrapping shell scripts (bash/sh) as build targets and tests.
-  Useful for integration tests and glue code.
+  Builder supports running arbitrary shell commands via `type: shell` (or `type: genrule`).
+  This enables integration of languages not natively supported (like Gleam, Crystal, etc.)
+  and custom build tooling.
 
 key_points:
-  - "sh_binary: Executable script"
-  - "sh_test: Test script"
-  - "data: Dependencies available at runtime"
+  - "type: shell - Run any shell command"
+  - "command: The command to execute"
+  - "workdir: Working directory for execution"
+  - "root: Root directory for language toolchains"
+  - "env: Environment variables"
+
+fields:
+  command:
+    desc: "Shell command to execute"
+    required: true
+  workdir:
+    desc: "Working directory (relative to workspace root)"
+    required: false
+  sources:
+    desc: "Input files - changes trigger rebuild"
+    required: false
+  output:
+    desc: "Expected output path"
+    required: false
+  env:
+    desc: "Environment variables as key-value map"
+    required: false
 
 usage_examples:
-  - description: "Test Script"
+  - description: "Gleam project build"
     code: |
-      sh_test(
-        name = "integration_test",
-        srcs = ["test.sh"],
-        data = [":server"],
-      )
+      target("gleam-app") {
+          type: shell;
+          command: "gleam build";
+          workdir: "./my-gleam-project";
+          sources: ["my-gleam-project/src/**/*.gleam"];
+      }
 
-related: [languages, testing, genrule]
+  - description: "Custom code generation"
+    code: |
+      target("generate-api") {
+          type: genrule;
+          command: "openapi-generator generate -i api.yaml -o src/api";
+          sources: ["api.yaml"];
+          output: "src/api";
+      }
+
+  - description: "NPM build with environment"
+    code: |
+      target("frontend") {
+          type: shell;
+          command: "npm run build";
+          workdir: "packages/frontend";
+          sources: ["packages/frontend/src/**/*.tsx"];
+          env: {
+              "NODE_ENV": "production",
+              "CI": "true"
+          };
+      }
+
+related: [genrule, targets, dynamic-languages]
 
 next_steps: |
-  - Use for black-box integration testing
+  - Use native language handlers when available for better caching
+  - See 'bldr explain genrule' for more examples
+  - See docs/architecture/DSL.md for complete field reference
 

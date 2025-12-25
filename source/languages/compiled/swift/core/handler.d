@@ -101,6 +101,7 @@ class SwiftHandler : BaseLanguageHandler
                 result = runTests(target, config, swiftConfig);
                 break;
             case TargetType.Custom:
+            case TargetType.Shell:
                 result = buildCustom(target, config, swiftConfig);
                 break;
         }

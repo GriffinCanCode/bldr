@@ -80,6 +80,7 @@ class ZigHandler : BaseLanguageHandler
                 result = runTests(target, config, zigConfig);
                 break;
             case TargetType.Custom:
+            case TargetType.Shell:
                 result = buildCustom(target, config, zigConfig);
                 break;
         }
@@ -328,10 +329,24 @@ class ZigHandler : BaseLanguageHandler
         in WorkspaceConfig workspace
     )
     {
-        if (target.sources.empty)
+        if (target.sources.empty && target.root.empty)
             return;
         
-        string sourceDir = dirName(target.sources[0]);
+        // Determine search directory - prefer target.root if set
+        string sourceDir;
+        if (!target.root.empty)
+        {
+            sourceDir = target.root.isAbsolute ? target.root : buildPath(workspace.root, target.root);
+            Logger.debugLog("Using target root for build.zig search: " ~ sourceDir);
+        }
+        else if (!target.sources.empty)
+        {
+            sourceDir = dirName(target.sources[0]);
+        }
+        else
+        {
+            sourceDir = workspace.root;
+        }
         
         // Auto-detect build.zig
         if (config.builder == ZigBuilderType.Auto)

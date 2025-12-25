@@ -22,8 +22,12 @@ target_types:
     example: "target(\"unit_tests\") { type: test; }"
   
   - type: "custom"
-    output: "Custom command"
-    example: "target(\"gen\") { type: custom; command: \"./gen.sh\"; }"
+    output: "Custom build logic"
+    example: "target(\"gen\") { type: custom; }"
+  
+  - type: "shell"
+    output: "Run arbitrary shell commands (alias: genrule)"
+    example: "target(\"codegen\") { type: shell; command: \"./generate.sh\"; }"
 
 target_structure:
   - field: "name"
@@ -32,11 +36,11 @@ target_structure:
   
   - field: "type"
     required: true
-    description: "executable, library, test, or custom"
+    description: "executable, library, test, custom, or shell"
   
   - field: "language"
     required: "for compiled targets"
-    description: "c, cpp, rust, go, python, etc."
+    description: "c, cpp, rust, go, python, zig, gleam, etc."
   
   - field: "sources"
     required: true
@@ -49,6 +53,18 @@ target_structure:
   - field: "flags"
     required: false
     description: "Compiler/linker flags"
+  
+  - field: "command"
+    required: "for shell targets"
+    description: "Shell command to execute"
+  
+  - field: "workdir"
+    required: false
+    description: "Working directory for command execution"
+  
+  - field: "root"
+    required: false
+    description: "Root directory for language toolchains (e.g., Zig build.zig location)"
 
 usage_examples:
   - description: "Define a C++ executable target"
@@ -59,6 +75,25 @@ usage_examples:
           sources: ["main.cpp", "utils.cpp"];
           deps: ["//lib:utils"];
           flags: ["-O2", "-Wall"];
+      }
+  
+  - description: "Shell target for arbitrary commands"
+    code: |
+      target("gleam-build") {
+          type: shell;
+          command: "gleam build";
+          workdir: "./gleam-project";
+          sources: ["gleam-project/src/**/*.gleam"];
+          output: "gleam-project/build";
+      }
+  
+  - description: "Zig project in subdirectory"
+    code: |
+      target("scorer") {
+          type: executable;
+          language: zig;
+          root: "./scorer";
+          sources: ["scorer/src/**/*.zig"];
       }
 
 target_addressing:

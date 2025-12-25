@@ -90,6 +90,7 @@ class RustHandler : BaseLanguageHandler
                 result = runTests(target, config, rustConfig);
                 break;
             case TargetType.Custom:
+            case TargetType.Shell:
                 result = buildCustom(target, config, rustConfig);
                 break;
         }
