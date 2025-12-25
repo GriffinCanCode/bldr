@@ -1,12 +1,166 @@
-# Builder Large-Scale Benchmark Suite
+# Builder Benchmark & Profiling Suite
 
-Comprehensive benchmarking infrastructure for testing Builder with 50,000 - 100,000 targets.
+Comprehensive benchmarking and profiling infrastructure for testing Builder's performance at scale. Includes microbenchmarks for critical paths, large-scale tests with 50K-100K targets, and real-world build profiling.
+
+## Quick Start
+
+```bash
+# Build Builder first
+make
+
+# Run microbenchmarks
+dub run --single tests/bench/graph_bench.d      # Graph operations
+dub run --single tests/bench/hashing_bench.d    # Hashing performance
+dub run --single tests/bench/serialization_bench.d
+dub run --single tests/bench/work_stealing_bench.d
+dub run --single tests/bench/chunking_bench.d
+
+# Run profiler on real projects
+dub run --single tests/bench/profiler.d
+dub run --single tests/bench/profiler.d -- /path/to/project
+
+# Run large-scale tests
+dub run --single tests/bench/scale_benchmark.d
+dub run --single tests/bench/realworld.d
+```
 
 ## Overview
 
-This benchmark suite tests Builder's performance at scale with realistic, complex project structures. It generates multi-language monorepos with varied naming conventions, complex dependency graphs, and real source files to simulate real-world usage.
+This benchmark suite tests:
+- **Microbenchmarks**: Critical path operations (graph, hashing, serialization)
+- **Large-scale tests**: 50K-100K target builds
+- **Real-world profiling**: Identify bottlenecks in actual builds
 
-## Components
+---
+
+## Microbenchmarks
+
+### Graph Operations (`graph_bench.d`)
+
+Tests critical graph algorithms and data structures:
+
+| Benchmark | Description | Target |
+|-----------|-------------|--------|
+| Node Creation | Arena vs GC allocation | 10-100x less GC pressure |
+| Graph Construction | Immediate vs deferred validation | < 100ms for 5K nodes |
+| Topological Sort | Full vs incremental (cached) | O(1) cache hit |
+| Cycle Detection | Validation performance | < 10ms for 1K nodes |
+| Critical Path | Cost calculation | < 50ms for 5K nodes |
+| Depth Calculation | Memoized traversal | O(V+E) total |
+| Serialization | Round-trip performance | < 100ms serialize |
+
+**Key Metrics:**
+- Arena allocation reduces GC allocations by 10-100x
+- Deferred validation 2-5x faster than immediate
+- Incremental topo sort cache provides 100x+ speedup
+
+### Hashing Performance (`hashing_bench.d`)
+
+Tests hashing operations critical to build caching:
+
+| Benchmark | Description | Target |
+|-----------|-------------|--------|
+| Blake3 vs SHA256 | Raw algorithm comparison | 2-5x faster |
+| String Hashing | Target path throughput | > 1M hashes/sec |
+| Tiered Hashing | Adaptive file hashing | 100+ MB/s |
+| Two-Tier Hashing | Metadata + content | 1000x faster (cached) |
+| Parallel Hashing | Multiple files | Near-linear scaling |
+| Incremental Hashing | Streaming mode | < 10% overhead |
+
+**Key Metrics:**
+- Blake3 is 2-5x faster than SHA256 for all sizes
+- Two-tier hashing: 1000x faster when metadata unchanged
+- Tiered approach handles files from 1KB to 100MB+ efficiently
+
+### Serialization (`serialization_bench.d`)
+
+Tests SIMD-accelerated serialization:
+
+| Benchmark | Description | Target |
+|-----------|-------------|--------|
+| Small Structs | 10K cache entries | 10x faster than JSON |
+| Large Graphs | 50K nodes | < 500ms serialize |
+| SIMD Arrays | 1M integers | 5-8x speedup |
+| Nested Structures | Complex AST-like | 8x faster than JSON |
+
+### Work-Stealing (`work_stealing_bench.d`)
+
+Tests lock-free work-stealing deque:
+
+| Benchmark | Description | Target |
+|-----------|-------------|--------|
+| Single-Thread | Push/pop baseline | 2-5x faster than mutex |
+| Contention | 4 threads competing | 10x faster under load |
+| Steal Operations | Steal latency | < 100ns per steal |
+| Load Balancing | 8 workers, uneven load | < 10% imbalance |
+
+### Content Chunking (`chunking_bench.d`)
+
+Tests content-defined chunking (Rabin fingerprinting):
+
+| Benchmark | Description | Target |
+|-----------|-------------|--------|
+| Chunking Speed | 100MB file | < 50ms |
+| Deduplication | 30% duplicate content | 90%+ detection |
+| Incremental | 1% file change | < 5% chunks changed |
+| Network Transfer | 10% modified | 80%+ bandwidth savings |
+
+---
+
+## Build Profiler (`profiler.d`)
+
+Comprehensive profiler for real-world builds:
+
+```bash
+# Profile example projects
+dub run --single tests/bench/profiler.d
+
+# Profile specific project
+dub run --single tests/bench/profiler.d -- /path/to/project
+
+# Verbose output
+dub run --single tests/bench/profiler.d -- --verbose /path/to/project
+```
+
+**Features:**
+- Phase timing breakdown (parse, analyze, execute, finalize)
+- Cache hit/miss analysis
+- Memory usage tracking
+- Hot path identification
+- Automatic bottleneck recommendations
+
+**Output:**
+- Detailed text report to console
+- Markdown report (`build-profile-report.md`)
+- Flame graph compatible data (folded stacks)
+
+**Sample Output:**
+```
+╔════════════════════════════════════════════════════════════════╗
+║              BUILD PROFILE REPORT                              ║
+╚════════════════════════════════════════════════════════════════╝
+
+TIMING BREAKDOWN
+  Parse            123 ms ( 12.3%) ██████
+  Analysis         234 ms ( 23.4%) ███████████
+  Execution        600 ms ( 60.0%) ██████████████████████████████
+  Finalization      43 ms (  4.3%) ██
+  ────────────────────────────────────────
+  TOTAL           1000 ms (100.0%)
+
+TARGET STATISTICS
+  Total Targets:       150
+  Cached:               75 (50.0%)
+  Built:                75
+  Throughput:       150.0 targets/sec
+
+RECOMMENDATIONS
+  • Execution-bound build - focus on parallelism
+```
+
+---
+
+## Large-Scale Benchmarks
 
 ### 1. Target Generator (`target_generator.d`)
 

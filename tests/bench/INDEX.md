@@ -4,13 +4,30 @@
 
 | Document | Purpose | Time to Read |
 |----------|---------|--------------|
-| **[SETUP_COMPLETE.md](SETUP_COMPLETE.md)** | ✅ Setup verification and overview | 5 min |
-| **[QUICKSTART.md](QUICKSTART.md)** | 🚀 Get started in 5 minutes | 5 min |
 | **[README.md](README.md)** | 📚 Complete documentation | 20 min |
+| **[QUICKSTART.md](QUICKSTART.md)** | 🚀 Get started in 5 minutes | 5 min |
+| **[SETUP_COMPLETE.md](SETUP_COMPLETE.md)** | ✅ Setup verification and overview | 5 min |
 
 ## 📂 File Reference
 
-### Core Tools (Executable)
+### Microbenchmarks (Critical Path Testing)
+
+| File | Type | Purpose | Targets |
+|------|------|---------|---------|
+| `graph_bench.d` | D Script | Graph operations | Arena alloc, topo sort, cycle detection |
+| `hashing_bench.d` | D Script | Hashing performance | Blake3 vs SHA256, tiered hashing |
+| `serialization_bench.d` | D Script | Serialization | SIMD-accelerated vs JSON baseline |
+| `work_stealing_bench.d` | D Script | Concurrency | Lock-free deque performance |
+| `chunking_bench.d` | D Script | Chunking | Rabin fingerprinting, deduplication |
+
+### Profiling Tools
+
+| File | Type | Purpose |
+|------|------|---------|
+| `profiler.d` | D Script | Real-world build profiler with bottleneck detection |
+| `realworld.d` | D Script | Enhanced real-world benchmarking |
+
+### Large-Scale Benchmarks
 
 | File | Type | Lines | Purpose |
 |------|------|-------|---------|
@@ -41,28 +58,60 @@
 
 ### Beginner (5 minutes)
 
-1. Read: `SETUP_COMPLETE.md`
-2. Run: `./run-scale-benchmarks.sh --simulated-only`
-3. View: `benchmark-scale-report.md`
+1. Run microbenchmarks: `dub run --single graph_bench.d`
+2. Run profiler: `dub run --single profiler.d`
+3. View results in console
 
 ### Intermediate (30 minutes)
 
-1. Read: `QUICKSTART.md`
-2. Run: `./run-scale-benchmarks.sh`
-3. Review: Both generated reports
-4. Customize: Try a config from `benchmark_config.example.d`
+1. Read: `README.md` (microbenchmarks section)
+2. Run all microbenchmarks
+3. Profile your own projects: `dub run --single profiler.d -- /path/to/project`
+4. Review generated reports
 
 ### Advanced (2+ hours)
 
 1. Read: `README.md` (complete)
 2. Study: Source code of benchmark tools
-3. Customize: Create your own scenarios
-4. Profile: Use `perf` or Instruments
-5. Track: Set up historical performance tracking
+3. Run large-scale tests: `./run-scale-benchmarks.sh`
+4. Profile with external tools: `perf` or Instruments
+5. Track historical performance
 
 ## 🔧 Common Tasks
 
-### Run Benchmarks
+### Run Microbenchmarks (Recommended First)
+
+```bash
+# Graph operations (arena alloc, topo sort, caching)
+dub run --single tests/bench/graph_bench.d
+
+# Hashing (Blake3, tiered, two-tier)
+dub run --single tests/bench/hashing_bench.d
+
+# Serialization (SIMD vs JSON)
+dub run --single tests/bench/serialization_bench.d
+
+# Work-stealing concurrency
+dub run --single tests/bench/work_stealing_bench.d
+
+# Content chunking
+dub run --single tests/bench/chunking_bench.d
+```
+
+### Profile Real-World Builds
+
+```bash
+# Profile example projects
+dub run --single tests/bench/profiler.d
+
+# Profile specific project
+dub run --single tests/bench/profiler.d -- /path/to/project
+
+# Verbose profiling
+dub run --single tests/bench/profiler.d -- --verbose /path/to/project
+```
+
+### Run Large-Scale Benchmarks
 
 ```bash
 # Quick test (2 min)
@@ -354,6 +403,19 @@ grep "Cache Hit Rate" benchmark-scale-report.md
 - [Runner Script](run-scale-benchmarks.sh)
 
 ## 📊 Benchmark Matrix
+
+### Microbenchmarks (Critical Paths)
+
+| Tool | Area | Fast | Targets |
+|------|------|------|---------|
+| graph_bench.d | Graph algorithms | ✅ | Arena 10-100x, Cache 100x |
+| hashing_bench.d | Hashing | ✅ | Blake3 2-5x, Two-tier 1000x |
+| serialization_bench.d | Serialization | ✅ | SIMD 10x vs JSON |
+| work_stealing_bench.d | Concurrency | ✅ | Lock-free 10x under contention |
+| chunking_bench.d | Chunking | ✅ | 80%+ bandwidth savings |
+| profiler.d | Real builds | ⚖️ | Bottleneck identification |
+
+### Large-Scale Tests
 
 | Tool | Simulated | Real Builder | Fast | Accurate | Use Case |
 |------|-----------|--------------|------|----------|----------|
