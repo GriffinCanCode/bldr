@@ -9,6 +9,8 @@ import engine.distributed.protocol.protocol;
 import engine.distributed.protocol.reapi_v2.types;
 import engine.distributed.protocol.reapi_v2.codec;
 import engine.distributed.protocol.reapi_v2.hash;
+import engine.distributed.protocol.grpc.connection;
+import engine.distributed.protocol.grpc.frame : ReapiServices;
 import infrastructure.errors;
 
 /**
@@ -284,13 +286,14 @@ final class ReapiV2Adapter {
  * REAPI v2 Client
  * 
  * Connect to REAPI-compatible remote execution servers
- * (BuildBuddy, BuildBarn, Google RBE, etc.)
+ * (BuildBuddy, BuildBarn, Google RBE, etc.) using proper HTTP/2 gRPC.
  */
 final class ReapiV2Client {
     private string endpoint;
     private ReapiV2Adapter adapter;
     private string instanceName;
     private Duration timeout;
+    private GrpcConnection grpcConn;
     
     this(string endpoint, string instanceName = "", Duration timeout = 30.seconds) @safe {
         this.endpoint = endpoint;
@@ -299,11 +302,31 @@ final class ReapiV2Client {
         this.adapter = new ReapiV2Adapter();
     }
     
-    /// Execute action on remote server
+    /// Ensure gRPC connection is established
+    private BuildResult!GrpcConnection ensureConnection() @trusted {
+        if (grpcConn !is null && grpcConn.isConnected)
+            return Ok!(GrpcConnection, BuildError)(grpcConn);
+        
+        auto poolResult = GrpcConnectionPool.instance.getConnection(endpoint);
+        if (poolResult.isErr)
+            return Err!(GrpcConnection, BuildError)(
+                DistributedErrors.protocol("gRPC connection failed: " ~ poolResult.unwrapErr()).build());
+        
+        grpcConn = poolResult.unwrap();
+        return Ok!(GrpcConnection, BuildError)(grpcConn);
+    }
+    
+    /// Execute action on remote server using gRPC server streaming
     BuildResult!ActionResult execute(ActionRequest request, bool skipCache = false) @trusted {
         if (request is null)
             return Err!(ActionResult, BuildError)(
                 DistributedErrors.protocol("Null action request").build());
+        
+        auto connResult = ensureConnection();
+        if (connResult.isErr)
+            return Err!(ActionResult, BuildError)(connResult.unwrapErr());
+        
+        auto conn = connResult.unwrap();
         
         // Convert to REAPI format
         ReapiCommand cmd;
@@ -324,13 +347,20 @@ final class ReapiV2Client {
         // Encode request
         auto requestData = ReapiV2Codec.encodeExecuteRequest(execReq);
         
-        // Send HTTP request
-        auto httpResult = sendRequest("POST", "/v2/" ~ instanceName ~ "/actions:execute", requestData);
-        if (httpResult.isErr)
-            return Err!(ActionResult, BuildError)(httpResult.unwrapErr());
+        // Send gRPC server streaming call (Execute returns stream of Operation)
+        auto streamResult = conn.serverStreamingCall(ReapiServices.execute().path, requestData, timeout);
+        if (streamResult.isErr)
+            return Err!(ActionResult, BuildError)(
+                DistributedErrors.protocol("Execute gRPC call failed: " ~ streamResult.unwrapErr()).build());
         
-        // Decode response
-        auto decodeResult = ReapiV2Codec.decodeExecuteResponse(httpResult.unwrap());
+        // Get final response from stream (last Operation with done=true)
+        auto responses = streamResult.unwrap();
+        if (responses.length == 0)
+            return Err!(ActionResult, BuildError)(
+                DistributedErrors.protocol("No response from Execute stream").build());
+        
+        // Decode final response
+        auto decodeResult = ReapiV2Codec.decodeExecuteResponse(responses[$ - 1]);
         if (decodeResult.isErr)
             return Err!(ActionResult, BuildError)(
                 DistributedErrors.protocol("Failed to decode response: " ~ decodeResult.unwrapErr()).build());
@@ -347,22 +377,29 @@ final class ReapiV2Client {
             adapter.reapiToActionResult(response.result, request.id));
     }
     
-    /// Get cached action result
+    /// Get cached action result using gRPC
     BuildResult!ActionResult getActionResult(ActionId actionId) @trusted {
+        auto connResult = ensureConnection();
+        if (connResult.isErr)
+            return Err!(ActionResult, BuildError)(connResult.unwrapErr());
+        
+        auto conn = connResult.unwrap();
+        
         auto digestResult = adapter.getHashTranslator().actionIdToDigest(actionId, 0);
         if (digestResult.isErr)
             return Err!(ActionResult, BuildError)(
                 DistributedErrors.protocol("Failed to convert digest").build());
         
+        // Build GetActionResult request
         auto digest = digestResult.unwrap();
-        auto path = "/v2/" ~ instanceName ~ "/actionResults/" ~ 
-                    digest.hashString() ~ "/" ~ digest.sizeBytes.to!string;
+        auto reqData = ReapiV2Codec.encodeGetActionResultRequest(instanceName, digest);
         
-        auto httpResult = sendRequest("GET", path, []);
-        if (httpResult.isErr)
-            return Err!(ActionResult, BuildError)(httpResult.unwrapErr());
+        auto grpcResult = conn.unaryCall(ReapiServices.getActionResult().path, reqData, timeout);
+        if (grpcResult.isErr)
+            return Err!(ActionResult, BuildError)(
+                DistributedErrors.protocol("GetActionResult gRPC call failed: " ~ grpcResult.unwrapErr()).build());
         
-        auto decodeResult = ReapiV2Codec.decodeActionResult(httpResult.unwrap());
+        auto decodeResult = ReapiV2Codec.decodeActionResult(grpcResult.unwrap());
         if (decodeResult.isErr)
             return Err!(ActionResult, BuildError)(
                 DistributedErrors.protocol("Failed to decode action result").build());
@@ -371,131 +408,112 @@ final class ReapiV2Client {
             adapter.reapiToActionResult(decodeResult.unwrap(), actionId));
     }
     
-    /// Get server capabilities
+    /// Get server capabilities using gRPC
     BuildResult!ReapiServerCapabilities getCapabilities() @trusted {
-        auto path = "/v2/" ~ instanceName ~ "/capabilities";
-        auto httpResult = sendRequest("GET", path, []);
+        auto connResult = ensureConnection();
+        if (connResult.isErr)
+            return Err!(ReapiServerCapabilities, BuildError)(connResult.unwrapErr());
         
-        if (httpResult.isErr)
-            return Err!(ReapiServerCapabilities, BuildError)(httpResult.unwrapErr());
+        auto conn = connResult.unwrap();
         
-        // Decode capabilities (simplified - just return Builder's capabilities)
-        return Ok!(ReapiServerCapabilities, BuildError)(adapter.buildServerCapabilities());
+        // Build GetCapabilities request
+        ReapiGetCapabilitiesRequest req;
+        req.instanceName = instanceName;
+        auto reqData = ReapiV2Codec.encodeGetCapabilitiesRequest(req);
+        
+        auto grpcResult = conn.unaryCall(ReapiServices.getCapabilities().path, reqData, timeout);
+        if (grpcResult.isErr)
+            return Err!(ReapiServerCapabilities, BuildError)(
+                DistributedErrors.protocol("GetCapabilities gRPC call failed: " ~ grpcResult.unwrapErr()).build());
+        
+        auto decodeResult = ReapiV2Codec.decodeServerCapabilities(grpcResult.unwrap());
+        if (decodeResult.isErr)
+            return Ok!(ReapiServerCapabilities, BuildError)(adapter.buildServerCapabilities());
+        
+        return Ok!(ReapiServerCapabilities, BuildError)(decodeResult.unwrap());
     }
     
-    /// Find missing blobs in CAS
+    /// Find missing blobs in CAS using gRPC
     BuildResult!(ReapiDigest[]) findMissingBlobs(ReapiDigest[] digests) @trusted {
-        // Encode request
-        ubyte[] reqData;
-        reqData.reserve(digests.length * 64);
+        auto connResult = ensureConnection();
+        if (connResult.isErr)
+            return Err!(ReapiDigest[], BuildError)(connResult.unwrapErr());
         
-        foreach (digest; digests) {
-            auto digestBuf = ReapiV2Codec.encodeDigest(digest);
-            reqData ~= ReapiV2Codec.makeTag(2, ReapiV2Codec.WireType.LengthDelimited);
-            reqData ~= ReapiV2Codec.encodeVarint(digestBuf.length);
-            reqData ~= digestBuf;
-        }
+        auto conn = connResult.unwrap();
         
-        auto path = "/v2/" ~ instanceName ~ "/blobs:findMissing";
-        auto httpResult = sendRequest("POST", path, reqData);
+        // Build request
+        ReapiFindMissingBlobsRequest req;
+        req.instanceName = instanceName;
+        req.blobDigests = digests;
+        auto reqData = ReapiV2Codec.encodeFindMissingBlobsRequest(req);
         
-        if (httpResult.isErr)
-            return Err!(ReapiDigest[], BuildError)(httpResult.unwrapErr());
+        auto grpcResult = conn.unaryCall(ReapiServices.findMissingBlobs().path, reqData, timeout);
+        if (grpcResult.isErr)
+            return Err!(ReapiDigest[], BuildError)(
+                DistributedErrors.protocol("FindMissingBlobs gRPC call failed: " ~ grpcResult.unwrapErr()).build());
         
-        // Decode response (simplified)
-        return Ok!(ReapiDigest[], BuildError)([]);
+        auto decodeResult = ReapiV2Codec.decodeFindMissingBlobsResponse(grpcResult.unwrap());
+        if (decodeResult.isErr)
+            return Err!(ReapiDigest[], BuildError)(
+                DistributedErrors.protocol("Failed to decode response: " ~ decodeResult.unwrapErr()).build());
+        
+        return Ok!(ReapiDigest[], BuildError)(decodeResult.unwrap().missingBlobDigests);
     }
     
-    /// Upload blob to CAS
+    /// Upload blob to CAS using gRPC BatchUpdateBlobs
     VoidBuildResult uploadBlob(ReapiDigest digest, const ubyte[] data) @trusted {
-        auto path = "/v2/" ~ instanceName ~ "/uploads/blobs/" ~ 
-                    digest.hashString() ~ "/" ~ digest.sizeBytes.to!string;
+        auto connResult = ensureConnection();
+        if (connResult.isErr)
+            return VoidBuildResult.err(connResult.unwrapErr());
         
-        auto httpResult = sendRequest("PUT", path, data);
-        if (httpResult.isErr)
-            return VoidBuildResult.err(httpResult.unwrapErr());
+        auto conn = connResult.unwrap();
+        
+        // Build BatchUpdateBlobs request
+        ReapiBatchUpdateBlobsRequest req;
+        req.instanceName = instanceName;
+        req.requests ~= ReapiBlobRequest(digest, data.dup, Compressor.Identity);
+        
+        auto reqData = ReapiV2Codec.encodeBatchUpdateBlobsRequest(req);
+        
+        auto grpcResult = conn.unaryCall(ReapiServices.batchUpdateBlobs().path, reqData, timeout);
+        if (grpcResult.isErr)
+            return VoidBuildResult.err(
+                DistributedErrors.protocol("BatchUpdateBlobs gRPC call failed: " ~ grpcResult.unwrapErr()).build());
         
         return Ok!BuildError();
     }
     
-    /// Download blob from CAS
+    /// Download blob from CAS using gRPC BatchReadBlobs
     BuildResult!(ubyte[]) downloadBlob(ReapiDigest digest) @trusted {
-        auto path = "/v2/" ~ instanceName ~ "/blobs/" ~
-                    digest.hashString() ~ "/" ~ digest.sizeBytes.to!string;
+        auto connResult = ensureConnection();
+        if (connResult.isErr)
+            return Err!(ubyte[], BuildError)(connResult.unwrapErr());
         
-        return sendRequest("GET", path, []);
-    }
-    
-    /// Send HTTP request helper
-    private BuildResult!(ubyte[]) sendRequest(
-        string method,
-        string path,
-        const ubyte[] body_
-    ) @trusted {
-        import std.socket : Socket, TcpSocket, InternetAddress, SocketShutdown;
-        import std.string : indexOf, startsWith;
+        auto conn = connResult.unwrap();
         
-        // Parse endpoint
-        string host;
-        ushort port = 443;
+        // Build BatchReadBlobs request
+        ReapiBatchReadBlobsRequest req;
+        req.instanceName = instanceName;
+        req.digests = [digest];
+        req.acceptableCompressors = [Compressor.Identity];
         
-        string remaining = endpoint;
-        if (remaining.startsWith("http://")) {
-            remaining = remaining[7 .. $];
-            port = 80;
-        } else if (remaining.startsWith("https://")) {
-            remaining = remaining[8 .. $];
-        }
+        auto reqData = ReapiV2Codec.encodeBatchReadBlobsRequest(req);
         
-        immutable colonIdx = remaining.indexOf(':');
-        if (colonIdx >= 0) {
-            host = remaining[0 .. colonIdx];
-            try { port = remaining[colonIdx + 1 .. $].to!ushort; } catch (Exception) {}
-        } else {
-            host = remaining;
-        }
-        
-        try {
-            auto addr = new InternetAddress(host, port);
-            auto socket = new TcpSocket();
-            socket.connect(addr);
-            scope(exit) { socket.shutdown(SocketShutdown.BOTH); socket.close(); }
-            
-            // Build HTTP request
-            string req = method ~ " " ~ path ~ " HTTP/1.1\r\n";
-            req ~= "Host: " ~ host ~ "\r\n";
-            req ~= "Content-Type: application/grpc+proto\r\n";
-            req ~= "Content-Length: " ~ body_.length.to!string ~ "\r\n";
-            req ~= "\r\n";
-            
-            socket.send(req);
-            if (body_.length > 0)
-                socket.send(body_);
-            
-            // Receive response
-            ubyte[] responseData;
-            ubyte[8192] buffer;
-            while (true) {
-                auto received = socket.receive(buffer);
-                if (received <= 0) break;
-                responseData ~= buffer[0 .. received];
-            }
-            
-            // Parse HTTP response
-            auto responseStr = cast(string)responseData;
-            auto headersEnd = responseStr.indexOf("\r\n\r\n");
-            if (headersEnd < 0)
-                return Err!(ubyte[], BuildError)(
-                    DistributedErrors.protocol("Invalid HTTP response").build());
-            
-            // Extract body
-            return Ok!(ubyte[], BuildError)(
-                responseData[headersEnd + 4 .. $].dup);
-        }
-        catch (Exception e) {
+        auto grpcResult = conn.unaryCall(ReapiServices.batchReadBlobs().path, reqData, timeout);
+        if (grpcResult.isErr)
             return Err!(ubyte[], BuildError)(
-                DistributedErrors.protocol("HTTP request failed: " ~ e.msg).build());
-        }
+                DistributedErrors.protocol("BatchReadBlobs gRPC call failed: " ~ grpcResult.unwrapErr()).build());
+        
+        auto decodeResult = ReapiV2Codec.decodeBatchReadBlobsResponse(grpcResult.unwrap());
+        if (decodeResult.isErr)
+            return Err!(ubyte[], BuildError)(
+                DistributedErrors.protocol("Failed to decode response: " ~ decodeResult.unwrapErr()).build());
+        
+        auto resp = decodeResult.unwrap();
+        if (resp.responses.length > 0 && resp.responses[0].data.length > 0)
+            return Ok!(ubyte[], BuildError)(resp.responses[0].data);
+        
+        return Ok!(ubyte[], BuildError)(cast(ubyte[])[]);
     }
 }
 

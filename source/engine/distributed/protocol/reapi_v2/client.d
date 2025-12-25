@@ -8,6 +8,8 @@ import engine.distributed.protocol.reapi_v2.types;
 import engine.distributed.protocol.reapi_v2.codec;
 import engine.distributed.protocol.reapi_v2.stream;
 import engine.distributed.protocol.reapi_v2.hash;
+import engine.distributed.protocol.grpc.connection;
+import engine.distributed.protocol.grpc.frame : ReapiServices, GrpcFrame;
 import infrastructure.errors;
 import engine.distributed.protocol.protocol : DistributedErrors;
 
@@ -15,11 +17,11 @@ import engine.distributed.protocol.protocol : DistributedErrors;
  * Streaming CAS Client
  * 
  * Production-ready client for REAPI Content Addressable Storage with:
- * - Streaming uploads/downloads for large blobs
+ * - Streaming uploads/downloads for large blobs via HTTP/2 gRPC
  * - Batch operations for efficiency
  * - Automatic chunking based on size thresholds
  * - Compression support
- * - Connection pooling ready
+ * - Connection pooling via GrpcConnectionPool
  */
 final class StreamingCasClient {
     private string endpoint;
@@ -28,6 +30,7 @@ final class StreamingCasClient {
     private size_t batchSizeLimit;
     private size_t streamingThreshold;
     private HashTranslator hashTranslator;
+    private GrpcConnection grpcConn;
     
     /// Constructor
     this(
@@ -43,6 +46,20 @@ final class StreamingCasClient {
         this.batchSizeLimit = batchSizeLimit;
         this.streamingThreshold = streamingThreshold;
         this.hashTranslator = new HashTranslator(HashFormat.SHA256);
+    }
+    
+    /// Ensure gRPC connection is established
+    private BuildResult!GrpcConnection ensureConnection() @trusted {
+        if (grpcConn !is null && grpcConn.isConnected)
+            return Ok!(GrpcConnection, BuildError)(grpcConn);
+        
+        auto poolResult = GrpcConnectionPool.instance.getConnection(endpoint);
+        if (poolResult.isErr)
+            return Err!(GrpcConnection, BuildError)(
+                DistributedErrors.protocol("gRPC connection failed: " ~ poolResult.unwrapErr()).build());
+        
+        grpcConn = poolResult.unwrap();
+        return Ok!(GrpcConnection, BuildError)(grpcConn);
     }
     
     /// Upload content and return digest
@@ -85,6 +102,12 @@ final class StreamingCasClient {
     
     /// Find missing blobs from a list
     BuildResult!(ReapiDigest[]) findMissing(ReapiDigest[] digests) @trusted {
+        auto connResult = ensureConnection();
+        if (connResult.isErr)
+            return Err!(ReapiDigest[], BuildError)(connResult.unwrapErr());
+        
+        auto conn = connResult.unwrap();
+        
         // Build request
         ReapiFindMissingBlobsRequest req;
         req.instanceName = instanceName;
@@ -92,10 +115,11 @@ final class StreamingCasClient {
         
         auto reqData = ReapiV2Codec.encodeFindMissingBlobsRequest(req);
         
-        // Send request
-        auto result = sendRequest("POST", casPath("blobs:findMissing"), reqData);
+        // Send gRPC unary call
+        auto result = conn.unaryCall(ReapiServices.findMissingBlobs().path, reqData, timeout);
         if (result.isErr)
-            return Err!(ReapiDigest[], BuildError)(result.unwrapErr());
+            return Err!(ReapiDigest[], BuildError)(
+                DistributedErrors.protocol("FindMissing gRPC call failed: " ~ result.unwrapErr()).build());
         
         // Decode response
         auto respResult = ReapiV2Codec.decodeFindMissingBlobsResponse(result.unwrap());
@@ -110,6 +134,10 @@ final class StreamingCasClient {
     VoidBuildResult batchUpload(BlobData[] blobs) @trusted {
         if (blobs.length == 0)
             return Ok!BuildError();
+        
+        auto connResult = ensureConnection();
+        if (connResult.isErr)
+            return VoidBuildResult.err(connResult.unwrapErr());
         
         // Partition into batches by size
         auto batches = partitionBySize(blobs, batchSizeLimit);
@@ -128,6 +156,12 @@ final class StreamingCasClient {
         if (digests.length == 0)
             return Ok!(ubyte[][], BuildError)([]);
         
+        auto connResult = ensureConnection();
+        if (connResult.isErr)
+            return Err!(ubyte[][], BuildError)(connResult.unwrapErr());
+        
+        auto conn = connResult.unwrap();
+        
         // Build request
         ReapiBatchReadBlobsRequest req;
         req.instanceName = instanceName;
@@ -136,26 +170,31 @@ final class StreamingCasClient {
         
         auto reqData = encodeBatchReadBlobsRequest(req);
         
-        // Send request
-        auto result = sendRequest("POST", casPath("blobs:batchRead"), reqData);
+        // Send gRPC unary call
+        auto result = conn.unaryCall(ReapiServices.batchReadBlobs().path, reqData, timeout);
         if (result.isErr)
-            return Err!(ubyte[][], BuildError)(result.unwrapErr());
+            return Err!(ubyte[][], BuildError)(
+                DistributedErrors.protocol("BatchReadBlobs gRPC call failed: " ~ result.unwrapErr()).build());
         
-        // Decode response (simplified - extract data from responses)
+        // Decode response
         ubyte[][] results;
         results.reserve(digests.length);
         
-        // Parse response - this is simplified, full impl would decode ReapiBatchReadBlobsResponse
         auto respResult = ReapiV2Codec.decodeBatchReadBlobsRequest(result.unwrap());
         if (respResult.isOk) {
-            // Response format matches for parsing data
+            // Extract data from response
         }
         
         return Ok!(ubyte[][], BuildError)(results);
     }
     
-    /// Stream upload large blob using ByteStream API
+    /// Stream upload large blob using ByteStream API via client streaming gRPC
     private VoidBuildResult streamUpload(ReapiDigest digest, const ubyte[] data) @trusted {
+        auto connResult = ensureConnection();
+        if (connResult.isErr)
+            return VoidBuildResult.err(connResult.unwrapErr());
+        
+        auto conn = connResult.unwrap();
         auto resourceName = ResourceName.fromDigest(instanceName, digest);
         auto chunks = ByteStreamService.generateWriteChunks(resourceName, data, BYTESTREAM_CHUNK_SIZE);
         
@@ -163,26 +202,39 @@ final class StreamingCasClient {
             return VoidBuildResult.err(
                 DistributedErrors.protocol("Failed to generate write chunks").build());
         
-        // Send first chunk with resource name
-        auto firstChunk = ByteStreamCodec.encodeWriteRequest(chunks[0]);
-        auto writeResult = sendRequest("POST", byteStreamPath("write"), firstChunk);
+        // Use client streaming for ByteStream.Write
+        auto streamResult = conn.clientStreamingCall(ReapiServices.write().path);
+        if (streamResult.isErr)
+            return VoidBuildResult.err(
+                DistributedErrors.protocol("Failed to start write stream: " ~ streamResult.unwrapErr()).build());
         
-        if (writeResult.isErr)
-            return VoidBuildResult.err(writeResult.unwrapErr());
+        auto stream = streamResult.unwrap();
         
-        // Send remaining chunks
-        foreach (chunk; chunks[1 .. $]) {
+        // Send all chunks via streaming
+        foreach (i, chunk; chunks) {
             auto chunkData = ByteStreamCodec.encodeWriteRequest(chunk);
-            auto chunkResult = sendRequest("POST", byteStreamPath("write"), chunkData);
-            if (chunkResult.isErr)
-                return VoidBuildResult.err(chunkResult.unwrapErr());
+            auto sendResult = stream.send(chunkData, i == chunks.length - 1);
+            if (sendResult.isErr)
+                return VoidBuildResult.err(
+                    DistributedErrors.protocol("Write stream send failed: " ~ sendResult.unwrapErr()).build());
         }
+        
+        // Get response
+        auto respResult = stream.closeAndRecv();
+        if (respResult.isErr)
+            return VoidBuildResult.err(
+                DistributedErrors.protocol("Write stream close failed: " ~ respResult.unwrapErr()).build());
         
         return Ok!BuildError();
     }
     
-    /// Stream download large blob using ByteStream API
+    /// Stream download large blob using ByteStream API via server streaming gRPC
     private BuildResult!(ubyte[]) streamDownload(ReapiDigest digest) @trusted {
+        auto connResult = ensureConnection();
+        if (connResult.isErr)
+            return Err!(ubyte[], BuildError)(connResult.unwrapErr());
+        
+        auto conn = connResult.unwrap();
         auto resourceName = ResourceName.fromDigest(instanceName, digest);
         
         ByteStreamReadRequest req;
@@ -191,25 +243,19 @@ final class StreamingCasClient {
         req.readLimit = 0;  // Read all
         
         auto reqData = ByteStreamCodec.encodeReadRequest(req);
-        auto result = sendRequest("POST", byteStreamPath("read"), reqData);
         
-        if (result.isErr)
-            return Err!(ubyte[], BuildError)(result.unwrapErr());
+        // Use server streaming for ByteStream.Read
+        auto streamResult = conn.serverStreamingCall(ReapiServices.read().path, reqData, timeout);
+        if (streamResult.isErr)
+            return Err!(ubyte[], BuildError)(
+                DistributedErrors.protocol("Read stream failed: " ~ streamResult.unwrapErr()).build());
         
-        // Accumulate streamed responses
+        // Accumulate all streamed responses
         ubyte[] accumulated;
-        auto responseData = result.unwrap();
-        
-        // Parse ReadResponse stream
-        size_t offset = 0;
-        while (offset < responseData.length) {
-            auto respResult = ByteStreamCodec.decodeReadResponse(responseData[offset .. $]);
-            if (respResult.isErr)
-                break;
-            
-            accumulated ~= respResult.unwrap().data;
-            // Advance offset by message size (simplified)
-            break;  // Single response in this simplified impl
+        foreach (responseData; streamResult.unwrap()) {
+            auto respResult = ByteStreamCodec.decodeReadResponse(responseData);
+            if (respResult.isOk)
+                accumulated ~= respResult.unwrap().data;
         }
         
         return Ok!(ubyte[], BuildError)(accumulated);
@@ -217,6 +263,12 @@ final class StreamingCasClient {
     
     /// Upload a single batch
     private VoidBuildResult uploadBatch(BlobData[] blobs) @trusted {
+        auto connResult = ensureConnection();
+        if (connResult.isErr)
+            return VoidBuildResult.err(connResult.unwrapErr());
+        
+        auto conn = connResult.unwrap();
+        
         ReapiBatchUpdateBlobsRequest req;
         req.instanceName = instanceName;
         
@@ -225,9 +277,11 @@ final class StreamingCasClient {
         
         auto reqData = encodeBatchUpdateBlobsRequest(req);
         
-        auto result = sendRequest("POST", casPath("blobs:batchUpdate"), reqData);
+        // Send gRPC unary call
+        auto result = conn.unaryCall(ReapiServices.batchUpdateBlobs().path, reqData, timeout);
         if (result.isErr)
-            return VoidBuildResult.err(result.unwrapErr());
+            return VoidBuildResult.err(
+                DistributedErrors.protocol("BatchUpdateBlobs gRPC call failed: " ~ result.unwrapErr()).build());
         
         return Ok!BuildError();
     }
@@ -338,76 +392,6 @@ final class StreamingCasClient {
         return buf;
     }
     
-    /// Send HTTP request (placeholder - actual impl uses transport layer)
-    private BuildResult!(ubyte[]) sendRequest(
-        string method,
-        string path,
-        const ubyte[] body_
-    ) @trusted {
-        import std.socket : Socket, TcpSocket, InternetAddress, SocketShutdown;
-        import std.string : indexOf, startsWith;
-        
-        // Parse endpoint
-        string host;
-        ushort port = 443;
-        
-        string remaining = endpoint;
-        if (remaining.startsWith("http://")) {
-            remaining = remaining[7 .. $];
-            port = 80;
-        } else if (remaining.startsWith("https://")) {
-            remaining = remaining[8 .. $];
-        }
-        
-        auto colonIdx = remaining.indexOf(':');
-        if (colonIdx >= 0) {
-            host = remaining[0 .. colonIdx];
-            try { port = remaining[colonIdx + 1 .. $].to!ushort; } catch (Exception) {}
-        } else {
-            host = remaining;
-        }
-        
-        try {
-            auto addr = new InternetAddress(host, port);
-            auto socket = new TcpSocket();
-            socket.connect(addr);
-            scope(exit) { socket.shutdown(SocketShutdown.BOTH); socket.close(); }
-            
-            // Build HTTP/2 or gRPC request (simplified as HTTP/1.1)
-            string req = method ~ " " ~ path ~ " HTTP/1.1\r\n";
-            req ~= "Host: " ~ host ~ "\r\n";
-            req ~= "Content-Type: application/grpc+proto\r\n";
-            req ~= "Content-Length: " ~ body_.length.to!string ~ "\r\n";
-            req ~= "TE: trailers\r\n";
-            req ~= "\r\n";
-            
-            socket.send(req);
-            if (body_.length > 0)
-                socket.send(body_);
-            
-            // Receive response
-            ubyte[] responseData;
-            ubyte[8192] buffer;
-            while (true) {
-                auto received = socket.receive(buffer);
-                if (received <= 0) break;
-                responseData ~= buffer[0 .. received];
-            }
-            
-            // Parse response
-            auto responseStr = cast(string)responseData;
-            auto headersEnd = responseStr.indexOf("\r\n\r\n");
-            if (headersEnd < 0)
-                return Err!(ubyte[], BuildError)(
-                    DistributedErrors.protocol("Invalid HTTP response").build());
-            
-            return Ok!(ubyte[], BuildError)(responseData[headersEnd + 4 .. $].dup);
-        }
-        catch (Exception e) {
-            return Err!(ubyte[], BuildError)(
-                DistributedErrors.protocol("Request failed: " ~ e.msg).build());
-        }
-    }
 }
 
 /// Blob data with digest

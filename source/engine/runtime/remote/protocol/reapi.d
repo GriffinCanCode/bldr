@@ -7,6 +7,8 @@ import std.string : toLower, format;
 import std.algorithm : map;
 import std.array : array;
 import engine.distributed.protocol.protocol;
+import engine.distributed.protocol.grpc.connection;
+import engine.distributed.protocol.grpc.frame : ReapiServices;
 import infrastructure.errors;
 
 /// Remote Execution API protocol adapter
@@ -314,36 +316,63 @@ struct ActionResult
 }
 
 /// REAPI protocol adapter
-/// Translates between REAPI and Builder's native protocol
+/// Translates between REAPI and Builder's native protocol using proper HTTP/2 gRPC
 final class ReapiAdapter
 {
     private string remoteUrl;
+    private GrpcConnection grpcConn;
+    private Duration timeout;
     
-    this(string remoteUrl) @safe
+    this(string remoteUrl, Duration timeout = 30.seconds) @safe
     {
         this.remoteUrl = remoteUrl;
+        this.timeout = timeout;
     }
     
-    /// Execute action via REAPI
+    /// Ensure gRPC connection is established
+    private BuildResult!GrpcConnection ensureConnection() @trusted
+    {
+        if (grpcConn !is null && grpcConn.isConnected)
+            return Ok!(GrpcConnection, BuildError)(grpcConn);
+        
+        auto poolResult = GrpcConnectionPool.instance.getConnection(remoteUrl);
+        if (poolResult.isErr)
+            return Err!(GrpcConnection, BuildError)(
+                Errors.generic("gRPC connection failed: " ~ poolResult.unwrapErr(), ErrorCode.NetworkError));
+        
+        grpcConn = poolResult.unwrap();
+        return Ok!(GrpcConnection, BuildError)(grpcConn);
+    }
+    
+    /// Execute action via REAPI using gRPC server streaming
     BuildResult!ExecuteResponse execute(
         Action action,
         bool skipCacheLookup = false
     ) @trusted
     {
-        // Convert to Builder action request
-        auto actionDigest = action.digest();
+        auto connResult = ensureConnection();
+        if (connResult.isErr)
+            return Err!(ExecuteResponse, BuildError)(connResult.unwrapErr());
+        
+        auto conn = connResult.unwrap();
         
         // Serialize execute request
         auto requestData = ReapiCodec.serializeExecuteRequest(action, skipCacheLookup);
         
-        // Send to remote execution endpoint
-        auto httpResult = sendHttpRequest("POST", remoteUrl ~ "/v2/actions/execute", requestData);
+        // Send gRPC server streaming call (Execute returns stream of Operation)
+        auto streamResult = conn.serverStreamingCall(ReapiServices.execute().path, requestData, timeout);
+        if (streamResult.isErr)
+            return Err!(ExecuteResponse, BuildError)(
+                Errors.generic("Execute gRPC call failed: " ~ streamResult.unwrapErr(), ErrorCode.NetworkError));
         
-        if (httpResult.isErr)
-            return Err!(ExecuteResponse, BuildError)(httpResult.unwrapErr());
+        // Get final response from stream
+        auto responses = streamResult.unwrap();
+        if (responses.length == 0)
+            return Err!(ExecuteResponse, BuildError)(
+                Errors.generic("No response from Execute stream", ErrorCode.NetworkError));
         
-        // Deserialize response
-        auto parseResult = ReapiCodec.deserializeExecuteResponse(httpResult.unwrap());
+        // Deserialize final response
+        auto parseResult = ReapiCodec.deserializeExecuteResponse(responses[$ - 1]);
         if (parseResult.isErr)
             return Err!(ExecuteResponse, BuildError)(
                 Errors.generic("Failed to parse execute response: " ~ parseResult.unwrapErr(), ErrorCode.NetworkError));
@@ -351,56 +380,38 @@ final class ReapiAdapter
         return Ok!(ExecuteResponse, BuildError)(parseResult.unwrap());
     }
     
-    /// Wait for execution (long-running operation)
+    /// Wait for execution using gRPC WaitExecution streaming
     BuildResult!ExecuteResponse waitExecution(
         string operationName,
-        Duration timeout = 0.seconds
+        Duration waitTimeout = 0.seconds
     ) @trusted
     {
-        import core.time : MonoTime;
-        import core.thread : Thread;
-        import std.datetime : msecs;
+        auto connResult = ensureConnection();
+        if (connResult.isErr)
+            return Err!(ExecuteResponse, BuildError)(connResult.unwrapErr());
         
-        // Poll for operation completion
-        auto startTime = MonoTime.currTime;
-        immutable timeoutMonoTime = timeout > Duration.zero ? startTime + timeout : MonoTime.max;
+        auto conn = connResult.unwrap();
         
-        while (MonoTime.currTime < timeoutMonoTime)
-        {
-            // Query operation status
-            auto statusResult = getOperationStatus(operationName);
-            if (statusResult.isErr)
-                return Err!(ExecuteResponse, BuildError)(statusResult.unwrapErr());
-            
-            auto response = statusResult.unwrap();
-            
-            // Check if completed
-            if (response.status.code == 0)
-                return Ok!(ExecuteResponse, BuildError)(response);
-            
-            // Check if error
-            if (response.status.code != 0 && response.status.code != 1) // 1 = IN_PROGRESS
-                return Err!(ExecuteResponse, BuildError)(
-                    Errors.generic("Operation failed: " ~ response.status.message, ErrorCode.BuildFailed));
-            
-            // Wait before polling again
-            Thread.sleep(500.msecs);
-        }
+        // Serialize WaitExecution request
+        auto requestData = ReapiCodec.serializeWaitExecutionRequest(operationName);
         
-        // Timeout reached
-        return Err!(ExecuteResponse, BuildError)(
-            Errors.generic("Operation timeout", ErrorCode.BuildTimeout));
-    }
-    
-    /// Get operation status
-    private BuildResult!ExecuteResponse getOperationStatus(string operationName) @trusted
-    {
-        auto httpResult = sendHttpRequest("GET", remoteUrl ~ "/v2/operations/" ~ operationName, []);
+        auto effectiveTimeout = waitTimeout > Duration.zero ? waitTimeout : timeout;
         
-        if (httpResult.isErr)
-            return Err!(ExecuteResponse, BuildError)(httpResult.unwrapErr());
+        // WaitExecution is server streaming - blocks until operation completes
+        auto streamResult = conn.serverStreamingCall(
+            ReapiServices.waitExecution().path, requestData, effectiveTimeout);
         
-        auto parseResult = ReapiCodec.deserializeExecuteResponse(httpResult.unwrap());
+        if (streamResult.isErr)
+            return Err!(ExecuteResponse, BuildError)(
+                Errors.generic("WaitExecution gRPC call failed: " ~ streamResult.unwrapErr(), ErrorCode.NetworkError));
+        
+        auto responses = streamResult.unwrap();
+        if (responses.length == 0)
+            return Err!(ExecuteResponse, BuildError)(
+                Errors.generic("No response from WaitExecution stream", ErrorCode.NetworkError));
+        
+        // Parse final Operation response
+        auto parseResult = ReapiCodec.deserializeExecuteResponse(responses[$ - 1]);
         if (parseResult.isErr)
             return Err!(ExecuteResponse, BuildError)(
                 Errors.generic("Failed to parse operation status: " ~ parseResult.unwrapErr(), ErrorCode.NetworkError));
@@ -408,36 +419,36 @@ final class ReapiAdapter
         return Ok!(ExecuteResponse, BuildError)(parseResult.unwrap());
     }
     
-    /// Get action result from cache
+    /// Get action result from cache using gRPC
     BuildResult!ActionResult getActionResult(
         Digest actionDigest
     ) @trusted
     {
-        import std.uri : encode;
+        auto connResult = ensureConnection();
+        if (connResult.isErr)
+            return Err!(ActionResult, BuildError)(connResult.unwrapErr());
         
-        // Query action cache via HTTP GET
-        immutable path = format("/v2/actionResults/%s/%s", 
-            actionDigest.toString(), actionDigest.sizeBytes);
+        auto conn = connResult.unwrap();
         
-        auto httpResult = sendHttpRequest("GET", remoteUrl ~ path, []);
+        // Serialize GetActionResult request
+        auto requestData = ReapiCodec.serializeGetActionResultRequest(actionDigest);
         
-        if (httpResult.isErr)
+        auto grpcResult = conn.unaryCall(ReapiServices.getActionResult().path, requestData, timeout);
+        if (grpcResult.isErr)
         {
-            // Not found is expected for cache misses
-            auto err = httpResult.unwrapErr();
-            if (auto cacheErr = cast(CacheError)err)
+            // gRPC NOT_FOUND is expected for cache misses
+            if (grpcResult.unwrapErr().indexOf("NOT_FOUND") >= 0 ||
+                grpcResult.unwrapErr().indexOf("5") >= 0)
             {
-                if (cacheErr.code == ErrorCode.CacheNotFound)
-                {
-                    ActionResult emptyResult;
-                    return Ok!(ActionResult, BuildError)(emptyResult);
-                }
+                ActionResult emptyResult;
+                return Ok!(ActionResult, BuildError)(emptyResult);
             }
-            return Err!(ActionResult, BuildError)(err);
+            return Err!(ActionResult, BuildError)(
+                Errors.generic("GetActionResult gRPC call failed: " ~ grpcResult.unwrapErr(), ErrorCode.NetworkError));
         }
         
         // Deserialize action result
-        auto parseResult = deserializeActionResult(httpResult.unwrap());
+        auto parseResult = deserializeActionResult(grpcResult.unwrap());
         if (parseResult.isErr)
             return Err!(ActionResult, BuildError)(
                 Errors.generic("Failed to parse action result: " ~ parseResult.unwrapErr(), ErrorCode.NetworkError));
@@ -445,127 +456,28 @@ final class ReapiAdapter
         return Ok!(ActionResult, BuildError)(parseResult.unwrap());
     }
     
-    /// Update action result in cache
+    /// Update action result in cache using gRPC
     VoidBuildResult updateActionResult(
         Digest actionDigest,
         ActionResult result
     ) @trusted
     {
-        import std.uri : encode;
+        auto connResult = ensureConnection();
+        if (connResult.isErr)
+            return VoidBuildResult.err(connResult.unwrapErr());
         
-        // Serialize action result
+        auto conn = connResult.unwrap();
+        
+        // Serialize UpdateActionResult request
         auto resultData = serializeActionResult(result);
+        auto requestData = ReapiCodec.serializeUpdateActionResultRequest(actionDigest, resultData);
         
-        // Upload to cache via HTTP PUT
-        immutable path = format("/v2/actionResults/%s/%s",
-            actionDigest.toString(), actionDigest.sizeBytes);
-        
-        auto httpResult = sendHttpRequest("PUT", remoteUrl ~ path, resultData);
-        
-        if (httpResult.isErr)
-            return VoidBuildResult.err(httpResult.unwrapErr());
+        auto grpcResult = conn.unaryCall(ReapiServices.updateActionResult().path, requestData, timeout);
+        if (grpcResult.isErr)
+            return VoidBuildResult.err(
+                Errors.generic("UpdateActionResult gRPC call failed: " ~ grpcResult.unwrapErr(), ErrorCode.NetworkError));
         
         return Ok!BuildError();
-    }
-    
-    /// Send HTTP request helper
-    private BuildResult!(ubyte[]) sendHttpRequest(
-        string method,
-        string url,
-        const ubyte[] body_
-    ) @trusted
-    {
-        import std.socket : Socket, TcpSocket, InternetAddress, SocketShutdown;
-        import std.string : indexOf, startsWith;
-        
-        // Parse URL
-        string host;
-        ushort port = 80;
-        string path;
-        
-        string remaining = url;
-        if (remaining.startsWith("http://"))
-            remaining = remaining[7 .. $];
-        else if (remaining.startsWith("https://"))
-        {
-            remaining = remaining[8 .. $];
-            port = 443;
-        }
-        
-        immutable slashPos = remaining.indexOf('/');
-        if (slashPos >= 0)
-        {
-            host = remaining[0 .. slashPos];
-            path = remaining[slashPos .. $];
-        }
-        else
-        {
-            host = remaining;
-            path = "/";
-        }
-        
-        try
-        {
-            auto addr = new InternetAddress(host, port);
-            auto socket = new TcpSocket();
-            socket.connect(addr);
-            scope(exit) { socket.shutdown(SocketShutdown.BOTH); socket.close(); }
-            
-            // Build HTTP request
-            string request = method ~ " " ~ path ~ " HTTP/1.1\r\n";
-            request ~= "Host: " ~ host ~ "\r\n";
-            request ~= "Content-Length: " ~ body_.length.to!string ~ "\r\n";
-            request ~= "Content-Type: application/octet-stream\r\n";
-            request ~= "\r\n";
-            
-            // Send request
-            socket.send(request);
-            if (body_.length > 0)
-                socket.send(body_);
-            
-            // Receive response
-            ubyte[] responseData;
-            ubyte[4096] buffer;
-            while (true)
-            {
-                auto received = socket.receive(buffer);
-                if (received <= 0)
-                    break;
-                responseData ~= buffer[0 .. received];
-            }
-            
-            // Parse HTTP response (simple)
-            immutable responseStr = cast(string)responseData;
-            immutable headersEnd = responseStr.indexOf("\r\n\r\n");
-            if (headersEnd < 0)
-                return Err!(ubyte[], BuildError)(
-                    Errors.generic("Invalid HTTP response", ErrorCode.NetworkError));
-            
-            // Extract status code
-            import std.array : split;
-            immutable firstLine = responseStr[0 .. responseStr.indexOf('\r')];
-            auto parts = firstLine.split(' ');
-            if (parts.length < 2)
-                return Err!(ubyte[], BuildError)(
-                    Errors.generic("Invalid HTTP status line", ErrorCode.NetworkError));
-            
-            immutable statusCode = parts[1].to!int;
-            if (statusCode == 404)
-                return Err!(ubyte[], BuildError)(
-                    Errors.cache("Not found", ErrorCode.CacheNotFound));
-            else if (statusCode >= 400)
-                return Err!(ubyte[], BuildError)(
-                    Errors.generic("HTTP error: " ~ statusCode.to!string, ErrorCode.NetworkError));
-            
-            // Extract body
-            auto body_result = cast(ubyte[])responseData[headersEnd + 4 .. $];
-            return Ok!(ubyte[], BuildError)(body_result);
-        }
-        catch (Exception e)
-        {
-            return Err!(ubyte[], BuildError)(
-                Errors.generic("HTTP request failed: " ~ e.msg, ErrorCode.NetworkError));
-        }
     }
     
     /// Deserialize action result
@@ -720,33 +632,105 @@ final class ReapiAdapter
 }
 
 /// REAPI request/response serialization
-/// Wire format compatible with Bazel REAPI but using efficient binary encoding
+/// Wire format compatible with Bazel REAPI using protobuf encoding
 struct ReapiCodec
 {
-    /// Serialize ExecuteRequest
+    /// Protobuf wire types
+    private enum WireType : ubyte {
+        Varint = 0, LengthDelimited = 2
+    }
+    
+    private static ubyte makeTag(uint fieldNumber, WireType wireType) pure nothrow @safe @nogc =>
+        cast(ubyte)((fieldNumber << 3) | wireType);
+    
+    private static ubyte[] encodeVarint(long value) @trusted {
+        ubyte[] buf;
+        auto uvalue = cast(ulong)value;
+        while (uvalue >= 0x80) {
+            buf ~= cast(ubyte)(uvalue | 0x80);
+            uvalue >>= 7;
+        }
+        buf ~= cast(ubyte)uvalue;
+        return buf;
+    }
+    
+    /// Serialize ExecuteRequest (protobuf wire format)
     static ubyte[] serializeExecuteRequest(Action action, bool skipCacheLookup) @trusted
     {
-        import std.bitmanip : write;
-        
         ubyte[] buffer;
-        buffer.reserve(1024);
+        buffer.reserve(256);
         
-        // Action digest
-        buffer ~= action.digest().hash;
-        buffer.write!ulong(action.digest().sizeBytes, buffer.length);
+        // Field 3: action_digest (Digest message)
+        auto digestBuf = encodeDigest(action.digest());
+        buffer ~= makeTag(3, WireType.LengthDelimited);
+        buffer ~= encodeVarint(digestBuf.length);
+        buffer ~= digestBuf;
         
-        // Skip cache flag
-        buffer.write!ubyte(skipCacheLookup ? 1 : 0, buffer.length);
-        
-        // Platform properties
-        buffer.write!uint(cast(uint)action.platform.properties.length, buffer.length);
-        foreach (prop; action.platform.properties)
-        {
-            buffer.write!uint(cast(uint)prop.name.length, buffer.length);
-            buffer ~= cast(ubyte[])prop.name;
-            buffer.write!uint(cast(uint)prop.value.length, buffer.length);
-            buffer ~= cast(ubyte[])prop.value;
+        // Field 2: skip_cache_lookup (bool)
+        if (skipCacheLookup) {
+            buffer ~= makeTag(2, WireType.Varint);
+            buffer ~= 0x01;
         }
+        
+        return buffer;
+    }
+    
+    /// Encode Digest message
+    private static ubyte[] encodeDigest(Digest digest) @trusted {
+        ubyte[] buf;
+        
+        // Field 1: hash (string as hex)
+        auto hexStr = digest.toString();
+        buf ~= makeTag(1, WireType.LengthDelimited);
+        buf ~= encodeVarint(hexStr.length);
+        buf ~= cast(ubyte[])hexStr;
+        
+        // Field 2: size_bytes
+        buf ~= makeTag(2, WireType.Varint);
+        buf ~= encodeVarint(digest.sizeBytes);
+        
+        return buf;
+    }
+    
+    /// Serialize WaitExecutionRequest
+    static ubyte[] serializeWaitExecutionRequest(string operationName) @trusted {
+        ubyte[] buffer;
+        
+        // Field 1: name (string)
+        buffer ~= makeTag(1, WireType.LengthDelimited);
+        buffer ~= encodeVarint(operationName.length);
+        buffer ~= cast(ubyte[])operationName;
+        
+        return buffer;
+    }
+    
+    /// Serialize GetActionResultRequest
+    static ubyte[] serializeGetActionResultRequest(Digest actionDigest) @trusted {
+        ubyte[] buffer;
+        
+        // Field 2: action_digest
+        auto digestBuf = encodeDigest(actionDigest);
+        buffer ~= makeTag(2, WireType.LengthDelimited);
+        buffer ~= encodeVarint(digestBuf.length);
+        buffer ~= digestBuf;
+        
+        return buffer;
+    }
+    
+    /// Serialize UpdateActionResultRequest
+    static ubyte[] serializeUpdateActionResultRequest(Digest actionDigest, ubyte[] resultData) @trusted {
+        ubyte[] buffer;
+        
+        // Field 2: action_digest
+        auto digestBuf = encodeDigest(actionDigest);
+        buffer ~= makeTag(2, WireType.LengthDelimited);
+        buffer ~= encodeVarint(digestBuf.length);
+        buffer ~= digestBuf;
+        
+        // Field 3: action_result
+        buffer ~= makeTag(3, WireType.LengthDelimited);
+        buffer ~= encodeVarint(resultData.length);
+        buffer ~= resultData;
         
         return buffer;
     }

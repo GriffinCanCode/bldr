@@ -137,3 +137,9 @@ public import engine.distributed.protocol.grpc.factory :
 public import engine.distributed.protocol.grpc.cas :
     GrpcCasTransport,
     GrpcCasFactory;
+
+public import engine.distributed.protocol.grpc.connection :
+    GrpcConnectionPool,
+    GrpcConnection,
+    ClientStream,
+    BidiStream;
