@@ -10,6 +10,7 @@ import core.memory : GC;
 import core.lifetime : emplace;
 import infrastructure.config.schema.schema;
 import infrastructure.errors;
+import infrastructure.utils.memory.prefetch : prefetch, prefetchBatch, PrefetchLocality;
 import engine.graph.core.incremental_topo;
 
 /// Arena allocator specialized for BuildNode instances
@@ -768,9 +769,12 @@ final class BuildGraph
             
             visited[node._nodeIndex] = true;
             
-            // Fast path: indexed access
+            // Fast path: indexed access with prefetching
             if (node.dependencyIndices.length == node.dependencyIds.length && _nodeArray.length > 0)
             {
+                // Prefetch upcoming nodes to hide memory latency
+                prefetchBatch(_nodeArray.ptr, node.dependencyIndices, 4);
+                
                 foreach (idx; node.dependencyIndices)
                 {
                     if (idx < _nodeArray.length && _nodeArray[idx] !is null)
@@ -1082,9 +1086,12 @@ final class BuildGraph
             // Get max cost of dependents (reverse direction - who depends on me)
             size_t maxDependentCost = 0;
             
-            // Fast path: indexed access
+            // Fast path: indexed access with prefetching
             if (node.dependentIndices.length == node.dependentIds.length && _nodeArray.length > 0)
             {
+                // Prefetch upcoming dependent nodes
+                prefetchBatch(_nodeArray.ptr, node.dependentIndices, 4);
+                
                 foreach (idx; node.dependentIndices)
                 {
                     if (idx < _nodeArray.length && _nodeArray[idx] !is null)

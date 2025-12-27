@@ -7,6 +7,7 @@ import core.atomic;
 import engine.graph.core.graph;
 import infrastructure.config.schema.schema;
 import infrastructure.errors;
+import infrastructure.utils.memory.prefetch : prefetch, prefetchBatch;
 
 /// Incremental topological ordering with O(affected) updates
 /// 
@@ -191,6 +192,9 @@ struct IncrementalTopoOrder
             
             visiting[node._nodeIndex] = true;
             
+            // Prefetch dependency nodes before traversal
+            prefetchBatch(_graph._nodeArray.ptr, node.dependencyIndices, 4);
+            
             // O(1) indexed access via dependencyIndices
             foreach (idx; node.dependencyIndices)
             {
@@ -261,7 +265,9 @@ struct IncrementalTopoOrder
             
             localVisiting[node._nodeIndex] = true;
             
-            // Fast path: indexed access
+            // Prefetch dependency nodes
+            prefetchBatch(_graph._nodeArray.ptr, node.dependencyIndices, 4);
+            
             // O(1) indexed access
             foreach (idx; node.dependencyIndices)
             {
@@ -329,6 +335,9 @@ struct IncrementalTopoOrder
             seen[node._nodeIndex] = true;
             affected ~= node;
             
+            // Prefetch dependent nodes
+            prefetchBatch(_graph._nodeArray.ptr, node.dependentIndices, 4);
+            
             // O(1) indexed access via dependentIndices
             foreach (idx; node.dependentIndices)
             {
@@ -370,6 +379,9 @@ struct IncrementalTopoOrder
             
             if (node.id == a)
                 return true;
+            
+            // Prefetch dependency nodes
+            prefetchBatch(_graph._nodeArray.ptr, node.dependencyIndices, 4);
             
             // Use indexed access (always available with dependencyIndices)
             foreach (idx; node.dependencyIndices)

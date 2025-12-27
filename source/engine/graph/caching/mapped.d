@@ -15,6 +15,7 @@ import engine.graph.core.reader : IGraphReader, GraphNodeView;
 import engine.graph.caching.schema;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.memory.mmap : MmapRegion, MapMode, MapAdvice;
+import infrastructure.utils.memory.prefetch : prefetch, prefetchRaw, PrefetchLocality;
 import infrastructure.utils.serialization;
 import infrastructure.errors;
 
@@ -261,8 +262,16 @@ final class MappedGraphView : IGraphReader
     {
         if (!_valid) return 0;
         
-        foreach (i; 0 .. cast(size_t)_header.nodeCount)
+        immutable count = cast(size_t)_header.nodeCount;
+        foreach (i; 0 .. count)
         {
+            // Prefetch next node while processing current
+            if (i + 1 < count)
+            {
+                immutable nextOffset = _header.nodeTableOffset + (i + 1) * MappedNode.SIZE;
+                prefetchRaw(cast(const(void)*)(_region[].ptr + nextOffset), PrefetchLocality.T0);
+            }
+            
             auto node = getNode(i);
             auto targetId = getString(node.targetIdOffset, node.targetIdLength);
             auto outputPath = getString(node.outputPathOffset, node.outputPathLength);
@@ -324,6 +333,13 @@ final class MappedGraphView : IGraphReader
         uint[] deps;
         deps.reserve(node.edgeCount);
         
+        // Prefetch edge table entries
+        foreach (i; 0 .. (node.edgeCount < 8 ? node.edgeCount : 8))
+        {
+            immutable edgeOffset = _header.edgeTableOffset + (node.firstEdgeIndex + i) * MappedEdge.SIZE;
+            prefetchRaw(cast(const(void)*)(_region[].ptr + edgeOffset), PrefetchLocality.T0);
+        }
+        
         foreach (i; 0 .. node.edgeCount)
         {
             auto edge = getEdge(node.firstEdgeIndex + i);
@@ -375,9 +391,25 @@ final class MappedGraphView : IGraphReader
         if (!_valid || nodeIndex >= _header.nodeCount) return false;
         auto node = getNode(nodeIndex);
         
+        // Prefetch first few edges and their target nodes
+        foreach (i; 0 .. (node.edgeCount < 4 ? node.edgeCount : 4))
+        {
+            immutable edgeOffset = _header.edgeTableOffset + (node.firstEdgeIndex + i) * MappedEdge.SIZE;
+            prefetchRaw(cast(const(void)*)(_region[].ptr + edgeOffset), PrefetchLocality.T1);
+        }
+        
         foreach (i; 0 .. node.edgeCount)
         {
             auto edge = getEdge(node.firstEdgeIndex + i);
+            
+            // Prefetch next edge's target node
+            if (i + 1 < node.edgeCount)
+            {
+                auto nextEdge = getEdge(node.firstEdgeIndex + i + 1);
+                immutable nextNodeOffset = _header.nodeTableOffset + nextEdge.toIndex * MappedNode.SIZE;
+                prefetchRaw(cast(const(void)*)(_region[].ptr + nextNodeOffset), PrefetchLocality.T1);
+            }
+            
             auto depNode = getNode(edge.toIndex);
             auto status = cast(BuildStatus)depNode.status;
             if (status != BuildStatus.Success && status != BuildStatus.Cached)
@@ -595,6 +627,15 @@ final class MmapGraphOverlay
         if (!_overlayActive || nodeIndex >= _statusOverlay.length) return false;
         
         auto node = _view.getNode(nodeIndex);
+        
+        // Prefetch status overlay entries for dependencies
+        foreach (i; 0 .. (node.edgeCount < 4 ? node.edgeCount : 4))
+        {
+            auto edge = _view.getEdge(node.firstEdgeIndex + i);
+            if (edge.toIndex < _statusOverlay.length)
+                prefetch(&_statusOverlay[edge.toIndex], PrefetchLocality.T1);
+        }
+        
         foreach (i; 0 .. node.edgeCount)
         {
             auto edge = _view.getEdge(node.firstEdgeIndex + i);
