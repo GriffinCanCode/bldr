@@ -8,7 +8,7 @@ import std.algorithm;
 import std.array;
 import std.json;
 import std.conv;
-import languages.base.base;
+import languages.compiled.base;
 import languages.compiled.zig.core.config;
 import languages.compiled.zig.analysis.builder;
 import languages.compiled.zig.tooling.tools;
@@ -16,184 +16,67 @@ import languages.compiled.zig.analysis.targets;
 import languages.compiled.zig.builders;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
-import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.logging;
 
 /// Advanced Zig build handler with build.zig and cross-compilation support
-class ZigHandler : BaseLanguageHandler
+class ZigHandler : BaseCompiledLanguageHandler
 {
-    protected override LanguageBuildResult buildImplWithContext(in BuildContext context)
+    private ZigConfig _config;
+    
+    this() { super(null); }
+    
+    // ===== Required Overrides =====
+    
+    override protected string languageId() const pure nothrow => "zig";
+    
+    override protected TargetLanguage languageType() const pure nothrow => TargetLanguage.Zig;
+    
+    override protected string[] configKeys() const pure nothrow => ["zig", "zigConfig"];
+    
+    override protected string toolchainNotFoundError() const pure nothrow =>
+        "Zig compiler not available. Install from https://ziglang.org/download/";
+    
+    override protected string detectToolchain(in Target target, in WorkspaceConfig config) @system
     {
-        // Extract target and config from context for convenience
-        auto target = context.target;
-        auto config = context.config;
+        import infrastructure.toolchain.detection.detector : ExecutableDetector;
         
-        LanguageBuildResult result;
+        _config = parseZigConfig(target);
+        enhanceConfigFromProject(_config, target, config);
         
-        structuredLog.debug_("building_zig_target_").field("detail", "Building Zig target: " ~ target.name).emit();
-        
-        // Parse Zig configuration
-        ZigConfig zigConfig = parseZigConfig(target);
-        
-        // Auto-detect and enhance configuration
-        enhanceConfigFromProject(zigConfig, target, config);
-        
-        // Run formatter if requested
-        if (zigConfig.runFmt)
-        {
-            auto fmtResult = formatCode(target.sources, zigConfig);
-            if (fmtResult.hasIssues())
-            {
-                structuredLog.info("formatting_issues_found").emit();
-                foreach (warning; fmtResult.warnings)
-                {
-                    structuredLog.warning("__").field("detail", "  " ~ warning).emit();
-                }
-            }
-        }
-        
-        // Run ast-check if requested
-        if (zigConfig.runCheck)
-        {
-            auto checkResult = ZigTools.astCheck(target.sources.dup);
-            if (!checkResult.success)
-            {
-                structuredLog.warning("ast_check_found_issues").emit();
-                foreach (error; checkResult.errors)
-                {
-                    structuredLog.warning("__").field("detail", "  " ~ error).emit();
-                }
-            }
-        }
-        
-        // Build based on target type
-        final switch (target.type)
-        {
-            case TargetType.Executable:
-                result = buildExecutable(target, config, zigConfig);
-                break;
-            case TargetType.Library:
-                result = buildLibrary(target, config, zigConfig);
-                break;
-            case TargetType.Test:
-                result = runTests(target, config, zigConfig);
-                break;
-            case TargetType.Custom:
-            case TargetType.Shell:
-                result = buildCustom(target, config, zigConfig);
-                break;
-        }
-        
-        return result;
+        return ExecutableDetector.findInPath("zig");
     }
     
-    override string[] getOutputs(in Target target, in WorkspaceConfig config)
-    {
-        ZigConfig zigConfig = parseZigConfig(target);
-        
-        string[] outputs;
-        
-        if (!target.outputPath.empty)
-        {
-            outputs ~= buildPath(config.options.outputDir, target.outputPath);
-        }
-        else
-        {
-            auto name = target.name.split(":")[$ - 1];
-            
-            // Add platform-specific extension
-            version(Windows)
-            {
-                if (zigConfig.outputType == OutputType.Exe)
-                    name ~= ".exe";
-            }
-            
-            string outputDir = zigConfig.outputDir.empty ? 
-                              config.options.outputDir : 
-                              zigConfig.outputDir;
-            
-            outputs ~= buildPath(outputDir, name);
-        }
-        
-        return outputs;
-    }
+    // ===== Build Methods =====
     
-    override Import[] analyzeImports(in string[] sources)
+    override protected LanguageBuildResult buildExecutable(in Target target, in WorkspaceConfig config, string toolPath) @system
     {
-        auto spec = getLanguageSpec(TargetLanguage.Zig);
-        if (spec is null)
-            return [];
+        _config.outputType = OutputType.Exe;
         
-        Import[] allImports;
-        
-        foreach (source; sources)
-        {
-            if (!exists(source) || !isFile(source))
-                continue;
-            
-            try
-            {
-                auto content = readText(source);
-                auto imports = spec.scanImports(source, content);
-                allImports ~= imports;
-            }
-            catch (Exception e)
-            {
-                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source).emit();
-            }
-        }
-        
-        return allImports;
-    }
-    
-    private LanguageBuildResult buildExecutable(
-        in Target target,
-        in WorkspaceConfig config,
-        ZigConfig zigConfig
-    )
-    {
-        LanguageBuildResult result;
-        
-        // Ensure output type is executable
-        zigConfig.outputType = OutputType.Exe;
-        
-        // Auto-detect entry point
-        if (zigConfig.entry.empty && !target.sources.empty)
+        if (_config.entry.empty && !target.sources.empty)
         {
             // Look for main.zig first
             foreach (source; target.sources)
             {
                 if (baseName(source) == "main.zig")
                 {
-                    zigConfig.entry = source;
+                    _config.entry = source;
                     break;
                 }
             }
-            
-            // Fallback to first source
-            if (zigConfig.entry.empty)
-                zigConfig.entry = target.sources[0];
+            if (_config.entry.empty)
+                _config.entry = target.sources[0];
         }
         
-        // Build with selected builder
-        return compileTarget(target, config, zigConfig);
+        return compileTarget(target, config);
     }
     
-    private LanguageBuildResult buildLibrary(
-        in Target target,
-        in WorkspaceConfig config,
-        ZigConfig zigConfig
-    )
+    override protected LanguageBuildResult buildLibrary(in Target target, in WorkspaceConfig config, string toolPath) @system
     {
-        LanguageBuildResult result;
+        if (_config.outputType == OutputType.Exe)
+            _config.outputType = OutputType.Lib;
         
-        // Set output type to library
-        if (zigConfig.outputType == OutputType.Exe)
-            zigConfig.outputType = OutputType.Lib;
-        
-        // Auto-detect entry point
-        if (zigConfig.entry.empty && !target.sources.empty)
+        if (_config.entry.empty && !target.sources.empty)
         {
             // Look for lib.zig or root.zig first
             foreach (source; target.sources)
@@ -201,152 +84,135 @@ class ZigHandler : BaseLanguageHandler
                 string basename = baseName(source);
                 if (basename == "lib.zig" || basename == "root.zig")
                 {
-                    zigConfig.entry = source;
+                    _config.entry = source;
                     break;
                 }
             }
-            
-            // Fallback to first source
-            if (zigConfig.entry.empty)
-                zigConfig.entry = target.sources[0];
+            if (_config.entry.empty)
+                _config.entry = target.sources[0];
         }
         
-        return compileTarget(target, config, zigConfig);
+        return compileTarget(target, config);
     }
     
-    private LanguageBuildResult runTests(
-        in Target target,
-        in WorkspaceConfig config,
-        ZigConfig zigConfig
-    )
+    override protected LanguageBuildResult buildAndRunTests(in Target target, in WorkspaceConfig config, string toolPath) @system
     {
-        LanguageBuildResult result;
-        
-        // Set mode to test
-        zigConfig.mode = ZigBuildMode.Test;
-        
-        return compileTarget(target, config, zigConfig);
+        _config.mode = ZigBuildMode.Test;
+        return compileTarget(target, config);
     }
     
-    private LanguageBuildResult buildCustom(
-        in Target target,
-        in WorkspaceConfig config,
-        ZigConfig zigConfig
-    )
+    override protected LanguageBuildResult buildCustom(in Target target, in WorkspaceConfig config, string toolPath) @system
     {
-        LanguageBuildResult result;
-        
-        zigConfig.mode = ZigBuildMode.Custom;
-        
-        return compileTarget(target, config, zigConfig);
+        _config.mode = ZigBuildMode.Custom;
+        return compileTarget(target, config);
     }
     
-    private LanguageBuildResult compileTarget(
-        const Target target,
-        const WorkspaceConfig config,
-        ZigConfig zigConfig
-    )
+    // ===== Tooling =====
+    
+    override protected bool shouldFormat(in Target target) const @system => _config.runFmt;
+    override protected bool shouldLint(in Target target) const @system => _config.runCheck;
+    
+    override protected CompiledLanguageResult runFormatter(in Target target, in WorkspaceConfig config) @system
     {
-        LanguageBuildResult result;
-        
-        // Create builder
-        auto builder = ZigBuilderFactory.create(zigConfig.builder, zigConfig);
-        
-        if (!builder.isAvailable())
-        {
-            result.error = "Zig compiler not available. Install from: https://ziglang.org/download/";
-            return result;
-        }
-        
-        structuredLog.debug_("using_zig_builder_").field("detail", "Using Zig builder: " ~ builder.name() ~ " (" ~ builder.getVersion() ~ ")").emit();
-        
-        // Compile
-        auto compileResult = builder.build(target.sources, zigConfig, target, config);
-        
-        if (!compileResult.success)
-        {
-            result.error = compileResult.error;
-            return result;
-        }
-        
-        // Report warnings
-        if (compileResult.hadWarnings && !compileResult.warnings.empty)
-        {
-            structuredLog.warning("compilation_warnings").emit();
-            foreach (warn; compileResult.warnings[0 .. min(5, $)])
-            {
-                structuredLog.warning("__").field("detail", "  " ~ warn).emit();
-            }
-            if (compileResult.warnings.length > 5)
-            {
-                structuredLog.warning("___and_").field("detail", "  ... and " ~ (compileResult.warnings.length - 5).to!string ~ " more warnings").emit();
-            }
-        }
-        
+        CompiledLanguageResult result;
         result.success = true;
-        result.outputs = compileResult.outputs ~ compileResult.artifacts;
-        result.outputHash = compileResult.outputHash;
+        
+        auto fmtResult = ZigTools.format(
+            target.sources.dup,
+            _config.fmtCheck,
+            !_config.fmtCheck,
+            _config.fmtExclude
+        );
+        
+        if (fmtResult.hasIssues())
+        {
+            result.hadWarnings = true;
+            result.warnings = fmtResult.warnings;
+        }
         
         return result;
     }
     
-    private ZigConfig parseZigConfig(in Target target)
+    override protected CompiledLanguageResult runLinter(in Target target, in WorkspaceConfig config) @system
+    {
+        CompiledLanguageResult result;
+        result.success = true;
+        
+        auto checkResult = ZigTools.astCheck(target.sources.dup);
+        if (!checkResult.success)
+        {
+            result.hadLintIssues = true;
+            result.lintIssues = checkResult.errors;
+        }
+        
+        return result;
+    }
+    
+    override protected string resolveOutputDir(in Target target, in WorkspaceConfig config) const @system
+    {
+        return _config.outputDir.empty ? config.options.outputDir : _config.outputDir;
+    }
+    
+    override protected string getOutputName(string name, TargetType type) const pure nothrow
+    {
+        string ext = "";
+        version(Windows) { if (type == TargetType.Executable || type == TargetType.Test) ext = ".exe"; }
+        return name ~ ext;
+    }
+    
+    // ===== Private Implementation =====
+    
+    private LanguageBuildResult compileTarget(in Target target, in WorkspaceConfig config) @system
+    {
+        auto builder = ZigBuilderFactory.create(_config.builder, _config);
+        
+        if (!builder.isAvailable())
+            return errorResult("Zig compiler not available. Install from https://ziglang.org/download/");
+        
+        structuredLog.debug_("using_zig_builder_").field("detail", "Using Zig builder: " ~ builder.name() ~ " (" ~ builder.getVersion() ~ ")").emit();
+        
+        auto compileResult = builder.build(target.sources, _config, target, config);
+        
+        if (!compileResult.success)
+            return errorResult(compileResult.error);
+        
+        if (compileResult.hadWarnings && !compileResult.warnings.empty)
+            reportWarnings(compileResult.warnings);
+        
+        return successResult(compileResult.outputs, compileResult.artifacts, compileResult.outputHash);
+    }
+    
+    private ZigConfig parseZigConfig(in Target target) @system
     {
         ZigConfig config;
         
-        // Try language-specific keys
-        string configKey = "";
-        if ("zig" in target.langConfig)
-            configKey = "zig";
-        else if ("zigConfig" in target.langConfig)
-            configKey = "zigConfig";
-        
-        if (!configKey.empty)
+        auto json = parseTargetConfig(target);
+        if (json != JSONValue.init)
         {
-            try
-            {
-                auto json = parseJSON(target.langConfig[configKey]);
-                config = ZigConfig.fromJSON(json);
-            }
+            try { config = ZigConfig.fromJSON(json); }
             catch (Exception e)
-            {
-                structuredLog.warning("failed_to_parse_zig_config_using_default").field("detail", "Failed to parse Zig config, using defaults: " ~ e.msg).emit();
-            }
-        }
-        
-        // Apply target flags to config
-        if (!target.flags.empty)
-        {
-            // Target flags are added during compilation
+                structuredLog.warning("failed_to_parse_zig_config_").field("detail", "Using defaults: " ~ e.msg).emit();
         }
         
         return config;
     }
     
-    private void enhanceConfigFromProject(
-        ref ZigConfig config,
-        in Target target,
-        in WorkspaceConfig workspace
-    )
+    private void enhanceConfigFromProject(ref ZigConfig config, in Target target, in WorkspaceConfig workspace) @system
     {
         if (target.sources.empty && target.root.empty)
             return;
         
-        // Determine search directory - prefer target.root if set
+        // Determine search directory
         string sourceDir;
         if (!target.root.empty)
         {
             sourceDir = target.root.isAbsolute ? target.root : buildPath(workspace.root, target.root);
-            structuredLog.debug_("using_target_root_for_buildzig_search_").field("detail", "Using target root for build.zig search: " ~ sourceDir).emit();
+            structuredLog.debug_("using_target_root_").field("detail", "Using target root: " ~ sourceDir).emit();
         }
         else if (!target.sources.empty)
-        {
             sourceDir = dirName(target.sources[0]);
-        }
         else
-        {
             sourceDir = workspace.root;
-        }
         
         // Auto-detect build.zig
         if (config.builder == ZigBuilderType.Auto)
@@ -354,58 +220,34 @@ class ZigHandler : BaseLanguageHandler
             auto buildZigPath = BuildZigParser.findBuildZig(sourceDir);
             if (!buildZigPath.empty)
             {
-                structuredLog.debug_("detected_buildzig_at_").field("detail", "Detected build.zig at: " ~ buildZigPath).emit();
+                structuredLog.debug_("detected_buildzig_").field("detail", "Detected build.zig: " ~ buildZigPath).emit();
                 config.buildZig.path = buildZigPath.idup;
                 config.builder = ZigBuilderType.BuildZig;
                 
-                // Parse build.zig for project info
                 auto project = BuildZigParser.parseBuildZig(buildZigPath);
                 if (!project.name.empty)
-                {
-                    structuredLog.debug_("project_").field("detail", "Project: " ~ project.name ~ 
-                                 (project.version_.empty ? "" : " v" ~ project.version_)).emit();
-                }
+                    structuredLog.debug_("project_").field("detail", "Project: " ~ project.name ~ (project.version_.empty ? "" : " v" ~ project.version_)).emit();
             }
             else
-            {
                 config.builder = ZigBuilderType.Compile;
-            }
         }
         
         // Auto-detect entry point
         if (config.entry.empty && !target.sources.empty)
         {
-            // Look for main.zig, lib.zig, or root.zig
             foreach (source; target.sources)
             {
                 string basename = baseName(source);
-                if (basename == "main.zig" || 
-                    basename == "lib.zig" || 
-                    basename == "root.zig")
+                if (basename == "main.zig" || basename == "lib.zig" || basename == "root.zig")
                 {
                     config.entry = source.idup;
                     break;
                 }
             }
-            
-            // Fallback to first source
             if (config.entry.empty)
                 config.entry = target.sources[0].idup;
         }
         
-        // Initialize target manager
         TargetManager.initialize();
     }
-    
-    private ToolResult formatCode(in string[] sources, ZigConfig config)
-    {
-        return ZigTools.format(
-            sources.dup,
-            config.fmtCheck,  // check only
-            !config.fmtCheck, // write in place
-            config.fmtExclude // exclude pattern
-        );
-    }
 }
-
-

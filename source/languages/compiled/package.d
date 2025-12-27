@@ -13,6 +13,7 @@ module languages.compiled;
 ///
 /// Note: GPU languages (CUDA, Metal, ROCm) are in languages.gpu package
 
+public import languages.compiled.base;
 public import languages.compiled.cpp;
 public import languages.compiled.d;
 public import languages.compiled.rust;

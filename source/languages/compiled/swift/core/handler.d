@@ -8,7 +8,7 @@ import std.algorithm;
 import std.array;
 import std.json;
 import std.string;
-import languages.base.base;
+import languages.compiled.base;
 import languages.compiled.swift.config;
 import languages.compiled.swift.analysis.manifest;
 import languages.compiled.swift.managers.spm;
@@ -16,414 +16,154 @@ import languages.compiled.swift.managers.toolchain;
 import languages.compiled.swift.tooling;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
-import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.logging;
 
 /// Advanced Swift build handler with SPM, Xcode, and cross-compilation support
-class SwiftHandler : BaseLanguageHandler
+class SwiftHandler : BaseCompiledLanguageHandler
 {
-    protected override LanguageBuildResult buildImplWithContext(in BuildContext context)
+    private SwiftConfig _config;
+    
+    this() { super(null); }
+    
+    // ===== Required Overrides =====
+    
+    override protected string languageId() const pure nothrow => "swift";
+    
+    override protected TargetLanguage languageType() const pure nothrow => TargetLanguage.Swift;
+    
+    override protected string[] configKeys() const pure nothrow => ["swift", "swiftConfig"];
+    
+    override protected string toolchainNotFoundError() const pure nothrow =>
+        "Swift toolchain not available. Install from https://swift.org or Xcode from the Apple App Store.";
+    
+    override protected string detectToolchain(in Target target, in WorkspaceConfig config) @system
     {
-        // Extract target and config from context for convenience
-        auto target = context.target;
-        auto config = context.config;
+        _config = parseSwiftConfig(target);
         
-        LanguageBuildResult result;
+        if (!SwiftToolchainManager.isSwiftAvailable())
+            return "";
         
-        structuredLog.debug_("building_swift_target_").field("detail", "Building Swift target: " ~ target.name).emit();
-        
-        // Parse Swift configuration
-        SwiftConfig swiftConfig = parseSwiftConfig(target);
-        
-        // Validate Swift toolchain
-        if (!ensureSwiftAvailable(swiftConfig))
-        {
-            result.error = "Swift toolchain not available. Install from https://swift.org";
-            return result;
-        }
-        
-        // Auto-detect Package.swift if present
-        if (swiftConfig.manifest.manifestPath.empty || !exists(swiftConfig.manifest.manifestPath))
+        // Auto-detect Package.swift
+        if (_config.manifest.manifestPath.empty || !exists(_config.manifest.manifestPath))
         {
             auto manifestPath = PackageManifestParser.findManifest(target.sources.dup);
             if (!manifestPath.empty)
             {
                 structuredLog.debug_("found_packageswift_").field("detail", "Found Package.swift: " ~ manifestPath).emit();
-                swiftConfig.manifest.manifestPath = manifestPath;
-                swiftConfig.packagePath = dirName(manifestPath);
+                _config.manifest.manifestPath = manifestPath;
+                _config.packagePath = dirName(manifestPath);
                 
-                // Parse manifest
                 auto manifest = PackageManifestParser.parse(manifestPath);
                 if (manifest.isValid)
-                {
-                    swiftConfig.manifest = manifest.manifest;
-                }
+                    _config.manifest = manifest.manifest;
             }
         }
         
-        // Run SwiftLint if requested
-        if (swiftConfig.swiftlint.enabled)
-        {
-            auto lintResult = runSwiftLint(target, swiftConfig, config);
-            if (lintResult.hadLintIssues && swiftConfig.swiftlint.strict)
-            {
-                structuredLog.warning("swiftlint_found_issues").emit();
-                foreach (issue; lintResult.lintIssues)
-                {
-                    structuredLog.warning("__").field("detail", "  " ~ issue).emit();
-                }
-                
-                if (lintResult.hadLintErrors)
-                {
-                    result.error = "SwiftLint errors in strict mode";
-                    return result;
-                }
-            }
-        }
-        
-        // Run SwiftFormat if requested
-        if (swiftConfig.swiftformat.enabled)
-        {
-            runSwiftFormat(target, swiftConfig);
-        }
-        
-        // Build based on target type
-        final switch (target.type)
-        {
-            case TargetType.Executable:
-                result = buildExecutable(target, config, swiftConfig);
-                break;
-            case TargetType.Library:
-                result = buildLibrary(target, config, swiftConfig);
-                break;
-            case TargetType.Test:
-                result = runTests(target, config, swiftConfig);
-                break;
-            case TargetType.Custom:
-            case TargetType.Shell:
-                result = buildCustom(target, config, swiftConfig);
-                break;
-        }
-        
-        // Generate documentation if requested
-        if (result.success && swiftConfig.documentation.enabled)
-        {
-            generateDocumentation(target, swiftConfig, config);
-        }
-        
-        // Generate XCFramework if requested
-        if (result.success && swiftConfig.xcframework.enabled && 
-            target.type == TargetType.Library)
-        {
-            generateXCFramework(target, swiftConfig, config);
-        }
-        
-        return result;
+        import infrastructure.toolchain.detection.detector : ExecutableDetector;
+        return ExecutableDetector.findInPath("swift");
     }
     
-    override string[] getOutputs(in Target target, in WorkspaceConfig config)
-    {
-        SwiftConfig swiftConfig = parseSwiftConfig(target);
-        
-        string[] outputs;
-        
-        if (!target.outputPath.empty)
-        {
-            outputs ~= buildPath(config.options.outputDir, target.outputPath);
-        }
-        else
-        {
-            auto name = target.name.split(":")[$ - 1];
-            
-            // Adjust extension based on platform
-            version(OSX)
-            {
-                if (target.type == TargetType.Library)
-                {
-                    if (swiftConfig.libraryType == SwiftLibraryType.Static)
-                        outputs ~= buildPath(config.options.outputDir, "lib" ~ name ~ ".a");
-                    else
-                        outputs ~= buildPath(config.options.outputDir, "lib" ~ name ~ ".dylib");
-                }
-                else
-                {
-                    outputs ~= buildPath(config.options.outputDir, name);
-                }
-            }
-            else version(linux)
-            {
-                if (target.type == TargetType.Library)
-                {
-                    if (swiftConfig.libraryType == SwiftLibraryType.Static)
-                        outputs ~= buildPath(config.options.outputDir, "lib" ~ name ~ ".a");
-                    else
-                        outputs ~= buildPath(config.options.outputDir, "lib" ~ name ~ ".so");
-                }
-                else
-                {
-                    outputs ~= buildPath(config.options.outputDir, name);
-                }
-            }
-            else version(Windows)
-            {
-                if (target.type == TargetType.Library)
-                {
-                    if (swiftConfig.libraryType == SwiftLibraryType.Static)
-                        outputs ~= buildPath(config.options.outputDir, name ~ ".lib");
-                    else
-                        outputs ~= buildPath(config.options.outputDir, name ~ ".dll");
-                }
-                else
-                {
-                    outputs ~= buildPath(config.options.outputDir, name ~ ".exe");
-                }
-            }
-            else
-            {
-                outputs ~= buildPath(config.options.outputDir, name);
-            }
-        }
-        
-        return outputs;
-    }
+    // ===== Build Methods =====
     
-    override Import[] analyzeImports(in string[] sources)
+    override protected LanguageBuildResult buildExecutable(in Target target, in WorkspaceConfig config, string toolPath) @system
     {
-        auto spec = getLanguageSpec(TargetLanguage.Swift);
-        if (spec is null)
-            return [];
+        if (_config.projectType != SwiftProjectType.Executable)
+            _config.projectType = SwiftProjectType.Executable;
         
-        Import[] allImports;
-        
-        foreach (source; sources)
-        {
-            if (!exists(source) || !isFile(source))
-                continue;
-            
-            try
-            {
-                auto content = readText(source);
-                auto imports = spec.scanImports(source, content);
-                allImports ~= imports;
-            }
-            catch (Exception e)
-            {
-                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source).emit();
-            }
-        }
-        
-        return allImports;
-    }
-    
-    private LanguageBuildResult buildExecutable(in Target target, in WorkspaceConfig config, SwiftConfig swiftConfig)
-    {
-        LanguageBuildResult result;
-        
-        // Set project type to executable
-        if (swiftConfig.projectType != SwiftProjectType.Executable)
-            swiftConfig.projectType = SwiftProjectType.Executable;
-        
-        // Auto-detect entry point if not specified
-        if (swiftConfig.product.empty && !target.sources.empty)
+        if (_config.product.empty && !target.sources.empty)
         {
             // Look for main.swift
             foreach (source; target.sources)
             {
                 if (baseName(source) == "main.swift")
                 {
-                    swiftConfig.product = stripExtension(baseName(source));
+                    _config.product = stripExtension(baseName(source));
                     break;
                 }
             }
-            
-            // Fallback to target name
-            if (swiftConfig.product.empty)
-                swiftConfig.product = target.name.split(":")[$ - 1];
+            if (_config.product.empty)
+                _config.product = target.name.split(":")[$ - 1];
         }
         
-        // Build with selected tooling
-        return compileTarget(target, config, swiftConfig);
+        return compileTarget(target, config);
     }
     
-    private LanguageBuildResult buildLibrary(in Target target, in WorkspaceConfig config, SwiftConfig swiftConfig)
+    override protected LanguageBuildResult buildLibrary(in Target target, in WorkspaceConfig config, string toolPath) @system
     {
-        LanguageBuildResult result;
+        if (_config.projectType != SwiftProjectType.Library)
+            _config.projectType = SwiftProjectType.Library;
         
-        // Set project type to library
-        if (swiftConfig.projectType != SwiftProjectType.Library)
-            swiftConfig.projectType = SwiftProjectType.Library;
+        if (_config.product.empty)
+            _config.product = target.name.split(":")[$ - 1];
         
-        // Ensure product name is set
-        if (swiftConfig.product.empty)
-            swiftConfig.product = target.name.split(":")[$ - 1];
-        
-        return compileTarget(target, config, swiftConfig);
+        return compileTarget(target, config);
     }
     
-    private LanguageBuildResult runTests(in Target target, in WorkspaceConfig config, SwiftConfig swiftConfig)
+    override protected LanguageBuildResult buildAndRunTests(in Target target, in WorkspaceConfig config, string toolPath) @system
     {
-        LanguageBuildResult result;
+        _config.mode = SPMBuildMode.Test;
         
-        // Set mode to test
-        swiftConfig.mode = SPMBuildMode.Test;
+        if (_config.buildConfig == SwiftBuildConfig.Release)
+            _config.buildConfig = SwiftBuildConfig.Debug;
         
-        // Use debug configuration for tests
-        if (swiftConfig.buildConfig == SwiftBuildConfig.Release)
-            swiftConfig.buildConfig = SwiftBuildConfig.Debug;
+        _config.enableTestability = true;
         
-        // Enable testability
-        swiftConfig.enableTestability = true;
-        
-        return compileTarget(target, config, swiftConfig);
+        return compileTarget(target, config);
     }
     
-    private LanguageBuildResult buildCustom(in Target target, in WorkspaceConfig config, SwiftConfig swiftConfig)
+    override protected LanguageBuildResult buildCustom(in Target target, in WorkspaceConfig config, string toolPath) @system
     {
-        LanguageBuildResult result;
-        
-        swiftConfig.mode = SPMBuildMode.Custom;
-        
-        return compileTarget(target, config, swiftConfig);
+        _config.mode = SPMBuildMode.Custom;
+        return compileTarget(target, config);
     }
     
-    private LanguageBuildResult compileTarget(in Target target, in WorkspaceConfig config, SwiftConfig swiftConfig)
+    // ===== Tooling =====
+    
+    override protected bool shouldFormat(in Target target) const @system => _config.swiftformat.enabled;
+    override protected bool shouldLint(in Target target) const @system => _config.swiftlint.enabled;
+    
+    override protected CompiledLanguageResult runFormatter(in Target target, in WorkspaceConfig config) @system
     {
-        LanguageBuildResult result;
-        
-        // Create builder
-        auto builder = SwiftBuilderFactory.create(swiftConfig);
-        
-        if (!builder.isAvailable())
-        {
-            result.error = "Swift builder '" ~ builder.name() ~ "' is not available. " ~
-                          "Install Swift from https://swift.org or Xcode.";
-            return result;
-        }
-        
-        structuredLog.debug_("using_swift_builder_").field("detail", "Using Swift builder: " ~ builder.name() ~ " (" ~ builder.getVersion() ~ ")").emit();
-        
-        // Resolve dependencies if using SPM
-        if (!swiftConfig.manifest.manifestPath.empty && !swiftConfig.skipUpdate)
-        {
-            if (!resolveDependencies(swiftConfig))
-            {
-                structuredLog.warning("failed_to_resolve_dependencies_continuin").emit();
-            }
-        }
-        
-        // Compile
-        auto compileResult = builder.build(target.sources, swiftConfig, target, config);
-        
-        if (!compileResult.success)
-        {
-            result.error = compileResult.error;
-            return result;
-        }
-        
-        // Report warnings
-        if (compileResult.warnings.length > 0)
-        {
-            structuredLog.warning("compilation_warnings").emit();
-            foreach (warn; compileResult.warnings)
-            {
-                structuredLog.warning("__").field("detail", "  " ~ warn).emit();
-            }
-        }
-        
+        CompiledLanguageResult result;
         result.success = true;
-        result.outputs = compileResult.outputs;
-        result.outputHash = compileResult.outputHash;
+        
+        if (!SwiftFormatRunner.isAvailable())
+        {
+            structuredLog.warning("swiftformat_not_available_skipping").emit();
+            return result;
+        }
+        
+        structuredLog.info("running_swiftformat").emit();
+        
+        auto runner = new SwiftFormatRunner();
+        auto res = runner.format(
+            target.sources.dup,
+            _config.swiftformat.configFile,
+            _config.swiftformat.checkOnly,
+            _config.swiftformat.inPlace
+        );
+        
+        if (res.status != 0)
+        {
+            structuredLog.warning("swiftformat_had_issues_").field("detail", "Issues: " ~ res.output).emit();
+            result.hadWarnings = true;
+            result.warnings = [res.output];
+        }
+        else
+            structuredLog.info("code_formatted_successfully").emit();
         
         return result;
     }
     
-    private SwiftConfig parseSwiftConfig(in Target target)
+    override protected CompiledLanguageResult runLinter(in Target target, in WorkspaceConfig config) @system
     {
-        SwiftConfig config;
-        
-        // Try language-specific keys
-        string configKey = "";
-        if ("swift" in target.langConfig)
-            configKey = "swift";
-        else if ("swiftConfig" in target.langConfig)
-            configKey = "swiftConfig";
-        
-        if (!configKey.empty)
-        {
-            try
-            {
-                auto json = parseJSON(target.langConfig[configKey]);
-                config = SwiftConfig.fromJSON(json);
-            }
-            catch (Exception e)
-            {
-                structuredLog.warning("failed_to_parse_swift_config_using_defau").field("detail", "Failed to parse Swift config, using defaults: " ~ e.msg).emit();
-            }
-        }
-        
-        // Auto-detect Package.swift if not specified
-        if (config.manifest.manifestPath.empty)
-        {
-            config.manifest.manifestPath = PackageManifestParser.findManifest(target.sources.dup);
-            if (!config.manifest.manifestPath.empty)
-            {
-                config.packagePath = dirName(config.manifest.manifestPath);
-                structuredLog.debug_("found_packageswift_").field("detail", "Found Package.swift: " ~ config.manifest.manifestPath).emit();
-            }
-        }
-        
-        // Apply target flags to Swift flags
-        if (!target.flags.empty)
-        {
-            config.buildSettings.swiftFlags ~= target.flags;
-        }
-        
-        return config;
-    }
-    
-    private bool ensureSwiftAvailable(SwiftConfig config)
-    {
-        // Check if swift command is available
-        return SwiftToolchainManager.isSwiftAvailable();
-    }
-    
-    private bool resolveDependencies(SwiftConfig config)
-    {
-        if (!SPMRunner.isAvailable())
-        {
-            structuredLog.warning("swift_package_manager_not_available").emit();
-            return false;
-        }
-        
-        structuredLog.info("resolving_swift_package_dependencies").emit();
-        
-        auto runner = new SPMRunner(config.packagePath);
-        
-        // Run swift package resolve
-        auto res = runner.resolve();
-        
-        if (res.status == 0)
-        {
-            structuredLog.info("dependencies_resolved_successfully").emit();
-            return true;
-        }
-        else
-        {
-            structuredLog.error("failed_to_resolve_dependencies").emit();
-            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
-            return false;
-        }
-    }
-    
-    private SwiftLintResult runSwiftLint(in Target target, SwiftConfig config, in WorkspaceConfig workspace)
-    {
-        SwiftLintResult result;
+        CompiledLanguageResult result;
+        result.success = true;
         
         if (!SwiftLintRunner.isAvailable())
         {
             structuredLog.warning("swiftlint_not_available_skipping").emit();
-            result.success = true;
             return result;
         }
         
@@ -432,68 +172,159 @@ class SwiftHandler : BaseLanguageHandler
         auto runner = new SwiftLintRunner();
         auto res = runner.lint(
             target.sources.dup,
-            config.swiftlint.configFile,
-            config.swiftlint.strict,
-            config.swiftlint.enableRules,
-            config.swiftlint.disableRules
+            _config.swiftlint.configFile,
+            _config.swiftlint.strict,
+            _config.swiftlint.enableRules,
+            _config.swiftlint.disableRules
         );
         
         if (res.status != 0)
         {
             result.hadLintIssues = true;
-            
-            // Parse SwiftLint output
             foreach (line; res.output.split("\n"))
             {
                 if (line.canFind("warning:"))
-                {
                     result.lintIssues ~= line;
-                }
                 else if (line.canFind("error:"))
-                {
-                    result.hadLintErrors = true;
                     result.lintIssues ~= line;
-                }
             }
         }
         
-        result.success = true;
         return result;
     }
     
-    private void runSwiftFormat(in Target target, SwiftConfig config)
+    override protected string getOutputName(string name, TargetType type) const pure nothrow
     {
-        if (!SwiftFormatRunner.isAvailable())
+        string ext = "";
+        string prefix = "";
+        
+        version(OSX)
         {
-            structuredLog.warning("swiftformat_not_available_skipping").emit();
-            return;
+            if (type == TargetType.Library)
+            {
+                prefix = "lib";
+                ext = _config.libraryType == SwiftLibraryType.Static ? ".a" : ".dylib";
+            }
+        }
+        else version(linux)
+        {
+            if (type == TargetType.Library)
+            {
+                prefix = "lib";
+                ext = _config.libraryType == SwiftLibraryType.Static ? ".a" : ".so";
+            }
+        }
+        else version(Windows)
+        {
+            if (type == TargetType.Library)
+                ext = _config.libraryType == SwiftLibraryType.Static ? ".lib" : ".dll";
+            else if (type == TargetType.Executable || type == TargetType.Test)
+                ext = ".exe";
         }
         
-        structuredLog.info("running_swiftformat").emit();
-        
-        auto runner = new SwiftFormatRunner();
-        auto res = runner.format(
-            target.sources.dup,
-            config.swiftformat.configFile,
-            config.swiftformat.checkOnly,
-            config.swiftformat.inPlace
-        );
-        
-        if (res.status != 0)
-        {
-            structuredLog.warning("swiftformat_had_issues_").field("detail", "SwiftFormat had issues: " ~ res.output).emit();
-        }
-        else
-        {
-            structuredLog.info("code_formatted_successfully").emit();
-        }
+        return prefix ~ name ~ ext;
     }
     
-    private void generateDocumentation(in Target target, SwiftConfig config, in WorkspaceConfig workspace)
+    // ===== Private Implementation =====
+    
+    private LanguageBuildResult compileTarget(in Target target, in WorkspaceConfig config) @system
+    {
+        auto builder = SwiftBuilderFactory.create(_config);
+        
+        if (!builder.isAvailable())
+            return errorResult("Swift builder '" ~ builder.name() ~ "' not available. Install from https://swift.org or Xcode.");
+        
+        structuredLog.debug_("using_swift_builder_").field("detail", "Using Swift builder: " ~ builder.name() ~ " (" ~ builder.getVersion() ~ ")").emit();
+        
+        // Resolve dependencies if using SPM
+        if (!_config.manifest.manifestPath.empty && !_config.skipUpdate)
+        {
+            if (!resolveDependencies())
+                structuredLog.warning("failed_to_resolve_deps_continuing").emit();
+        }
+        
+        auto compileResult = builder.build(target.sources, _config, target, config);
+        
+        if (!compileResult.success)
+            return errorResult(compileResult.error);
+        
+        if (compileResult.warnings.length > 0)
+            reportWarnings(compileResult.warnings);
+        
+        LanguageBuildResult result;
+        result.success = true;
+        result.outputs = compileResult.outputs;
+        result.outputHash = compileResult.outputHash;
+        
+        // Generate documentation if enabled
+        if (_config.documentation.enabled)
+            generateDocumentation(target, config);
+        
+        // Generate XCFramework if enabled and library
+        if (_config.xcframework.enabled && target.type == TargetType.Library)
+            generateXCFramework(target, config);
+        
+        return result;
+    }
+    
+    private SwiftConfig parseSwiftConfig(in Target target) @system
+    {
+        SwiftConfig config;
+        
+        auto json = parseTargetConfig(target);
+        if (json != JSONValue.init)
+        {
+            try { config = SwiftConfig.fromJSON(json); }
+            catch (Exception e)
+                structuredLog.warning("failed_to_parse_swift_config_").field("detail", "Using defaults: " ~ e.msg).emit();
+        }
+        
+        // Auto-detect Package.swift
+        if (config.manifest.manifestPath.empty)
+        {
+            config.manifest.manifestPath = PackageManifestParser.findManifest(target.sources.dup);
+            if (!config.manifest.manifestPath.empty)
+            {
+                config.packagePath = dirName(config.manifest.manifestPath);
+                structuredLog.debug_("found_packageswift_").field("detail", "Found: " ~ config.manifest.manifestPath).emit();
+            }
+        }
+        
+        // Apply target flags
+        if (!target.flags.empty)
+            config.buildSettings.swiftFlags ~= target.flags;
+        
+        return config;
+    }
+    
+    private bool resolveDependencies() @system
+    {
+        if (!SPMRunner.isAvailable())
+        {
+            structuredLog.warning("spm_not_available").emit();
+            return false;
+        }
+        
+        structuredLog.info("resolving_swift_deps").emit();
+        
+        auto runner = new SPMRunner(_config.packagePath);
+        auto res = runner.resolve();
+        
+        if (res.status == 0)
+        {
+            structuredLog.info("deps_resolved_successfully").emit();
+            return true;
+        }
+        
+        structuredLog.error("failed_to_resolve_deps_").field("detail", "Output: " ~ res.output).emit();
+        return false;
+    }
+    
+    private void generateDocumentation(in Target target, in WorkspaceConfig config) @system
     {
         if (!DocCRunner.isAvailable())
         {
-            structuredLog.warning("swiftdocc_not_available_skipping_documen").emit();
+            structuredLog.warning("docc_not_available_skipping").emit();
             return;
         }
         
@@ -501,49 +332,31 @@ class SwiftHandler : BaseLanguageHandler
         
         auto runner = new DocCRunner();
         auto res = runner.generate(
-            config.manifest.manifestPath.empty ? target.sources[0] : config.packagePath,
-            config.documentation.outputPath,
-            config.documentation.hostingBasePath
+            _config.manifest.manifestPath.empty ? target.sources[0] : _config.packagePath,
+            _config.documentation.outputPath,
+            _config.documentation.hostingBasePath
         );
         
         if (res.status != 0)
-        {
-            structuredLog.warning("documentation_generation_failed_").field("detail", "Documentation generation failed: " ~ res.output).emit();
-        }
+            structuredLog.warning("doc_generation_failed_").field("detail", "Failed: " ~ res.output).emit();
         else
-        {
-            structuredLog.info("documentation_generated_successfully").emit();
-        }
+            structuredLog.info("doc_generated_successfully").emit();
     }
     
-    private void generateXCFramework(in Target target, SwiftConfig config, in WorkspaceConfig workspace)
+    private void generateXCFramework(in Target target, in WorkspaceConfig config) @system
     {
         structuredLog.info("generating_xcframework").emit();
         
         auto runner = new XCFrameworkBuilder();
         auto res = runner.create(
-            config.product,
-            config.xcframework.outputPath,
-            config.xcframework.platforms
+            _config.product,
+            _config.xcframework.outputPath,
+            _config.xcframework.platforms
         );
         
         if (res.status != 0)
-        {
-            structuredLog.warning("xcframework_generation_failed_").field("detail", "XCFramework generation failed: " ~ res.output).emit();
-        }
+            structuredLog.warning("xcframework_failed_").field("detail", "Failed: " ~ res.output).emit();
         else
-        {
             structuredLog.info("xcframework_generated_successfully").emit();
-        }
     }
 }
-
-/// SwiftLint result
-struct SwiftLintResult
-{
-    bool success;
-    bool hadLintIssues;
-    bool hadLintErrors;
-    string[] lintIssues;
-}
-

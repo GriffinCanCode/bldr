@@ -8,305 +8,253 @@ import std.algorithm;
 import std.array;
 import std.json;
 import std.string;
-import languages.base.base;
-import languages.base.mixins;
+import languages.compiled.base;
 import languages.compiled.rust.core.config;
 import languages.compiled.rust.analysis.manifest;
 import languages.compiled.rust.managers.toolchain;
 import languages.compiled.rust.tooling.builders;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
-import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.logging;
 import engine.caching.actions.action;
 
-/// Advanced Rust build handler with cargo, rustup, and toolchain support with action-level caching
-class RustHandler : BaseLanguageHandler
+/// Advanced Rust build handler with cargo, rustup, and toolchain support
+class RustHandler : BaseCompiledLanguageHandler
 {
-    mixin CachingHandlerMixin!"rust";
-    protected override LanguageBuildResult buildImplWithContext(in BuildContext context)
-    {
-        // Extract target and config from context for convenience
-        auto target = context.target;
-        auto config = context.config;
-        
-        LanguageBuildResult result;
-        
-        structuredLog.debug_("building_rust_target_").field("detail", "Building Rust target: " ~ target.name).emit();
-        
-        // Parse Rust configuration
-        RustConfig rustConfig = parseRustConfig(target);
-        
-        // Check and install toolchain if needed
-        if (!rustConfig.toolchain.empty && rustConfig.installToolchain)
-        {
-            if (!ensureToolchain(rustConfig.toolchain))
-            {
-                result.error = "Failed to ensure toolchain: " ~ rustConfig.toolchain;
-                return result;
-            }
-        }
-        
-        // Check and install target if needed
-        if (!rustConfig.target.empty)
-        {
-            if (!ensureTarget(rustConfig.target, rustConfig.toolchain))
-            {
-                structuredLog.warning("target_triple_may_not_be_installed_").field("detail", "Target triple may not be installed: " ~ rustConfig.target).emit();
-            }
-        }
-        
-        // Run clippy if requested
-        if (rustConfig.clippy)
-        {
-            auto clippyResult = runClippy(target, rustConfig, config);
-            if (clippyResult.hadClippyIssues)
-            {
-                structuredLog.warning("clippy_found_issues").emit();
-                foreach (issue; clippyResult.clippyIssues)
-                {
-                    structuredLog.warning("__").field("detail", "  " ~ issue).emit();
-                }
-            }
-        }
-        
-        // Run rustfmt if requested
-        if (rustConfig.fmt)
-        {
-            runRustfmt(target, rustConfig);
-        }
-        
-        // Build based on target type
-        final switch (target.type)
-        {
-            case TargetType.Executable:
-                result = buildExecutable(target, config, rustConfig);
-                break;
-            case TargetType.Library:
-                result = buildLibrary(target, config, rustConfig);
-                break;
-            case TargetType.Test:
-                result = runTests(target, config, rustConfig);
-                break;
-            case TargetType.Custom:
-            case TargetType.Shell:
-                result = buildCustom(target, config, rustConfig);
-                break;
-        }
-        
-        return result;
-    }
+    private RustConfig _config;
     
-    override string[] getOutputs(in Target target, in WorkspaceConfig config)
-    {
-        RustConfig rustConfig = parseRustConfig(target);
-        
-        string[] outputs;
-        
-        if (!target.outputPath.empty)
-        {
-            outputs ~= buildPath(config.options.outputDir, target.outputPath);
-        }
-        else
-        {
-            auto name = target.name.split(":")[$ - 1];
-            outputs ~= buildPath(config.options.outputDir, name);
-        }
-        
-        return outputs;
-    }
+    this() { super(null); }
     
-    override Import[] analyzeImports(in string[] sources)
+    // ===== Required Overrides =====
+    
+    override protected string languageId() const pure nothrow => "rust";
+    
+    override protected TargetLanguage languageType() const pure nothrow => TargetLanguage.Rust;
+    
+    override protected string[] configKeys() const pure nothrow => ["rust", "rustConfig"];
+    
+    override protected string toolchainNotFoundError() const pure nothrow =>
+        "Rust compiler not available. Install from https://rustup.rs/";
+    
+    override protected string detectToolchain(in Target target, in WorkspaceConfig config) @system
     {
-        auto spec = getLanguageSpec(TargetLanguage.Rust);
-        if (spec is null)
-            return [];
+        import infrastructure.toolchain.detection.detector : ExecutableDetector;
         
-        Import[] allImports;
+        // Parse config to check for toolchain preference
+        _config = parseRustConfig(target);
         
-        foreach (source; sources)
+        // Check if rustup is available
+        auto rustup = ExecutableDetector.findInPath("rustup");
+        if (!rustup.empty)
         {
-            if (!exists(source) || !isFile(source))
-                continue;
+            // If specific toolchain requested, ensure it's installed
+            if (!_config.toolchain.empty && _config.installToolchain)
+            {
+                if (!ensureToolchain(_config.toolchain))
+                    structuredLog.warning("failed_to_install_toolchain_").field("detail", "Failed to ensure toolchain: " ~ _config.toolchain).emit();
+            }
             
-            try
+            // If specific target requested, ensure it's installed
+            if (!_config.target.empty)
             {
-                auto content = readText(source);
-                auto imports = spec.scanImports(source, content);
-                allImports ~= imports;
-            }
-            catch (Exception e)
-            {
-                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source).emit();
+                if (!ensureTarget(_config.target, _config.toolchain))
+                    structuredLog.warning("target_may_not_be_installed_").field("detail", "Target may not be installed: " ~ _config.target).emit();
             }
         }
         
-        return allImports;
+        // Prefer cargo if Cargo.toml exists
+        auto cargo = ExecutableDetector.findInPath("cargo");
+        if (!cargo.empty && !_config.manifest.empty)
+            return cargo;
+        
+        // Fallback to rustc
+        return ExecutableDetector.findInPath("rustc");
     }
     
-    private LanguageBuildResult buildExecutable(in Target target, in WorkspaceConfig config, RustConfig rustConfig)
+    // ===== Build Methods =====
+    
+    override protected LanguageBuildResult buildExecutable(in Target target, in WorkspaceConfig config, string toolPath) @system
     {
-        LanguageBuildResult result;
+        if (_config.crateType == CrateType.Lib)
+            _config.crateType = CrateType.Bin;
         
-        // Set crate type to binary
-        if (rustConfig.crateType == CrateType.Lib)
-            rustConfig.crateType = CrateType.Bin;
+        if (_config.entry.empty && !target.sources.empty)
+            _config.entry = target.sources[0];
         
-        // Auto-detect entry point if not specified
-        if (rustConfig.entry.empty && !target.sources.empty)
-        {
-            rustConfig.entry = target.sources[0];
-        }
-        
-        // Build with selected compiler
-        return compileTarget(target, config, rustConfig);
+        return compileTarget(target, config);
     }
     
-    private LanguageBuildResult buildLibrary(in Target target, in WorkspaceConfig config, RustConfig rustConfig)
+    override protected LanguageBuildResult buildLibrary(in Target target, in WorkspaceConfig config, string toolPath) @system
     {
-        LanguageBuildResult result;
+        if (_config.crateType == CrateType.Bin)
+            _config.crateType = CrateType.Lib;
         
-        // Set crate type to library if not specified
-        if (rustConfig.crateType == CrateType.Bin)
-            rustConfig.crateType = CrateType.Lib;
-        
-        // Auto-detect entry point
-        if (rustConfig.entry.empty && !target.sources.empty)
+        if (_config.entry.empty && !target.sources.empty)
         {
             // Look for lib.rs first
             foreach (source; target.sources)
             {
                 if (baseName(source) == "lib.rs")
                 {
-                    rustConfig.entry = source;
+                    _config.entry = source;
                     break;
                 }
             }
-            
-            // Fallback to first source
-            if (rustConfig.entry.empty)
-                rustConfig.entry = target.sources[0];
+            if (_config.entry.empty)
+                _config.entry = target.sources[0];
         }
         
-        return compileTarget(target, config, rustConfig);
+        return compileTarget(target, config);
     }
     
-    private LanguageBuildResult runTests(in Target target, in WorkspaceConfig config, RustConfig rustConfig)
+    override protected LanguageBuildResult buildAndRunTests(in Target target, in WorkspaceConfig config, string toolPath) @system
     {
-        LanguageBuildResult result;
+        _config.mode = RustBuildMode.Test;
+        if (_config.profile == RustProfile.Release)
+            _config.profile = RustProfile.Test;
         
-        // Set mode to test
-        rustConfig.mode = RustBuildMode.Test;
-        
-        // Use test profile
-        if (rustConfig.profile == RustProfile.Release)
-            rustConfig.profile = RustProfile.Test;
-        
-        return compileTarget(target, config, rustConfig);
+        return compileTarget(target, config);
     }
     
-    private LanguageBuildResult buildCustom(in Target target, in WorkspaceConfig config, RustConfig rustConfig)
+    override protected LanguageBuildResult buildCustom(in Target target, in WorkspaceConfig config, string toolPath) @system
     {
-        LanguageBuildResult result;
-        
-        rustConfig.mode = RustBuildMode.Custom;
-        
-        return compileTarget(target, config, rustConfig);
+        _config.mode = RustBuildMode.Custom;
+        return compileTarget(target, config);
     }
     
-    private LanguageBuildResult compileTarget(in Target target, in WorkspaceConfig config, RustConfig rustConfig)
+    // ===== Tooling =====
+    
+    override protected bool shouldFormat(in Target target) const @system => _config.fmt;
+    override protected bool shouldLint(in Target target) const @system => _config.clippy;
+    
+    override protected CompiledLanguageResult runFormatter(in Target target, in WorkspaceConfig config) @system
     {
-        LanguageBuildResult result;
-        
-        // Create builder, pass actionCache for per-build-step caching
-        auto builder = RustBuilderFactory.create(rustConfig.compiler, rustConfig, actionCache);
-        
-        if (!builder.isAvailable())
-        {
-            result.error = "Rust compiler '" ~ builder.name() ~ "' is not available. " ~
-                          "Install Rust from https://rustup.rs/";
-            return result;
-        }
-        
-        structuredLog.debug_("using_rust_builder_").field("detail", "Using Rust builder: " ~ builder.name() ~ " (" ~ builder.getVersion() ~ ")").emit();
-        
-        // Compile
-        auto compileResult = builder.build(target.sources, rustConfig, target, config);
-        
-        if (!compileResult.success)
-        {
-            result.error = compileResult.error;
-            return result;
-        }
-        
-        // Report warnings
-        if (compileResult.hadWarnings)
-        {
-            structuredLog.warning("compilation_warnings").emit();
-            foreach (warn; compileResult.warnings)
-            {
-                structuredLog.warning("__").field("detail", "  " ~ warn).emit();
-            }
-        }
-        
+        CompiledLanguageResult result;
         result.success = true;
-        result.outputs = compileResult.outputs ~ compileResult.artifacts;
-        result.outputHash = compileResult.outputHash;
+        
+        if (!Rustfmt.isAvailable())
+        {
+            structuredLog.warning("rustfmt_not_available_skipping").emit();
+            return result;
+        }
+        
+        structuredLog.info("running_rustfmt").emit();
+        
+        string manifestPath = _config.manifest.empty
+            ? CargoParser.findManifest(target.sources.dup)
+            : _config.manifest;
+        
+        if (manifestPath.empty)
+        {
+            structuredLog.warning("no_cargotoml_found_skipping_rustfmt").emit();
+            return result;
+        }
+        
+        auto res = Rustfmt.format(dirName(manifestPath));
+        if (res.status != 0)
+        {
+            structuredLog.warning("rustfmt_failed_").field("detail", "rustfmt failed: " ~ res.output).emit();
+            result.hadWarnings = true;
+            result.warnings = [res.output];
+        }
+        else
+            structuredLog.info("code_formatted_successfully").emit();
         
         return result;
     }
     
-    private RustConfig parseRustConfig(in Target target)
+    override protected CompiledLanguageResult runLinter(in Target target, in WorkspaceConfig config) @system
     {
-        RustConfig config;
+        CompiledLanguageResult result;
+        result.success = true;
         
-        // Try language-specific keys
-        string configKey = "";
-        if ("rust" in target.langConfig)
-            configKey = "rust";
-        else if ("rustConfig" in target.langConfig)
-            configKey = "rustConfig";
-        
-        if (!configKey.empty)
+        if (!Clippy.isAvailable())
         {
-            try
+            structuredLog.warning("clippy_not_available_skipping").emit();
+            return result;
+        }
+        
+        structuredLog.info("running_clippy").emit();
+        
+        string manifestPath = _config.manifest.empty
+            ? CargoParser.findManifest(target.sources.dup)
+            : _config.manifest;
+        
+        if (manifestPath.empty)
+        {
+            structuredLog.warning("no_cargotoml_found_skipping_clippy").emit();
+            return result;
+        }
+        
+        auto res = Clippy.run(dirName(manifestPath), _config.clippyFlags);
+        if (res.status != 0)
+        {
+            result.hadLintIssues = true;
+            foreach (line; res.output.split("\n"))
             {
-                auto json = parseJSON(target.langConfig[configKey]);
-                config = RustConfig.fromJSON(json);
-            }
-            catch (Exception e)
-            {
-                structuredLog.warning("failed_to_parse_rust_config_using_defaul").field("detail", "Failed to parse Rust config, using defaults: " ~ e.msg).emit();
+                if (line.canFind("warning:") || line.canFind("error:"))
+                    result.lintIssues ~= line;
             }
         }
         
-        // Auto-detect Cargo.toml if not specified
+        return result;
+    }
+    
+    // ===== Private Implementation =====
+    
+    private LanguageBuildResult compileTarget(in Target target, in WorkspaceConfig config) @system
+    {
+        auto builder = RustBuilderFactory.create(_config.compiler, _config, actionCache);
+        
+        if (!builder.isAvailable())
+            return errorResult("Rust compiler '" ~ builder.name() ~ "' is not available. Install from https://rustup.rs/");
+        
+        structuredLog.debug_("using_rust_builder_").field("detail", "Using Rust builder: " ~ builder.name() ~ " (" ~ builder.getVersion() ~ ")").emit();
+        
+        auto compileResult = builder.build(target.sources, _config, target, config);
+        
+        if (!compileResult.success)
+            return errorResult(compileResult.error);
+        
+        if (compileResult.hadWarnings)
+            reportWarnings(compileResult.warnings);
+        
+        return successResult(compileResult.outputs, compileResult.artifacts, compileResult.outputHash);
+    }
+    
+    private RustConfig parseRustConfig(in Target target) @system
+    {
+        RustConfig config;
+        
+        auto json = parseTargetConfig(target);
+        if (json != JSONValue.init)
+        {
+            try { config = RustConfig.fromJSON(json); }
+            catch (Exception e)
+                structuredLog.warning("failed_to_parse_rust_config_").field("detail", "Using defaults: " ~ e.msg).emit();
+        }
+        
+        // Auto-detect Cargo.toml
         if (config.manifest.empty)
         {
             config.manifest = CargoParser.findManifest(target.sources.dup);
             if (!config.manifest.empty)
-            {
                 structuredLog.debug_("found_cargotoml_").field("detail", "Found Cargo.toml: " ~ config.manifest).emit();
-            }
         }
         
-        // Auto-detect entry point if not specified
+        // Auto-detect entry point
         if (config.entry.empty && !target.sources.empty)
-        {
             config.entry = target.sources[0];
-        }
         
-        // Apply target flags to rustc flags
+        // Apply target flags
         if (!target.flags.empty)
-        {
             config.rustcFlags ~= target.flags;
-        }
         
         return config;
     }
     
-    private bool ensureToolchain(string toolchain)
+    private bool ensureToolchain(string toolchain) @system
     {
         if (!Rustup.isAvailable())
         {
@@ -315,21 +263,19 @@ class RustHandler : BaseLanguageHandler
         }
         
         auto toolchains = Rustup.listToolchains();
-        
         foreach (tc; toolchains)
         {
             if (tc.name == toolchain && tc.isInstalled)
             {
-                structuredLog.debug_("toolchain_already_installed_").field("detail", "Toolchain already installed: " ~ toolchain).emit();
+                structuredLog.debug_("toolchain_already_installed_").field("detail", "Toolchain installed: " ~ toolchain).emit();
                 return true;
             }
         }
         
-        // Install toolchain
         return Rustup.installToolchain(toolchain);
     }
     
-    private bool ensureTarget(string target, string toolchain)
+    private bool ensureTarget(string target, string toolchain) @system
     {
         if (!Rustup.isAvailable())
         {
@@ -338,99 +284,15 @@ class RustHandler : BaseLanguageHandler
         }
         
         auto targets = Rustup.listTargets(toolchain);
-        
         foreach (t; targets)
         {
             if (t.name == target && t.isInstalled)
             {
-                structuredLog.debug_("target_already_installed_").field("detail", "Target already installed: " ~ target).emit();
+                structuredLog.debug_("target_already_installed_").field("detail", "Target installed: " ~ target).emit();
                 return true;
             }
         }
         
-        // Install target
         return Rustup.installTarget(target, toolchain);
     }
-    
-    private RustCompileResult runClippy(in Target target, RustConfig config, in WorkspaceConfig workspace)
-    {
-        RustCompileResult result;
-        
-        if (!Clippy.isAvailable())
-        {
-            structuredLog.warning("clippy_not_available_skipping").emit();
-            result.success = true;
-            return result;
-        }
-        
-        structuredLog.info("running_clippy").emit();
-        
-        string manifestPath = config.manifest.empty
-            ? CargoParser.findManifest(target.sources.dup)
-            : config.manifest;
-        
-        if (manifestPath.empty)
-        {
-            structuredLog.warning("no_cargotoml_found_skipping_clippy").emit();
-            result.success = true;
-            return result;
-        }
-        
-        string projectDir = dirName(manifestPath);
-        
-        auto res = Clippy.run(projectDir, config.clippyFlags);
-        
-        if (res.status != 0)
-        {
-            result.hadClippyIssues = true;
-            
-            // Parse clippy output
-            foreach (line; res.output.split("\n"))
-            {
-                if (line.canFind("warning:") || line.canFind("error:"))
-                {
-                    result.clippyIssues ~= line;
-                }
-            }
-        }
-        
-        result.success = true;
-        return result;
-    }
-    
-    private void runRustfmt(in Target target, RustConfig config)
-    {
-        if (!Rustfmt.isAvailable())
-        {
-            structuredLog.warning("rustfmt_not_available_skipping").emit();
-            return;
-        }
-        
-        structuredLog.info("running_rustfmt").emit();
-        
-        string manifestPath = config.manifest.empty
-            ? CargoParser.findManifest(target.sources.dup)
-            : config.manifest;
-        
-        if (manifestPath.empty)
-        {
-            structuredLog.warning("no_cargotoml_found_skipping_rustfmt").emit();
-            return;
-        }
-        
-        string projectDir = dirName(manifestPath);
-        
-        auto res = Rustfmt.format(projectDir);
-        
-        if (res.status != 0)
-        {
-            structuredLog.warning("rustfmt_failed_").field("detail", "rustfmt failed: " ~ res.output).emit();
-        }
-        else
-        {
-            structuredLog.info("code_formatted_successfully").emit();
-        }
-    }
 }
-
-
