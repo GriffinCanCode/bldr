@@ -242,6 +242,7 @@ enum TargetLanguage
     OCaml,
     Haskell,
     Elm,
+    WebAssembly,  // WASM/WASI targets
     Generic
 }
 

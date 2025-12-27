@@ -218,6 +218,9 @@ class DependencyResolver
             case TargetLanguage.Protobuf:
                 target = "";  // Protobuf imports handled by compiler
                 break;
+            case TargetLanguage.WebAssembly:
+                target = "";  // WASM imports resolved at runtime
+                break;
             case TargetLanguage.Generic:
                 target = "";
                 break;

@@ -119,6 +119,9 @@ final class HandlerRegistry : IHandlerRegistry
             case TargetLanguage.Protobuf:
                 import languages.compiled.protobuf : ProtobufHandler;
                 return new ProtobufHandler();
+            case TargetLanguage.WebAssembly:
+                import languages.wasm : WebAssemblyHandler;
+                return new WebAssemblyHandler();
             case TargetLanguage.FSharp:
             case TargetLanguage.CSS:
             case TargetLanguage.Generic:

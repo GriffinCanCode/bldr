@@ -54,6 +54,7 @@ shared static this()
     aliases[TargetLanguage.OCaml] = ["ocaml", "ml"];
     aliases[TargetLanguage.Haskell] = ["haskell", "hs"];
     aliases[TargetLanguage.Elm] = ["elm"];
+    aliases[TargetLanguage.WebAssembly] = ["webassembly", "wasm", "wasi", "wat"];
     aliases[TargetLanguage.Generic] = ["generic"];
     
     languageAliases = cast(immutable) aliases;
@@ -173,6 +174,11 @@ shared static this()
     
     // Elm
     extensions[".elm"] = TargetLanguage.Elm;
+    
+    // WebAssembly
+    extensions[".wasm"] = TargetLanguage.WebAssembly;
+    extensions[".wat"] = TargetLanguage.WebAssembly;
+    extensions[".wast"] = TargetLanguage.WebAssembly;
     
     extensionMap = cast(immutable) extensions;
 }
@@ -318,6 +324,7 @@ string getLanguageLabel(TargetLanguage language)
         case TargetLanguage.OCaml: return "OCaml";
         case TargetLanguage.Haskell: return "Haskell";
         case TargetLanguage.Elm: return "Elm";
+        case TargetLanguage.WebAssembly: return "WebAssembly";
         case TargetLanguage.Generic: return "Generic";
         default: return "Unknown";
     }
@@ -330,7 +337,8 @@ enum LanguageCategory
     Scripting,
     JVM,
     DotNet,
-    Web
+    Web,
+    Wasm  // WebAssembly/WASI targets
 }
 
 /// Get the category for a language
@@ -376,6 +384,9 @@ LanguageCategory getLanguageCategory(TargetLanguage language)
         case TargetLanguage.CSS:
         case TargetLanguage.Elm:
             return LanguageCategory.Web;
+            
+        case TargetLanguage.WebAssembly:
+            return LanguageCategory.Wasm;
             
         default:
             return LanguageCategory.Scripting;

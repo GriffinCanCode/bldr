@@ -141,6 +141,7 @@ class EnhancedTemplateGenerator
             case TargetLanguage.OCaml:
             case TargetLanguage.Haskell:
             case TargetLanguage.Elm:
+            case TargetLanguage.WebAssembly:
             case TargetLanguage.Generic:
                 return "";
         }

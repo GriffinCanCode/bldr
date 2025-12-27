@@ -14,7 +14,7 @@ The `registry.d` module is the single source of truth for all language-related i
 - Language name aliases (e.g., "py" → Python, "c++" → C++)
 - File extension mappings (e.g., ".ts" → TypeScript)
 - Language display labels for UI
-- Language categorization (Compiled, Scripting, JVM, .NET, Web)
+- Language categorization (Compiled, Scripting, JVM, .NET, Web, Wasm)
 
 **Important**: When adding a new language, update `registry.d` and it will automatically appear in help text, wizard, and all other places. Never hardcode language lists elsewhere.
 
@@ -36,6 +36,9 @@ C#, F#
 
 #### Web Languages
 JavaScript, TypeScript, CSS, Elm
+
+#### WebAssembly (Wasm)
+WebAssembly/WASI targets - compile from Rust, C/C++, Go, Zig, AssemblyScript with runtimes wasmtime, wasmer, wasm3
 
 ### Module Structure
 

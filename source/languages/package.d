@@ -32,6 +32,7 @@ module languages;
 ///   ocaml/       - OCaml language support (modular - dune, ocamlopt, ocamlc, opam)
 ///   protobuf/    - Protocol Buffers support (modular - protoc, buf, code generation)
 ///   elm/         - Elm language support (functional, web, compiles to JavaScript)
+///   wasm/        - WebAssembly support (modular - wasm-pack, emscripten, wasmtime, wasmer, WASI)
 /// 
 /// Dynamic Language Support
 ///   Instead of 150+ lines of D code per language, define languages via JSON specs.
@@ -82,4 +83,5 @@ public import languages.scripting.lua;
 public import languages.compiled.nim;
 public import languages.compiled.zig;
 public import languages.compiled.haskell;
+public import languages.wasm;  // WebAssembly/WASI
 

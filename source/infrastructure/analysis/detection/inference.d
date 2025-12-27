@@ -198,6 +198,7 @@ class TargetInference
             case TargetLanguage.Gleam:
             case TargetLanguage.CSS:
             case TargetLanguage.Protobuf:
+            case TargetLanguage.WebAssembly:
             case TargetLanguage.Generic:
                 return config;
         }

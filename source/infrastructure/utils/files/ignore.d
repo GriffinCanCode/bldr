@@ -536,6 +536,7 @@ IgnoreSeverity getIgnoreSeverity(TargetLanguage lang)
         
         // NONE
         case TargetLanguage.CSS:
+        case TargetLanguage.WebAssembly:
         case TargetLanguage.Generic:
         default:
             return IgnoreSeverity.None;

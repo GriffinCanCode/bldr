@@ -132,6 +132,8 @@ class TemplateGenerator
                 return generateElmTarget(langInfo);
             case TargetLanguage.Gleam:
                 return generateGleamTarget(langInfo);
+            case TargetLanguage.WebAssembly:
+                return generateWebAssemblyTarget(langInfo);
             case TargetLanguage.Generic:
                 return generateGenericTarget();
         }
@@ -246,6 +248,7 @@ class TemplateGenerator
             case TargetLanguage.Haskell: return "haskell";
             case TargetLanguage.Elm: return "elm";
             case TargetLanguage.Gleam: return "gleam";
+            case TargetLanguage.WebAssembly: return "webassembly";
             case TargetLanguage.Generic: return "generic";
         }
     }
@@ -971,12 +974,34 @@ class TemplateGenerator
                 case TargetLanguage.Haskell:
                 case TargetLanguage.Elm:
                 case TargetLanguage.Gleam:
+                case TargetLanguage.WebAssembly:
                 case TargetLanguage.Generic:
                     break;
             }
         }
         
         return envVars;
+    }
+    
+    /// WebAssembly target generation
+    private string generateWebAssemblyTarget(LanguageInfo info)
+    {
+        string sources = generateSourcesArray(info.sourceFiles, "*.wat,*.wasm");
+        string targetName = generateUniqueTargetName("wasm", info);
+        
+        string target = format("target(\"%s\") {\n", targetName);
+        target ~= "    type: executable;\n";
+        target ~= "    language: webassembly;\n";
+        target ~= format("    sources: %s;\n", sources);
+        target ~= "    langConfig: {\n";
+        target ~= "        wasm: {\n";
+        target ~= "            \"runtime\": \"wasmtime\",\n";
+        target ~= "            \"wasi\": { \"enabled\": true }\n";
+        target ~= "        }\n";
+        target ~= "    };\n";
+        target ~= "}";
+        
+        return target;
     }
 }
 

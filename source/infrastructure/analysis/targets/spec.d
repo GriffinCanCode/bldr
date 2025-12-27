@@ -380,6 +380,16 @@ shared static this()
         &detectRelativeImport
     );
     
+    // WebAssembly (WAT imports)
+    specs[TargetLanguage.WebAssembly] = LanguageSpec(
+        TargetLanguage.WebAssembly,
+        "WebAssembly",
+        [
+            ImportPattern("import", `\(import\s+"([^"]+)"\s+"[^"]+"`),
+        ],
+        &detectRelativeImport
+    );
+    
     // Generic (no-op)
     specs[TargetLanguage.Generic] = LanguageSpec(
         TargetLanguage.Generic,

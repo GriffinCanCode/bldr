@@ -1,0 +1,68 @@
+# WebAssembly Example Project
+# Demonstrates WASM/WASI support in Builder
+
+targets:
+  # Simple WAT to WASM compilation
+  - name: hello-wat
+    type: executable
+    language: webassembly
+    sources:
+      - src/hello.wat
+    langConfig:
+      wasm: |
+        {
+          "toolchain": "wat2wasm",
+          "optimize": "os",
+          "outputName": "hello"
+        }
+
+  # WASI executable (requires Rust toolchain)
+  - name: hello-wasi
+    type: executable
+    language: wasm
+    sources:
+      - src/main.rs
+    langConfig:
+      wasm: |
+        {
+          "sourceLang": "rust",
+          "toolchain": "wasm-pack",
+          "runtime": "wasmtime",
+          "wasi": {
+            "enabled": true,
+            "capabilities": ["stdout", "stderr"],
+            "inheritStdio": true
+          }
+        }
+
+  # Zig WASM (requires Zig compiler)
+  - name: hello-zig-wasm
+    type: executable
+    language: webassembly
+    sources:
+      - src/main.zig
+    langConfig:
+      wasm: |
+        {
+          "sourceLang": "zig",
+          "toolchain": "zig",
+          "wasi": { "enabled": true },
+          "optimize": "small"
+        }
+
+  # Browser-targeted WASM library
+  - name: web-lib
+    type: library
+    language: wasm
+    sources:
+      - src/lib.wat
+    langConfig:
+      wasm: |
+        {
+          "runtime": "browser",
+          "jsGlue": true,
+          "esModule": true,
+          "exportAll": true
+        }
+
+
