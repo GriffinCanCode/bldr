@@ -86,7 +86,7 @@ class DCompiler
             {
                 result.error = execResult.output;
                 return BuildResult!CompilationResult.err(
-                    Errors.parse("", "Macro compilation failed: " ~ result.error)
+                    Errors.language("D", "Macro compilation failed: " ~ result.error, Language.MacroExpansionFailed)
                         .withLocation(__FILE__, __LINE__)
                         .build()
                 );
@@ -99,7 +99,7 @@ class DCompiler
             result.success = false;
             result.error = e.msg;
             return BuildResult!CompilationResult.err(
-                Errors.parse("", "Macro compilation exception: " ~ e.msg)
+                Errors.language("D", "Macro compilation exception: " ~ e.msg, Language.MacroExpansionFailed)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -112,7 +112,7 @@ class DCompiler
         if (!exists(filePath))
         {
             return BuildResult!CompilationResult.err(
-                Errors.parse(filePath, "Macro file not found: " ~ filePath)
+                Errors.io(filePath, "Macro file not found: " ~ filePath, IO.FileNotFound)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -164,7 +164,7 @@ class MacroExecutor
             result.success = false;
             result.error = "Macro binary not found: " ~ binaryPath;
             return BuildResult!MacroResult.err(
-                Errors.parse(binaryPath, result.error)
+                Errors.io(binaryPath, result.error, IO.FileNotFound)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -183,7 +183,7 @@ class MacroExecutor
             {
                 result.error = execResult.output;
                 return BuildResult!MacroResult.err(
-                    Errors.parse("", "Macro execution failed: " ~ result.error)
+                    Errors.language("D", "Macro execution failed: " ~ result.error, Language.MacroExpansionFailed)
                         .withLocation(__FILE__, __LINE__)
                         .build()
                 );
@@ -199,7 +199,7 @@ class MacroExecutor
             result.success = false;
             result.error = e.msg;
             return BuildResult!MacroResult.err(
-                Errors.parse("", "Macro execution exception: " ~ e.msg)
+                Errors.language("D", "Macro execution exception: " ~ e.msg, Language.MacroExpansionFailed)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );

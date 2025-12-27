@@ -530,7 +530,7 @@ class Evaluator
             
             if (!iterResult.unwrap().isArray())
                 return VoidBuildResult.err(
-                    Errors.parse("", "For loop requires array")
+                    Errors.parse("", "For loop requires array", Parse.InvalidFieldValue)
                         .withLocation(__FILE__, __LINE__)
                         .build()
                 );

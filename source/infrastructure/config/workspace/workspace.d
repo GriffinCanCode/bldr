@@ -703,7 +703,7 @@ struct WorkspaceAnalyzer
     {
         return expr ? extractBoolFromLiteral((cast(LiteralExpr)expr).value) :
             Err!(bool, BuildError)(
-                Errors.parse("", "Expected boolean literal")
+                Errors.parse("", "Expected boolean literal", Parse.InvalidFieldValue)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -722,7 +722,7 @@ struct WorkspaceAnalyzer
         }
         
         return Err!(bool, BuildError)(
-            Errors.parse("", "Expected boolean value")
+            Errors.parse("", "Expected boolean value", Parse.InvalidFieldValue)
                 .withLocation(__FILE__, __LINE__)
                 .build()
         );
@@ -733,7 +733,7 @@ struct WorkspaceAnalyzer
     {
         auto litExpr = cast(LiteralExpr)expr;
         if (!litExpr) return Err!(long, BuildError)(
-            Errors.parse("", "Expected number literal")
+            Errors.parse("", "Expected number literal", Parse.InvalidFieldValue)
                 .withLocation(__FILE__, __LINE__)
                 .build()
         );
@@ -745,14 +745,14 @@ struct WorkspaceAnalyzer
         {
             try { return Ok!(long, BuildError)(litExpr.value.asString().to!long); }
             catch (Exception) { return Err!(long, BuildError)(
-                Errors.parse("", "Invalid number format")
+                Errors.parse("", "Invalid number format", Parse.InvalidFieldValue)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             ); }
         }
         
         return Err!(long, BuildError)(
-            Errors.parse("", "Expected number value")
+            Errors.parse("", "Expected number value", Parse.InvalidFieldValue)
                 .withLocation(__FILE__, __LINE__)
                 .build()
         );

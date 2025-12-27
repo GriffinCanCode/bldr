@@ -211,7 +211,7 @@ class Interpreter
         if (!iterable.isArray())
         {
             return VoidBuildResult.err(
-                Errors.parse("", "For loop requires an array to iterate over")
+                Errors.parse("", "For loop requires an array to iterate over", Parse.InvalidFieldValue)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -492,7 +492,7 @@ class Interpreter
         else
         {
             return BuildResult!Value.err(
-                Errors.parse("", "Unsupported expression type for evaluation")
+                Errors.parse("", "Unsupported expression type for evaluation", Internal.NotSupported)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );

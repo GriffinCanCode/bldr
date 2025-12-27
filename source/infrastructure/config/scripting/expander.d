@@ -137,7 +137,7 @@ class MacroExpander
         if (!iterable.isArray())
         {
             return BuildResult!(TargetDeclStmt[]).err(
-                Errors.parse("", "For loop requires array iterable")
+                Errors.parse("", "For loop requires array iterable", Parse.InvalidFieldValue)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );

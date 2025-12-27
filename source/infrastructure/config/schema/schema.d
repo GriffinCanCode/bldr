@@ -40,7 +40,7 @@ struct TargetId
         if (qualified.empty)
         {
             return BuildResult!TargetId.err(
-                Errors.parse("", "Empty target ID - target identifier cannot be empty")
+                Errors.parse("", "Empty target ID - target identifier cannot be empty", Config.InvalidTarget)
                     .withSuggestion("Provide a valid target identifier in the format 'name' or 'namespace:name'")
                     .withSuggestion("Check that the target definition has a non-empty 'name' field")
                     .withSuggestion("See docs/architecture/DSL.md for target naming conventions")

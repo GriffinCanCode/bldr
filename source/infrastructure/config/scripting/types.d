@@ -377,7 +377,7 @@ struct TargetConfig
         if (!v.isMap())
         {
             return BuildResult!TargetConfig.err(
-                Errors.parse("", "Target configuration must be a map")
+                Errors.parse("", "Target configuration must be a map", Config.InvalidTarget)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -390,7 +390,7 @@ struct TargetConfig
         if ("type" !in map)
         {
             return BuildResult!TargetConfig.err(
-                Errors.parse("", "Target must have 'type' field")
+                Errors.parse("", "Target must have 'type' field", Config.RequiredFieldMissing)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );

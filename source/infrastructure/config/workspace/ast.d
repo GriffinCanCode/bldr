@@ -155,7 +155,7 @@ struct Literal
     {
         if (kind != LiteralKind.Array)
             return Err!(string[], BuildError)(
-                Errors.parse("", "Expected array")
+                Errors.parse("", "Expected array", Parse.InvalidFieldValue)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -165,7 +165,7 @@ struct Literal
         {
             if (elem.kind != LiteralKind.String)
                 return Err!(string[], BuildError)(
-                    Errors.parse("", "Array must contain strings")
+                    Errors.parse("", "Array must contain strings", Parse.InvalidFieldValue)
                         .withLocation(__FILE__, __LINE__)
                         .build()
                 );
@@ -178,7 +178,7 @@ struct Literal
     {
         if (kind != LiteralKind.Map)
             return Err!(string[string], BuildError)(
-                Errors.parse("", "Expected map")
+                Errors.parse("", "Expected map", Parse.InvalidFieldValue)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -188,7 +188,7 @@ struct Literal
         {
             if (value.kind != LiteralKind.String)
                 return Err!(string[string], BuildError)(
-                    Errors.parse("", "Map values must be strings")
+                    Errors.parse("", "Map values must be strings", Parse.InvalidFieldValue)
                         .withLocation(__FILE__, __LINE__)
                         .build()
                 );

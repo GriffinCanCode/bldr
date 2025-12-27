@@ -232,7 +232,7 @@ struct SemanticAnalyzer
             if (litExpr.value.kind == LiteralKind.String)
                 return Ok!(string, BuildError)(litExpr.value.asString());
             return Err!(string, BuildError)(
-                Errors.parse("", "Expected string")
+                Errors.parse("", "Expected string", Parse.InvalidFieldValue)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -245,7 +245,7 @@ struct SemanticAnalyzer
         }
         
         return Err!(string, BuildError)(
-            Errors.parse("", "Expected string literal")
+            Errors.parse("", "Expected string literal", Parse.InvalidFieldValue)
                 .withLocation(__FILE__, __LINE__)
                 .build()
         );
@@ -259,7 +259,7 @@ struct SemanticAnalyzer
         }
         
         return Err!(string[], BuildError)(
-            Errors.parse("", "Expected array of strings")
+            Errors.parse("", "Expected array of strings", Parse.InvalidFieldValue)
                 .withLocation(__FILE__, __LINE__)
                 .build()
         );
@@ -273,7 +273,7 @@ struct SemanticAnalyzer
         }
         
         return Err!(string[string], BuildError)(
-            Errors.parse("", "Expected map of strings")
+            Errors.parse("", "Expected map of strings", Parse.InvalidFieldValue)
                 .withLocation(__FILE__, __LINE__)
                 .build()
         );
@@ -352,7 +352,7 @@ struct SemanticAnalyzer
         }
         
         return Err!(string, BuildError)(
-            Errors.parse("", "Expected map for language config")
+            Errors.parse("", "Expected map for language config", Parse.InvalidFieldValue)
                 .withLocation(__FILE__, __LINE__)
                 .build()
         );

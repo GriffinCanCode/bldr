@@ -72,7 +72,7 @@ class ScopeManager
             if (!stack.empty && stack[$ - 1].scopeLevel == scopeLevel)
             {
                 return VoidBuildResult.err(
-                    Errors.parse("", "Variable '" ~ name ~ "' is already defined in this scope")
+                    Errors.parse("", "Variable '" ~ name ~ "' is already defined in this scope", Analysis.DuplicateDefinition)
                         .withSuggestion("Use a different variable name")
                         .withSuggestion("Or use assignment instead of re-declaration")
                         .withLocation(__FILE__, __LINE__)
@@ -120,7 +120,7 @@ class ScopeManager
         if (name !in symbols || symbols[name].empty)
         {
             return VoidBuildResult.err(
-                Errors.parse("", "Undefined variable '" ~ name ~ "'")
+                Errors.parse("", "Undefined variable '" ~ name ~ "'", Analysis.UndefinedReference)
                     .withSuggestion("Define variable with 'let " ~ name ~ " = ...'")
                     .withSuggestion("Check for typos in variable name")
                     .withLocation(__FILE__, __LINE__)
@@ -134,7 +134,7 @@ class ScopeManager
         if (sym.isConst)
         {
             return VoidBuildResult.err(
-                Errors.parse("", "Cannot assign to const variable '" ~ name ~ "'")
+                Errors.parse("", "Cannot assign to const variable '" ~ name ~ "'", Parse.InvalidFieldValue)
                     .withSuggestion("Use 'let' instead of 'const' for mutable variables")
                     .withSuggestion("Create a new variable with a different name")
                     .withLocation(__FILE__, __LINE__)
@@ -155,7 +155,7 @@ class ScopeManager
         if (name !in symbols || symbols[name].empty)
         {
             return BuildResult!Value.err(
-                Errors.parse("", "Undefined variable '" ~ name ~ "'")
+                Errors.parse("", "Undefined variable '" ~ name ~ "'", Analysis.UndefinedReference)
                     .withSuggestion("Define variable with 'let " ~ name ~ " = ...'")
                     .withSuggestion("Check for typos in variable name")
                     .withSuggestion("Ensure variable is defined before use")
