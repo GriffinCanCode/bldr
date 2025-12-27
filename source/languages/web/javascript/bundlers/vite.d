@@ -5,7 +5,7 @@ import std.path;
 import std.file;
 import std.algorithm;
 import std.array;
-import std.string : strip;
+import std.string : strip, indexOf;
 import languages.web.javascript.bundlers.base;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;

@@ -107,7 +107,9 @@ struct SwiftConfig
     ref Dependency[] deps() return { return dependencies.dependencies; }
     
     ref SwiftLintConfig swiftlint() return { return quality.swiftlint; }
+    const(SwiftLintConfig) swiftlint() const { return quality.swiftlint; }
     ref SwiftFormatConfig swiftformat() return { return quality.swiftformat; }
+    const(SwiftFormatConfig) swiftformat() const { return quality.swiftformat; }
     ref DocCConfig documentation() return { return quality.documentation; }
     
     ref SwiftSanitizer sanitizer() return { return testing.sanitizer; }

@@ -94,7 +94,7 @@ class HaskellHandler : BaseCompiledLanguageHandler
         CompiledLanguageResult result;
         result.success = true;
         
-        string[] hsFiles = target.sources.filter!(s => extension(s) == ".hs").array;
+        auto hsFiles = target.sources.filter!(s => extension(s) == ".hs").array;
         if (hsFiles.empty) return result;
         
         if (_config.ormolu && GHCWrapper.isOroluAvailable())
@@ -119,7 +119,7 @@ class HaskellHandler : BaseCompiledLanguageHandler
         if (!_config.hlint || !GHCWrapper.isHLintAvailable())
             return result;
         
-        string[] hsFiles = target.sources.filter!(s => extension(s) == ".hs").array;
+        auto hsFiles = target.sources.filter!(s => extension(s) == ".hs").array;
         if (hsFiles.empty) return result;
         
         auto lintResult = GHCWrapper.runHLint(hsFiles);
@@ -254,8 +254,6 @@ class HaskellHandler : BaseCompiledLanguageHandler
         result.error = compileResult.error;
         result.outputs = compileResult.outputs.dup;
         result.outputHash = compileResult.outputHash;
-        result.hadWarnings = compileResult.hadWarnings;
-        result.warnings = compileResult.warnings.dup;
         
         return result;
     }
@@ -277,8 +275,6 @@ class HaskellHandler : BaseCompiledLanguageHandler
         result.error = compileResult.error;
         result.outputs = compileResult.outputs.dup;
         result.outputHash = compileResult.outputHash;
-        result.hadWarnings = compileResult.hadWarnings;
-        result.warnings = compileResult.warnings.dup;
         
         return result;
     }
@@ -300,8 +296,6 @@ class HaskellHandler : BaseCompiledLanguageHandler
         result.error = compileResult.error;
         result.outputs = compileResult.outputs.dup;
         result.outputHash = compileResult.outputHash;
-        result.hadWarnings = compileResult.hadWarnings;
-        result.warnings = compileResult.warnings.dup;
         
         return result;
     }

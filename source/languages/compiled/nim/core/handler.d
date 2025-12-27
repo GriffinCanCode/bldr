@@ -41,11 +41,11 @@ class NimHandler : BaseCompiledLanguageHandler
         import infrastructure.toolchain.detection.detector : ExecutableDetector;
         
         parseNimConfig(target, config);
-        return NimTools.isCompilerAvailable() ? ExecutableDetector.findInPath("nim") : "";
+        return NimTools.isNimAvailable() ? ExecutableDetector.findInPath("nim") : "";
     }
     
     /// Get toolchain version string
-    string getToolchainVersion() @system => NimTools.getVersion();
+    string getToolchainVersion() @system => NimTools.getNimVersion();
     
     private void parseNimConfig(in Target target, in WorkspaceConfig config) @system
     {

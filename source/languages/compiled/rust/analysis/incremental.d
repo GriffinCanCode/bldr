@@ -91,7 +91,7 @@ final class RustDependencyAnalyzer : BaseDependencyAnalyzer
             return BuildResult!(string[]).err(
                 Errors.generic("Failed to analyze Rust dependencies for " ~ 
                              sourceFile ~ ": " ~ e.msg,
-                             Analysis.Failed)
+                             ErrorCode.AnalysisFailed)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );

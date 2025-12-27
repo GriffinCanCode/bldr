@@ -48,6 +48,7 @@ struct ElixirConfig
     ref DialyzerConfig dialyzer() return { return quality.dialyzer; }
     ref CredoConfig credo() return { return quality.credo; }
     ref FormatConfig format() return { return quality.format; }
+    const(FormatConfig) format() const { return quality.format; }
     ref DocConfig documentation() return { return quality.documentation; }
     
     ref ExUnitConfig exunit() return { return testing.exunit; }

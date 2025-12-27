@@ -281,6 +281,10 @@ class CUDAHandler : BaseGPUHandler
             case GPUOutputType.StaticLib:
                 version(Windows) return name ~ ".lib";
                 else return "lib" ~ name ~ ".a";
+            // Metal/ROCm specific - not applicable for CUDA
+            case GPUOutputType.AIR: return name ~ ".air";
+            case GPUOutputType.MetalLib: return name ~ ".metallib";
+            case GPUOutputType.HIPFatbin: return name ~ ".hipfatbin";
         }
     }
 }

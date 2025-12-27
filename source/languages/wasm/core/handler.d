@@ -13,7 +13,7 @@ import languages.base.mixins;
 import languages.wasm.core.config;
 import languages.wasm.tooling.tools;
 import infrastructure.config.schema.schema;
-import infrastructure.analysis.targets.types;
+import infrastructure.analysis.targets.types : Import, ImportKind, SourceLocation;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.logging;
@@ -43,6 +43,7 @@ class WebAssemblyHandler : BaseLanguageHandler
         
         // Auto-detect toolchain
         if (wasmConfig.toolchain == WasmToolchain.Auto)
+        
             wasmConfig.toolchain = WasmTools.detectToolchain(wasmConfig.sourceLang);
         
         // Create output directory
@@ -366,11 +367,11 @@ class WebAssemblyHandler : BaseLanguageHandler
         
         foreach (match; matchAll(content, importRegex))
         {
-            Import imp;
-            imp.module_ = match[1];
-            imp.name = match[2];
-            imp.isExternal = true;
-            imports ~= imp;
+            imports ~= Import(
+                match[1] ~ "." ~ match[2],
+                ImportKind.External,
+                SourceLocation("", 0, 0)
+            );
         }
         
         return imports;

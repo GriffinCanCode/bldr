@@ -177,7 +177,7 @@ class LuacheckLinter : Checker
         }
         catch (Exception e)
         {
-            import infrastructure.utils.logging : Logger;
+            import infrastructure.utils.logging : structuredLog;
             structuredLog.debug_("failed_to_get_luacheck_version_").field("detail", "Failed to get Luacheck version: " ~ e.msg).emit();
         }
         

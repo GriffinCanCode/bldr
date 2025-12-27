@@ -398,7 +398,7 @@ string getLuaRocksVersion()
     }
     catch (Exception e)
     {
-        import infrastructure.utils.logging : Logger;
+        import infrastructure.utils.logging : structuredLog;
         structuredLog.debug_("failed_to_get_luarocks_version_").field("detail", "Failed to get LuaRocks version: " ~ e.msg).emit();
     }
     

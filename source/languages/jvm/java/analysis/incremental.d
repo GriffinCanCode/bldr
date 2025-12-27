@@ -75,7 +75,7 @@ final class JavaDependencyAnalyzer : BaseDependencyAnalyzer
             return BuildResult!(string[]).err(
                 Errors.generic("Failed to analyze Java dependencies for " ~ 
                              sourceFile ~ ": " ~ e.msg,
-                             Analysis.Failed)
+                             ErrorCode.AnalysisFailed)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );

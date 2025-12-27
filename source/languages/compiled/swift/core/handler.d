@@ -198,12 +198,15 @@ class SwiftHandler : BaseCompiledLanguageHandler
         string ext = "";
         string prefix = "";
         
+        // Access libraryType via direct struct field access for pure compatibility
+        auto libType = _config.build.libraryType;
+        
         version(OSX)
         {
             if (type == TargetType.Library)
             {
                 prefix = "lib";
-                ext = _config.libraryType == SwiftLibraryType.Static ? ".a" : ".dylib";
+                ext = libType == SwiftLibraryType.Static ? ".a" : ".dylib";
             }
         }
         else version(linux)
@@ -211,13 +214,13 @@ class SwiftHandler : BaseCompiledLanguageHandler
             if (type == TargetType.Library)
             {
                 prefix = "lib";
-                ext = _config.libraryType == SwiftLibraryType.Static ? ".a" : ".so";
+                ext = libType == SwiftLibraryType.Static ? ".a" : ".so";
             }
         }
         else version(Windows)
         {
             if (type == TargetType.Library)
-                ext = _config.libraryType == SwiftLibraryType.Static ? ".lib" : ".dll";
+                ext = libType == SwiftLibraryType.Static ? ".lib" : ".dll";
             else if (type == TargetType.Executable || type == TargetType.Test)
                 ext = ".exe";
         }

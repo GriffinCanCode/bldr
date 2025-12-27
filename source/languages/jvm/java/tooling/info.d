@@ -130,7 +130,7 @@ class JavaInfo
         }
         catch (Exception e)
         {
-            import infrastructure.utils.logging : Logger;
+            import infrastructure.utils.logging : structuredLog;
             structuredLog.debug_("failed_to_get_java_info_").field("detail", "Failed to get Java info: " ~ e.msg).emit();
         }
         
@@ -229,7 +229,7 @@ class JavaInfo
         }
         catch (Exception e)
         {
-            import infrastructure.utils.logging : Logger;
+            import infrastructure.utils.logging : structuredLog;
             structuredLog.debug_("failed_to_get_java_info_").field("detail", "Failed to get Java info: " ~ e.msg).emit();
         }
         
@@ -251,7 +251,7 @@ class JavaInfo
         }
         catch (Exception e)
         {
-            import infrastructure.utils.logging : Logger;
+            import infrastructure.utils.logging : structuredLog;
             structuredLog.debug_("failed_to_get_java_info_").field("detail", "Failed to get Java info: " ~ e.msg).emit();
         }
         
@@ -326,7 +326,7 @@ class JavaInfo
         }
         catch (Exception e)
         {
-            import infrastructure.utils.logging : Logger;
+            import infrastructure.utils.logging : structuredLog;
             structuredLog.debug_("failed_to_get_java_info_").field("detail", "Failed to get Java info: " ~ e.msg).emit();
         }
         

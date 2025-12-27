@@ -607,12 +607,12 @@ struct LogError
     
     static LogError targetNotFound(string targetId) pure @system
     {
-        return LogError("Target not found: " ~ targetId, Build.TargetNotFound);
+        return LogError("Target not found: " ~ targetId, ErrorCode.TargetNotFound);
     }
     
     static LogError exportFailed(string details) pure @system
     {
-        return LogError("Export failed: " ~ details, IO.FileWriteFailed);
+        return LogError("Export failed: " ~ details, ErrorCode.FileWriteFailed);
     }
     
     string toString() const pure nothrow @system

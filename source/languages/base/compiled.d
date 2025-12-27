@@ -12,7 +12,7 @@ import languages.base.base;
 import languages.base.types;
 import languages.base.config;
 import infrastructure.config.schema.schema;
-import infrastructure.analysis.targets.types;
+import infrastructure.analysis.targets.types : Import, ImportKind, SourceLocation;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.logging;
 import infrastructure.utils.security : execute;
@@ -292,12 +292,12 @@ abstract class BaseCompiledHandler : BaseLanguageHandler
         
         foreach (match; matchAll(content, includeRegex))
         {
-            Import imp;
-            imp.name = match[1];
-            imp.module_ = baseName(match[1]);
-            imp.isExternal = match.hit.canFind('<');
-            imp.source = sourceFile;
-            imports ~= imp;
+            auto isExternal = match.hit.canFind('<');
+            imports ~= Import(
+                match[1],
+                isExternal ? ImportKind.External : ImportKind.Relative,
+                SourceLocation(sourceFile, 0, 0)
+            );
         }
         
         return imports;
@@ -362,13 +362,13 @@ abstract class BaseCompiledHandler : BaseLanguageHandler
     }
     
     /// Create error result with proper code
-    protected UnifiedBuildResult createError(string message, BuildErrorCode code) pure nothrow
+    protected UnifiedBuildResult createError(string message, BuildErrorCode code)
     {
         return UnifiedBuildResult.err(message, code);
     }
     
     /// Create success result
-    protected UnifiedBuildResult createSuccess(string[] outputs, string hash) pure nothrow
+    protected UnifiedBuildResult createSuccess(string[] outputs, string hash)
     {
         return UnifiedBuildResult.ok(outputs, hash);
     }

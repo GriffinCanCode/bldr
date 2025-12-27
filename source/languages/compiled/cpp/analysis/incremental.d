@@ -100,7 +100,7 @@ final class CppDependencyAnalyzer : BaseDependencyAnalyzer
             return BuildResult!(string[]).err(
                 Errors.generic("Failed to analyze dependencies for " ~ 
                              sourceFile ~ ": " ~ e.msg,
-                             Analysis.Failed)
+                             ErrorCode.AnalysisFailed)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );

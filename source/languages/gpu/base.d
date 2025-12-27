@@ -245,7 +245,7 @@ abstract class BaseGPUHandler : BaseCompiledHandler
                 try
                 {
                     auto json = parseJSON(target.langConfig[key]);
-                    parseGPUConfig(config, json);
+                    languages.base.config.parseGPUConfig(config, json);
                     break;
                 }
                 catch (Exception e)

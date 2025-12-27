@@ -18,24 +18,8 @@ import infrastructure.utils.logging;
 import infrastructure.utils.process.checker : isCommandAvailable;
 import engine.caching.actions.action;
 
-// ============================================================================
-// TypeScript-specific enums
-// ============================================================================
-
-/// TypeScript build modes
-enum TSBuildMode { Check, Compile, Bundle, Library }
-
-/// TypeScript compiler selection
-enum TSCompiler { Auto, TSC, SWC, ESBuild, Webpack, Rollup, Vite, None }
-
-/// JSX compilation mode
-enum TSXMode { Preserve, React, ReactJSX, ReactJSXDev, ReactNative }
-
-/// Target ECMAScript version
-enum TSTarget { ES3, ES5, ES6, ES2015, ES2016, ES2017, ES2018, ES2019, ES2020, ES2021, ES2022, ES2023, ESNext }
-
-/// Module resolution strategy
-enum TSModuleResolution { Classic, Node, Node16, NodeNext, Bundler }
+// Import TypeScript enums from bundlers.base to avoid duplication
+import languages.web.typescript.tooling.bundlers.base : TSBuildMode, TSCompiler, TSXMode, TSTarget, TSModuleResolution;
 
 // ============================================================================
 // TypeScript Config Extension

@@ -130,7 +130,7 @@ class OCamlHandler : BaseCompiledLanguageHandler
         LanguageBuildResult result;
         
         // Filter for ML files
-        string[] mlFiles = target.sources.filter!(s => 
+        auto mlFiles = target.sources.filter!(s => 
             extension(s) == ".ml" || extension(s) == ".mli" ||
             extension(s) == ".mll" || extension(s) == ".mly"
         ).array;

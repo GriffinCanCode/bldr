@@ -1,5 +1,7 @@
 module languages.base.types;
 
+import std.range : empty;
+
 /// Standard error codes for build failures
 enum BuildErrorCode
 {

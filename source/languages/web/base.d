@@ -527,7 +527,7 @@ abstract class BaseWebHandler : BaseLanguageHandler
         structuredLog.info("installing_dependencies_with_").field("detail", 
             "Installing dependencies with " ~ cmd[0] ~ "...").emit();
         
-        auto res = execute(cmd, null, std.process.Config.none, size_t.max, packageDir);
+        auto res = execute(cmd, packageDir);
         
         if (res.status != 0)
             structuredLog.warning("failed_to_install_dependencies_").field("detail", res.output).emit();

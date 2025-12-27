@@ -6,6 +6,7 @@ import std.algorithm;
 import std.array;
 import std.json;
 import std.conv;
+import std.uni : toLower;
 import languages.base;
 import languages.web.base;
 import languages.web.css.processors;

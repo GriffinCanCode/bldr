@@ -215,7 +215,7 @@ final class SpecRegistry
         }
         catch (Exception e)
         {
-            auto error = Errors.build("spec-registry", "Failed to load specs: " ~ e.msg, Internal.Error)
+            auto error = Errors.build("spec-registry", "Failed to load specs: " ~ e.msg, ErrorCode.InternalError)
                 .withLocation(__FILE__, __LINE__)
                 .build();
             return Err!(size_t, BuildError)(error);

@@ -84,7 +84,7 @@ class ProtobufHandler : BaseCompiledLanguageHandler, DiscoverableAction
             return result;
         
         structuredLog.debug_("running_buf_format").emit();
-        string[] protoFiles = target.sources.filter!(s => extension(s) == ".proto").array;
+        auto protoFiles = target.sources.filter!(s => extension(s) == ".proto").array;
         
         auto fmtResult = BufWrapper.format(protoFiles, true);
         result.success = fmtResult.success;
@@ -103,7 +103,7 @@ class ProtobufHandler : BaseCompiledLanguageHandler, DiscoverableAction
             return result;
         
         structuredLog.debug_("running_buf_lint").emit();
-        string[] protoFiles = target.sources.filter!(s => extension(s) == ".proto").array;
+        auto protoFiles = target.sources.filter!(s => extension(s) == ".proto").array;
         
         auto lintResult = BufWrapper.lint(protoFiles);
         result.success = lintResult.success;
@@ -133,7 +133,7 @@ class ProtobufHandler : BaseCompiledLanguageHandler, DiscoverableAction
         LanguageBuildResult result;
         
         // Filter for .proto files
-        string[] protoFiles = target.sources.filter!(s => extension(s) == ".proto").array;
+        auto protoFiles = target.sources.filter!(s => extension(s) == ".proto").array;
         
         if (protoFiles.empty)
         {
@@ -232,7 +232,7 @@ class ProtobufHandler : BaseCompiledLanguageHandler, DiscoverableAction
         parseProtobufConfig(target, config);
         
         // Filter proto files
-        string[] protoFiles = target.sources.filter!(s => extension(s) == ".proto").array;
+        auto protoFiles = target.sources.filter!(s => extension(s) == ".proto").array;
         
         if (protoFiles.empty)
         {

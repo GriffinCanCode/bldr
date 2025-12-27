@@ -327,7 +327,7 @@ class JavaToolDetection
             }
             catch (Exception e)
         {
-            import infrastructure.utils.logging : Logger;
+            import infrastructure.utils.logging : structuredLog;
             structuredLog.debug_("failed_to_detect_java_project_info_").field("detail", "Failed to detect Java project info: " ~ e.msg).emit();
         }
         }
@@ -345,7 +345,7 @@ class JavaToolDetection
             }
             catch (Exception e)
         {
-            import infrastructure.utils.logging : Logger;
+            import infrastructure.utils.logging : structuredLog;
             structuredLog.debug_("failed_to_detect_java_project_info_").field("detail", "Failed to detect Java project info: " ~ e.msg).emit();
         }
         }
@@ -365,7 +365,7 @@ class JavaToolDetection
             }
             catch (Exception e)
         {
-            import infrastructure.utils.logging : Logger;
+            import infrastructure.utils.logging : structuredLog;
             structuredLog.debug_("failed_to_detect_java_project_info_").field("detail", "Failed to detect Java project info: " ~ e.msg).emit();
         }
         }
@@ -383,7 +383,7 @@ class JavaToolDetection
             }
             catch (Exception e)
         {
-            import infrastructure.utils.logging : Logger;
+            import infrastructure.utils.logging : structuredLog;
             structuredLog.debug_("failed_to_detect_java_project_info_").field("detail", "Failed to detect Java project info: " ~ e.msg).emit();
         }
         }

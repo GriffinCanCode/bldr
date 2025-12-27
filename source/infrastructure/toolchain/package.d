@@ -55,7 +55,7 @@ public import infrastructure.toolchain.registry;
 // Provider system (Local, Repository-based providers)
 public import infrastructure.toolchain.providers;
 
-import infrastructure.errors : Result, BuildResult, BuildError, Ok, Err, SystemError, ErrorCode, Errors;
+import infrastructure.errors : Result, BuildResult, BuildError, Ok, Err, SystemError, ErrorCode, Errors, Plugin;
 import std.range : empty;
 
 /// Convenience function to get a toolchain by name with optional version constraint
