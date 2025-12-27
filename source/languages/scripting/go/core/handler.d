@@ -8,8 +8,7 @@ import std.path;
 import std.algorithm;
 import std.array;
 import std.json;
-import languages.base.base;
-import languages.base.mixins;
+import languages.scripting.base;
 import languages.scripting.go.core.config;
 import languages.scripting.go.managers.modules;
 import languages.scripting.go.tooling.tools;
@@ -22,11 +21,147 @@ import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionId, ActionType;
 
 /// Go build handler - modular and extensible with action-level caching
-class GoHandler : BaseLanguageHandler
+/// Extends BaseScriptingHandler for common scripting language infrastructure
+class GoHandler : BaseScriptingHandler
 {
-    mixin CachingHandlerMixin!"go";
-    mixin ConfigParsingMixin!(GoConfig, "parseGoConfig", ["go", "goConfig"]);
-    mixin SimpleBuildOrchestrationMixin!(GoConfig, "parseGoConfig");
+    private GoConfig _currentConfig;
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ABSTRACT METHOD IMPLEMENTATIONS
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    override protected string languageId() const pure nothrow @safe => "go";
+    
+    override protected string[] configKeys() const pure nothrow @safe => ["go", "goConfig"];
+    
+    override protected TargetLanguage targetLanguage() const pure nothrow @safe => TargetLanguage.Go;
+    
+    override protected EnvironmentSetupResult setupEnvironment(JSONValue config, string projectRoot) @system
+    {
+        GoConfig goConfig = GoConfig.fromJSON(config);
+        _currentConfig = goConfig;
+        
+        // Go uses its own toolchain, just verify it's available
+        if (!GoTools.isGoAvailable())
+            return EnvironmentSetupResult.fail("Go compiler not available. Install from: https://golang.org/dl/");
+        
+        return EnvironmentSetupResult.ok("go");
+    }
+    
+    override protected SyntaxValidationResult validateSyntax(
+        in string[] sources,
+        JSONValue config,
+        string interpreterCmd
+    ) @system
+    {
+        // Go build will handle syntax validation
+        return SyntaxValidationResult.ok();
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // HOOK METHOD OVERRIDES
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    override protected JSONValue parseConfig(in Target target) @system
+    {
+        GoConfig config;
+        
+        foreach (key; configKeys())
+        {
+            if (key in target.langConfig)
+            {
+                try
+                {
+                    auto json = parseJSON(target.langConfig[key]);
+                    config = GoConfig.fromJSON(json);
+                    _currentConfig = config;
+                    return json;
+                }
+                catch (Exception e)
+                {
+                    structuredLog.warning("config_parse_fallback").field("key", key).emit();
+                }
+            }
+        }
+        
+        _currentConfig = config;
+        return JSONValue.init;
+    }
+    
+    override protected void enhanceConfigFromProject(
+        ref JSONValue config,
+        in Target target,
+        in WorkspaceConfig workspace
+    ) @system
+    {
+        if (target.sources.empty)
+            return;
+        
+        string sourceDir = dirName(target.sources[0]);
+        
+        auto goModPath = ModuleAnalyzer.findGoMod(sourceDir);
+        if (!goModPath.empty && _currentConfig.modMode == GoModMode.Auto)
+        {
+            _currentConfig.modMode = GoModMode.On;
+            structuredLog.debug_("detected_gomod_at_")
+                .field("detail", "Detected go.mod at: " ~ goModPath)
+                .emit();
+            
+            auto mod = ModuleAnalyzer.parseGoMod(goModPath);
+            if (mod.isValid())
+            {
+                structuredLog.debug_("module_path_")
+                    .field("detail", "Module path: " ~ mod.path)
+                    .emit();
+                structuredLog.debug_("go_version_")
+                    .field("detail", "Go version: " ~ mod.goVersion)
+                    .emit();
+                
+                if (_currentConfig.modPath.empty)
+                    _currentConfig.modPath = mod.path;
+            }
+        }
+        
+        auto goWorkPath = ModuleAnalyzer.findGoWork(sourceDir);
+        if (!goWorkPath.empty)
+        {
+            structuredLog.debug_("detected_gowork_at_")
+                .field("detail", "Detected go.work at: " ~ goWorkPath)
+                .emit();
+            
+            auto ws = ModuleAnalyzer.parseGoWork(goWorkPath);
+            if (ws.isValid())
+                structuredLog.debug_("workspace_modules_")
+                    .field("detail", "Workspace modules: " ~ ws.use.join(", "))
+                    .emit();
+        }
+        
+        if (!_currentConfig.cgo.enabled)
+        {
+            foreach (source; target.sources)
+            {
+                if (exists(source) && hasCGoCode(source))
+                {
+                    structuredLog.debug_("detected_cgo_code_in_")
+                        .field("detail", "Detected CGO code in: " ~ source)
+                        .emit();
+                    _currentConfig.cgo.enabled = true;
+                    break;
+                }
+            }
+        }
+    }
+    
+    // Go doesn't have traditional pre-build steps like interpreted languages
+    override protected ScriptingStepResult preBuildSteps(
+        in Target target,
+        in WorkspaceConfig config,
+        JSONValue langConfig,
+        string interpreterCmd
+    ) @system
+    {
+        return ScriptingStepResult.ok();
+    }
     
     override string[] getOutputs(in Target target, in WorkspaceConfig config) @system
     {
@@ -52,62 +187,15 @@ class GoHandler : BaseLanguageHandler
         return outputs;
     }
     
-    private void enhanceConfigFromProject(
-        ref GoConfig config,
-        const Target target,
-        const WorkspaceConfig workspace
-    ) @system
-    {
-        if (target.sources.empty)
-            return;
-        
-        string sourceDir = dirName(target.sources[0]);
-        
-        auto goModPath = ModuleAnalyzer.findGoMod(sourceDir);
-        if (!goModPath.empty && config.modMode == GoModMode.Auto)
-        {
-            config.modMode = GoModMode.On;
-            structuredLog.debug_("detected_gomod_at_").field("detail", "Detected go.mod at: " ~ goModPath).emit();
-            
-            auto mod = ModuleAnalyzer.parseGoMod(goModPath);
-            if (mod.isValid())
-            {
-                structuredLog.debug_("module_path_").field("detail", "Module path: " ~ mod.path).emit();
-                structuredLog.debug_("go_version_").field("detail", "Go version: " ~ mod.goVersion).emit();
-                
-                if (config.modPath.empty)
-                    config.modPath = mod.path;
-            }
-        }
-        
-        auto goWorkPath = ModuleAnalyzer.findGoWork(sourceDir);
-        if (!goWorkPath.empty)
-        {
-            structuredLog.debug_("detected_gowork_at_").field("detail", "Detected go.work at: " ~ goWorkPath).emit();
-            
-            auto ws = ModuleAnalyzer.parseGoWork(goWorkPath);
-            if (ws.isValid())
-                structuredLog.debug_("workspace_modules_").field("detail", "Workspace modules: " ~ ws.use.join(", ")).emit();
-        }
-        
-        if (!config.cgo.enabled)
-        {
-            foreach (source; target.sources)
-            {
-                if (exists(source) && hasCGoCode(source))
-                {
-                    structuredLog.debug_("detected_cgo_code_in_").field("detail", "Detected CGO code in: " ~ source).emit();
-                    config.cgo.enabled = true;
-                    break;
-                }
-            }
-        }
-    }
+    // ═══════════════════════════════════════════════════════════════════════════
+    // BUILD IMPLEMENTATIONS
+    // ═══════════════════════════════════════════════════════════════════════════
     
-    private LanguageBuildResult buildExecutable(
-        const Target target,
-        const WorkspaceConfig config,
-        GoConfig goConfig
+    override protected LanguageBuildResult buildExecutableImpl(
+        in Target target,
+        in WorkspaceConfig config,
+        JSONValue langConfig,
+        string interpreterCmd
     ) @system
     {
         LanguageBuildResult result;
@@ -118,7 +206,7 @@ class GoHandler : BaseLanguageHandler
             return result;
         }
         
-        auto builder = GoBuilderFactory.createAuto(goConfig, getCache());
+        auto builder = GoBuilderFactory.createAuto(_currentConfig, getCache());
         
         if (!builder.isAvailable())
         {
@@ -126,9 +214,11 @@ class GoHandler : BaseLanguageHandler
             return result;
         }
         
-        structuredLog.debug_("using_builder_").field("detail", "Using builder: " ~ builder.name() ~ " (" ~ builder.getVersion() ~ ")").emit();
+        structuredLog.debug_("using_builder_")
+            .field("detail", "Using builder: " ~ builder.name() ~ " (" ~ builder.getVersion() ~ ")")
+            .emit();
         
-        auto buildResult = builder.build(target.sources, goConfig, target, config);
+        auto buildResult = builder.build(target.sources, _currentConfig, target, config);
         
         result.success = buildResult.success;
         result.error = buildResult.error;
@@ -145,15 +235,16 @@ class GoHandler : BaseLanguageHandler
         return result;
     }
     
-    private LanguageBuildResult buildLibrary(
-        const Target target,
-        const WorkspaceConfig config,
-        GoConfig goConfig
+    override protected LanguageBuildResult buildLibraryImpl(
+        in Target target,
+        in WorkspaceConfig config,
+        JSONValue langConfig,
+        string interpreterCmd
     ) @system
     {
-        goConfig.mode = GoBuildMode.Library;
+        _currentConfig.mode = GoBuildMode.Library;
         
-        auto builder = GoBuilderFactory.createAuto(goConfig, getCache());
+        auto builder = GoBuilderFactory.createAuto(_currentConfig, getCache());
         
         if (!builder.isAvailable())
         {
@@ -164,7 +255,7 @@ class GoHandler : BaseLanguageHandler
         
         structuredLog.debug_("building_go_librarypackage").emit();
         
-        auto buildResult = builder.build(target.sources, goConfig, target, config);
+        auto buildResult = builder.build(target.sources, _currentConfig, target, config);
         
         LanguageBuildResult result;
         result.success = buildResult.success;
@@ -175,10 +266,11 @@ class GoHandler : BaseLanguageHandler
         return result;
     }
     
-    private LanguageBuildResult runTests(
-        const Target target,
-        const WorkspaceConfig config,
-        GoConfig goConfig
+    override protected LanguageBuildResult runTestsImpl(
+        in Target target,
+        in WorkspaceConfig config,
+        JSONValue langConfig,
+        string interpreterCmd
     ) @system
     {
         LanguageBuildResult result;
@@ -195,9 +287,9 @@ class GoHandler : BaseLanguageHandler
         
         string[] cmd = ["go", "test"];
         
-        cmd ~= goConfig.test.toFlags();
+        cmd ~= _currentConfig.test.toFlags();
         
-        auto allTags = goConfig.buildTags ~ goConfig.constraints.tags;
+        auto allTags = _currentConfig.buildTags ~ _currentConfig.constraints.tags;
         if (!allTags.empty)
         {
             cmd ~= "-tags";
@@ -211,21 +303,23 @@ class GoHandler : BaseLanguageHandler
         else
             cmd ~= target.sources;
         
-        structuredLog.info("running_go_tests_").field("detail", "Running Go tests: " ~ cmd.join(" ")).emit();
+        structuredLog.info("running_go_tests_")
+            .field("detail", "Running Go tests: " ~ cmd.join(" "))
+            .emit();
         
         string[string] env;
         foreach (key, value; environment.toAA())
             env[key] = value;
         
-        if (goConfig.cgo.enabled)
+        if (_currentConfig.cgo.enabled)
         {
-            foreach (key, value; goConfig.cgo.toEnv())
+            foreach (key, value; _currentConfig.cgo.toEnv())
                 env[key] = value;
         }
         
-        if (goConfig.cross.isCross())
+        if (_currentConfig.cross.isCross())
         {
-            foreach (key, value; goConfig.cross.toEnv())
+            foreach (key, value; _currentConfig.cross.toEnv())
                 env[key] = value;
         }
         
@@ -240,15 +334,19 @@ class GoHandler : BaseLanguageHandler
         result.success = true;
         result.outputHash = FastHash.hashStrings(target.sources);
         
-        if (goConfig.test.coverage && !goConfig.test.coverProfile.empty)
+        if (_currentConfig.test.coverage && !_currentConfig.test.coverProfile.empty)
         {
-            auto coverPath = buildPath(workDir, goConfig.test.coverProfile);
+            auto coverPath = buildPath(workDir, _currentConfig.test.coverProfile);
             if (exists(coverPath))
                 result.outputs ~= coverPath;
         }
         
         return result;
     }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // GO-SPECIFIC HELPER METHODS
+    // ═══════════════════════════════════════════════════════════════════════════
     
     private bool hasCGoCode(string filePath) @system
     {
@@ -269,33 +367,5 @@ class GoHandler : BaseLanguageHandler
         {
             return false;
         }
-    }
-    
-    override Import[] analyzeImports(in string[] sources) @system
-    {
-        auto spec = getLanguageSpec(TargetLanguage.Go);
-        if (spec is null)
-            return [];
-        
-        Import[] allImports;
-        
-        foreach (source; sources)
-        {
-            if (!exists(source) || !isFile(source))
-                continue;
-            
-            try
-            {
-                auto content = readText(source);
-                auto imports = spec.scanImports(source, content);
-                allImports ~= imports;
-            }
-            catch (Exception e)
-            {
-                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source).emit();
-            }
-        }
-        
-        return allImports;
     }
 }

@@ -6,21 +6,23 @@ import std.array;
 import std.string : lineSplitter, indexOf;
 import std.regex;
 import std.file : exists, isFile, readText;
-import languages.base.base;
-import languages.base.mixins;
+import std.json;
+import std.path;
+import languages.scripting.base;
 import languages.scripting.perl.core.config;
 import languages.scripting.perl.services;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
+import infrastructure.analysis.targets.spec;
+import infrastructure.utils.files.hash;
 import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig;
-import engine.runtime.shutdown.shutdown : ShutdownCoordinator;
 
-/// Thin orchestration layer for Perl builds
-/// Delegates all work to specialized services
-final class PerlHandler : BaseLanguageHandler
+/// Perl build handler with action-level caching
+/// Extends BaseScriptingHandler for common scripting language infrastructure
+final class PerlHandler : BaseScriptingHandler
 {
-    private ActionCache actionCache;
+    private PerlConfig _currentConfig;
     private IPerlConfigService configService;
     private IPerlDependencyService dependencyService;
     private IPerlQualityService qualityService;
@@ -30,13 +32,6 @@ final class PerlHandler : BaseLanguageHandler
     
     this()
     {
-        // Initialize action cache
-        auto cacheConfig = ActionCacheConfig.fromEnvironment();
-        actionCache = new ActionCache(".builder-cache/actions/perl", cacheConfig);
-        
-        // Note: BuildServices handles cache cleanup via shutdown coordinator
-        
-        // Initialize services
         configService = new PerlConfigService();
         dependencyService = new PerlDependencyService();
         qualityService = new PerlQualityService();
@@ -45,175 +40,165 @@ final class PerlHandler : BaseLanguageHandler
         documentationService = new PerlDocumentationService();
     }
     
-    ~this()
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ABSTRACT METHOD IMPLEMENTATIONS
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    override protected string languageId() const pure nothrow @safe => "perl";
+    
+    override protected string[] configKeys() const pure nothrow @safe => ["perl", "perlConfig"];
+    
+    override protected TargetLanguage targetLanguage() const pure nothrow @safe => TargetLanguage.Perl;
+    
+    override protected EnvironmentSetupResult setupEnvironment(JSONValue config, string projectRoot) @system
     {
-        import core.memory : GC;
-        if (actionCache && !GC.inFinalizer())
-        {
-            try
-            {
-                actionCache.close();
-            }
-            catch (Exception) {}
-        }
+        // Perl uses system perl by default
+        return EnvironmentSetupResult.ok("perl");
     }
     
-    protected override LanguageBuildResult buildImplWithContext(in BuildContext context)
+    override protected SyntaxValidationResult validateSyntax(
+        in string[] sources,
+        JSONValue config,
+        string interpreterCmd
+    ) @system
     {
-        // Extract target and config from context for convenience
-        auto target = context.target;
-        auto config = context.config;
-        
-        structuredLog.debug_("building_perl_target_").field("detail", "Building Perl target: " ~ target.name).emit();
-        
-        // Parse configuration
-        auto perlConfig = configService.parse(target, config);
-        
-        // Execute build pipeline based on target type
-        final switch (target.type)
-        {
-            case TargetType.Executable:
-                return buildExecutable(target, config, perlConfig);
-                
-            case TargetType.Library:
-                return buildLibrary(target, config, perlConfig);
-                
-            case TargetType.Test:
-                return runTests(target, config, perlConfig);
-                
-            case TargetType.Custom:
-            case TargetType.Shell:
-                return buildCustom(target, config, perlConfig);
-        }
-    }
-    
-    private LanguageBuildResult buildExecutable(
-        in Target target,
-        in WorkspaceConfig config,
-        in PerlConfig perlConfig
-    )
-    {
-        // Install dependencies
-        if (perlConfig.installDeps && !perlConfig.modules.empty)
-        {
-            if (!dependencyService.install(perlConfig, config.root, actionCache))
-            {
-                LanguageBuildResult result;
-                result.error = "Failed to install dependencies";
-                return result;
-            }
-        }
-        
-        // Format code
-        if (perlConfig.format.autoFormat)
-        {
-            qualityService.formatCode(target.sources, perlConfig);
-        }
-        
-        // Lint with Perl::Critic
-        if (perlConfig.format.formatter == PerlFormatter.PerlCritic ||
-            perlConfig.format.formatter == PerlFormatter.Both)
-        {
-            auto lintResult = qualityService.lintCode(target.sources, perlConfig, actionCache);
-            if (!lintResult.success && perlConfig.format.failOnCritic)
-            {
-                return lintResult;
-            }
-        }
-        
-        // Syntax check
         string[] syntaxErrors;
-        if (!qualityService.checkSyntax(target.sources, perlConfig, syntaxErrors, actionCache))
+        if (!qualityService.checkSyntax(sources, _currentConfig, syntaxErrors, getCache()))
+            return SyntaxValidationResult.fail(syntaxErrors.empty ? ["Syntax check failed"] : syntaxErrors);
+        
+        return SyntaxValidationResult.ok();
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // HOOK METHOD OVERRIDES
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    override protected JSONValue parseConfig(in Target target) @system
+    {
+        // Use the specialized config service
+        auto workspace = WorkspaceConfig.init;
+        _currentConfig = configService.parse(target, workspace);
+        return JSONValue.init; // Perl uses its own config parsing
+    }
+    
+    override protected bool shouldInstallDeps(JSONValue config) const @system
+        => _currentConfig.installDeps && !_currentConfig.modules.empty;
+    
+    override protected bool shouldAutoFormat(JSONValue config) const @system
+        => _currentConfig.format.autoFormat;
+    
+    override protected bool shouldAutoLint(JSONValue config) const @system
+        => _currentConfig.format.formatter == PerlFormatter.PerlCritic ||
+           _currentConfig.format.formatter == PerlFormatter.Both;
+    
+    override protected bool shouldFailOnLintError(JSONValue config) const @system
+        => _currentConfig.format.failOnCritic;
+    
+    override protected DependencyInstallResult installDependencies(
+        JSONValue config,
+        string projectRoot,
+        string interpreterCmd
+    ) @system
+    {
+        if (!dependencyService.install(_currentConfig, projectRoot, getCache()))
+            return DependencyInstallResult.fail("Failed to install dependencies");
+        
+        return DependencyInstallResult.ok();
+    }
+    
+    override protected FormatStepResult runFormatter(
+        in string[] sources,
+        JSONValue config,
+        string interpreterCmd
+    ) @system
+    {
+        qualityService.formatCode(sources, _currentConfig);
+        return FormatStepResult.ok();
+    }
+    
+    override protected LintStepResult runLinter(
+        in string[] sources,
+        JSONValue config,
+        string interpreterCmd
+    ) @system
+    {
+        auto lintResult = qualityService.lintCode(sources, _currentConfig, getCache());
+        
+        if (!lintResult.success)
         {
-            LanguageBuildResult result;
-            result.error = "Syntax errors:\n" ~ syntaxErrors.join("\n");
+            LintStepResult result;
+            result.success = false;
+            result.error = lintResult.error;
             return result;
         }
         
-        // Build executable
-        return buildService.buildExecutable(target, config, perlConfig);
+        return LintStepResult.ok();
     }
     
-    private LanguageBuildResult buildLibrary(
+    // ═══════════════════════════════════════════════════════════════════════════
+    // BUILD IMPLEMENTATIONS
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    override protected LanguageBuildResult buildExecutableImpl(
         in Target target,
         in WorkspaceConfig config,
-        in PerlConfig perlConfig
-    )
+        JSONValue langConfig,
+        string interpreterCmd
+    ) @system
     {
-        // Install dependencies
-        if (perlConfig.installDeps && !perlConfig.modules.empty)
-        {
-            if (!dependencyService.install(perlConfig, config.root, actionCache))
-            {
-                LanguageBuildResult result;
-                result.error = "Failed to install dependencies";
-                return result;
-            }
-        }
-        
-        // Syntax check
-        string[] syntaxErrors;
-        if (!qualityService.checkSyntax(target.sources, perlConfig, syntaxErrors, actionCache))
-        {
-            LanguageBuildResult result;
-            result.error = "Syntax errors:\n" ~ syntaxErrors.join("\n");
-            return result;
-        }
-        
-        // Build library
+        return buildService.buildExecutable(target, config, _currentConfig);
+    }
+    
+    override protected LanguageBuildResult buildLibraryImpl(
+        in Target target,
+        in WorkspaceConfig config,
+        JSONValue langConfig,
+        string interpreterCmd
+    ) @system
+    {
         LanguageBuildResult result;
         
-        if (perlConfig.mode == PerlBuildMode.CPAN)
-        {
-            result = buildService.buildCPAN(target, config, perlConfig, actionCache);
-        }
+        if (_currentConfig.mode == PerlBuildMode.CPAN)
+            result = buildService.buildCPAN(target, config, _currentConfig, getCache());
         else
-        {
-            result = buildService.buildLibrary(target, config, perlConfig);
-        }
+            result = buildService.buildLibrary(target, config, _currentConfig);
         
         // Generate documentation
-        if (result.success && perlConfig.documentation.generator != PerlDocGenerator.None)
-        {
-            documentationService.generate(target.sources, perlConfig, config.root, actionCache);
-        }
+        if (result.success && _currentConfig.documentation.generator != PerlDocGenerator.None)
+            documentationService.generate(target.sources, _currentConfig, config.root, getCache());
         
         return result;
     }
     
-    private LanguageBuildResult runTests(
+    override protected LanguageBuildResult runTestsImpl(
         in Target target,
         in WorkspaceConfig config,
-        in PerlConfig perlConfig
-    )
+        JSONValue langConfig,
+        string interpreterCmd
+    ) @system
     {
-        return testService.run(target, perlConfig, config.root, actionCache);
+        return testService.run(target, _currentConfig, config.root, getCache());
     }
     
-    private LanguageBuildResult buildCustom(
+    override protected LanguageBuildResult buildCustomImpl(
         in Target target,
         in WorkspaceConfig config,
-        in PerlConfig perlConfig
-    )
+        JSONValue langConfig,
+        string interpreterCmd
+    ) @system
     {
-        import infrastructure.utils.files.hash : FastHash;
-        
-        // Syntax check only
-        string[] syntaxErrors;
-        if (!qualityService.checkSyntax(target.sources, perlConfig, syntaxErrors, actionCache))
-        {
-            LanguageBuildResult result;
-            result.error = "Syntax errors:\n" ~ syntaxErrors.join("\n");
-            return result;
-        }
-        
+        // For custom targets, just do syntax check
         LanguageBuildResult result;
         result.success = true;
         result.outputHash = FastHash.hashStrings(target.sources);
         return result;
     }
     
-    override Import[] analyzeImports(in string[] sources)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // IMPORT ANALYSIS (PERL-SPECIFIC)
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    override Import[] analyzeImports(in string[] sources) @system
     {
         Import[] allImports;
         
@@ -230,7 +215,9 @@ final class PerlHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source ~ ": " ~ e.msg).emit();
+                structuredLog.warning("failed_to_analyze_imports_in_")
+                    .field("detail", "Failed to analyze imports in " ~ source ~ ": " ~ e.msg)
+                    .emit();
             }
         }
         
@@ -241,7 +228,6 @@ final class PerlHandler : BaseLanguageHandler
     {
         Import[] imports;
         
-        // Match: use Module; or require Module;
         auto useRegex = regex(`^\s*(?:use|require)\s+([A-Za-z_]\w*(?:::\w+)*)\s*`, "m");
         
         size_t lineNum = 1;
@@ -264,7 +250,6 @@ final class PerlHandler : BaseLanguageHandler
     
     private ImportKind determineImportKind(string moduleName)
     {
-        // Core modules
         const string[] coreModules = [
             "strict", "warnings", "base", "parent", "Carp", "Data::Dumper",
             "File::Spec", "File::Basename", "File::Path", "Cwd",
@@ -278,12 +263,10 @@ final class PerlHandler : BaseLanguageHandler
                 return ImportKind.External;
         }
         
-        // Relative imports (single-word or lowercase start)
         import std.uni : isLower;
         if (moduleName.indexOf("::") < 0 || (moduleName.length > 0 && isLower(moduleName[0])))
             return ImportKind.Relative;
         
-        // External (CPAN modules)
         return ImportKind.External;
     }
 }

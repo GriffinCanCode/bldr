@@ -8,8 +8,7 @@ import std.algorithm;
 import std.array;
 import std.conv;
 import std.json;
-import languages.base.base;
-import languages.base.mixins;
+import languages.scripting.base;
 import languages.scripting.ruby.core.config;
 import languages.scripting.ruby.tooling.info;
 import languages.scripting.ruby.managers;
@@ -21,104 +20,224 @@ import infrastructure.analysis.targets.types;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.logging;
+import infrastructure.utils.security : execute;
 import engine.caching.actions.action;
 
 /// Ruby build handler with action-level caching
-class RubyHandler : BaseLanguageHandler
+/// Extends BaseScriptingHandler for common scripting language infrastructure
+class RubyHandler : BaseScriptingHandler
 {
-    mixin CachingHandlerMixin!"ruby";
-    mixin ConfigParsingMixin!(RubyConfig, "parseRubyConfig", ["ruby", "rubyConfig"]);
-    mixin OutputResolutionMixin!(RubyConfig, "parseRubyConfig");
-    mixin BuildOrchestrationMixin!(RubyConfig, "parseRubyConfig", string);
+    private RubyConfig _currentConfig;
+    private string _currentRubyCmd;
     
-    private string setupBuildContext(RubyConfig rubyConfig, in WorkspaceConfig config)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ABSTRACT METHOD IMPLEMENTATIONS
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    override protected string languageId() const pure nothrow @safe => "ruby";
+    
+    override protected string[] configKeys() const pure nothrow @safe => ["ruby", "rubyConfig"];
+    
+    override protected TargetLanguage targetLanguage() const pure nothrow @safe => TargetLanguage.Ruby;
+    
+    override protected EnvironmentSetupResult setupEnvironment(JSONValue config, string projectRoot) @system
     {
-        return setupRubyEnvironment(rubyConfig, config.root);
+        RubyConfig rubyConfig = RubyConfig.fromJSON(config);
+        _currentConfig = rubyConfig;
+        
+        string rubyCmd = "ruby";
+        
+        if (rubyConfig.rubyVersion.major > 0)
+        {
+            auto versionManager = VersionManagerFactory.create(rubyConfig.versionManager, projectRoot);
+            string versionStr = rubyConfig.rubyVersion.toString();
+            if (versionManager.isVersionInstalled(versionStr))
+            {
+                rubyCmd = versionManager.getRubyPath(versionStr);
+                structuredLog.debug_("using_ruby_version_")
+                    .field("detail", "Using Ruby version: " ~ versionStr)
+                    .emit();
+            }
+        }
+        
+        _currentRubyCmd = rubyCmd;
+        return EnvironmentSetupResult.ok(rubyCmd);
     }
     
-    private void enhanceConfigFromProject(
-        ref RubyConfig config,
+    override protected SyntaxValidationResult validateSyntax(
+        in string[] sources,
+        JSONValue config,
+        string interpreterCmd
+    ) @system
+    {
+        if (sources.empty)
+            return SyntaxValidationResult.ok();
+        
+        string[] checkErrors;
+        auto checkSuccess = SyntaxChecker.check(sources, checkErrors);
+        
+        if (!checkSuccess)
+            return SyntaxValidationResult.fail(checkErrors.empty ? ["Syntax check failed"] : checkErrors);
+        
+        return SyntaxValidationResult.ok();
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // HOOK METHOD OVERRIDES
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    override protected JSONValue parseConfig(in Target target) @system
+    {
+        RubyConfig config;
+        
+        foreach (key; configKeys())
+        {
+            if (key in target.langConfig)
+            {
+                try
+                {
+                    auto json = parseJSON(target.langConfig[key]);
+                    config = RubyConfig.fromJSON(json);
+                    _currentConfig = config;
+                    return json;
+                }
+                catch (Exception e)
+                {
+                    structuredLog.warning("config_parse_fallback").field("key", key).emit();
+                }
+            }
+        }
+        
+        _currentConfig = config;
+        return JSONValue.init;
+    }
+    
+    override protected void enhanceConfigFromProject(
+        ref JSONValue config,
         in Target target,
         in WorkspaceConfig workspace
-    )
+    ) @system
     {
         if (target.sources.empty)
             return;
         
         string sourceDir = dirName(target.sources[0]);
         
-        if (config.packageManager == RubyPackageManager.Auto)
+        if (_currentConfig.packageManager == RubyPackageManager.Auto)
         {
-            config.packageManager = detectPackageManager(sourceDir);
-            structuredLog.debug_("detected_package_manager_").field("detail", "Detected package manager: " ~ config.packageManager.to!string).emit();
+            _currentConfig.packageManager = detectPackageManager(sourceDir);
+            structuredLog.debug_("detected_package_manager_")
+                .field("detail", "Detected package manager: " ~ _currentConfig.packageManager.to!string)
+                .emit();
         }
         
-        if (config.versionManager == RubyVersionManager.Auto)
+        if (_currentConfig.versionManager == RubyVersionManager.Auto)
         {
-            config.versionManager = detectVersionManager(sourceDir);
-            structuredLog.debug_("detected_version_manager_").field("detail", "Detected version manager: " ~ config.versionManager.to!string).emit();
+            _currentConfig.versionManager = detectVersionManager(sourceDir);
+            structuredLog.debug_("detected_version_manager_")
+                .field("detail", "Detected version manager: " ~ _currentConfig.versionManager.to!string)
+                .emit();
         }
     }
     
-    private LanguageBuildResult buildExecutable(
-        const Target target,
-        const WorkspaceConfig config,
-        RubyConfig rubyConfig,
-        string rubyCmd
-    )
+    override protected bool shouldInstallDeps(JSONValue config) const @system
+        => _currentConfig.installDeps;
+    
+    override protected bool shouldAutoFormat(JSONValue config) const @system
+        => _currentConfig.format.autoFormat && _currentConfig.format.formatter != RubyFormatter.None;
+    
+    override protected bool shouldTypeCheck(JSONValue config) const @system
+        => _currentConfig.typeCheck.enabled;
+    
+    override protected DependencyInstallResult installDependencies(
+        JSONValue config,
+        string projectRoot,
+        string interpreterCmd
+    ) @system
+    {
+        auto packageManager = PackageManagerFactory.create(_currentConfig.packageManager, projectRoot);
+        
+        if (packageManager.hasLockfile())
+        {
+            structuredLog.info("installing_dependencies").emit();
+            auto result = packageManager.installFromFile(buildPath(projectRoot, "Gemfile"));
+            if (!result.success)
+                return DependencyInstallResult.fail("Failed to install dependencies");
+        }
+        
+        return DependencyInstallResult.ok();
+    }
+    
+    override protected FormatStepResult runFormatter(
+        in string[] sources,
+        JSONValue config,
+        string interpreterCmd
+    ) @system
+    {
+        auto formatter = FormatterFactory.create(_currentConfig.format.formatter);
+        auto fmtResult = formatter.format(sources, _currentConfig.format, _currentConfig.format.autoCorrect);
+        
+        if (!fmtResult.success)
+            return FormatStepResult.fail("Formatting failed");
+        
+        if (fmtResult.hasOffenses())
+        {
+            structuredLog.info("found_")
+                .field("detail", "Found " ~ fmtResult.offenseCount.to!string ~ " style offenses")
+                .emit();
+            if (fmtResult.autoFixed)
+                structuredLog.info("autofixed_offenses").emit();
+        }
+        
+        return FormatStepResult.ok();
+    }
+    
+    override protected TypeCheckStepResult runTypeChecker(
+        in string[] sources,
+        JSONValue config,
+        string interpreterCmd
+    ) @system
+    {
+        auto checker = TypeCheckerFactory.create(_currentConfig.typeCheck.checker);
+        auto result = checker.check(sources, _currentConfig.typeCheck);
+        
+        if (result.hasErrors())
+        {
+            TypeCheckStepResult r;
+            r.success = false;
+            r.errors = result.errors;
+            r.error = result.errors.empty ? "" : result.errors[0];
+            return r;
+        }
+        
+        if (result.hasWarnings() && _currentConfig.typeCheck.strict)
+        {
+            TypeCheckStepResult r;
+            r.success = false;
+            r.errors = result.warnings;
+            r.error = "Type checking warnings in strict mode";
+            return r;
+        }
+        
+        return TypeCheckStepResult.ok();
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // BUILD IMPLEMENTATIONS
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    override protected LanguageBuildResult buildExecutableImpl(
+        in Target target,
+        in WorkspaceConfig config,
+        JSONValue langConfig,
+        string interpreterCmd
+    ) @system
     {
         LanguageBuildResult result;
         
         if (target.sources.empty)
         {
             result.error = "No source files provided";
-            return result;
-        }
-        
-        if (rubyConfig.installDeps && !installDependencies(rubyConfig, config.root))
-            {
-                result.error = "Failed to install dependencies";
-                return result;
-        }
-        
-        if (rubyConfig.format.autoFormat && rubyConfig.format.formatter != RubyFormatter.None)
-        {
-            structuredLog.info("autoformatting_code").emit();
-            auto formatter = FormatterFactory.create(rubyConfig.format.formatter);
-            auto fmtResult = formatter.format(target.sources, rubyConfig.format, rubyConfig.format.autoCorrect);
-            
-            if (!fmtResult.success)
-                structuredLog.warning("formatting_failed_continuing_anyway").emit();
-            else if (fmtResult.hasOffenses())
-            {
-                structuredLog.info("found_").field("detail", "Found " ~ fmtResult.offenseCount.to!string ~ " style offenses").emit();
-                if (fmtResult.autoFixed)
-                    structuredLog.info("autofixed_offenses").emit();
-            }
-        }
-        
-        if (rubyConfig.typeCheck.enabled)
-        {
-            auto typeResult = typeCheckWithCache(target, rubyConfig);
-            
-            if (typeResult.hasErrors())
-            {
-                result.error = "Type checking failed:\n" ~ typeResult.errors.join("\n");
-                return result;
-            }
-            
-            if (typeResult.hasWarnings() && rubyConfig.typeCheck.strict)
-            {
-                result.error = "Type checking warnings in strict mode:\n" ~ typeResult.warnings.join("\n");
-                return result;
-            }
-        }
-        
-        string[] checkErrors;
-        auto checkSuccess = SyntaxChecker.check(target.sources, checkErrors);
-        if (!checkSuccess)
-        {
-            result.error = checkErrors.length > 0 ? checkErrors[0] : "Syntax check failed";
             return result;
         }
         
@@ -140,12 +259,12 @@ class RubyHandler : BaseLanguageHandler
         return result;
     }
     
-    private LanguageBuildResult buildLibrary(
-        const Target target,
-        const WorkspaceConfig config,
-        RubyConfig rubyConfig,
-        string rubyCmd
-    )
+    override protected LanguageBuildResult buildLibraryImpl(
+        in Target target,
+        in WorkspaceConfig config,
+        JSONValue langConfig,
+        string interpreterCmd
+    ) @system
     {
         LanguageBuildResult result;
         
@@ -155,34 +274,10 @@ class RubyHandler : BaseLanguageHandler
             return result;
         }
         
-        if (rubyConfig.installDeps && !installDependencies(rubyConfig, config.root))
-            {
-                result.error = "Failed to install dependencies";
-                return result;
-        }
-        
-        if (rubyConfig.typeCheck.enabled)
-        {
-            auto typeResult = typeCheckWithCache(target, rubyConfig);
-            if (typeResult.hasErrors())
-            {
-                result.error = "Type checking failed:\n" ~ typeResult.errors.join("\n");
-                return result;
-            }
-        }
-        
-        string[] checkErrors2;
-        auto checkSuccess2 = SyntaxChecker.check(target.sources, checkErrors2);
-        if (!checkSuccess2)
-        {
-            result.error = checkErrors2.length > 0 ? checkErrors2[0] : "Syntax check failed";
-            return result;
-        }
-        
-        if (rubyConfig.mode == RubyBuildMode.Gem)
+        if (_currentConfig.mode == RubyBuildMode.Gem)
         {
             auto builder = new GemBuilder();
-            auto buildResult = builder.build(target.sources, rubyConfig, target, config);
+            auto buildResult = builder.build(target.sources, _currentConfig, target, config);
             if (!buildResult.success)
             {
                 result.error = "Failed to build gem: " ~ buildResult.error;
@@ -198,16 +293,14 @@ class RubyHandler : BaseLanguageHandler
         return result;
     }
     
-    private LanguageBuildResult runTests(
-        const Target target,
-        const WorkspaceConfig config,
-        RubyConfig rubyConfig,
-        string rubyCmd
-    )
+    override protected LanguageBuildResult runTestsImpl(
+        in Target target,
+        in WorkspaceConfig config,
+        JSONValue langConfig,
+        string interpreterCmd
+    ) @system
     {
-        LanguageBuildResult result;
-        
-        auto runner = rubyConfig.test.framework;
+        auto runner = _currentConfig.test.framework;
         if (runner == RubyTestFramework.Auto)
             runner = detectTestFramework(config.root);
         
@@ -218,62 +311,27 @@ class RubyHandler : BaseLanguageHandler
                 goto case RubyTestFramework.Minitest;
             
             case RubyTestFramework.Minitest:
-                result = runMinitest(target, rubyConfig, rubyCmd);
-                break;
+                return runMinitest(target, interpreterCmd);
             
             case RubyTestFramework.RSpec:
-                result = runRSpec(target, rubyConfig, rubyCmd);
-                break;
+                return runRSpec(target, interpreterCmd);
             
             case RubyTestFramework.TestUnit:
-                result = runTestUnit(target, rubyConfig, rubyCmd);
-                break;
+                return runTestUnit(target, interpreterCmd);
             
             case RubyTestFramework.Cucumber:
-                result = runCucumber(target, rubyConfig, rubyCmd);
-                break;
+                return runCucumber(target, interpreterCmd, config.root);
             
             case RubyTestFramework.None:
+                LanguageBuildResult result;
                 result.success = true;
-                break;
+                return result;
         }
-        
-        return result;
     }
     
-    // ===== Helper methods =====
-    
-    private string setupRubyEnvironment(RubyConfig config, string projectRoot)
-    {
-        string rubyCmd = "ruby";
-        
-        if (config.rubyVersion.major > 0)
-        {
-            auto versionManager = VersionManagerFactory.create(config.versionManager, projectRoot);
-            string versionStr = config.rubyVersion.toString();
-            if (versionManager.isVersionInstalled(versionStr))
-            {
-                rubyCmd = versionManager.getRubyPath(versionStr);
-                structuredLog.debug_("using_ruby_version_").field("detail", "Using Ruby version: " ~ versionStr).emit();
-            }
-        }
-        
-        return rubyCmd;
-    }
-    
-    private bool installDependencies(RubyConfig config, string projectRoot)
-    {
-        auto packageManager = PackageManagerFactory.create(config.packageManager, projectRoot);
-        
-        if (packageManager.hasLockfile())
-        {
-            structuredLog.info("installing_dependencies").emit();
-            auto result = packageManager.installFromFile(buildPath(projectRoot, "Gemfile"));
-            return result.success;
-        }
-        
-        return true;
-    }
+    // ═══════════════════════════════════════════════════════════════════════════
+    // RUBY-SPECIFIC HELPER METHODS
+    // ═══════════════════════════════════════════════════════════════════════════
     
     private RubyPackageManager detectPackageManager(string projectRoot)
     {
@@ -289,7 +347,6 @@ class RubyHandler : BaseLanguageHandler
         auto versionFile = buildPath(projectRoot, ".ruby-version");
         if (exists(versionFile))
         {
-            import infrastructure.utils.security : execute;
             auto checkRbenv = execute(["which", "rbenv"]);
             if (checkRbenv.status == 0)
                 return RubyVersionManager.Rbenv;
@@ -310,30 +367,27 @@ class RubyHandler : BaseLanguageHandler
     
     private RubyTestFramework detectTestFramework(string projectRoot)
     {
-        // Check for Cucumber first (BDD takes precedence)
         import languages.scripting.ruby.tooling.testers.cucumber;
         if (CucumberRunner.detectCucumber(projectRoot))
             return RubyTestFramework.Cucumber;
         
-        // Check for RSpec
         if (exists(buildPath(projectRoot, "spec")))
             return RubyTestFramework.RSpec;
         
-        // Check for Minitest/Test::Unit
         if (exists(buildPath(projectRoot, "test")))
             return RubyTestFramework.Minitest;
         
         return RubyTestFramework.Minitest;
     }
     
-    private LanguageBuildResult runMinitest(in Target target, RubyConfig config, string rubyCmd)
+    private LanguageBuildResult runMinitest(in Target target, string rubyCmd)
     {
         LanguageBuildResult result;
         
         string[] cmd = [rubyCmd, "-Ilib:test"];
         foreach (source; target.sources)
             cmd ~= ["-r", source];
-        cmd ~= config.test.minitestArgs;
+        cmd ~= _currentConfig.test.minitestArgs;
         
         auto res = execute(cmd);
         result.success = (res.status == 0);
@@ -344,13 +398,13 @@ class RubyHandler : BaseLanguageHandler
         return result;
     }
     
-    private LanguageBuildResult runRSpec(in Target target, RubyConfig config, string rubyCmd)
+    private LanguageBuildResult runRSpec(in Target target, string rubyCmd)
     {
         LanguageBuildResult result;
         
         string[] cmd = ["rspec"];
-        cmd ~= config.test.rspecArgs;
-            cmd ~= target.sources;
+        cmd ~= _currentConfig.test.rspecArgs;
+        cmd ~= target.sources;
         
         auto res = execute(cmd);
         result.success = (res.status == 0);
@@ -361,12 +415,12 @@ class RubyHandler : BaseLanguageHandler
         return result;
     }
     
-    private LanguageBuildResult runTestUnit(in Target target, RubyConfig config, string rubyCmd)
+    private LanguageBuildResult runTestUnit(in Target target, string rubyCmd)
     {
         LanguageBuildResult result;
         
         string[] cmd = [rubyCmd];
-            cmd ~= target.sources;
+        cmd ~= target.sources;
         
         auto res = execute(cmd);
         result.success = (res.status == 0);
@@ -377,13 +431,12 @@ class RubyHandler : BaseLanguageHandler
         return result;
     }
     
-    private LanguageBuildResult runCucumber(in Target target, RubyConfig config, string rubyCmd)
+    private LanguageBuildResult runCucumber(in Target target, string rubyCmd, string projectRoot)
     {
         LanguageBuildResult result;
         
         import languages.scripting.ruby.tooling.testers.cucumber;
         
-        // Check if Cucumber is available
         if (!CucumberRunner.isAvailable())
         {
             result.error = "Cucumber not available (install: gem install cucumber)";
@@ -393,24 +446,18 @@ class RubyHandler : BaseLanguageHandler
         
         structuredLog.info("running_cucumber_bdd_tests").emit();
         
-        // Determine feature files
         string[] featureFiles;
-        
-        // Use sources if they are .feature files
         foreach (source; target.sources)
         {
             if (source.endsWith(".feature"))
                 featureFiles ~= source;
         }
         
-        // If no feature files in sources, check for features directory
         if (featureFiles.empty)
         {
-            import std.file : dirEntries, SpanMode;
             auto featuresDir = buildPath(dirName(target.sources.empty ? "." : target.sources[0]), "features");
-            
             if (!exists(featuresDir))
-                featuresDir = "features"; // Default location
+                featuresDir = "features";
             
             if (exists(featuresDir))
             {
@@ -418,7 +465,9 @@ class RubyHandler : BaseLanguageHandler
                     foreach (entry; dirEntries(featuresDir, "*.feature", SpanMode.depth))
                         featureFiles ~= entry.name;
                 } catch (Exception e) {
-                    structuredLog.warning("failed_to_scan_features_directory_").field("detail", "Failed to scan features directory: " ~ e.msg).emit();
+                    structuredLog.warning("failed_to_scan_features_directory_")
+                        .field("detail", "Failed to scan features directory: " ~ e.msg)
+                        .emit();
                 }
             }
         }
@@ -431,10 +480,9 @@ class RubyHandler : BaseLanguageHandler
             return result;
         }
         
-        // Run Cucumber tests
         auto cucumberResult = CucumberRunner.runTests(
             featureFiles,
-            config.test,
+            _currentConfig.test,
             rubyCmd,
             dirName(featureFiles[0])
         );
@@ -446,19 +494,14 @@ class RubyHandler : BaseLanguageHandler
         if (cucumberResult.hasFailures())
         {
             structuredLog.error("cucumber_tests_failed").emit();
-            structuredLog.error("__scenarios_").field("detail", "  Scenarios: " ~ cucumberResult.scenariosPassed.to!string ~ "/" ~ 
-                        cucumberResult.scenarios.to!string ~ " passed").emit();
-            structuredLog.error("__steps_").field("detail", "  Steps: " ~ cucumberResult.stepsPassed.to!string ~ "/" ~ 
-                        cucumberResult.steps.to!string ~ " passed").emit();
-            
-            if (!result.error.empty)
-                structuredLog.error("__").field("detail", "  " ~ result.error).emit();
+            structuredLog.error("__scenarios_")
+                .field("detail", "  Scenarios: " ~ cucumberResult.scenariosPassed.to!string ~ "/" ~ 
+                            cucumberResult.scenarios.to!string ~ " passed")
+                .emit();
         }
         else if (cucumberResult.scenarios > 0)
         {
             structuredLog.info("all_cucumber_tests_passed").emit();
-            structuredLog.info("__").field("detail", "  " ~ cucumberResult.scenarios.to!string ~ " scenarios, " ~ 
-                       cucumberResult.steps.to!string ~ " steps").emit();
         }
         
         return result;
@@ -473,47 +516,16 @@ class RubyHandler : BaseLanguageHandler
         metadata["checker"] = config.typeCheck.checker.to!string;
         
         if (getCache().isCached(actionId, target.sources, metadata))
-            {
+        {
             structuredLog.debug_("__cached_type_checking").emit();
             return TypeCheckResult();
-            }
-            
+        }
+        
         auto checker = TypeCheckerFactory.create(config.typeCheck.checker);
         auto result = checker.check(target.sources, config.typeCheck);
         
         getCache().update(actionId, target.sources, [], metadata, !result.hasErrors());
         
         return result;
-    }
-    
-    /// Analyze imports in Ruby source files
-    override Import[] analyzeImports(in string[] sources) @system
-    {
-        import std.file : readText, exists, isFile;
-        
-        auto spec = getLanguageSpec(TargetLanguage.Ruby);
-        if (spec is null)
-            return [];
-        
-        Import[] allImports;
-        
-        foreach (source; sources)
-        {
-            if (!exists(source) || !isFile(source))
-                continue;
-            
-            try
-            {
-                auto content = readText(source);
-                auto imports = spec.scanImports(source, content);
-                allImports ~= imports;
-            }
-            catch (Exception e)
-            {
-                // Silently skip unreadable files
-            }
-        }
-        
-        return allImports;
     }
 }
