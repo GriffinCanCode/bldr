@@ -12,6 +12,7 @@ import engine.distributed.protocol.protocol : NetworkError;
 import engine.distributed.protocol.transport;
 import engine.distributed.protocol.messages;
 import infrastructure.utils.concurrency.deque : WorkStealingDeque;
+import infrastructure.utils.memory.numa : NUMATopology;
 import engine.distributed.worker.peers;
 import engine.distributed.worker.steal;
 import engine.distributed.worker.adaptive;
@@ -68,7 +69,8 @@ struct WorkerLifecycle
     void initialize(WorkerConfig config) @trusted
     {
         this.config = config;
-        this.localQueue = WorkStealingDeque!ActionRequest(config.localQueueSize);
+        // Use NUMA-local allocation for work-stealing deque on multi-socket systems
+        this.localQueue = WorkStealingDeque!ActionRequest(config.localQueueSize, NUMATopology.currentNode());
         atomicStore(state, WorkerState.Idle);
         atomicStore(running, false);
         

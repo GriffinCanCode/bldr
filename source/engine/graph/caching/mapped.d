@@ -16,6 +16,7 @@ import engine.graph.caching.schema;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.memory.mmap : MmapRegion, MapMode, MapAdvice;
 import infrastructure.utils.memory.prefetch : prefetch, prefetchRaw, PrefetchLocality;
+import infrastructure.utils.memory.calibration : CacheCalibration;
 import infrastructure.utils.serialization;
 import infrastructure.errors;
 
@@ -391,8 +392,12 @@ final class MappedGraphView : IGraphReader
         if (!_valid || nodeIndex >= _header.nodeCount) return false;
         auto node = getNode(nodeIndex);
         
+        // Use calibrated prefetch distance based on L2/L3 latency measurements
+        immutable lookahead = CacheCalibration.optimalDistance(MappedEdge.SIZE, PrefetchLocality.T1);
+        immutable prefetchCount = node.edgeCount < lookahead ? node.edgeCount : lookahead;
+        
         // Prefetch first few edges and their target nodes
-        foreach (i; 0 .. (node.edgeCount < 4 ? node.edgeCount : 4))
+        foreach (i; 0 .. prefetchCount)
         {
             immutable edgeOffset = _header.edgeTableOffset + (node.firstEdgeIndex + i) * MappedEdge.SIZE;
             prefetchRaw(cast(const(void)*)(_region[].ptr + edgeOffset), PrefetchLocality.T1);
@@ -402,12 +407,13 @@ final class MappedGraphView : IGraphReader
         {
             auto edge = getEdge(node.firstEdgeIndex + i);
             
-            // Prefetch next edge's target node
-            if (i + 1 < node.edgeCount)
+            // Prefetch next edge's target node with calibrated distance
+            immutable nextPrefetch = i + CacheCalibration.optimalDistance(MappedNode.SIZE, PrefetchLocality.T1);
+            if (nextPrefetch < node.edgeCount)
             {
-                auto nextEdge = getEdge(node.firstEdgeIndex + i + 1);
-                immutable nextNodeOffset = _header.nodeTableOffset + nextEdge.toIndex * MappedNode.SIZE;
-                prefetchRaw(cast(const(void)*)(_region[].ptr + nextNodeOffset), PrefetchLocality.T1);
+                auto futureEdge = getEdge(node.firstEdgeIndex + nextPrefetch);
+                immutable futureNodeOffset = _header.nodeTableOffset + futureEdge.toIndex * MappedNode.SIZE;
+                prefetchRaw(cast(const(void)*)(_region[].ptr + futureNodeOffset), PrefetchLocality.T1);
             }
             
             auto depNode = getNode(edge.toIndex);

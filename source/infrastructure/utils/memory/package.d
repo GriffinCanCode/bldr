@@ -7,4 +7,7 @@ public import infrastructure.utils.memory.compact;
 public import infrastructure.utils.memory.refs;
 public import infrastructure.utils.memory.sharded;
 public import infrastructure.utils.memory.shardedcache;
+public import infrastructure.utils.memory.prefetch;
+public import infrastructure.utils.memory.calibration;
+public import infrastructure.utils.memory.numa;
 

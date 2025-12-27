@@ -5,6 +5,7 @@ import std.algorithm;
 import std.range;
 import std.traits;
 
+import infrastructure.utils.memory.numa : NUMATopology, numaAlloc, numaFree;
 
 /// Lock-free work-stealing deque using Chase-Lev algorithm
 /// Optimized for single-producer (owner) and multiple-consumer (stealers) pattern
@@ -20,6 +21,7 @@ import std.traits;
 /// - Dynamic circular buffer with automatic resizing
 /// - Cache-friendly: owner operations access bottom, stealers access top
 /// - Cache line padding prevents false sharing between bottom/top indices
+/// - NUMA-aware allocation for multi-socket systems
 /// 
 /// References:
 /// - Chase & Lev: "Dynamic Circular Work-Stealing Deque" (2005)
@@ -30,16 +32,18 @@ struct WorkStealingDeque(T) if (is(T == class) || is(T == interface))
     {
         shared T[] buffer;
         size_t logSize;  // log2(capacity) for fast modulo (not immutable for heap allocation)
+        uint numaNode;   // NUMA node where buffer is allocated
+        bool numaAllocated;
         
         @disable this(this);  // Non-copyable
         
-        static CircularArray* create(size_t capacity) @system nothrow
+        /// Create array with optional NUMA-local allocation
+        static CircularArray* create(size_t capacity, uint preferNode = uint.max) @system nothrow
         {
             import std.math : isPowerOf2;
             assert(isPowerOf2(capacity), "Capacity must be power of 2");
             
             auto arr = new CircularArray();
-            arr.buffer.length = capacity;
             
             // Calculate log2(capacity)
             size_t temp = capacity;
@@ -50,6 +54,34 @@ struct WorkStealingDeque(T) if (is(T == class) || is(T == interface))
                 log++;
             }
             arr.logSize = log;
+            
+            // Try NUMA-local allocation for multi-socket systems
+            immutable bufSize = capacity * T.sizeof;
+            if (NUMATopology.available() && NUMATopology.nodeCount() > 1 && bufSize >= 4096)
+            {
+                arr.numaNode = preferNode < NUMATopology.nodeCount() 
+                             ? preferNode 
+                             : NUMATopology.currentNode();
+                try
+                {
+                    auto mem = numaAlloc(bufSize, arr.numaNode);
+                    if (mem.ptr !is null)
+                    {
+                        // Use the NUMA-allocated memory for the buffer
+                        arr.buffer = (cast(shared(T)*)mem.ptr)[0 .. capacity];
+                        arr.numaAllocated = true;
+                    }
+                }
+                catch (Exception) {}
+            }
+            
+            // Fallback to regular allocation
+            if (!arr.numaAllocated)
+            {
+                arr.buffer.length = capacity;
+                arr.numaNode = 0;
+            }
+            
             return arr;
         }
         
@@ -75,19 +107,28 @@ struct WorkStealingDeque(T) if (is(T == class) || is(T == interface))
     private shared long bottom;  // Bottom index (owner side)
     private ubyte[64] _padBottom; // Cache line padding to prevent false sharing
     private shared long top;     // Top index (stealer side)
+    private uint _numaNode;      // NUMA node this deque prefers
     
     @disable this(this);  // Non-copyable
     
     /// Initialize deque with initial capacity (must be power of 2)
-    this(size_t capacity) @system
+    /// Optionally specify NUMA node for memory allocation
+    this(size_t capacity, uint numaNode = uint.max) @system
     {
         import std.math : isPowerOf2;
         assert(isPowerOf2(capacity), "Capacity must be power of 2");
         
-        auto arr = CircularArray.create(capacity);
+        _numaNode = numaNode < NUMATopology.nodeCount() ? numaNode : NUMATopology.currentNode();
+        auto arr = CircularArray.create(capacity, _numaNode);
         atomicStore(array, cast(shared)arr);
         atomicStore(bottom, cast(long)0);
         atomicStore(top, cast(long)0);
+    }
+    
+    /// Create deque on current thread's NUMA node
+    static WorkStealingDeque!T forCurrentNode(size_t capacity) @system
+    {
+        return WorkStealingDeque!T(capacity, NUMATopology.currentNode());
     }
     
     /// Push task to bottom (owner only)
@@ -97,7 +138,7 @@ struct WorkStealingDeque(T) if (is(T == class) || is(T == interface))
     /// 1. Only owner thread calls this (by design contract)
     /// 2. Atomic loads for top, relaxed for bottom (owner exclusive)
     /// 3. Array access is bounds-checked via capacity
-    /// 4. Automatic growth when needed
+    /// 4. Automatic growth when needed (NUMA-local when possible)
     @system
     void push(T task) nothrow
     {
@@ -108,8 +149,8 @@ struct WorkStealingDeque(T) if (is(T == class) || is(T == interface))
         immutable size = b - t;
         if (size >= arr.capacity)
         {
-            // Grow array (rare path) - allocate on heap to avoid dangling pointer
-            auto newArray = CircularArray.create(arr.capacity * 2);
+            // Grow array (rare path) - maintain NUMA locality
+            auto newArray = CircularArray.create(arr.capacity * 2, _numaNode);
             foreach (i; t .. b)
                 newArray.put(i, arr.get(i));
             atomicStore(array, cast(shared)newArray);
@@ -273,6 +314,17 @@ struct WorkStealingDeque(T) if (is(T == class) || is(T == interface))
     {
         auto arr = cast(CircularArray*)atomicLoad(array);
         return arr.capacity;
+    }
+    
+    /// Get NUMA node this deque prefers
+    @property uint numaNode() const nothrow @nogc => _numaNode;
+    
+    /// Check if deque buffer is NUMA-locally allocated
+    @system
+    @property bool isNUMALocal() const nothrow @nogc
+    {
+        auto arr = cast(CircularArray*)atomicLoad(array);
+        return arr.numaAllocated;
     }
 }
 

@@ -11,6 +11,8 @@ import core.lifetime : emplace;
 import infrastructure.config.schema.schema;
 import infrastructure.errors;
 import infrastructure.utils.memory.prefetch : prefetch, prefetchBatch, PrefetchLocality;
+import infrastructure.utils.memory.calibration : prefetchAheadCalibrated, prefetchMultiLevel, prefetchBatchCalibrated;
+import infrastructure.utils.memory.numa : NUMATopology, numaAlloc, numaFree;
 import engine.graph.core.incremental_topo;
 
 /// Arena allocator specialized for BuildNode instances
@@ -19,31 +21,64 @@ import engine.graph.core.incremental_topo;
 /// - Batch deallocation (reset all at once)
 /// - Cache-friendly contiguous memory layout
 /// - GC root registration for proper scanning
+/// - NUMA-aware allocation for multi-socket systems
 struct NodeArena
 {
     private ubyte[] buffer;
     private size_t offset;
     private size_t nodeCount;
+    private uint numaNode;
+    private bool numaAllocated;
     private enum nodeSize = __traits(classInstanceSize, BuildNode);
     private enum nodeAlign = __traits(classInstanceAlignment, BuildNode);
     
     @disable this(this);  // Non-copyable
     
     /// Create arena with capacity for expectedNodes BuildNode instances
-    this(size_t expectedNodes) @trusted
+    /// Uses NUMA-local allocation when available on multi-socket systems
+    this(size_t expectedNodes, uint preferredNode = uint.max) @trusted
     {
         immutable size = alignUp(nodeSize, nodeAlign) * expectedNodes;
-        buffer = new ubyte[size];
+        
+        // Try NUMA-local allocation on multi-socket systems
+        if (NUMATopology.available() && NUMATopology.nodeCount() > 1)
+        {
+            numaNode = preferredNode < NUMATopology.nodeCount() 
+                     ? preferredNode 
+                     : NUMATopology.currentNode();
+            buffer = numaAlloc(size, numaNode);
+            numaAllocated = buffer.ptr !is null;
+        }
+        
+        // Fallback to regular allocation
+        if (buffer.ptr is null)
+        {
+            buffer = new ubyte[size];
+            numaAllocated = false;
+            numaNode = 0;
+        }
+        
         offset = 0;
         nodeCount = 0;
         // Don't set NO_SCAN - we need GC to scan for Target/TargetId references
         GC.addRoot(buffer.ptr);
     }
     
+    /// Create arena on current thread's NUMA node
+    static NodeArena* forCurrentNode(size_t expectedNodes) @trusted
+    {
+        auto arena = new NodeArena(expectedNodes, NUMATopology.currentNode());
+        return arena;
+    }
+    
     ~this() @trusted
     {
         if (buffer.ptr !is null)
+        {
             GC.removeRoot(buffer.ptr);
+            if (numaAllocated)
+                numaFree(buffer);
+        }
     }
     
     /// Allocate and construct a BuildNode in the arena
@@ -75,6 +110,8 @@ struct NodeArena
     @property size_t used() const pure @safe nothrow @nogc => offset;
     @property size_t capacity() const pure @safe nothrow @nogc => buffer.length;
     @property bool full() const pure @safe nothrow @nogc => offset >= buffer.length;
+    @property uint node() const pure @safe nothrow @nogc => numaNode;
+    @property bool isNUMALocal() const pure @safe nothrow @nogc => numaAllocated;
     
     private static size_t alignUp(size_t value, size_t alignment) pure @safe nothrow @nogc =>
         (value + alignment - 1) & ~(alignment - 1);
@@ -772,8 +809,8 @@ final class BuildGraph
             // Fast path: indexed access with prefetching
             if (node.dependencyIndices.length == node.dependencyIds.length && _nodeArray.length > 0)
             {
-                // Prefetch upcoming nodes to hide memory latency
-                prefetchBatch(_nodeArray.ptr, node.dependencyIndices, 4);
+                // Prefetch upcoming nodes with calibrated distance
+                prefetchBatchCalibrated(_nodeArray.ptr, node.dependencyIndices);
                 
                 foreach (idx; node.dependencyIndices)
                 {
@@ -1089,8 +1126,8 @@ final class BuildGraph
             // Fast path: indexed access with prefetching
             if (node.dependentIndices.length == node.dependentIds.length && _nodeArray.length > 0)
             {
-                // Prefetch upcoming dependent nodes
-                prefetchBatch(_nodeArray.ptr, node.dependentIndices, 4);
+                // Prefetch upcoming dependent nodes with calibrated distance
+                prefetchBatchCalibrated(_nodeArray.ptr, node.dependentIndices);
                 
                 foreach (idx; node.dependentIndices)
                 {

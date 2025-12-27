@@ -6,6 +6,7 @@ import std.conv : to;
 import core.atomic;
 import core.sync.mutex : Mutex;
 import infrastructure.utils.concurrency.deque : WorkStealingDeque;
+import infrastructure.utils.memory.numa : NUMATopology;
 import engine.distributed.protocol.protocol;
 import engine.distributed.protocol.transport;
 import engine.distributed.worker.peers;
@@ -227,10 +228,11 @@ final class PriorityQueueManager
         this.transport = transport;
         this.selfId = selfId;
         
-        // Create queue for each priority level
+        // Create queue for each priority level with NUMA-local allocation
+        immutable numaNode = NUMATopology.currentNode();
         foreach (priority; [Priority.Critical, Priority.High, Priority.Normal, Priority.Low])
         {
-            auto localQueue = WorkStealingDeque!ActionRequest(queueCapacity);
+            auto localQueue = WorkStealingDeque!ActionRequest(queueCapacity, numaNode);
             queues[priority] = new DistributedQueue(
                 localQueue, peers, transport, selfId
             );

@@ -8,6 +8,7 @@ import engine.graph.core.graph;
 import infrastructure.config.schema.schema;
 import infrastructure.errors;
 import infrastructure.utils.memory.prefetch : prefetch, prefetchBatch;
+import infrastructure.utils.memory.calibration : CacheCalibration, prefetchBatchCalibrated;
 
 /// Incremental topological ordering with O(affected) updates
 /// 
@@ -193,7 +194,7 @@ struct IncrementalTopoOrder
             visiting[node._nodeIndex] = true;
             
             // Prefetch dependency nodes before traversal
-            prefetchBatch(_graph._nodeArray.ptr, node.dependencyIndices, 4);
+            prefetchBatchCalibrated(_graph._nodeArray.ptr, node.dependencyIndices);
             
             // O(1) indexed access via dependencyIndices
             foreach (idx; node.dependencyIndices)
@@ -266,7 +267,7 @@ struct IncrementalTopoOrder
             localVisiting[node._nodeIndex] = true;
             
             // Prefetch dependency nodes
-            prefetchBatch(_graph._nodeArray.ptr, node.dependencyIndices, 4);
+            prefetchBatchCalibrated(_graph._nodeArray.ptr, node.dependencyIndices);
             
             // O(1) indexed access
             foreach (idx; node.dependencyIndices)
@@ -336,7 +337,7 @@ struct IncrementalTopoOrder
             affected ~= node;
             
             // Prefetch dependent nodes
-            prefetchBatch(_graph._nodeArray.ptr, node.dependentIndices, 4);
+            prefetchBatchCalibrated(_graph._nodeArray.ptr, node.dependentIndices);
             
             // O(1) indexed access via dependentIndices
             foreach (idx; node.dependentIndices)
@@ -381,7 +382,7 @@ struct IncrementalTopoOrder
                 return true;
             
             // Prefetch dependency nodes
-            prefetchBatch(_graph._nodeArray.ptr, node.dependencyIndices, 4);
+            prefetchBatchCalibrated(_graph._nodeArray.ptr, node.dependencyIndices);
             
             // Use indexed access (always available with dependencyIndices)
             foreach (idx; node.dependencyIndices)

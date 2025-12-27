@@ -10,6 +10,7 @@ import std.random;
 import std.parallelism : totalCPUs;
 import infrastructure.utils.concurrency.deque;
 import infrastructure.utils.concurrency.priority;
+import infrastructure.utils.memory.numa : NUMATopology;
 
 // Thread-local arena reset for zero-sync memory between tasks
 private void resetWorkerArena() @trusted nothrow
@@ -48,10 +49,12 @@ final class WorkStealingScheduler(T)
         shared size_t tasksStolen;
         shared size_t stealAttempts;
         
-        this(size_t id, size_t capacity) @system
+        this(size_t id, size_t capacity, uint numaNode = uint.max) @system
         {
             this.id = id;
-            this.deque = WorkStealingDeque!(PriorityTask!T)(capacity);
+            // Use NUMA-local allocation for work-stealing deque on multi-socket systems
+            immutable node = numaNode < NUMATopology.nodeCount() ? numaNode : NUMATopology.currentNode();
+            this.deque = WorkStealingDeque!(PriorityTask!T)(capacity, node);
             this.rng = Mt19937(cast(uint)(unpredictableSeed + id));
             atomicStore(running, true);
             atomicStore(tasksExecuted, cast(size_t)0);
@@ -121,9 +124,12 @@ final class WorkStealingScheduler(T)
         
         // Create workers
         workers.reserve(this.workerCount);
+        immutable numNodes = NUMATopology.nodeCount();
         foreach (i; 0 .. this.workerCount)
         {
-            auto worker = new Worker(i, DEQUE_CAPACITY);
+            // Distribute workers across NUMA nodes for optimal locality
+            immutable numaNode = cast(uint)(i % numNodes);
+            auto worker = new Worker(i, DEQUE_CAPACITY, numaNode);
             workers ~= worker;
             worker.start(() @system => workerLoop(worker));
         }

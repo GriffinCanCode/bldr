@@ -125,6 +125,7 @@ void prefetchWrite(T)(T* addr) @system nothrow @nogc
 
 /// Batch prefetch - prefetch multiple addresses with stride
 /// Useful for prefetching next N nodes in graph traversal
+/// Note: For calibrated lookahead, use prefetchBatchCalibrated from calibration module
 pragma(inline, true)
 void prefetchBatch(T)(const(T)* base, const(uint)[] indices, size_t lookahead = 4) @system nothrow @nogc
 {
@@ -137,6 +138,7 @@ void prefetchBatch(T)(const(T)* base, const(uint)[] indices, size_t lookahead = 
 
 /// Prefetch array elements ahead of current position
 /// Call at start of loop iteration to prefetch future iterations
+/// Note: For calibrated distance, use prefetchAheadCalibrated from calibration module
 pragma(inline, true)
 void prefetchAhead(T)(const(T)[] arr, size_t currentIdx, size_t distance = 8) @system nothrow @nogc
 {
@@ -146,6 +148,15 @@ void prefetchAhead(T)(const(T)[] arr, size_t currentIdx, size_t distance = 8) @s
     if (targetIdx < arr.length)
         prefetch(&arr[targetIdx], PrefetchLocality.T0);
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// Calibrated Prefetch (re-exported from calibration module)
+// ═══════════════════════════════════════════════════════════════════════
+
+public import infrastructure.utils.memory.calibration : 
+    CacheCalibration, CacheParams, 
+    prefetchAheadCalibrated, prefetchBatchCalibrated, 
+    prefetchMultiLevel, AdaptivePrefetcher;
 
 unittest
 {
