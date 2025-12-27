@@ -21,6 +21,7 @@ import infrastructure.utils.concurrency.priority : Priority;
 import engine.runtime.services.speculation.predictor : ChangePredictor, ChangeProbability;
 import engine.runtime.services.speculation.history : HistoryTracker, ChangeType;
 import engine.runtime.services.speculation.warmer : PredictorWarmer, WarmerConfig, WarmupStatus;
+import engine.runtime.services.speculation.adaptive : AdaptiveSpeculator, AdaptiveConfig, TargetSpecProfile, AdaptiveState;
 
 /// Speculation policy configuration
 /// Controls the aggressiveness and budget for speculative execution
@@ -258,6 +259,10 @@ final class SpeculationService : ISpeculationService
     private PredictorWarmer _warmer;
     private bool _usePredictiveMode;
     
+    // Profile-guided speculation with adaptive thresholds
+    private AdaptiveSpeculator _adaptive;
+    private bool _useAdaptiveMode;
+    
     this(CostEstimator estimator, BuildGraph graph = null) @trusted
     {
         _estimator = estimator;
@@ -318,6 +323,71 @@ final class SpeculationService : ISpeculationService
             _history = _warmer.history();
         }
         return true;
+    }
+    
+    /// Initialize profile-guided adaptive thresholds
+    /// Dynamically adjusts confidence thresholds per-target based on hit rates
+    void initializeAdaptive(AdaptiveConfig config = AdaptiveConfig.init) @trusted
+    {
+        synchronized (_mutex)
+        {
+            _adaptive = new AdaptiveSpeculator(config);
+            _useAdaptiveMode = true;
+            
+            // Load persisted adaptive state if available
+            if (_history !is null)
+            {
+                auto stateFile = _history._cacheDir ~ "/adaptive_state.json";
+                import std.file : exists, readText;
+                import std.json : parseJSON, JSONType;
+                
+                if (exists(stateFile))
+                {
+                    try
+                    {
+                        auto json = parseJSON(readText(stateFile));
+                        AdaptiveState state;
+                        
+                        if ("profiles" in json && json["profiles"].type == JSONType.object)
+                        {
+                            foreach (key, val; json["profiles"].objectNoRef)
+                            {
+                                if (val.type != JSONType.object) continue;
+                                TargetSpecProfile profile;
+                                profile.speculationAttempts = cast(size_t)val["attempts"].integer;
+                                profile.speculationHits = cast(size_t)val["hits"].integer;
+                                profile.speculationMisses = cast(size_t)val["misses"].integer;
+                                profile.currentThreshold = cast(float)val["threshold"].floating;
+                                profile.ewmaHitRate = cast(float)val["ewmaHitRate"].floating;
+                                state.profiles[key] = profile;
+                            }
+                        }
+                        
+                        _adaptive.importState(state);
+                    }
+                    catch (Exception) {}
+                }
+            }
+            
+            structuredLog.debug_("speculation_initialized_adaptive_mode").emit();
+        }
+    }
+    
+    /// Get adaptive speculator for direct access
+    AdaptiveSpeculator getAdaptive() @trusted
+    {
+        synchronized (_mutex) { return _adaptive; }
+    }
+    
+    /// Check if adaptive mode is enabled
+    @property bool isAdaptiveMode() const @safe nothrow => _useAdaptiveMode;
+    
+    /// Get adaptive threshold for a target (uses profile-guided adjustment)
+    float getAdaptiveThreshold(TargetId targetId) @trusted
+    {
+        if (_adaptive is null)
+            return _policy.confidenceThreshold;
+        return _adaptive.getThreshold(targetId);
     }
     
     /// Check if predictor is warmed and ready
@@ -535,9 +605,23 @@ final class SpeculationService : ISpeculationService
                     // Update predictor with successful speculation
                     if (_predictor !is null)
                         _predictor.recordChange(targetId);
+                    
+                    // Record hit in adaptive speculator for threshold tuning
+                    if (_adaptive !is null)
+                        _adaptive.recordOutcome(targetId, true, task.actualDuration);
                 }
                 atomicOp!"-="(_activeCount, 1);
             }
+        }
+    }
+    
+    /// Record a speculation miss (aborted or wasted)
+    void recordSpeculationMiss(TargetId targetId, Duration duration) @trusted
+    {
+        synchronized (_mutex)
+        {
+            if (_adaptive !is null)
+                _adaptive.recordOutcome(targetId, false, duration);
         }
     }
     
@@ -552,11 +636,19 @@ final class SpeculationService : ISpeculationService
                 {
                     task.abort();
                     _stats.aborted++;
+                    
+                    // Record miss in adaptive speculator
+                    if (_adaptive !is null)
+                        _adaptive.recordOutcome(task.targetId, false, task.actualDuration);
                 }
                 else if (status == SpeculativeStatus.Completed)
                 {
                     _stats.wasted++;
                     _stats.timeWasted += task.actualDuration;
+                    
+                    // Completed but not promoted = wasted speculation
+                    if (_adaptive !is null)
+                        _adaptive.recordOutcome(task.targetId, false, task.actualDuration);
                 }
             }
             _tasks.clear();
@@ -588,6 +680,33 @@ final class SpeculationService : ISpeculationService
                 _history.updatePredictorState(_predictor.exportState());
                 _history.flush();
                 structuredLog.debug_("speculation_saved_predictor_state").emit();
+            }
+            
+            // Save adaptive speculation state
+            if (_adaptive !is null && _history !is null)
+            {
+                import std.file : write;
+                import std.json : JSONValue;
+                
+                auto state = _adaptive.exportState();
+                JSONValue json;
+                JSONValue profiles;
+                
+                foreach (key, profile; state.profiles)
+                {
+                    JSONValue p;
+                    p["attempts"] = JSONValue(profile.speculationAttempts);
+                    p["hits"] = JSONValue(profile.speculationHits);
+                    p["misses"] = JSONValue(profile.speculationMisses);
+                    p["threshold"] = JSONValue(profile.currentThreshold);
+                    p["ewmaHitRate"] = JSONValue(profile.ewmaHitRate);
+                    profiles[key] = p;
+                }
+                json["profiles"] = profiles;
+                
+                auto stateFile = _history._cacheDir ~ "/adaptive_state.json";
+                write(stateFile, json.toPrettyString());
+                structuredLog.debug_("speculation_saved_adaptive_state").emit();
             }
         }
         
@@ -700,8 +819,13 @@ private:
                 }
             }
             
+            // Get adaptive threshold for this target (profile-guided)
+            auto effectiveThreshold = _useAdaptiveMode && _adaptive !is null
+                ? _adaptive.getThreshold(node.id)
+                : _policy.confidenceThreshold;
+            
             // Penalize low confidence (high cache hit probability)
-            if (profile.cacheHitProbability > _policy.confidenceThreshold)
+            if (profile.cacheHitProbability > effectiveThreshold)
             {
                 // Unless predictor says it's likely to change
                 if (changeProbability < 0.6f)
@@ -709,6 +833,18 @@ private:
                 
                 // High change probability overrides cache hit expectation
                 reason ~= "+override_cache";
+            }
+            
+            // Adaptive boost: targets with good historical hit rates get priority
+            if (_useAdaptiveMode && _adaptive !is null)
+            {
+                auto targetProfile = _adaptive.getProfile(node.id);
+                if (targetProfile.speculationAttempts >= 5 && targetProfile.hitRate > 0.7f)
+                {
+                    score += cast(size_t)(targetProfile.hitRate * 500);
+                    if (reason.length > 0) reason ~= "+";
+                    reason ~= "adaptive_boost";
+                }
             }
             
             if (score > 0)

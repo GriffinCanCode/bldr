@@ -17,6 +17,7 @@ import infrastructure.utils.files.cdc : FastCDC, CDCManifest = ChunkManifest, sh
 import infrastructure.utils.crypto.merkle : MerkleProof;
 import infrastructure.utils.simd.bloom : BloomFilter;
 import infrastructure.errors;
+import engine.caching.distributed.remote.dictionary : SharedDictionaryManager, SharedDictConfig, DictionaryPackage, DictionarySyncProtocol;
 
 /// Remote cache client with connection pooling and retry logic
 /// Provides high-level interface for artifact storage and retrieval
@@ -36,6 +37,10 @@ final class RemoteCacheClient
     private BloomFilter knownEntries;  // Fast negative lookup filter
     private shared size_t bloomFilterSaves;  // Network requests avoided
     
+    // Shared dictionary compression for network transfers
+    private SharedDictionaryManager _dictManager;
+    private bool _useDictCompression;
+    
     /// Constructor
     this(RemoteCacheConfig config) @trusted
     {
@@ -50,6 +55,78 @@ final class RemoteCacheClient
         // Initialize bloom filter for fast negative lookups
         // Sized for 100K entries with 0.1% FPR - avoids network for known misses
         this.knownEntries = BloomFilter.create(100_000, 0.001);
+    }
+    
+    /// Initialize shared dictionary compression for improved network transfer efficiency
+    /// Dictionary-based compression typically provides 30-50% better ratios for similar artifacts
+    void initDictionaryCompression(string cacheDir, SharedDictConfig dictConfig = SharedDictConfig.init) @trusted
+    {
+        _dictManager = new SharedDictionaryManager(cacheDir, dictConfig);
+        _useDictCompression = true;
+    }
+    
+    /// Get the dictionary manager for external coordination
+    SharedDictionaryManager getDictionaryManager() @trusted => _dictManager;
+    
+    /// Check if dictionary compression is enabled
+    bool isDictionaryCompressionEnabled() const @safe => _useDictCompression;
+    
+    /// Sync dictionary from coordinator (for worker nodes)
+    VoidBuildResult syncDictionary() @trusted
+    {
+        if (!_useDictCompression || _dictManager is null)
+            return VoidBuildResult.err(Errors.generic("Dictionary compression not enabled").build());
+        
+        // Request latest dictionary from server
+        auto requestMsg = DictionarySyncProtocol.createRequest(_dictManager.getDictionaryId());
+        auto dictKey = "__dict_sync__";
+        
+        auto result = executeWithRetry(() => transport.get(dictKey));
+        if (result.isErr)
+            return VoidBuildResult.err(result.unwrapErr());
+        
+        auto responseData = result.unwrap();
+        if (responseData.length < 13)
+            return VoidBuildResult.ok();  // No dictionary available
+        
+        auto header = DictionarySyncProtocol.Header.deserialize(responseData);
+        
+        // Already have latest
+        if (header.dictionaryId == _dictManager.getDictionaryId())
+            return VoidBuildResult.ok();
+        
+        // Import new dictionary
+        if (header.type == DictionarySyncProtocol.MessageType.DictionaryResponse ||
+            header.type == DictionarySyncProtocol.MessageType.DictionaryUpdate)
+        {
+            auto pkg = DictionaryPackage.deserialize(responseData[13 .. $]);
+            return _dictManager.importDictionary(pkg.data, pkg.meta);
+        }
+        
+        return VoidBuildResult.ok();
+    }
+    
+    /// Broadcast dictionary update to server (for coordinator)
+    VoidBuildResult broadcastDictionary() @trusted
+    {
+        if (!_useDictCompression || _dictManager is null)
+            return VoidBuildResult.err(Errors.generic("Dictionary compression not enabled").build());
+        
+        auto pkg = _dictManager.getCurrentDictionary();
+        if (pkg.data.length == 0)
+            return VoidBuildResult.err(Errors.generic("No dictionary to broadcast").build());
+        
+        auto msg = DictionarySyncProtocol.createUpdate(pkg);
+        auto dictKey = "__dict_sync__";
+        
+        auto result = executeWithRetry!bool(() @trusted {
+            auto putResult = transport.put(dictKey, msg);
+            if (putResult.isErr)
+                return Err!(bool, BuildError)(putResult.unwrapErr());
+            return Ok!(bool, BuildError)(true);
+        });
+        
+        return result.isOk ? VoidBuildResult.ok() : VoidBuildResult.err(result.unwrapErr());
     }
     
     /// Destructor
@@ -95,6 +172,15 @@ final class RemoteCacheClient
                 // Decompress if needed (check first byte for compression marker)
                 if (data.length > 0 && data[0] == 0xFD)  // Zstd magic number
                 {
+                    // Try dictionary decompression first
+                    if (_useDictCompression && _dictManager !is null)
+                    {
+                        auto dictResult = _dictManager.decompress(data);
+                        if (dictResult.isOk)
+                            return Ok!(ubyte[], BuildError)(dictResult.unwrap());
+                    }
+                    
+                    // Fallback to standard decompression
                     auto compressor = new Compressor();
                     auto decompressResult = compressor.decompress(data, CompressionAlgorithm.Zstd);
                     
@@ -208,17 +294,38 @@ final class RemoteCacheClient
         ubyte[] payload = cast(ubyte[])data;
         if (config.enableCompression && data.length > 1024)
         {
-            auto compressor = new Compressor(CompressionAlgorithm.Zstd, StandardLevel.Default);
-            auto compressResult = compressor.compress(data);
-            
-            if (compressResult.isOk)
+            // Prefer dictionary compression if available (30-50% better ratio)
+            if (_useDictCompression && _dictManager !is null && _dictManager.hasDictionary())
             {
-                auto compressed = compressResult.unwrap();
-                
-                // Only use compressed version if it's significantly smaller (>5% reduction)
-                if (Compressor.shouldCompress(compressed.originalSize, compressed.compressedSize))
+                auto dictResult = _dictManager.compress(data, 3);
+                if (dictResult.isOk)
                 {
-                    payload = compressed.data;
+                    auto compressed = dictResult.unwrap();
+                    if (compressed.length < data.length * 9 / 10)  // >10% reduction
+                    {
+                        payload = compressed;
+                        
+                        // Add sample for dictionary training improvement
+                        _dictManager.addSample(data);
+                    }
+                }
+            }
+            
+            // Fallback to standard compression
+            if (payload.length == data.length)
+            {
+                auto compressor = new Compressor(CompressionAlgorithm.Zstd, StandardLevel.Default);
+                auto compressResult = compressor.compress(data);
+                
+                if (compressResult.isOk)
+                {
+                    auto compressed = compressResult.unwrap();
+                    
+                    // Only use compressed version if it's significantly smaller (>5% reduction)
+                    if (Compressor.shouldCompress(compressed.originalSize, compressed.compressedSize))
+                    {
+                        payload = compressed.data;
+                    }
                 }
             }
             // On compression failure, fallback to uncompressed (already set)

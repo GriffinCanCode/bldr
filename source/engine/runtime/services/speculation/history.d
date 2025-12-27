@@ -63,7 +63,7 @@ struct BuildSession
 /// Feeds the ChangePredictor with historical data for learning
 final class HistoryTracker
 {
-    private string _cacheDir;
+    package string _cacheDir;  // Package-visible for service integration
     private Mutex _mutex;
     
     // In-memory state
