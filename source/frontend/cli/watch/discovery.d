@@ -9,7 +9,7 @@ import std.conv;
 import engine.graph;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.logging;
-import infrastructure.errors;
+import infrastructure.errors : BuildResult, Errors, Cache, BuildError;
 import infrastructure.errors.formatting.format : formatError = format;
 
 /// Re-discovery statistics
@@ -174,7 +174,7 @@ class WatchModeWithDiscovery
     }
     
     /// Execute re-discovery workflow for changed targets
-    private Result!(RediscoveryStats, string) executeRediscovery(string[] targetIds) @system
+    private BuildResult!RediscoveryStats executeRediscovery(string[] targetIds) @system
     {
         import engine.runtime.core.engine.discovery;
         import engine.runtime.services;
@@ -195,12 +195,12 @@ class WatchModeWithDiscovery
         }
         
         if (nodesToRediscover.empty)
-            return Result!(RediscoveryStats, string).ok(stats);
+            return BuildResult!RediscoveryStats.ok(stats);
         
         // 3. Execute discovery on each node
         auto discoveryResult = runDiscoveryPhase(nodesToRediscover);
         if (discoveryResult.isErr)
-            return Result!(RediscoveryStats, string).err(discoveryResult.unwrapErr());
+            return BuildResult!RediscoveryStats.err(discoveryResult.unwrapErr());
         
         auto newNodes = discoveryResult.unwrap();
         stats.newNodes = newNodes.length;
@@ -208,11 +208,11 @@ class WatchModeWithDiscovery
         // 4. Update graph with new discoveries and rebuild affected targets
         auto rebuildResult = rebuildAffectedTargets(nodesToRediscover, newNodes);
         if (rebuildResult.isErr)
-            return Result!(RediscoveryStats, string).err(rebuildResult.unwrapErr());
+            return BuildResult!RediscoveryStats.err(rebuildResult.unwrapErr());
         
         stats.rebuiltTargets = rebuildResult.unwrap();
         
-        return Result!(RediscoveryStats, string).ok(stats);
+        return BuildResult!RediscoveryStats.ok(stats);
     }
     
     /// Clear old discoveries for targets needing re-discovery
@@ -236,7 +236,7 @@ class WatchModeWithDiscovery
     }
     
     /// Run discovery phase on nodes
-    private Result!(BuildNode[], string) runDiscoveryPhase(BuildNode[] nodes) @system
+    private BuildResult!(BuildNode[]) runDiscoveryPhase(BuildNode[] nodes) @system
     {
         import engine.runtime.core.engine.discovery;
         import engine.runtime.services;
@@ -283,14 +283,14 @@ class WatchModeWithDiscovery
         // Apply discoveries to graph
         auto applyResult = dynamicGraph.applyDiscoveries();
         if (applyResult.isErr)
-            return Result!(BuildNode[], string).err(applyResult.unwrapErr().message());
+            return BuildResult!(BuildNode[]).err(applyResult.unwrapErr());
         
         newNodes = applyResult.unwrap();
-        return Result!(BuildNode[], string).ok(newNodes);
+        return BuildResult!(BuildNode[]).ok(newNodes);
     }
     
     /// Rebuild affected targets after discovery
-    private Result!(size_t, string) rebuildAffectedTargets(BuildNode[] originalNodes, BuildNode[] newNodes) @system
+    private BuildResult!size_t rebuildAffectedTargets(BuildNode[] originalNodes, BuildNode[] newNodes) @system
     {
         import engine.runtime.services.container.services;
         
@@ -316,7 +316,7 @@ class WatchModeWithDiscovery
         // This just prepares nodes for rebuild
         structuredLog.info("prepared_").field("detail", "Prepared " ~ rebuiltCount.to!string ~ " targets for rebuild").emit();
         
-        return Result!(size_t, string).ok(rebuiltCount);
+        return BuildResult!size_t.ok(rebuiltCount);
     }
     
     /// Register a discovery result

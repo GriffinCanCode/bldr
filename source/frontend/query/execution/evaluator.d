@@ -9,7 +9,7 @@ import frontend.query.parsing.ast;
 import frontend.query.execution.algorithms;
 import frontend.query.execution.operators;
 import engine.graph;
-import infrastructure.errors;
+import infrastructure.errors : BuildResult, Result, Errors, Parse, BuildError;
 
 /// Query evaluator - executes AST against build graph
 /// 
@@ -26,17 +26,17 @@ final class QueryEvaluator : QueryVisitor
     }
     
     /// Evaluate query expression
-    Result!(BuildNode[], string) evaluate(QueryExpr expr) @system
+    BuildResult!(BuildNode[]) evaluate(QueryExpr expr) @system
     {
         try
         {
             currentResult = [];
             expr.accept(this);
-            return Result!(BuildNode[], string).ok(currentResult);
+            return BuildResult!(BuildNode[]).ok(currentResult);
         }
         catch (Exception e)
         {
-            return Result!(BuildNode[], string).err(e.msg);
+            return BuildResult!(BuildNode[]).err(Errors.parse("N/A", e.msg, Parse.SyntaxError).build());
         }
     }
     
@@ -347,7 +347,7 @@ final class QueryEvaluator : QueryVisitor
 }
 
 /// Convenience function to parse and evaluate a query
-Result!(BuildNode[], string) executeQuery(string queryString, BuildGraph graph) @system
+BuildResult!(BuildNode[]) executeQuery(string queryString, BuildGraph graph) @system
 {
     import frontend.query.parsing.lexer : QueryLexer;
     import frontend.query.parsing.parser : QueryParser;
@@ -356,13 +356,13 @@ Result!(BuildNode[], string) executeQuery(string queryString, BuildGraph graph) 
     auto lexer = QueryLexer(queryString);
     auto tokensResult = lexer.tokenize();
     if (tokensResult.isErr)
-        return Result!(BuildNode[], string).err("Lexer error: " ~ tokensResult.unwrapErr().message());
+        return BuildResult!(BuildNode[]).err(tokensResult.unwrapErr());
     
     // Parse
     auto parser = QueryParser(tokensResult.unwrap());
     auto astResult = parser.parse();
     if (astResult.isErr)
-        return Result!(BuildNode[], string).err("Parser error: " ~ astResult.unwrapErr());
+        return BuildResult!(BuildNode[]).err(astResult.unwrapErr());
     
     // Evaluate
     auto evaluator = new QueryEvaluator(graph);
@@ -370,7 +370,7 @@ Result!(BuildNode[], string) executeQuery(string queryString, BuildGraph graph) 
 }
 
 /// Execute query with optimization (predicate pushdown)
-Result!(BuildNode[], string) executeQueryOptimized(string queryString, BuildGraph graph) @system
+BuildResult!(BuildNode[]) executeQueryOptimized(string queryString, BuildGraph graph) @system
 {
     import frontend.query.parsing.lexer : QueryLexer;
     import frontend.query.parsing.parser : QueryParser;
@@ -379,12 +379,12 @@ Result!(BuildNode[], string) executeQueryOptimized(string queryString, BuildGrap
     auto lexer = QueryLexer(queryString);
     auto tokensResult = lexer.tokenize();
     if (tokensResult.isErr)
-        return Result!(BuildNode[], string).err("Lexer error: " ~ tokensResult.unwrapErr().message());
+        return BuildResult!(BuildNode[]).err(tokensResult.unwrapErr());
     
     auto parser = QueryParser(tokensResult.unwrap());
     auto astResult = parser.parse();
     if (astResult.isErr)
-        return Result!(BuildNode[], string).err("Parser error: " ~ astResult.unwrapErr());
+        return BuildResult!(BuildNode[]).err(astResult.unwrapErr());
     
     // Plan and optimize
     auto planner = QueryPlanner();
@@ -412,17 +412,17 @@ final class OptimizedQueryEvaluator : QueryVisitor
         this.pushedPredicates = plan.pushedPredicates;
     }
     
-    Result!(BuildNode[], string) evaluate(QueryExpr expr) @system
+    BuildResult!(BuildNode[]) evaluate(QueryExpr expr) @system
     {
         try
         {
             currentResult = [];
             expr.accept(this);
-            return Result!(BuildNode[], string).ok(currentResult);
+            return BuildResult!(BuildNode[]).ok(currentResult);
         }
         catch (Exception e)
         {
-            return Result!(BuildNode[], string).err(e.msg);
+            return BuildResult!(BuildNode[]).err(Errors.parse("N/A", e.msg, Parse.SyntaxError).build());
         }
     }
     

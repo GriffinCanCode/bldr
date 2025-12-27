@@ -5,7 +5,7 @@ import engine.graph.core.graph;
 import engine.graph.caching.schema;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.serialization;
-import infrastructure.errors : Result, Ok, Err;
+import infrastructure.errors : Result, Ok, Err, BuildError, Errors, Cache, Graph;
 
 /// High-performance binary serialization for BuildGraph
 /// Uses SIMD-accelerated serialization framework
@@ -60,17 +60,20 @@ struct GraphStorage
     /// - Atomic stores to shared fields
     /// - Arena allocation for reduced GC pressure
     /// 
-    /// Throws: Exception on format errors
+    /// Throws: CacheError/GraphError on format errors
     static BuildGraph deserialize(scope ubyte[] data) @system
     {
         if (data.length == 0)
-            throw new Exception("Empty graph data");
+            throw Errors.cache("Empty graph data", Cache.LoadFailed)
+                .withSuggestion("Graph cache file is empty or corrupted")
+                .withCommand("Clear cache", "bldr clean --cache").build();
         
         // Deserialize with codec
         auto result = Codec.deserialize!SerializableBuildGraph(data);
         
         if (result.isErr)
-            throw new Exception("Failed to deserialize graph: " ~ result.unwrapErr());
+            throw Errors.cache("Failed to deserialize graph: " ~ result.unwrapErr(), Cache.Corrupted)
+                .withCommand("Clear corrupted cache", "bldr clean --cache").build();
         
         auto serializable = result.unwrap();
         
@@ -88,7 +91,8 @@ struct GraphStorage
             // Convert serializable node to runtime node
             auto idResult = TargetId.parse(serialNode.targetId);
             if (idResult.isErr)
-                throw new Exception("Failed to parse target ID: " ~ idResult.unwrapErr().message);
+                throw Errors.graph("Failed to parse target ID: " ~ idResult.unwrapErr().message, Graph.Invalid)
+                    .withSuggestion("Cached graph contains invalid target ID").build();
             auto targetId = idResult.unwrap();
             auto target = fromSerializableTarget!Target(serialNode.target);
             
@@ -115,7 +119,8 @@ struct GraphStorage
             {
                 auto depIdResult = TargetId.parse(depId);
                 if (depIdResult.isErr)
-                    throw new Exception("Failed to parse dependency ID: " ~ depIdResult.unwrapErr().message);
+                    throw Errors.graph("Failed to parse dependency ID: " ~ depIdResult.unwrapErr().message, Graph.Invalid)
+                        .withSuggestion("Cached graph contains invalid dependency ID").build();
                 node.dependencyIds ~= depIdResult.unwrap();
             }
             
@@ -123,7 +128,8 @@ struct GraphStorage
             {
                 auto depIdResult = TargetId.parse(depId);
                 if (depIdResult.isErr)
-                    throw new Exception("Failed to parse dependent ID: " ~ depIdResult.unwrapErr().message);
+                    throw Errors.graph("Failed to parse dependent ID: " ~ depIdResult.unwrapErr().message, Graph.Invalid)
+                        .withSuggestion("Cached graph contains invalid dependent ID").build();
                 node.dependentIds ~= depIdResult.unwrap();
             }
         }

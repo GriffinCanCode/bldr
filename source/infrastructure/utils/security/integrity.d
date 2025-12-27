@@ -5,6 +5,7 @@ import std.conv;
 import std.algorithm;
 import std.bitmanip;
 import infrastructure.utils.crypto.blake3;
+import infrastructure.errors : Errors, Cache;
 
 
 /// BLAKE3-based HMAC for cache integrity validation
@@ -270,7 +271,9 @@ struct SignedData
     static SignedData deserialize(scope const(ubyte)[] bytes) @system
     {
         if (bytes.length < 4 + 8 + 32 + 4)
-            throw new Exception("Invalid signed data: too short");
+            throw Errors.cache("Invalid signed data: too short", Cache.Corrupted)
+                .withSuggestion("Signed data is truncated or corrupted")
+                .withCommand("Clear cache", "bldr clean --cache").build();
         
         SignedData signed;
         size_t offset = 0;
@@ -288,7 +291,9 @@ struct SignedData
         offset += 4;
         
         if (offset + dataLen != bytes.length)
-            throw new Exception("Invalid signed data: length mismatch");
+            throw Errors.cache("Invalid signed data: length mismatch", Cache.Corrupted)
+                .withSuggestion("Signed data has invalid length encoding")
+                .withCommand("Clear cache", "bldr clean --cache").build();
         
         signed.data = cast(ubyte[])bytes[offset .. $].dup;
         

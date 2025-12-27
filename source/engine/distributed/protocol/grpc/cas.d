@@ -9,7 +9,7 @@ import engine.distributed.protocol.grpc.http2 : H2Connection, H2Settings, HpackE
 import engine.distributed.protocol.grpc.frame;
 import engine.distributed.protocol.grpc.codec : GrpcCodec;
 import engine.caching.distributed.remote.artifact;
-import infrastructure.errors;
+import infrastructure.errors : Errors, Network, BuildError, VoidBuildResult, BuildResult, Err, Ok;
 
 /**
  * gRPC Content-Addressable Storage Transport
@@ -56,7 +56,7 @@ final class GrpcCasTransport : StreamingArtifactTransport, BatchArtifactTranspor
             
             if (result.isErr)
                 return VoidBuildResult.err(
-                    new NetworkError("gRPC connect failed: " ~ result.unwrapErr(), Network.Error));
+                    Errors.network("gRPC connect failed: " ~ result.unwrapErr(), Network.Error).build());
             
             connected = true;
             return Ok!BuildError();
@@ -151,7 +151,7 @@ final class GrpcCasTransport : StreamingArtifactTransport, BatchArtifactTranspor
             auto streamResult = connection.createStream();
             if (streamResult.isErr)
                 return Err!(size_t, BuildError)(
-                    new NetworkError("Failed to create stream: " ~ streamResult.unwrapErr(), Network.Error));
+                    Errors.network("Failed to create stream: " ~ streamResult.unwrapErr(), Network.Error).build());
             
             auto streamId = streamResult.unwrap();
             auto target = config.parseTarget();
@@ -217,7 +217,7 @@ final class GrpcCasTransport : StreamingArtifactTransport, BatchArtifactTranspor
             auto streamResult = connection.createStream();
             if (streamResult.isErr)
                 return Err!(string, BuildError)(
-                    new NetworkError("Failed to create stream: " ~ streamResult.unwrapErr(), Network.Error));
+                    Errors.network("Failed to create stream: " ~ streamResult.unwrapErr(), Network.Error).build());
             
             auto streamId = streamResult.unwrap();
             auto target = config.parseTarget();
@@ -252,7 +252,7 @@ final class GrpcCasTransport : StreamingArtifactTransport, BatchArtifactTranspor
             auto responseResult = connection.receiveResponse(streamId);
             if (responseResult.isErr)
                 return Err!(string, BuildError)(
-                    new NetworkError("Write response failed: " ~ responseResult.unwrapErr(), Network.Error));
+                    Errors.network("Write response failed: " ~ responseResult.unwrapErr(), Network.Error).build());
             
             return Ok!(string, BuildError)(resourceName);
         }
@@ -277,7 +277,7 @@ final class GrpcCasTransport : StreamingArtifactTransport, BatchArtifactTranspor
             
             if (result.isErr)
                 return Err!(string[], BuildError)(
-                    new NetworkError("FindMissingBlobs failed: " ~ result.unwrapErr(), Network.Error));
+                    Errors.network("FindMissingBlobs failed: " ~ result.unwrapErr(), Network.Error).build());
             
             return Ok!(string[], BuildError)(decodeFindMissingResponse(result.unwrap()));
         }
@@ -293,7 +293,7 @@ final class GrpcCasTransport : StreamingArtifactTransport, BatchArtifactTranspor
             
             if (result.isErr)
                 return Err!(UploadResult[], BuildError)(
-                    new NetworkError("BatchUpdateBlobs failed: " ~ result.unwrapErr(), Network.Error));
+                    Errors.network("BatchUpdateBlobs failed: " ~ result.unwrapErr(), Network.Error).build());
             
             return Ok!(UploadResult[], BuildError)(decodeBatchUpdateResponse(result.unwrap(), blobs));
         }
@@ -309,7 +309,7 @@ final class GrpcCasTransport : StreamingArtifactTransport, BatchArtifactTranspor
             
             if (result.isErr)
                 return Err!(ubyte[][], BuildError)(
-                    new NetworkError("BatchReadBlobs failed: " ~ result.unwrapErr(), Network.Error));
+                    Errors.network("BatchReadBlobs failed: " ~ result.unwrapErr(), Network.Error).build());
             
             return Ok!(ubyte[][], BuildError)(decodeBatchReadResponse(result.unwrap()));
         }

@@ -4,7 +4,7 @@ import std.variant;
 import std.conv;
 import std.algorithm;
 import std.array;
-import infrastructure.errors;
+import infrastructure.errors : BuildResult, Errors, Parse;
 
 /// Type of value in the scripting system
 enum ValueType
@@ -180,7 +180,7 @@ struct Value
     bool asBool() const @trusted
     {
         if (!isBool())
-            throw new Exception("Value is not a bool");
+            throw Errors.parse("", "Value is not a bool", Parse.InvalidFieldValue).build();
         return data_.get!bool;
     }
     
@@ -188,7 +188,7 @@ struct Value
     double asNumber() const @trusted
     {
         if (!isNumber())
-            throw new Exception("Value is not a number");
+            throw Errors.parse("", "Value is not a number", Parse.InvalidFieldValue).build();
         return data_.get!double;
     }
     
@@ -196,7 +196,7 @@ struct Value
     string asString() const @trusted
     {
         if (!isString())
-            throw new Exception("Value is not a string");
+            throw Errors.parse("", "Value is not a string", Parse.InvalidFieldValue).build();
         return data_.get!string;
     }
     
@@ -204,7 +204,7 @@ struct Value
     Value[] asArray() const @trusted
     {
         if (!isArray())
-            throw new Exception("Value is not an array");
+            throw Errors.parse("", "Value is not an array", Parse.InvalidFieldValue).build();
         return cast(Value[])data_.get!(Value[]);
     }
     
@@ -212,7 +212,7 @@ struct Value
     Value[string] asMap() const @trusted
     {
         if (!isMap())
-            throw new Exception("Value is not a map");
+            throw Errors.parse("", "Value is not a map", Parse.InvalidFieldValue).build();
         return cast(Value[string])data_.get!(Value[string]);
     }
     
@@ -220,7 +220,7 @@ struct Value
     TargetConfig asTarget() const @trusted
     {
         if (!isTarget())
-            throw new Exception("Value is not a target");
+            throw Errors.parse("", "Value is not a target", Parse.InvalidFieldValue).build();
         return cast(TargetConfig)data_.get!TargetConfig;
     }
     
@@ -228,7 +228,7 @@ struct Value
     Closure asClosure() const @trusted
     {
         if (!isFunction())
-            throw new Exception("Value is not a function");
+            throw Errors.parse("", "Value is not a function", Parse.InvalidFieldValue).build();
         return cast(Closure)data_.get!Closure;
     }
     

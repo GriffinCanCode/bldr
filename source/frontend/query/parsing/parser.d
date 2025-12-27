@@ -4,7 +4,7 @@ import std.conv : to;
 import std.string : format;
 import frontend.query.parsing.lexer;
 import frontend.query.parsing.ast;
-import infrastructure.errors;
+import infrastructure.errors : BuildResult, Errors, Parse, BuildError;
 
 /// Recursive descent parser for bldrquery DSL
 /// 
@@ -28,26 +28,26 @@ struct QueryParser
     }
     
     /// Parse tokens into AST
-    Result!(QueryExpr, string) parse() @system
+    BuildResult!QueryExpr parse() @system
     {
         if (tokens.length == 0)
-            return Result!(QueryExpr, string).err("Empty query");
+            return BuildResult!QueryExpr.err(Errors.parse("N/A", "Empty query", Parse.InvalidInput).build());
         
         try
         {
             auto expr = parseSetExpr();
             
             if (!isAtEnd() && !check(TokenType.EOF))
-                return Result!(QueryExpr, string).err(
-                    format("Unexpected token '%s' at line %d", 
-                           peek().value, peek().line)
+                return BuildResult!QueryExpr.err(
+                    Errors.parse("N/A", format("Unexpected token '%s' at line %d", peek().value, peek().line), 
+                                 peek().line, 0, Parse.SyntaxError).build()
                 );
             
-            return Result!(QueryExpr, string).ok(expr);
+            return BuildResult!QueryExpr.ok(expr);
         }
         catch (Exception e)
         {
-            return Result!(QueryExpr, string).err(e.msg);
+            return BuildResult!QueryExpr.err(Errors.parse("N/A", e.msg, Parse.SyntaxError).build());
         }
     }
     
@@ -125,10 +125,8 @@ struct QueryParser
         if (match(TokenType.String))
             return new TargetPattern(previous().value);
         
-        throw new Exception(
-            format("Unexpected token '%s' at line %d", 
-                   peek().value, peek().line)
-        );
+        throw Errors.parse("", format("Unexpected token '%s' at line %d", peek().value, peek().line), 
+            Parse.Failed).build();
     }
     
     /// Parse deps(expr) or deps(expr, depth)
@@ -223,7 +221,7 @@ struct QueryParser
         else if (match(TokenType.Identifier))
             kindToken = previous();
         else
-            throw new Exception("Expected kind type (string or identifier)");
+            throw Errors.parse("", "Expected kind type (string or identifier)", Parse.Failed).build();
         
         consume(TokenType.Comma, "Expected ',' after kind type");
         auto inner = parseSetExpr();
@@ -288,7 +286,7 @@ struct QueryParser
         else if (match(TokenType.Pattern))
             patternToken = previous();
         else
-            throw new Exception("Expected pattern (string or target pattern)");
+            throw Errors.parse("", "Expected pattern (string or target pattern)", Parse.Failed).build();
         
         consume(TokenType.RightParen, "Expected ')' after buildfiles argument");
         return new BuildFilesExpr(patternToken.value);
@@ -360,10 +358,8 @@ struct QueryParser
         if (check(type))
             return advance();
         
-        throw new Exception(
-            format("%s at line %d (got '%s')", 
-                   message, peek().line, peek().value)
-        );
+        throw Errors.parse("", format("%s at line %d (got '%s')", message, peek().line, peek().value), 
+            Parse.Failed).build();
     }
 }
 

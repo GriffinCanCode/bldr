@@ -7,11 +7,11 @@ import core.sync.condition;
 import core.time : Duration, MonoTime, msecs, seconds;
 import std.algorithm : remove, filter, each, canFind;
 import std.array : array;
-import std.exception : enforce;
 import std.conv : to;
 import std.concurrency;
 import infrastructure.utils.concurrency.pool;
 import infrastructure.utils.concurrency.priority;
+import infrastructure.errors : Errors, Internal;
 
 
 /// Cancellation token for hierarchical cancellation
@@ -141,7 +141,8 @@ final class StructuredTask(T)
     /// Start task with work delegate
     void start(T delegate() @system work) @trusted
     {
-        enforce(atomicLoad(state) == TaskState.Created, "Task already started");
+        if (atomicLoad(state) != TaskState.Created)
+            throw Errors.internal("Task already started", Internal.InvalidState).build();
         
         startTime = MonoTime.currTime;
         atomicStore(state, TaskState.Running);
@@ -226,7 +227,7 @@ final class StructuredTask(T)
                 throw error;
             case TaskState.Created:
             case TaskState.Running:
-                throw new Exception("Task not complete");
+                throw Errors.internal("Task not complete", Internal.Error).build();
         }
     }
     
@@ -301,7 +302,8 @@ final class TaskScope
     /// Launch a void task in this scope
     VoidTask launch(string taskName, void delegate() @system work) @trusted
     {
-        enforce(!atomicLoad(closed), "TaskScope is closed");
+        if (atomicLoad(closed))
+            throw Errors.internal("TaskScope is closed", Internal.InvalidState).build();
         
         auto task = new VoidTask(this, taskName, token);
         
@@ -318,7 +320,8 @@ final class TaskScope
     /// Launch a task returning a result
     StructuredTask!T launch(T)(string taskName, T delegate() @system work) @trusted
     {
-        enforce(!atomicLoad(closed), "TaskScope is closed");
+        if (atomicLoad(closed))
+            throw Errors.internal("TaskScope is closed", Internal.InvalidState).build();
         
         auto task = new StructuredTask!T(this, taskName, token);
         atomicOp!"+="(activeTasks, 1);
@@ -394,7 +397,8 @@ final class TaskScope
     /// Create a child scope (for nested structured concurrency)
     TaskScope createChild(string childName) @trusted
     {
-        enforce(!atomicLoad(closed), "TaskScope is closed");
+        if (atomicLoad(closed))
+            throw Errors.internal("TaskScope is closed", Internal.InvalidState).build();
         return new TaskScope(childName, this, pool);
     }
     

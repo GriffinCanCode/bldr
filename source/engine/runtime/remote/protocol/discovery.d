@@ -8,7 +8,7 @@ import engine.graph;
 import infrastructure.config.schema.schema : TargetId;
 import engine.distributed.protocol.protocol;
 import infrastructure.utils.logging;
-import infrastructure.errors;
+import infrastructure.errors : BuildResult, Errors, Cache, BuildError;
 
 /// Remote discovery executor - handles discovery in distributed builds
 /// Coordinates discovery across multiple workers
@@ -68,7 +68,7 @@ struct RemoteDiscoveryExecutor
     }
     
     /// Deserialize discovery metadata from remote transmission
-    static Result!(DiscoveryMetadata, string) deserializeDiscovery(ubyte[] data) @system
+    static BuildResult!DiscoveryMetadata deserializeDiscovery(ubyte[] data) @system
     {
         import std.json;
         
@@ -95,11 +95,11 @@ struct RemoteDiscoveryExecutor
                 discovery.metadata[key] = value.str;
             }
             
-            return Result!(DiscoveryMetadata, string).ok(discovery);
+            return BuildResult!DiscoveryMetadata.ok(discovery);
         }
         catch (Exception e)
         {
-            return Result!(DiscoveryMetadata, string).err("Failed to deserialize: " ~ e.msg);
+            return BuildResult!DiscoveryMetadata.err(Errors.cache("Failed to deserialize: " ~ e.msg, Cache.Corrupted).build());
         }
     }
 }

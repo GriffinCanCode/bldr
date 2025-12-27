@@ -2,7 +2,7 @@ module engine.distributed.memory.arena;
 
 import core.memory : GC;
 import std.algorithm : max;
-import std.exception : enforce;
+import infrastructure.errors : Errors, Internal;
 
 /// Memory arena for fast batch allocations
 /// Reduces GC pressure and improves cache locality
@@ -61,7 +61,8 @@ struct Arena
         immutable alignedOffset = alignUp(offset, alignment);
         immutable newOffset = alignedOffset + size;
         
-        enforce(newOffset <= capacity, "Arena out of memory: " ~ newOffset.to!string ~ " > " ~ capacity.to!string);
+        if (newOffset > capacity)
+            throw Errors.internal("Arena out of memory: " ~ newOffset.to!string ~ " > " ~ capacity.to!string, Internal.ResourceExhausted).build();
         
         offset = newOffset;
         return buffer[alignedOffset .. newOffset];

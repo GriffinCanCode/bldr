@@ -11,7 +11,7 @@ import infrastructure.utils.logging;
 import infrastructure.analysis.incremental.interface_;
 import infrastructure.config.schema.schema;
 import infrastructure.parsing.treesitter.adapter;
-import infrastructure.errors;
+import infrastructure.errors : Errors, Watch, VoidBuildResult, BuildError, Ok;
 
 /// Proactive analysis cache updater using file watching
 /// Automatically invalidates and updates cache when files change
@@ -41,13 +41,7 @@ final class AnalysisWatcher
     VoidBuildResult start(string watchPath = "") @system
     {
         if (active)
-        {
-            auto error = new WatchError(
-                "Watcher already active",
-                Watch.Error
-            );
-            return VoidBuildResult.err(error);
-        }
+            return VoidBuildResult.err(Errors.watch("Watcher already active", Watch.Error).build());
         
         immutable path = watchPath.empty ? config.root : watchPath;
         

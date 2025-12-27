@@ -10,7 +10,7 @@ import infrastructure.utils.security.validation;
 import infrastructure.utils.logging;
 import engine.runtime.hermetic;
 import infrastructure.errors : ErrorCode, Errors, BuildError, BuildResult, Err, Ok, 
-    VoidBuildResult, IOError, SystemError, InternalError;
+    VoidBuildResult, IOError, SystemError, InternalError, Config, Security;
 
 
 /// Known safe build tool patterns that contain path separators but aren't actual paths
@@ -328,26 +328,26 @@ struct SecureExecutor
         // Validation layer
         if (cmd.length == 0)
             return Err!(ProcessResult, BuildError)(
-                securityError("Empty command", SecurityCode.InvalidCommand));
+                securityError("Empty command", Security.InvalidCommand));
         
         // Validate command executable
         if (!SecurityValidator.isArgumentSafe(cmd[0]))
             return Err!(ProcessResult, BuildError)(
-                securityError("Unsafe command: " ~ cmd[0], SecurityCode.InjectionAttempt));
+                securityError("Unsafe command: " ~ cmd[0], Security.CommandInjection));
         
         // Validate all arguments
         foreach (arg; cmd[1 .. $])
         {
             if (!SecurityValidator.isArgumentSafe(arg))
                 return Err!(ProcessResult, BuildError)(
-                    securityError("Unsafe argument: " ~ arg, SecurityCode.InjectionAttempt));
+                    securityError("Unsafe argument: " ~ arg, Security.CommandInjection));
             
             // Validate paths if enabled
             if (validatePaths && (arg.canFind('/') || arg.canFind('\\')))
             {
                 if (!isKnownSafeBuildPattern(arg) && !SecurityValidator.isPathSafe(arg))
                     return Err!(ProcessResult, BuildError)(
-                        securityError("Unsafe path: " ~ arg, SecurityCode.PathTraversal));
+                        securityError("Unsafe path: " ~ arg, Security.PathTraversal));
             }
         }
         
@@ -383,7 +383,7 @@ struct SecureExecutor
                 {
                     return Err!(ProcessResult, BuildError)(
                         securityError("Hermetic executor creation failed: " ~ executorResult.unwrapErr().message(), 
-                                    SecurityCode.ExecutionFailure));
+                                    Security.Error));
                 }
                 
                 auto executor = executorResult.unwrap();
@@ -393,7 +393,7 @@ struct SecureExecutor
                 {
                     return Err!(ProcessResult, BuildError)(
                         securityError("Hermetic execution failed: " ~ result.unwrapErr().message(), 
-                                    SecurityCode.ExecutionFailure));
+                                    Security.Error));
                 }
                 
                 auto output = result.unwrap();
@@ -403,7 +403,7 @@ struct SecureExecutor
             catch (Exception e)
             {
                 return Err!(ProcessResult, BuildError)(
-                    securityError("Hermetic execution exception: " ~ e.msg, SecurityCode.ExecutionFailure));
+                    securityError("Hermetic execution exception: " ~ e.msg, Security.Error));
             }
         }
         
@@ -424,7 +424,7 @@ struct SecureExecutor
         catch (Exception e)
         {
             return Err!(ProcessResult, BuildError)(
-                securityError("Execution failed: " ~ e.msg, SecurityCode.ExecutionFailure));
+                securityError("Execution failed: " ~ e.msg, Security.Error));
         }
     }
     
@@ -454,7 +454,7 @@ struct SecureExecutor
             return Err!(ProcessResult, BuildError)(
                 securityError(
                     "Command failed with exit " ~ proc.status.to!string ~ ": " ~ proc.output,
-                    SecurityCode.ExecutionFailure));
+                    Security.Error));
         }
         
         return Ok!(ProcessResult, BuildError)(proc);
@@ -473,42 +473,10 @@ struct ProcessResult
     }
 }
 
-/// Security error types - using proper BuildError from errors module
-/// Maps SecurityCode to ErrorCode for consistency
-enum SecurityCode
-{
-    Unknown,
-    InvalidCommand,
-    InjectionAttempt,
-    PathTraversal,
-    ExecutionFailure,
-    AccessDenied
-}
-
-/// Convert SecurityCode to ErrorCode
-private ErrorCode toErrorCode(SecurityCode code) pure nothrow @safe @nogc
-{
-    final switch (code)
-    {
-        case SecurityCode.Unknown:
-            return Internal.Error;
-        case SecurityCode.InvalidCommand:
-            return Config.InvalidInput;
-        case SecurityCode.InjectionAttempt:
-            return Language.ValidationFailed;
-        case SecurityCode.PathTraversal:
-            return IO.PermissionDenied;
-        case SecurityCode.ExecutionFailure:
-            return System.ProcessSpawnFailed;
-        case SecurityCode.AccessDenied:
-            return IO.PermissionDenied;
-    }
-}
-
 /// Create a security error using proper SystemError type
-private SystemError securityError(string message, SecurityCode code = SecurityCode.Unknown) @system
+private SystemError securityError(string message, Security code = Security.Error) @system
 {
-    return Errors.system(message, toErrorCode(code))
+    return Errors.system(message, cast(ErrorCode)code)
         .withSuggestion("Security validation failed")
         .withSuggestion("Review command arguments and paths")
         .withLocation(__FILE__, __LINE__)
@@ -550,29 +518,29 @@ auto execute(
     import std.exception : enforce;
     
     // Critical security check: validate command is not empty
-    enforce(args.length > 0, "Cannot execute empty command");
+    if (args.length == 0)
+        throw Errors.config("Cannot execute empty command", Config.InvalidInput)
+            .withContext("security validation").build();
     
     // Skip validation only if explicitly requested (for trusted internal use)
     if (skipValidation)
-    {
         return std.process.execute(args, env, config, maxOutput, workDir);
-    }
     
     // Security Layer 1: Validate executable name
     if (!SecurityValidator.isArgumentSafe(args[0]))
-    {
-        throw new Exception("SECURITY: Unsafe command executable detected: " ~ args[0]);
-    }
+        throw Errors.system("Unsafe command executable detected: " ~ args[0], Security.InvalidCommand)
+            .withSuggestion("Remove shell metacharacters from command")
+            .withContext("security validation").build();
     
     // Security Layer 2: Validate all arguments
     foreach (i, arg; args[1 .. $])
     {
         // Check for command injection patterns
         if (!SecurityValidator.isArgumentSafe(arg))
-        {
-            throw new Exception("SECURITY: Unsafe argument detected at position " ~ 
-                              to!string(i + 1) ~ ": " ~ arg);
-        }
+            throw Errors.system("Unsafe argument detected at position " ~ to!string(i + 1) ~ ": " ~ arg, 
+                Security.CommandInjection)
+                .withSuggestion("Remove shell metacharacters from argument")
+                .withContext("security validation").build();
         
         // If argument contains path separators, validate as path
         if (arg.canFind('/') || arg.canFind('\\'))
@@ -582,9 +550,9 @@ auto execute(
             {
                 // Allow known safe build tool patterns (Go wildcards, etc.)
                 if (!isKnownSafeBuildPattern(arg) && !SecurityValidator.isPathSafe(arg))
-                {
-                    throw new Exception("SECURITY: Unsafe path detected in argument: " ~ arg);
-                }
+                    throw Errors.io(arg, "Unsafe path detected in argument", Security.PathTraversal)
+                        .withSuggestion("Use absolute or relative paths without traversal")
+                        .withContext("security validation").build();
             }
         }
     }
@@ -593,9 +561,9 @@ auto execute(
     if (workDir !is null && workDir.length > 0)
     {
         if (!SecurityValidator.isPathSafe(workDir.idup))
-        {
-            throw new Exception("SECURITY: Unsafe working directory: " ~ workDir.idup);
-        }
+            throw Errors.io(workDir.idup, "Unsafe working directory", Security.PathTraversal)
+                .withSuggestion("Use safe directory path")
+                .withContext("security validation").build();
         
         // Additional check for system directories
         version(Posix)
@@ -604,9 +572,9 @@ auto execute(
             foreach (sysDir; systemDirs)
             {
                 if (workDir == sysDir || workDir.startsWith(sysDir ~ "/"))
-                {
-                    throw new Exception("SECURITY: Cannot execute in system directory: " ~ workDir.idup);
-                }
+                    throw Errors.io(workDir.idup, "Cannot execute in system directory", Security.AccessDenied)
+                        .withSuggestion("Use a user-writable directory")
+                        .withContext("security validation").build();
             }
         }
     }
@@ -645,7 +613,7 @@ auto execute(
     // Test injection prevention
     auto badResult = exec.run(["echo", "hello; rm -rf /"]);
     assert(badResult.isErr);
-    assert(badResult.unwrapErr().code == Language.ValidationFailed);
+    assert(badResult.unwrapErr().code == cast(ErrorCode)Security.CommandInjection);
     
     // Test builder pattern
     auto configured = SecureExecutor.create()

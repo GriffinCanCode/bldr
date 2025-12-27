@@ -11,7 +11,7 @@ import core.sync.mutex : Mutex;
 import engine.caching.index.sqlite;
 import engine.graph.core.graph : BuildStatus;
 import infrastructure.config.schema.schema : TargetId;
-import infrastructure.errors;
+import infrastructure.errors : BuildError, BuildResult, Err, Ok, Errors, Cache, Graph;
 
 /// SQLite-backed build graph persistence providing:
 /// - Efficient partial queries (SELECT WHERE) without full graph load
@@ -519,7 +519,8 @@ private:
         {
             auto msg = errMsg ? fromStringz(errMsg).idup : "Unknown error";
             sqlite3_free(errMsg);
-            throw new Exception("SQL error: " ~ msg ~ " (query: " ~ sql ~ ")");
+            throw Errors.graph("SQL error: " ~ msg ~ " (query: " ~ sql ~ ")", Graph.Invalid)
+                .withCommand("Clear cache", "bldr clean --cache").build();
         }
     }
     
@@ -528,7 +529,8 @@ private:
         sqlite3_stmt* stmt;
         auto rc = sqlite3_prepare_v2(db, sql.toStringz, cast(int)sql.length, &stmt, null);
         if (rc != SQLITE_OK)
-            throw new Exception("Failed to prepare: " ~ sql ~ " - " ~ fromStringz(sqlite3_errmsg(db)).idup);
+            throw Errors.graph("Failed to prepare SQL: " ~ sql ~ " - " ~ fromStringz(sqlite3_errmsg(db)).idup, 
+                Graph.Invalid).withCommand("Clear cache", "bldr clean --cache").build();
         return stmt;
     }
     

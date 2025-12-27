@@ -6,6 +6,7 @@ import std.string;
 import std.algorithm;
 import std.array;
 import std.regex;
+import infrastructure.errors : Errors, Security;
 
 
 /// Security utilities for validating and sanitizing file paths and arguments
@@ -341,9 +342,8 @@ struct SafeExecute
             if (arg.canFind('/') || arg.canFind('\\'))
             {
                 if (!SecurityValidator.isPathSafe(arg))
-                {
-                    throw new Exception("Unsafe path detected in command: " ~ arg);
-                }
+                    throw Errors.system("Unsafe path detected in command: " ~ arg, Security.PathTraversal)
+                        .withSuggestion("Use safe path without traversal patterns").build();
             }
         }
         

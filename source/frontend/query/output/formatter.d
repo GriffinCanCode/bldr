@@ -10,7 +10,7 @@ import engine.graph;
 import infrastructure.config.schema.schema : TargetType;
 import frontend.cli.control.terminal : Terminal, Capabilities, Color, Style;
 import frontend.cli.display.format : Formatter;
-import infrastructure.errors;
+import infrastructure.errors : BuildResult, Errors, Parse, BuildError;
 
 /// Output format for query results
 enum OutputFormat
@@ -284,24 +284,24 @@ struct QueryFormatter
 }
 
 /// Parse output format from string
-Result!(OutputFormat, string) parseOutputFormat(string formatStr) @system
+BuildResult!OutputFormat parseOutputFormat(string formatStr) @system
 {
     switch (formatStr.toLower())
     {
         case "pretty":
         case "default":
-            return Result!(OutputFormat, string).ok(OutputFormat.Pretty);
+            return BuildResult!OutputFormat.ok(OutputFormat.Pretty);
         case "list":
         case "plain":
-            return Result!(OutputFormat, string).ok(OutputFormat.List);
+            return BuildResult!OutputFormat.ok(OutputFormat.List);
         case "json":
-            return Result!(OutputFormat, string).ok(OutputFormat.JSON);
+            return BuildResult!OutputFormat.ok(OutputFormat.JSON);
         case "dot":
         case "graphviz":
-            return Result!(OutputFormat, string).ok(OutputFormat.DOT);
+            return BuildResult!OutputFormat.ok(OutputFormat.DOT);
         default:
-            return Result!(OutputFormat, string).err(
-                std.string.format("Unknown output format: %s (valid: pretty, list, json, dot)", formatStr)
+            return BuildResult!OutputFormat.err(
+                Errors.parse("N/A", std.string.format("Unknown output format: %s (valid: pretty, list, json, dot)", formatStr), Parse.InvalidInput).build()
             );
     }
 }

@@ -14,7 +14,7 @@ import engine.workers.jvm;
 import engine.workers.go;
 import engine.workers.python;
 import infrastructure.config.schema.schema : TargetLanguage;
-import infrastructure.errors;
+import infrastructure.errors : Errors, Internal, System, Language, BuildError, BuildResult, Err, Ok;
 import infrastructure.utils.logging;
 
 /// Persistent Worker Pool
@@ -287,7 +287,7 @@ final class PersistentWorkerPool
     {
         if (!atomicLoad(running))
             return Err!(WorkerExecutionResult, BuildError)(
-                new InternalError("Persistent worker pool not running"));
+                Errors.internal("Persistent worker pool not running", Internal.InvalidState).build());
         
         // Per-language lock ensures serialized access to workers of same type
         synchronized (locks[lang])
@@ -306,7 +306,7 @@ final class PersistentWorkerPool
                         economics.record(lang, false, WorkerEconomics.coldStartMs(lang));
                 }
                 return Err!(WorkerExecutionResult, BuildError)(
-                    new SystemError("Worker execution failed: " ~ result.unwrapErr().message()));
+                    Errors.system("Worker execution failed: " ~ result.unwrapErr().message(), System.ProcessSpawnFailed).build());
             }
             
             auto response = result.unwrap();
@@ -414,7 +414,7 @@ final class PersistentWorkerPool
             case TargetLanguage.Python: return Ok!(WorkerLanguage, BuildError)(WorkerLanguage.Python);
             default:
                 return Err!(WorkerLanguage, BuildError)(
-                    new ConfigError("Language not supported by persistent workers: " ~ lang.to!string));
+                    Errors.language(lang.to!string, "Language not supported by persistent workers", Language.NotSupported).build());
         }
     }
     

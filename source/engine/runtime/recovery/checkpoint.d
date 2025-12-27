@@ -10,7 +10,7 @@ import std.conv;
 import engine.graph;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.files.directories : ensureDirectoryWithGitignore;
-import infrastructure.errors.handling.result;
+import infrastructure.errors : BuildResult, Errors, Cache, BuildError;
 
 /// Build checkpoint - persists build state for resumption
 struct Checkpoint
@@ -165,20 +165,20 @@ final class CheckpointManager
     /// 3. deserialize() validates data before reconstruction
     /// 4. Exception handling converts to Result type
     @system
-    Result!(Checkpoint, string) load()
+    BuildResult!Checkpoint load()
     {
         if (!std.file.exists(checkpointPath))
-            return Result!(Checkpoint, string).err("No checkpoint found");
+            return BuildResult!Checkpoint.err(Errors.cache("No checkpoint found", Cache.NotFound).build());
         
         try
         {
             auto data = cast(ubyte[])std.file.read(checkpointPath);
             auto checkpoint = deserialize(data);
-            return Result!(Checkpoint, string).ok(checkpoint);
+            return BuildResult!Checkpoint.ok(checkpoint);
         }
         catch (Exception e)
         {
-            return Result!(Checkpoint, string).err("Failed to load checkpoint: " ~ e.msg);
+            return BuildResult!Checkpoint.err(Errors.cache("Failed to load checkpoint: " ~ e.msg, Cache.LoadFailed).build());
         }
     }
     
@@ -309,12 +309,16 @@ final class CheckpointManager
         // Validate magic number
         immutable magic = readValue!uint(data, offset);
         if (magic != 0x434B5054)
-            throw new Exception("Invalid checkpoint: bad magic number");
+            throw Errors.cache("Invalid checkpoint: bad magic number", Cache.Corrupted)
+                .withSuggestion("Checkpoint file is corrupted")
+                .withCommand("Clear checkpoint", "bldr clean").build();
         
         // Version
         immutable version_ = readValue!ubyte(data, offset);
         if (version_ != 1)
-            throw new Exception("Unsupported checkpoint version");
+            throw Errors.cache("Unsupported checkpoint version", Cache.Corrupted)
+                .withSuggestion("Checkpoint was created by incompatible bldr version")
+                .withCommand("Clear checkpoint", "bldr clean").build();
         
         Checkpoint checkpoint;
         
@@ -381,7 +385,8 @@ private string readString(ubyte[] data, size_t* offset) @system
     *offset += uint.sizeof;
     
     if (*offset + len > data.length)
-        throw new Exception("Invalid checkpoint: truncated string");
+        throw Errors.cache("Invalid checkpoint: truncated string", Cache.Corrupted)
+            .withCommand("Clear checkpoint", "bldr clean").build();
     
     auto str = cast(string)data[*offset .. *offset + len];
     *offset += len;

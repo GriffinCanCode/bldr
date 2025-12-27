@@ -4,6 +4,7 @@ import std.stdio : File;
 import std.file : exists, remove;
 import frontend.testframework.results : TestResult, TestCase;
 import std.datetime : SysTime, Duration;
+import infrastructure.errors : Errors, Cache;
 
 /// Test cache entry for serialization
 struct TestCacheEntry
@@ -67,7 +68,9 @@ struct TestCacheStorage
         uint version_ = versionBuf[0];
         
         if (version_ != 1)
-            throw new Exception("Unsupported cache version");
+            throw Errors.cache("Unsupported test cache version", Cache.Corrupted)
+                .withSuggestion("Test cache was created by incompatible version")
+                .withCommand("Clear cache", "bldr clean --cache").build();
         
         // Read entry count
         size_t[1] countBuf;

@@ -8,7 +8,7 @@ import std.datetime;
 import std.range;
 import engine.graph;
 import engine.runtime.recovery.checkpoint;
-import infrastructure.errors;
+import infrastructure.errors : BuildResult, Errors, Cache, BuildError;
 
 /// Resume strategy - determines how to handle checkpoint
 enum ResumeStrategy
@@ -65,18 +65,18 @@ final class ResumePlanner
     }
     
     /// Plan resume from checkpoint
-    Result!(ResumePlan, string) plan(
+    BuildResult!ResumePlan plan(
         const ref Checkpoint checkpoint,
         BuildGraph graph
     ) @system
     {
         // Validate checkpoint
         if (!checkpoint.isValid(graph))
-            return Result!(ResumePlan, string).err("Checkpoint invalid for current graph");
+            return BuildResult!ResumePlan.err(Errors.cache("Checkpoint invalid for current graph", Cache.Corrupted).build());
         
         // Check age
         if (Clock.currTime() - checkpoint.timestamp > config.maxCheckpointAge)
-            return Result!(ResumePlan, string).err("Checkpoint too old");
+            return BuildResult!ResumePlan.err(Errors.cache("Checkpoint too old", Cache.Expired).build());
         
         // Build plan based on strategy
         ResumePlan plan;
@@ -102,7 +102,7 @@ final class ResumePlanner
                 break;
         }
         
-        return Result!(ResumePlan, string).ok(plan);
+        return BuildResult!ResumePlan.ok(plan);
     }
     
     private void planRetryFailed(

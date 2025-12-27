@@ -4,7 +4,7 @@ import infrastructure.utils.serialization;
 import infrastructure.config.caching.schema;
 import infrastructure.config.workspace.ast : BuildFile, TargetDeclStmt, Location, Expr,
     ASTField = Field;  // Alias to avoid conflict with serialization.Field
-import infrastructure.errors;
+import infrastructure.errors : Errors, Cache;
 
 /// High-performance binary serialization for AST nodes
 /// Uses SIMD-accelerated serialization framework
@@ -47,13 +47,16 @@ struct ASTStorage
     static BuildFile deserialize(const(ubyte)[] data)
     {
         if (data.length == 0)
-            throw new Exception("Empty AST data");
+            throw Errors.cache("Empty AST data", Cache.LoadFailed)
+                .withSuggestion("AST cache is empty or corrupted")
+                .withCommand("Clear cache", "bldr clean --cache").build();
         
         // Deserialize with codec
         auto result = Codec.deserialize!SerializableBuildFile(data);
         
         if (result.isErr)
-            throw new Exception("Failed to deserialize AST: " ~ result.unwrapErr());
+            throw Errors.cache("Failed to deserialize AST: " ~ result.unwrapErr(), Cache.Corrupted)
+                .withCommand("Clear corrupted cache", "bldr clean --cache").build();
         
         auto serializable = result.unwrap();
         

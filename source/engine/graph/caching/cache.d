@@ -16,7 +16,7 @@ import infrastructure.utils.security.integrity;
 import infrastructure.utils.io : BatchHasher;
 import infrastructure.utils.files.directories : ensureDirectoryWithGitignore;
 import infrastructure.utils.memory.mmap : MmapRegion, MapMode;
-import infrastructure.errors;
+import infrastructure.errors : Errors, Cache;
 
 /// Size threshold for mmap graph loading (>1MB uses mmap)
 private enum size_t GRAPH_MMAP_THRESHOLD = 1024 * 1024;
@@ -445,12 +445,16 @@ final class GraphCache
         
         // Verify integrity signature
         if (!validator.verifyWithMetadata(signed))
-            throw new Exception("Graph cache signature verification failed");
+            throw Errors.cache("Graph cache signature verification failed", Cache.Corrupted)
+                .withSuggestion("Cache integrity check failed - cache may be corrupted or tampered")
+                .withCommand("Clear cache", "bldr clean --cache").build();
         
         // Check expiration (30 days)
         import core.time : days;
         if (IntegrityValidator.isExpired(signed, 30.days))
-            throw new Exception("Graph cache expired");
+            throw Errors.cache("Graph cache expired", Cache.LoadFailed)
+                .withSuggestion("Cache has expired, rebuilding graph")
+                .withCommand("Force rebuild", "bldr build --force").build();
         
         // Deserialize graph
         return GraphStorage.deserialize(signed.data);

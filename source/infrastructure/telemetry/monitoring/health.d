@@ -7,7 +7,7 @@ import std.format : format;
 import std.algorithm : max, min;
 import core.sync.mutex : Mutex;
 import core.memory : GC;
-import infrastructure.errors;
+import infrastructure.errors : BuildResult, Errors, Internal, BuildError;
 
 /// Health checkpoint snapshot for long-running builds
 /// Captures system state at regular intervals for monitoring
@@ -294,14 +294,14 @@ final class HealthMonitor
     }
     
     /// Get latest checkpoint
-    Result!(HealthCheckpoint, string) getLatest() const @system
+    BuildResult!HealthCheckpoint getLatest() const @system
     {
         synchronized (monitorMutex)
         {
             if (checkpoints.length == 0)
-                return Result!(HealthCheckpoint, string).err("No checkpoints recorded");
+                return BuildResult!HealthCheckpoint.err(Errors.internal("No checkpoints recorded", Internal.NotInitialized).build());
             
-            return Result!(HealthCheckpoint, string).ok(
+            return BuildResult!HealthCheckpoint.ok(
                 checkpoints[$-1]
             );
         }

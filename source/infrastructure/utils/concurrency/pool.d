@@ -6,7 +6,7 @@ import core.sync.condition;
 import core.atomic;
 import std.algorithm;
 import std.range;
-import std.exception;
+import infrastructure.errors : Errors, Internal;
 import std.conv : to;
 import std.parallelism : totalCPUs;
 
@@ -48,7 +48,8 @@ final class ThreadPool
         if (workerCount == 0)
             workerCount = totalCPUs;
         
-        enforce(workerCount > 0, "Worker count must be positive");
+        if (workerCount == 0)
+            throw Errors.internal("Worker count must be positive", Internal.InvalidState).build();
         
         jobMutex = new Mutex();
         jobAvailable = new Condition(jobMutex);

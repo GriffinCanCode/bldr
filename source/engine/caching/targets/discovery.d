@@ -11,7 +11,7 @@ import std.datetime;
 import engine.graph;
 import infrastructure.config.schema.schema : TargetId;
 import infrastructure.utils.logging;
-import infrastructure.errors;
+import infrastructure.errors : BuildResult, Errors, Cache, BuildError;
 
 /// Discovery cache - caches discovery results for fast incremental builds
 /// Allows skipping discovery phase if inputs haven't changed
@@ -67,12 +67,12 @@ final class DiscoveryCache
     }
     
     /// Get cached discovery result
-    Result!(DiscoveryMetadata, string) getCached(string targetId) @system
+    BuildResult!DiscoveryMetadata getCached(string targetId) @system
     {
         if (targetId !in entries)
-            return Result!(DiscoveryMetadata, string).err("Not cached");
+            return BuildResult!DiscoveryMetadata.err(Errors.cache("Not cached", Cache.NotFound).build());
         
-        return Result!(DiscoveryMetadata, string).ok(entries[targetId].discovery);
+        return BuildResult!DiscoveryMetadata.ok(entries[targetId].discovery);
     }
     
     /// Flush cache to disk

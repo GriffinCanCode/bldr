@@ -3,6 +3,7 @@ module infrastructure.utils.simd.context;
 import infrastructure.utils.simd.capabilities;
 import infrastructure.utils.simd.ops;
 import infrastructure.utils.simd.bloom;
+import infrastructure.errors : Errors, Internal;
 import std.range;
 import std.algorithm;
 
@@ -78,7 +79,7 @@ struct SIMDContext
         import std.range : iota, array;
         
         if (array1.length != array2.length)
-            throw new Exception("Arrays must have same length for batch XOR");
+            throw Errors.internal("Arrays must have same length for batch XOR", Internal.AssertionFailed).build();
         
         return mapParallel(
             iota(array1.length).array,

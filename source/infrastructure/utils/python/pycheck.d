@@ -8,7 +8,7 @@ import std.array;
 import std.algorithm;
 import std.file;
 import std.path;
-import std.exception;
+import infrastructure.errors : Errors, Internal;
 
 /// Result of Python validation for a single file
 struct PyFileResult
@@ -142,7 +142,8 @@ class PyValidator
     static PyFileResult validateSingle(string file)
     {
         auto result = validate([file]);
-        enforce(!result.files.empty, "No validation result returned");
+        if (result.files.empty)
+            throw Errors.internal("No validation result returned", Internal.Error).build();
         return result.files[0];
     }
     
