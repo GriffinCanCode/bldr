@@ -62,7 +62,7 @@ final class CacheGarbageCollector
         catch (Exception e)
         {
             return Err!(GCResult, BuildError)(Errors.cache(
-                "Garbage collection failed: " ~ e.msg, ErrorCode.CacheGCFailed).build());
+                "Garbage collection failed: " ~ e.msg, Cache.GCFailed).build());
         }
     }
     

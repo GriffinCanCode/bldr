@@ -89,7 +89,7 @@ final class NullRemoteExecutionService : IRemoteExecutionService
         )
         {
             return Err!(RemoteExecutionResult, BuildError)(
-                Errors.generic("Remote execution not enabled", ErrorCode.NotSupported)
+                Errors.generic("Remote execution not enabled", Internal.NotSupported)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -101,7 +101,7 @@ final class NullRemoteExecutionService : IRemoteExecutionService
         )
         {
             return Err!(ExecuteResponse, BuildError)(
-                Errors.generic("REAPI not enabled", ErrorCode.NotSupported)
+                Errors.generic("REAPI not enabled", Internal.NotSupported)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );

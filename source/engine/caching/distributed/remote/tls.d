@@ -229,11 +229,11 @@ final class TlsContext
         
         if (!config.isValid())
             return VoidBuildResult.err(
-                Errors.config("Invalid TLS configuration", ErrorCode.ConfigError));
+                Errors.config("Invalid TLS configuration", Config.Error));
         
         if (!config.certificatesExist())
             return VoidBuildResult.err(
-                Errors.io(config.certFile, "TLS certificates not found: " ~ config.certFile, ErrorCode.FileNotFound));
+                Errors.io(config.certFile, "TLS certificates not found: " ~ config.certFile, IO.FileNotFound));
         
         // Production with SSL library (e.g., deimos-openssl):
         // SSL_CTX* ctx = SSL_CTX_new(TLS_server_method());
@@ -271,7 +271,7 @@ final class TlsContext
         catch (Exception e)
         {
             return Err!(TlsSocket, BuildError)(
-                Errors.system("Failed to wrap socket with TLS: " ~ e.msg, ErrorCode.NetworkError));
+                Errors.system("Failed to wrap socket with TLS: " ~ e.msg, Network.Error));
         }
     }
     
@@ -323,7 +323,7 @@ final class TlsSocket
         // For now, just verify socket is connected
         if (!underlyingSocket.isAlive)
             return VoidBuildResult.err(
-                Errors.system("Socket not connected for TLS handshake", ErrorCode.NetworkError));
+                Errors.system("Socket not connected for TLS handshake", Network.Error));
         
         return Ok!BuildError();
     }
@@ -459,7 +459,7 @@ final class CertificateManager
         auto checkResult = execute(["certbot", "--version"]);
         if (checkResult.status != 0)
             return VoidBuildResult.err(
-                Errors.system("certbot not found - install with: apt-get install certbot or brew install certbot", ErrorCode.NetworkError));
+                Errors.system("certbot not found - install with: apt-get install certbot or brew install certbot", Network.Error));
         
         // Ensure certificate directory exists
         immutable certDir = dirName(config.certFile);
@@ -487,7 +487,7 @@ final class CertificateManager
         
         if (result.status != 0)
             return VoidBuildResult.err(
-                Errors.system("Certificate renewal failed: " ~ result.output, ErrorCode.NetworkError));
+                Errors.system("Certificate renewal failed: " ~ result.output, Network.Error));
         
         structuredLog.info("certificate_renewed").field("domain", domain).emit();
         return Ok!BuildError();
@@ -519,7 +519,7 @@ final class CertificateManager
         // Verify new certificates exist and are valid
         if (!exists(config.certFile) || !exists(config.keyFile))
             return VoidBuildResult.err(
-                Errors.io(config.certFile, "Certificate files not found for reload", ErrorCode.FileNotFound));
+                Errors.io(config.certFile, "Certificate files not found for reload", IO.FileNotFound));
         
         // Verify certificate is valid
         auto verifyResult = TlsUtil.verifyCertificate(config.certFile);
@@ -559,7 +559,7 @@ struct TlsUtil
         auto checkResult = execute(["openssl", "version"]);
         if (checkResult.status != 0)
             return VoidBuildResult.err(
-                Errors.system("openssl not found - install OpenSSL to generate certificates", ErrorCode.NetworkError));
+                Errors.system("openssl not found - install OpenSSL to generate certificates", Network.Error));
         
         // Ensure directories exist
         immutable certDir = dirName(certPath);
@@ -581,7 +581,7 @@ struct TlsUtil
         auto keyResult = execute(keyGenArgs);
         if (keyResult.status != 0)
             return VoidBuildResult.err(
-                Errors.system("Failed to generate private key: " ~ keyResult.output, ErrorCode.NetworkError));
+                Errors.system("Failed to generate private key: " ~ keyResult.output, Network.Error));
         
         // Generate self-signed certificate
         string[] certGenArgs = [
@@ -597,7 +597,7 @@ struct TlsUtil
         auto certResult = execute(certGenArgs);
         if (certResult.status != 0)
             return VoidBuildResult.err(
-                Errors.system("Failed to generate certificate: " ~ certResult.output, ErrorCode.NetworkError));
+                Errors.system("Failed to generate certificate: " ~ certResult.output, Network.Error));
         
         structuredLog.info("self_signed_cert_generated")
             .field("cert_path", certPath)
@@ -615,7 +615,7 @@ struct TlsUtil
         
         if (!exists(certPath))
             return Err!(bool, BuildError)(
-                Errors.io(certPath, "Certificate not found: " ~ certPath, ErrorCode.FileNotFound));
+                Errors.io(certPath, "Certificate not found: " ~ certPath, IO.FileNotFound));
         
         // Use openssl to verify certificate
         string[] opensslArgs = [
@@ -628,7 +628,7 @@ struct TlsUtil
         auto result = execute(opensslArgs);
         if (result.status != 0)
             return Err!(bool, BuildError)(
-                Errors.system("Certificate verification failed: " ~ result.output, ErrorCode.NetworkError));
+                Errors.system("Certificate verification failed: " ~ result.output, Network.Error));
         
         // Check certificate dates
         string[] dateArgs = [
@@ -641,7 +641,7 @@ struct TlsUtil
         auto dateResult = execute(dateArgs);
         if (dateResult.status != 0)
             return Err!(bool, BuildError)(
-                Errors.system("Failed to check certificate dates", ErrorCode.NetworkError));
+                Errors.system("Failed to check certificate dates", Network.Error));
         
         return Ok!(bool, BuildError)(true);
     }

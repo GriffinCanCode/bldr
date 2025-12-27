@@ -35,7 +35,7 @@ class WorkerError : BaseBuildError
     
     this(string msg, WorkerErrorCode code = WorkerErrorCode.Unknown) @trusted
     {
-        super(ErrorCode.BuildFailed, msg);
+        super(Build.Failed, msg);
         this.workerCode = code;
     }
 }

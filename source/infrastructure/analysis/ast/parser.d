@@ -125,7 +125,7 @@ final class ASTParserRegistry
         if (parser is null)
         {
             return BuildResult!IASTParser.err(
-                Errors.generic("No AST parser registered for: " ~ ext, ErrorCode.UnsupportedLanguage)
+                Errors.generic("No AST parser registered for: " ~ ext, Language.UnsupportedLanguage)
                     .withLocation(__FILE__, __LINE__)
                     .build());
         }

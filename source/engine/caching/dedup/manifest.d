@@ -96,7 +96,7 @@ struct ManifestStorage
         auto result = Codec.deserialize!ActionManifest(data);
         return result.isErr 
             ? Err!(ActionManifest, BuildError)(Errors.cache(
-                "Failed to deserialize manifest", ErrorCode.CacheLoadFailed).build())
+                "Failed to deserialize manifest", Cache.LoadFailed).build())
             : Ok!(ActionManifest, BuildError)(result.unwrap());
     }
 }

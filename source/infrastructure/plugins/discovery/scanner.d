@@ -114,7 +114,7 @@ class PluginScanner {
         }
         
         return Err!(string, BuildError)(
-            Errors.plugin("Plugin not found: " ~ name, ErrorCode.ToolNotFound)
+            Errors.plugin("Plugin not found: " ~ name, Plugin.ToolNotFound)
                 .withSuggestion("Install the plugin: brew install builder-plugin-" ~ name)
                 .withSuggestion("Check if the plugin is in PATH: which " ~ fullName)
                 .withSuggestion("List installed plugins: bldr plugin list")
@@ -164,7 +164,7 @@ class PluginScanner {
             
             if (responseLine.empty) {
                 return Err!(PluginInfo, BuildError)(
-                    Errors.plugin("Plugin did not respond to info request: " ~ pluginPath, ErrorCode.PluginTimeout)
+                    Errors.plugin("Plugin did not respond to info request: " ~ pluginPath, Plugin.Timeout)
                         .withSuggestion("Check if the plugin is a valid Builder plugin")
                         .withSuggestion("Run the plugin manually to see error output")
                         .withLocation(__FILE__, __LINE__)
@@ -181,7 +181,7 @@ class PluginScanner {
             auto response = responseResult.unwrap();
             if (response.isError) {
                 return Err!(PluginInfo, BuildError)(
-                    Errors.plugin("Plugin returned error: " ~ response.error.message, ErrorCode.PluginError)
+                    Errors.plugin("Plugin returned error: " ~ response.error.message, Plugin.Error)
                         .withLocation(__FILE__, __LINE__)
                         .build()
                 );
@@ -192,7 +192,7 @@ class PluginScanner {
             
         } catch (Exception e) {
             return Err!(PluginInfo, BuildError)(
-                Errors.plugin("Failed to query plugin " ~ pluginPath ~ ": " ~ e.msg, ErrorCode.PluginError)
+                Errors.plugin("Failed to query plugin " ~ pluginPath ~ ": " ~ e.msg, Plugin.Error)
                     .withContext("querying plugin", "process execution failed")
                     .withLocation(__FILE__, __LINE__)
                     .build()
@@ -247,7 +247,7 @@ class PluginScanner {
             return Ok!BuildError();
         } catch (Exception e) {
             return VoidBuildResult.err(
-                Errors.plugin("Failed to save plugin cache: " ~ e.msg, ErrorCode.CacheSaveFailed)
+                Errors.plugin("Failed to save plugin cache: " ~ e.msg, Cache.SaveFailed)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );

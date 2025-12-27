@@ -166,7 +166,7 @@ struct IncrementalTopoOrder
             
             if (nodeKey in visiting)
             {
-                cycleError = Errors.graph("Circular dependency detected: " ~ node.id.toString(), ErrorCode.GraphCycle)
+                cycleError = Errors.graph("Circular dependency detected: " ~ node.id.toString(), Graph.Cycle)
                     .withContext("incremental topological sort", "cycle detected")
                     .withCommand("Visualize dependencies", "bldr graph")
                     .withSuggestion("Break the cycle by refactoring dependencies")

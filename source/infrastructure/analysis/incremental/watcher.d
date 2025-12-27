@@ -44,7 +44,7 @@ final class AnalysisWatcher
         {
             auto error = new WatchError(
                 "Watcher already active",
-                ErrorCode.WatchError
+                Watch.Error
             );
             return VoidBuildResult.err(error);
         }

@@ -45,7 +45,7 @@ final class ArtifactManager
             {
                 auto error = Errors.generic(
                     "Failed to read input: " ~ inputPath ~ ": " ~ readResult.unwrapErr(),
-                    ErrorCode.FileNotFound)
+                    IO.FileNotFound)
                     .withLocation(__FILE__, __LINE__)
                     .build();
                 return Err!(InputSpec[], BuildError)(error);
@@ -108,7 +108,7 @@ final class ArtifactManager
     {
         if (!exists(inputPath))
         {
-            auto error = Errors.generic("Failed to read input: " ~ inputPath ~ ": file not found", ErrorCode.FileNotFound)
+            auto error = Errors.generic("Failed to read input: " ~ inputPath ~ ": file not found", IO.FileNotFound)
                 .withLocation(__FILE__, __LINE__)
                 .build();
             return Err!(TransferStats, BuildError)(error);

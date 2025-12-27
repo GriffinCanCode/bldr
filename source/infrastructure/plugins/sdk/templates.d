@@ -27,7 +27,7 @@ class TemplateGenerator {
         // Check if directory exists
         if (exists(pluginDir)) {
             return VoidBuildResult.err(
-                Errors.plugin("Plugin directory already exists: " ~ pluginDir, ErrorCode.InvalidInput)
+                Errors.plugin("Plugin directory already exists: " ~ pluginDir, Config.InvalidInput)
                     .withSuggestion("Choose a different name or remove the existing directory")
                     .withLocation(__FILE__, __LINE__)
                     .build()
@@ -63,7 +63,7 @@ class TemplateGenerator {
             return Ok!BuildError();
         } catch (Exception e) {
             return VoidBuildResult.err(
-                Errors.plugin("Failed to create plugin template: " ~ e.msg, ErrorCode.FileWriteFailed)
+                Errors.plugin("Failed to create plugin template: " ~ e.msg, IO.FileWriteFailed)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );

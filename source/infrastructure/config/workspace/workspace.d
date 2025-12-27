@@ -689,7 +689,7 @@ struct WorkspaceAnalyzer
     private VoidBuildResult error(string message)
     {
         return VoidBuildResult.err(
-            Errors.parse(workspacePath, message, ErrorCode.InvalidBuildFile)
+            Errors.parse(workspacePath, message, Parse.InvalidBuildFile)
                 .withSuggestion("Verify the workspace configuration is valid")
                 .withSuggestion("Check docs/architecture/DSL.md for valid workspace fields")
                 .withSuggestion("Review Builderspace examples in the examples/ directory")

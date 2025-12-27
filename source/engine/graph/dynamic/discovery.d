@@ -144,7 +144,7 @@ final class GraphExtension
                         auto error = addDepResult.unwrapErr();
                         
                         // Allow duplicate edge errors (idempotent)
-                        if (error.code != ErrorCode.GraphInvalid)
+                        if (error.code != Graph.Invalid)
                             return BuildResult!(BuildNode[]).err(error);
                     }
                 }

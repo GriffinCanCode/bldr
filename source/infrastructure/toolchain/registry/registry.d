@@ -80,7 +80,7 @@ class ToolchainRegistry
         if (tc is null)
         {
             return Err!(Toolchain, BuildError)(
-                Errors.system("Toolchain not found: " ~ id, ErrorCode.ToolNotFound)
+                Errors.system("Toolchain not found: " ~ id, Plugin.ToolNotFound)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -130,7 +130,7 @@ class ToolchainRegistry
         }
         
         return Err!(Toolchain, BuildError)(
-            Errors.system("No toolchain found for platform: " ~ platform.toTriple(), ErrorCode.ToolNotFound)
+            Errors.system("No toolchain found for platform: " ~ platform.toTriple(), Plugin.ToolNotFound)
                 .withLocation(__FILE__, __LINE__)
                 .build()
         );
@@ -156,7 +156,7 @@ class ToolchainRegistry
             if (tcs.empty)
             {
                 return Err!(Toolchain, BuildError)(
-                    Errors.system("Toolchain not found: " ~ ref_.name, ErrorCode.ToolNotFound)
+                    Errors.system("Toolchain not found: " ~ ref_.name, Plugin.ToolNotFound)
                         .withLocation(__FILE__, __LINE__)
                         .build()
                 );

@@ -10,7 +10,7 @@ import infrastructure.config.schema.schema : LanguageBuildResult;
 /// Adapters for integrating new error system with legacy code
 
 /// Convert exception to BuildError with strongly-typed suggestions
-BuildError fromException(Exception e, ErrorCode code = Internal.Error)
+BuildError fromException(Exception e, ErrorCode code = ErrorCode.InternalError)
 {
     import infrastructure.errors.types.context : ErrorSuggestion;
     

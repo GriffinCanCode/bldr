@@ -40,7 +40,7 @@ final class LockfileCache
             auto entry = manifestHash in entries;
             if (entry is null)
                 return Err!(Lockfile, BuildError)(
-                    Errors.cache("Lockfile not cached", ErrorCode.CacheNotFound).build());
+                    Errors.cache("Lockfile not cached", Cache.NotFound).build());
             
             // Update access time for LRU
             entry.lastAccess = Clock.currTime.stdTime;
@@ -194,7 +194,7 @@ private:
     {
         if (!exists(path))
             return Err!(Lockfile, BuildError)(
-                Errors.cache("Lockfile not found: " ~ path, ErrorCode.CacheNotFound).build());
+                Errors.cache("Lockfile not found: " ~ path, Cache.NotFound).build());
         
         try
         {
@@ -205,12 +205,12 @@ private:
             return result.isOk 
                 ? Ok!(Lockfile, BuildError)(result.unwrap())
                 : Err!(Lockfile, BuildError)(
-                    Errors.cache("Failed to deserialize lockfile", ErrorCode.CacheLoadFailed).build());
+                    Errors.cache("Failed to deserialize lockfile", Cache.LoadFailed).build());
         }
         catch (Exception e)
         {
             return Err!(Lockfile, BuildError)(
-                Errors.cache("Failed to load lockfile: " ~ e.msg, ErrorCode.CacheLoadFailed).build());
+                Errors.cache("Failed to load lockfile: " ~ e.msg, Cache.LoadFailed).build());
         }
     }
     
@@ -225,7 +225,7 @@ private:
         catch (Exception e)
         {
             return Err!(void, BuildError)(
-                Errors.cache("Failed to save lockfile: " ~ e.msg, ErrorCode.CacheSaveFailed).build());
+                Errors.cache("Failed to save lockfile: " ~ e.msg, Cache.SaveFailed).build());
         }
     }
 }

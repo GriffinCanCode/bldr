@@ -52,7 +52,7 @@ final class RustDependencyAnalyzer : BaseDependencyAnalyzer
         if (!exists(sourceFile) || !isFile(sourceFile))
         {
             return BuildResult!(string[]).err(
-                Errors.generic("Source file not found: " ~ sourceFile, ErrorCode.FileNotFound)
+                Errors.generic("Source file not found: " ~ sourceFile, IO.FileNotFound)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -91,7 +91,7 @@ final class RustDependencyAnalyzer : BaseDependencyAnalyzer
             return BuildResult!(string[]).err(
                 Errors.generic("Failed to analyze Rust dependencies for " ~ 
                              sourceFile ~ ": " ~ e.msg,
-                             ErrorCode.AnalysisFailed)
+                             Analysis.Failed)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );

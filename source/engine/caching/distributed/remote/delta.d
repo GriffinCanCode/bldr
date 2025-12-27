@@ -249,7 +249,7 @@ final class RsyncDelta
                 case DeltaOp.Copy:
                     if (inst.offset + inst.length > baseData.length)
                         return Err!(ubyte[], BuildError)(Errors.cache(
-                            "Delta copy out of bounds", ErrorCode.CacheCorrupted).build());
+                            "Delta copy out of bounds", Cache.Corrupted).build());
                     output ~= baseData[inst.offset .. inst.offset + inst.length];
                     break;
                     
@@ -288,7 +288,7 @@ final class RsyncDelta
     {
         if (data.length < 4)
             return Err!(DeltaInstruction[], BuildError)(Errors.cache(
-                "Delta data too short", ErrorCode.CacheCorrupted).build());
+                "Delta data too short", Cache.Corrupted).build());
         
         auto count = bigEndianToNative!uint(data[0 .. 4][0 .. 4]);
         auto instructions = appender!(DeltaInstruction[])();
@@ -298,7 +298,7 @@ final class RsyncDelta
         {
             if (pos + 17 > data.length)
                 return Err!(DeltaInstruction[], BuildError)(Errors.cache(
-                    "Truncated delta instruction", ErrorCode.CacheCorrupted).build());
+                    "Truncated delta instruction", Cache.Corrupted).build());
             
             DeltaInstruction inst;
             inst.op = cast(DeltaOp)data[pos++];
@@ -309,7 +309,7 @@ final class RsyncDelta
             {
                 if (pos + inst.length > data.length)
                     return Err!(DeltaInstruction[], BuildError)(Errors.cache(
-                        "Truncated insert data", ErrorCode.CacheCorrupted).build());
+                        "Truncated insert data", Cache.Corrupted).build());
                 inst.data = cast(ubyte[])data[pos .. pos + inst.length].dup;
                 pos += inst.length;
             }
@@ -708,7 +708,7 @@ BuildResult!(TransferResult[]) batchDeltaUpload(
 {
     if (blobHashes.length != blobs.length)
         return Err!(TransferResult[], BuildError)(Errors.generic(
-            "Hash/blob count mismatch", ErrorCode.UnknownError).build());
+            "Hash/blob count mismatch", Internal.InvalidArgument).build());
     
     auto results = appender!(TransferResult[])();
     

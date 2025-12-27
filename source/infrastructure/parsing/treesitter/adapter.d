@@ -54,7 +54,7 @@ final class IncrementalParseAdapter {
         auto registry = ASTParserRegistry.instance();
         if (!registry.canParse(path))
             return BuildResult!FileAST.err(
-                Errors.generic("No parser for: " ~ ext, ErrorCode.UnsupportedLanguage)
+                Errors.generic("No parser for: " ~ ext, Language.UnsupportedLanguage)
                     .withLocation(__FILE__, __LINE__)
                     .build());
         
@@ -92,7 +92,7 @@ final class IncrementalParseAdapter {
     private BuildResult!FileAST handleCreation(string path) @system {
         if (!exists(path))
             return BuildResult!FileAST.err(
-                Errors.generic("File not found: " ~ path, ErrorCode.FileNotFound)
+                Errors.generic("File not found: " ~ path, IO.FileNotFound)
                     .withLocation(__FILE__, __LINE__)
                     .build());
         
@@ -123,7 +123,7 @@ final class IncrementalParseAdapter {
             return parseFile(path, edits);
         } catch (Exception e) {
             return BuildResult!FileAST.err(
-                Errors.generic("Failed to read: " ~ path ~ " - " ~ e.msg, ErrorCode.FileReadFailed)
+                Errors.generic("Failed to read: " ~ path ~ " - " ~ e.msg, IO.FileReadFailed)
                     .withLocation(__FILE__, __LINE__)
                     .build());
         }

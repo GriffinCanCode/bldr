@@ -85,7 +85,7 @@ final class WorkerProvisioner
         
         if (workers.length == 0)
         {
-            auto error = Errors.generic("Failed to provision any workers in batch", ErrorCode.InternalError)
+            auto error = Errors.generic("Failed to provision any workers in batch", Internal.Error)
                 .withLocation(__FILE__, __LINE__)
                 .build();
             return Err!(WorkerId[], BuildError)(error);
@@ -133,7 +133,7 @@ final class WorkerProvisioner
         
         if (successCount == 0)
         {
-            auto error = Errors.generic("Failed to deprovision any workers in batch", ErrorCode.InternalError)
+            auto error = Errors.generic("Failed to deprovision any workers in batch", Internal.Error)
                 .withLocation(__FILE__, __LINE__)
                 .build();
             return VoidBuildResult.err(error);

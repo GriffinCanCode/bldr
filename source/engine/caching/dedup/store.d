@@ -109,7 +109,7 @@ final class DedupStore
             
             if (!exists(manifestPath))
                 return Err!(ActionManifest, BuildError)(Errors.cache(
-                    "Manifest not found: " ~ actionId, ErrorCode.CacheNotFound).build());
+                    "Manifest not found: " ~ actionId, Cache.NotFound).build());
             
             auto data = cast(ubyte[])read(manifestPath);
             return ManifestStorage.deserialize(data);

@@ -201,7 +201,7 @@ final class ActionCacheService : IActionCacheService {
             return Ok!(ReapiActionResult, BuildError)(*result);
         
         return Err!(ReapiActionResult, BuildError)(
-            Errors.cache("Action not found in cache", ErrorCode.CacheNotFound).build());
+            Errors.cache("Action not found in cache", Cache.NotFound).build());
     }
     
     BuildResult!ReapiActionResult updateActionResult(

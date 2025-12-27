@@ -137,7 +137,7 @@ final class RateLimiter
                 emitRateLimitHit(priority);
                 
                 return VoidBuildResult.err(
-                    Errors.system("Rate limit exceeded for endpoint: " ~ endpoint, ErrorCode.NetworkError)
+                    Errors.system("Rate limit exceeded for endpoint: " ~ endpoint, Network.Error)
                         .withLocation(__FILE__, __LINE__)
                         .build()
                 );
@@ -313,7 +313,7 @@ final class RateLimiter
         emitRateLimitHit(priority);
         
         return VoidBuildResult.err(
-            Errors.system("Rate limit timeout for endpoint: " ~ endpoint, ErrorCode.NetworkError)
+            Errors.system("Rate limit timeout for endpoint: " ~ endpoint, Network.Error)
                 .withLocation(__FILE__, __LINE__)
                 .build()
         );
@@ -410,7 +410,7 @@ final class SlidingWindowLimiter
                 {
                     metrics.rejected++;
                     return VoidBuildResult.err(
-                        Errors.system("Rate limit exceeded (sliding window): " ~ endpoint, ErrorCode.NetworkError)
+                        Errors.system("Rate limit exceeded (sliding window): " ~ endpoint, Network.Error)
                             .withLocation(__FILE__, __LINE__)
                             .build()
                     );

@@ -32,7 +32,7 @@ module infrastructure.errors;
 ///   }
 
 public import infrastructure.errors.handling.result;
-public import infrastructure.errors.handling.codes;
+public import infrastructure.errors.codes;
 public import infrastructure.errors.handling.extensions;
 public import infrastructure.errors.types.types;
 public import infrastructure.errors.types.context;

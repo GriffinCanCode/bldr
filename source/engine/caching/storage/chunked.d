@@ -98,13 +98,13 @@ final class ChunkedCAS
         {
             if (!exists(manifestPath))
                 return Err!(ChunkManifest, BuildError)(Errors.cache(
-                    "Manifest not found: " ~ blobHash, ErrorCode.CacheNotFound).build());
+                    "Manifest not found: " ~ blobHash, Cache.NotFound).build());
             
             auto data = cast(ubyte[])read(manifestPath);
             auto result = ChunkManifest.deserialize(data);
             if (result.isErr)
                 return Err!(ChunkManifest, BuildError)(Errors.cache(
-                    result.unwrapErr(), ErrorCode.CacheLoadFailed).build());
+                    result.unwrapErr(), Cache.LoadFailed).build());
             
             return Ok!(ChunkManifest, BuildError)(result.unwrap());
         }
@@ -121,7 +121,7 @@ final class ChunkedCAS
         
         if (actualHash != expectedHash)
             return VoidBuildResult.err(Errors.cache(
-                "Chunk hash mismatch", ErrorCode.CacheCorrupted).build());
+                "Chunk hash mismatch", Cache.Corrupted).build());
         
         auto path = getChunkPath(expectedHash);
         
@@ -155,7 +155,7 @@ final class ChunkedCAS
             if (!exists(path))
                 return Err!(ubyte[], BuildError)(Errors.cache(
                     "Chunk not found: " ~ toHexString(hash[]),
-                    ErrorCode.CacheNotFound).build());
+                    Cache.NotFound).build());
             
             return Ok!(ubyte[], BuildError)(cast(ubyte[])read(path));
         }
@@ -244,7 +244,7 @@ final class ChunkedCAS
         
         if (result.chunks.length == 0)
             return Err!(string, BuildError)(Errors.cache(
-                "Chunking failed", ErrorCode.CacheWriteFailed).build());
+                "Chunking failed", Cache.WriteFailed).build());
         
         // Store each chunk
         foreach (ref chunk; result.chunks)
@@ -290,7 +290,7 @@ final class ChunkedCAS
         auto parseResult = ChunkManifest.deserialize(manifestData);
         if (parseResult.isErr)
             return Err!(ubyte[], BuildError)(Errors.cache(
-                parseResult.unwrapErr(), ErrorCode.CacheLoadFailed).build());
+                parseResult.unwrapErr(), Cache.LoadFailed).build());
         
         auto manifest = parseResult.unwrap();
         
@@ -304,12 +304,12 @@ final class ChunkedCAS
             if (!exists(chunkPath))
                 return Err!(ubyte[], BuildError)(Errors.cache(
                     "Missing chunk: " ~ toHexString(r.hash[]),
-                    ErrorCode.CacheNotFound).build());
+                    Cache.NotFound).build());
             
             auto chunkData = cast(ubyte[])read(chunkPath);
             if (chunkData.length != r.length)
                 return Err!(ubyte[], BuildError)(Errors.cache(
-                    "Chunk size mismatch", ErrorCode.CacheCorrupted).build());
+                    "Chunk size mismatch", Cache.Corrupted).build());
             
             output[r.offset .. r.offset + r.length] = chunkData[];
         }
@@ -318,7 +318,7 @@ final class ChunkedCAS
         immutable actualHash = FastHash.hashBytes(output);
         if (actualHash != blobHash)
             return Err!(ubyte[], BuildError)(Errors.cache(
-                "Reassembled blob hash mismatch", ErrorCode.CacheCorrupted).build());
+                "Reassembled blob hash mismatch", Cache.Corrupted).build());
         
         return Ok!(ubyte[], BuildError)(output);
     }

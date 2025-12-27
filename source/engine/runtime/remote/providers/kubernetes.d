@@ -100,12 +100,12 @@ spec:
             
             if (status != 0)
                 return Err!(WorkerId, BuildError)(
-                    Errors.system(format("Failed to create Kubernetes pod: %s", errorOutput), ErrorCode.ProcessSpawnFailed));
+                    Errors.system(format("Failed to create Kubernetes pod: %s", errorOutput), System.ProcessSpawnFailed));
         }
         catch (Exception e)
         {
             return Err!(WorkerId, BuildError)(
-                Errors.system(format("Failed to execute kubectl: %s", e.msg), ErrorCode.ProcessSpawnFailed));
+                Errors.system(format("Failed to execute kubectl: %s", e.msg), System.ProcessSpawnFailed));
         }
         
         // Convert string pod name to WorkerId by hashing
@@ -126,7 +126,7 @@ spec:
         auto podNamePtr = workerId in podNameMap;
         if (podNamePtr is null)
             return VoidBuildResult.err(
-                Errors.system("Worker ID not found in pod map", ErrorCode.WorkerFailed));
+                Errors.system("Worker ID not found in pod map", Distributed.WorkerFailed));
         
         string podName = *podNamePtr;
         
@@ -144,7 +144,7 @@ spec:
         
         if (result.status != 0)
             return VoidBuildResult.err(
-                Errors.system(format("Failed to delete Kubernetes pod %s: %s", podName, result.output), ErrorCode.ProcessSpawnFailed));
+                Errors.system(format("Failed to delete Kubernetes pod %s: %s", podName, result.output), System.ProcessSpawnFailed));
         
         structuredLog.info("deleted_kubernetes_pod_").field("detail", "Deleted Kubernetes pod: " ~ podName).emit();
         podNameMap.remove(workerId);
@@ -157,7 +157,7 @@ spec:
         auto podNamePtr = workerId in podNameMap;
         if (podNamePtr is null)
             return Err!(WorkerStatus, BuildError)(
-                Errors.system("Worker ID not found in pod map", ErrorCode.WorkerFailed));
+                Errors.system("Worker ID not found in pod map", Distributed.WorkerFailed));
         
         string podName = *podNamePtr;
         
@@ -175,7 +175,7 @@ spec:
         
         if (result.status != 0)
             return Err!(WorkerStatus, BuildError)(
-                Errors.system(format("Failed to get pod status for %s: %s", podName, result.output), ErrorCode.ProcessSpawnFailed));
+                Errors.system(format("Failed to get pod status for %s: %s", podName, result.output), System.ProcessSpawnFailed));
         
         // Parse JSON output properly
         WorkerStatus status;
@@ -255,7 +255,7 @@ spec:
         catch (JSONException e)
         {
             return Err!(WorkerStatus, BuildError)(
-                Errors.system(format("Failed to parse pod JSON: %s", e.msg), ErrorCode.ParseFailed));
+                Errors.system(format("Failed to parse pod JSON: %s", e.msg), Parse.Failed));
         }
         
         return Ok!(WorkerStatus, BuildError)(status);

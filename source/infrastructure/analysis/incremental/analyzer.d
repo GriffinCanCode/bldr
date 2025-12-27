@@ -64,7 +64,7 @@ final class IncrementalAnalyzer : IIncrementalAnalyzer
             auto error = createAnalysisError(
                 target.name,
                 "Incremental analysis unavailable - change tracking failed",
-                ErrorCode.AnalysisFailed
+                Analysis.Failed
             );
             error.addContext(ErrorContext("initializing incremental analysis", "change tracking initialization failed"));
             error.addSuggestion(ErrorSuggestion("Full rebuild will be performed"));

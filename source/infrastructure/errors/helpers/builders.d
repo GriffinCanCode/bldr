@@ -17,7 +17,7 @@ import infrastructure.errors.codes;
 auto createParseError(
     string filePath,
     string message,
-    ErrorCode code = Parse.Failed,
+    ErrorCode code = ErrorCode.ParseFailed,
     string file = __FILE__,
     size_t line = __LINE__
 ) @system
@@ -127,7 +127,7 @@ auto createFileReadError(
 auto createAnalysisError(
     string targetName,
     string message,
-    ErrorCode code = Analysis.Failed,
+    ErrorCode code = ErrorCode.AnalysisFailed,
     string file = __FILE__,
     size_t line = __LINE__
 ) @system
@@ -170,7 +170,7 @@ auto createAnalysisError(
 auto createBuildError(
     string targetId,
     string message,
-    ErrorCode code = Build.Failed,
+    ErrorCode code = ErrorCode.BuildFailed,
     string file = __FILE__,
     size_t line = __LINE__
 ) @system
@@ -212,7 +212,7 @@ auto createBuildError(
 auto createLanguageError(
     string language,
     string message,
-    ErrorCode code = Language.CompilationFailed,
+    ErrorCode code = ErrorCode.CompilationFailed,
     string file = __FILE__,
     size_t line = __LINE__
 ) @system
@@ -250,7 +250,7 @@ auto createLanguageError(
 /// Create a cache error with rich context
 auto createCacheError(
     string message,
-    ErrorCode code = Cache.LoadFailed,
+    ErrorCode code = ErrorCode.CacheLoadFailed,
     string cachePath = "",
     string file = __FILE__,
     size_t line = __LINE__
@@ -294,7 +294,7 @@ auto createCacheError(
 /// Create a system error with rich context
 auto createSystemError(
     string message,
-    ErrorCode code = System.ProcessSpawnFailed,
+    ErrorCode code = ErrorCode.ProcessSpawnFailed,
     string file = __FILE__,
     size_t line = __LINE__
 ) @system

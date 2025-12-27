@@ -198,7 +198,7 @@ final class ASTDependencyCache
             auto astPtr = buildNormalizedPath(filePath) in astCache;
             return astPtr is null
                 ? BuildResult!(FileAST*).err(
-                    Errors.generic("No AST cached for: " ~ filePath, ErrorCode.FileNotFound)
+                    Errors.generic("No AST cached for: " ~ filePath, IO.FileNotFound)
                         .withLocation(__FILE__, __LINE__)
                         .build())
                 : BuildResult!(FileAST*).ok(astPtr);

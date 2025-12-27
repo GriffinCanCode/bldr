@@ -106,7 +106,7 @@ private final class ActionCompletionTracker
             if (info is null)
             {
                 return Err!(ActionResult, BuildError)(
-                    Errors.generic("Action not registered: " ~ actionId.toString(), ErrorCode.InternalError)
+                    Errors.generic("Action not registered: " ~ actionId.toString(), Internal.Error)
                         .withLocation(__FILE__, __LINE__)
                         .build());
             }
@@ -123,7 +123,7 @@ private final class ActionCompletionTracker
                 if (elapsed >= timeout)
                 {
                     return Err!(ActionResult, BuildError)(
-                        Errors.generic("Action timed out: " ~ actionId.toString(), ErrorCode.ProcessTimeout)
+                        Errors.generic("Action timed out: " ~ actionId.toString(), System.ProcessTimeout)
                             .withLocation(__FILE__, __LINE__)
                             .build());
                 }
@@ -381,7 +381,7 @@ final class RemoteExecutor
         if (coordinator is null)
         {
             return Err!(engine.distributed.protocol.protocol.ActionResult, BuildError)(
-                Errors.generic("Coordinator not initialized", ErrorCode.InternalError)
+                Errors.generic("Coordinator not initialized", Internal.Error)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -395,7 +395,7 @@ final class RemoteExecutor
         auto scheduleResult = coordinator.scheduleAction(request);
         if (scheduleResult.isErr)
         {
-            auto error = Errors.generic("Failed to schedule action: " ~ scheduleResult.unwrapErr().message(), ErrorCode.ActionSchedulingFailed)
+            auto error = Errors.generic("Failed to schedule action: " ~ scheduleResult.unwrapErr().message(), Distributed.ActionSchedulingFailed)
                 .withLocation(__FILE__, __LINE__)
                 .build();
             completionTracker.notifyError(request.id, error);
@@ -437,7 +437,7 @@ final class RemoteExecutor
     {
         structuredLog.debug_("action_failure_callback_").field("detail", "Action failure callback: " ~ actionId.toString()).emit();
         completionTracker.notifyError(actionId, 
-            Errors.generic("Remote action failed: " ~ errorMsg, ErrorCode.BuildFailed)
+            Errors.generic("Remote action failed: " ~ errorMsg, Build.Failed)
                 .withLocation(__FILE__, __LINE__)
                 .build()
         );
@@ -448,7 +448,7 @@ final class RemoteExecutor
     {
         // Query action cache (would integrate with action cache service)
         return Err!(RemoteExecutionResult, BuildError)(
-            Errors.generic("Not in cache", ErrorCode.CacheNotFound)
+            Errors.generic("Not in cache", Cache.NotFound)
                 .withLocation(__FILE__, __LINE__)
                 .build()
         );

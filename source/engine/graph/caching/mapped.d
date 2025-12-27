@@ -194,14 +194,14 @@ final class MappedGraphView
     {
         if (!stdfile.exists(path))
             return Err!(MappedGraphView, BuildError)(
-                Errors.cache("Graph file not found: " ~ path, ErrorCode.CacheNotFound).build()
+                Errors.cache("Graph file not found: " ~ path, Cache.NotFound).build()
             );
         
         string mapError;
         auto region = MmapRegion.map(path, MapMode.ReadOnly, 0, 0, &mapError);
         if (region is null)
             return Err!(MappedGraphView, BuildError)(
-                Errors.cache("Failed to map graph: " ~ mapError, ErrorCode.CacheLoadFailed).build()
+                Errors.cache("Failed to map graph: " ~ mapError, Cache.LoadFailed).build()
             );
         
         auto view = new MappedGraphView();
@@ -213,7 +213,7 @@ final class MappedGraphView
         {
             region.unmap();
             return Err!(MappedGraphView, BuildError)(
-                Errors.cache("Graph file too small", ErrorCode.CacheCorrupted).build()
+                Errors.cache("Graph file too small", Cache.Corrupted).build()
             );
         }
         
@@ -223,7 +223,7 @@ final class MappedGraphView
         {
             region.unmap();
             return Err!(MappedGraphView, BuildError)(
-                Errors.cache("Invalid graph format", ErrorCode.CacheCorrupted).build()
+                Errors.cache("Invalid graph format", Cache.Corrupted).build()
             );
         }
         
@@ -390,7 +390,7 @@ final class MappedGraphStorage
     VoidBuildResult persist(BuildGraph graph, const ubyte[32] configHash = (ubyte[32]).init) @system
     {
         if (graph is null)
-            return VoidBuildResult.err(Errors.cache("Null graph", ErrorCode.InvalidInput).build());
+            return VoidBuildResult.err(Errors.cache("Null graph", Config.InvalidInput).build());
         
         synchronized (mutex)
         {
@@ -507,7 +507,7 @@ final class MappedGraphStorage
             catch (Exception e)
             {
                 return VoidBuildResult.err(
-                    Errors.cache("Failed to persist graph: " ~ e.msg, ErrorCode.CacheWriteFailed).build()
+                    Errors.cache("Failed to persist graph: " ~ e.msg, Cache.WriteFailed).build()
                 );
             }
         }
@@ -520,7 +520,7 @@ final class MappedGraphStorage
         {
             if (!stdfile.exists(graphPath))
                 return Err!(MappedGraphView, BuildError)(
-                    Errors.cache("No cached graph found", ErrorCode.CacheNotFound).build()
+                    Errors.cache("No cached graph found", Cache.NotFound).build()
                 );
             
             auto result = MappedGraphView.open(graphPath);
@@ -594,7 +594,7 @@ final class MappedGraphStorage
             {
                 _stats.watchModeMisses++;
                 return Err!(BuildGraph, BuildError)(
-                    Errors.cache("Config changed since last persist", ErrorCode.CacheCorrupted).build()
+                    Errors.cache("Config changed since last persist", Cache.Corrupted).build()
                 );
             }
             
@@ -675,7 +675,7 @@ final class MappedGraphStorage
         catch (Exception e)
         {
             return Err!(BuildGraph, BuildError)(
-                Errors.cache("Failed to restore graph: " ~ e.msg, ErrorCode.CacheLoadFailed).build()
+                Errors.cache("Failed to restore graph: " ~ e.msg, Cache.LoadFailed).build()
             );
         }
     }

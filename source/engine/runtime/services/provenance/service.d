@@ -89,7 +89,7 @@ final class ProvenanceService : IProvenanceService
     {
         if (!_config.enabled)
             return Err!(BuildProvenance, BuildError)(
-                Errors.system("Provenance disabled", ErrorCode.BuildCancelled)
+                Errors.system("Provenance disabled", Build.Cancelled)
                     .withLocation(__FILE__, __LINE__)
                     .build());
         
@@ -133,7 +133,7 @@ final class NullProvenanceService : IProvenanceService
     BuildResult!BuildProvenance complete() @system
     {
         return Err!(BuildProvenance, BuildError)(
-            Errors.system("Provenance disabled", ErrorCode.BuildCancelled)
+            Errors.system("Provenance disabled", Build.Cancelled)
                 .withLocation(__FILE__, __LINE__)
                 .build());
     }

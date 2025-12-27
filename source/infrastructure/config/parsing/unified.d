@@ -67,7 +67,7 @@ class UnifiedParser
         if (file.statements.empty)
         {
             return Err!(BuildFile, BuildError)(
-                Errors.parse(filePath, "Builderfile is empty", ErrorCode.InvalidBuildFile)
+                Errors.parse(filePath, "Builderfile is empty", Parse.InvalidBuildFile)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );

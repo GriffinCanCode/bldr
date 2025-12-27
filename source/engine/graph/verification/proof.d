@@ -226,7 +226,7 @@ struct BuildVerifier
         auto sortResult = graph.topologicalSort();
         if (sortResult.isErr)
             return BuildResult!AcyclicityProof.err(
-                Errors.graph("Acyclicity proof failed: graph contains cycles", ErrorCode.GraphCycle)
+                Errors.graph("Acyclicity proof failed: graph contains cycles", Graph.Cycle)
                     .withSuggestion("Remove circular dependencies to make graph acyclic")
                     .build());
         
@@ -241,7 +241,7 @@ struct BuildVerifier
         
         if (!proof.isValid)
             return BuildResult!AcyclicityProof.err(
-                Errors.graph("Acyclicity proof verification failed", ErrorCode.GraphInvalid).build());
+                Errors.graph("Acyclicity proof verification failed", Graph.Invalid).build());
         
         return BuildResult!AcyclicityProof.ok(proof);
     }
@@ -304,7 +304,7 @@ struct BuildVerifier
         
         if (!proof.isValid)
             return BuildResult!HermeticityProof.err(
-                Errors.graph("Hermeticity proof failed: input and output sets overlap", ErrorCode.GraphInvalid)
+                Errors.graph("Hermeticity proof failed: input and output sets overlap", Graph.Invalid)
                     .withContext("hermeticity", "I ∩ O ≠ ∅")
                     .withSuggestion("Ensure inputs and outputs do not overlap")
                     .build());
@@ -346,7 +346,7 @@ struct BuildVerifier
         
         if (!proof.isValid)
             return BuildResult!DeterminismProof.err(
-                Errors.graph("Determinism proof failed: incomplete specifications", ErrorCode.GraphInvalid).build());
+                Errors.graph("Determinism proof failed: incomplete specifications", Graph.Invalid).build());
         
         return BuildResult!DeterminismProof.ok(proof);
     }
@@ -403,7 +403,7 @@ struct BuildVerifier
         
         if (!proof.isValid)
             return BuildResult!RaceFreedomProof.err(
-                Errors.graph("Race-freedom proof failed", ErrorCode.GraphInvalid)
+                Errors.graph("Race-freedom proof failed", Graph.Invalid)
                     .withContext("concurrency", "potential data race detected")
                     .withSuggestion("Ensure all shared state uses atomic operations")
                     .build());

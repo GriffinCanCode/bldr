@@ -42,7 +42,7 @@ final class TypeScriptDependencyAnalyzer : BaseDependencyAnalyzer
         if (!exists(sourceFile) || !isFile(sourceFile))
         {
             return BuildResult!(string[]).err(
-                Errors.generic("Source file not found: " ~ sourceFile, ErrorCode.FileNotFound)
+                Errors.generic("Source file not found: " ~ sourceFile, IO.FileNotFound)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -79,7 +79,7 @@ final class TypeScriptDependencyAnalyzer : BaseDependencyAnalyzer
             return BuildResult!(string[]).err(
                 Errors.generic("Failed to analyze TypeScript dependencies for " ~ 
                              sourceFile ~ ": " ~ e.msg,
-                             ErrorCode.AnalysisFailed)
+                             Analysis.Failed)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );

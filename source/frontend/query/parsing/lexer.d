@@ -161,7 +161,7 @@ struct QueryLexer
             default:
                 return BuildResult!Token.err(
                     Errors.parseAt("query", "Unexpected character '" ~ c ~ "' at column " ~ startCol.to!string,
-                        line, startCol, ErrorCode.ParseFailed)
+                        line, startCol, Parse.Failed)
                         .withLocation(__FILE__, __LINE__)
                         .build()
                 );
@@ -214,7 +214,7 @@ struct QueryLexer
                 if (isAtEnd())
                 {
                     return BuildResult!Token.err(
-                        Errors.parseAt("query", "Unterminated string", startLine, startCol, ErrorCode.ParseFailed)
+                        Errors.parseAt("query", "Unterminated string", startLine, startCol, Parse.Failed)
                             .withLocation(__FILE__, __LINE__)
                             .build()
                     );
@@ -244,7 +244,7 @@ struct QueryLexer
         if (isAtEnd())
         {
             return BuildResult!Token.err(
-                Errors.parseAt("query", "Unterminated string", startLine, startCol, ErrorCode.ParseFailed)
+                Errors.parseAt("query", "Unterminated string", startLine, startCol, Parse.Failed)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );

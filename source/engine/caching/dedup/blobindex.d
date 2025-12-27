@@ -51,7 +51,7 @@ final class BlobIndex
         auto rc = sqlite3_open(dbPath.toStringz, &db);
         if (rc != SQLITE_OK)
             throw Errors.cache("Failed to open blob index: " ~ 
-                fromStringz(sqlite3_errmsg(db)).idup, ErrorCode.CacheLoadFailed).build();
+                fromStringz(sqlite3_errmsg(db)).idup, Cache.LoadFailed).build();
         
         // Configure for performance
         execSQL("PRAGMA journal_mode=WAL");
@@ -98,7 +98,7 @@ final class BlobIndex
             
             if (sqlite3_step(stmtBlobGet) != SQLITE_ROW)
                 return Err!(BlobEntry, BuildError)(Errors.cache(
-                    "Blob not found: " ~ hash, ErrorCode.CacheNotFound).build());
+                    "Blob not found: " ~ hash, Cache.NotFound).build());
             
             BlobEntry entry;
             entry.hash = fromStringz(sqlite3_column_text(stmtBlobGet, 0)).idup;

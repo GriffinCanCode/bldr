@@ -36,7 +36,7 @@ struct SemanticVersion {
             auto parts = cleaned.split(".");
             if (parts.length < 2 || parts.length > 3)
                 return Err!(SemanticVersion, BuildError)(
-                    Errors.plugin("Invalid version format: " ~ ver, ErrorCode.InvalidFieldValue)
+                    Errors.plugin("Invalid version format: " ~ ver, Parse.InvalidFieldValue)
                         .withSuggestion("Use semantic versioning format: MAJOR.MINOR.PATCH"));
             
             int major = parts[0].to!int;
@@ -46,7 +46,7 @@ struct SemanticVersion {
             return Ok!(SemanticVersion, BuildError)(SemanticVersion(major, minor, patch));
         } catch (Exception e) {
             return Err!(SemanticVersion, BuildError)(
-                Errors.plugin("Failed to parse version: " ~ ver ~ " - " ~ e.msg, ErrorCode.InvalidFieldValue));
+                Errors.plugin("Failed to parse version: " ~ ver ~ " - " ~ e.msg, Parse.InvalidFieldValue));
         }
     }
     
@@ -193,11 +193,11 @@ class PluginValidator {
         // Check required fields
         if (info.name.empty)
             return VoidBuildResult.err(
-                Errors.plugin("Plugin name is required", ErrorCode.InvalidFieldValue));
+                Errors.plugin("Plugin name is required", Parse.InvalidFieldValue));
         
         if (info.version_.empty)
             return VoidBuildResult.err(
-                Errors.plugin("Plugin version is required", ErrorCode.InvalidFieldValue));
+                Errors.plugin("Plugin version is required", Parse.InvalidFieldValue));
         
         // Validate version format
         auto pluginVerResult = SemanticVersion.parse(info.version_);
@@ -241,7 +241,7 @@ class PluginValidator {
             if (currentVer.opCmp(minVer) < 0)
                 return VoidBuildResult.err(
                     Errors.plugin("Plugin '" ~ info.name ~ "' requires Builder " ~ info.minBuilderVersion ~ 
-                        " or higher (current: " ~ builderVersion ~ ")", ErrorCode.IncompatibleVersion)
+                        " or higher (current: " ~ builderVersion ~ ")", Plugin.IncompatibleVersion)
                         .withSuggestion("Upgrade Builder: brew upgrade builder")
                         .withSuggestion("Or use an older version of the plugin"));
         }
@@ -256,7 +256,7 @@ class PluginValidator {
             if (currentVer.opCmp(maxVer) > 0)
                 return VoidBuildResult.err(
                     Errors.plugin("Plugin '" ~ info.name ~ "' is not compatible with Builder " ~ builderVersion ~ 
-                        " (max supported: " ~ info.maxBuilderVersion ~ ")", ErrorCode.IncompatibleVersion)
+                        " (max supported: " ~ info.maxBuilderVersion ~ ")", Plugin.IncompatibleVersion)
                         .withSuggestion("Downgrade Builder or upgrade the plugin")
                         .withSuggestion("Check for a newer version: brew upgrade builder-plugin-" ~ info.name));
         }
@@ -273,7 +273,7 @@ class PluginValidator {
                 if (!dep.optional)
                     return VoidBuildResult.err(
                         Errors.plugin("Plugin '" ~ info.name ~ "' requires plugin '" ~ dep.name ~ 
-                            "' which is not installed", ErrorCode.PluginNotFound)
+                            "' which is not installed", Plugin.NotFound)
                             .withSuggestion("Install the dependency: brew install builder-plugin-" ~ dep.name));
                 continue;
             }
@@ -290,7 +290,7 @@ class PluginValidator {
             if (!rangeResult.unwrap().satisfies(verResult.unwrap()))
                 return VoidBuildResult.err(
                     Errors.plugin("Plugin '" ~ info.name ~ "' requires '" ~ dep.name ~ "' " ~ 
-                        dep.versionRange ~ " but found " ~ (*known).version_, ErrorCode.PluginVersionMismatch)
+                        dep.versionRange ~ " but found " ~ (*known).version_, Plugin.VersionMismatch)
                         .withSuggestion("Upgrade plugin: brew upgrade builder-plugin-" ~ dep.name));
         }
         
@@ -314,7 +314,7 @@ class PluginValidator {
         
         if (!valid)
             return VoidBuildResult.err(
-                Errors.plugin("Unknown capability: " ~ capability, ErrorCode.InvalidFieldValue)
+                Errors.plugin("Unknown capability: " ~ capability, Parse.InvalidFieldValue)
                     .withSuggestion("Valid capabilities: " ~ validCapabilities.to!string));
         
         return Ok!BuildError();
@@ -324,11 +324,11 @@ class PluginValidator {
     static VoidBuildResult validateExecutable(string pluginPath) @system {
         if (!exists(pluginPath))
             return VoidBuildResult.err(
-                Errors.plugin("Plugin executable not found: " ~ pluginPath, ErrorCode.ToolNotFound));
+                Errors.plugin("Plugin executable not found: " ~ pluginPath, Plugin.ToolNotFound));
         
         if (!isFile(pluginPath))
             return VoidBuildResult.err(
-                Errors.plugin("Plugin path is not a file: " ~ pluginPath, ErrorCode.InvalidInput));
+                Errors.plugin("Plugin path is not a file: " ~ pluginPath, Config.InvalidInput));
         
         version(Posix) {
             import core.sys.posix.sys.stat;
@@ -338,7 +338,7 @@ class PluginValidator {
             if (stat(pluginPath.toStringz(), &statbuf) == 0) {
                 if ((statbuf.st_mode & S_IXUSR) == 0)
                     return VoidBuildResult.err(
-                        Errors.plugin("Plugin is not executable: " ~ pluginPath, ErrorCode.InvalidInput)
+                        Errors.plugin("Plugin is not executable: " ~ pluginPath, Config.InvalidInput)
                             .withSuggestion("Make it executable: chmod +x " ~ pluginPath));
             }
         }

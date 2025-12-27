@@ -121,7 +121,7 @@ final class ResilienceService : IResilienceService
         if (!enableCheckpoints)
         {
             return BuildResult!Checkpoint.err(
-                Errors.system("Checkpoints disabled", ErrorCode.UnknownError)
+                Errors.system("Checkpoints disabled", Internal.NotSupported)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -131,7 +131,7 @@ final class ResilienceService : IResilienceService
         if (loadResult.isErr)
         {
             return BuildResult!Checkpoint.err(
-                Errors.system(loadResult.unwrapErr(), ErrorCode.CacheLoadFailed)
+                Errors.system(loadResult.unwrapErr(), Cache.LoadFailed)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -144,7 +144,7 @@ final class ResilienceService : IResilienceService
         if (!enableCheckpoints)
         {
             return BuildResult!ResumePlan.err(
-                Errors.system("Checkpoints disabled", ErrorCode.UnknownError)
+                Errors.system("Checkpoints disabled", Internal.NotSupported)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -154,7 +154,7 @@ final class ResilienceService : IResilienceService
         if (checkpointResult.isErr)
         {
             return BuildResult!ResumePlan.err(
-                Errors.system(checkpointResult.unwrapErr(), ErrorCode.CacheLoadFailed)
+                Errors.system(checkpointResult.unwrapErr(), Cache.LoadFailed)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -165,7 +165,7 @@ final class ResilienceService : IResilienceService
         if (planResult.isErr)
         {
             return BuildResult!ResumePlan.err(
-                Errors.system(planResult.unwrapErr(), ErrorCode.UnknownError)
+                Errors.system(planResult.unwrapErr(), Internal.Error)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -195,7 +195,7 @@ final class NullResilienceService : IResilienceService
     
     this()
     {
-        nullError = Errors.system("Null resilience service", ErrorCode.UnknownError)
+        nullError = Errors.system("Null resilience service", Internal.NullReference)
             .withLocation(__FILE__, __LINE__)
             .build();
     }

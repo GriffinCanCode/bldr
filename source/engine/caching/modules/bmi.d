@@ -207,7 +207,7 @@ final class BMICache
             
             if (entryPtr is null || !exists(entryPtr.bmiPath))
                 return Err!(string, BuildError)(
-                    Errors.cache("BMI not found: " ~ key.moduleName, ErrorCode.CacheNotFound).build());
+                    Errors.cache("BMI not found: " ~ key.moduleName, Cache.NotFound).build());
             
             return Ok!(string, BuildError)(entryPtr.bmiPath);
         }

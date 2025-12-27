@@ -88,7 +88,7 @@ final class CdnManager
     {
         if (!config.enabled || config.provider != "cloudfront")
             return Err!(string, BuildError)(
-                Errors.config("CloudFront not configured", ErrorCode.ConfigError).build());
+                Errors.config("CloudFront not configured", Config.Error).build());
         
         immutable expiry = Clock.currStdTime() / 10_000_000 + validity.total!"seconds";
         
@@ -113,7 +113,7 @@ final class CdnManager
     {
         if (!config.enabled || config.provider != "cloudflare")
             return Err!(string, BuildError)(
-                Errors.config("Cloudflare not configured", ErrorCode.ConfigError).build());
+                Errors.config("Cloudflare not configured", Config.Error).build());
         
         immutable expiry = Clock.currStdTime() / 10_000_000 + validity.total!"seconds";
         immutable baseUrl = "https://" ~ config.domain ~ path;
@@ -170,13 +170,13 @@ final class CdnManager
         immutable now = Clock.currStdTime() / 10_000_000;
         if (now > expiry)
             return Err!(bool, BuildError)(
-                Errors.cache("Signed URL expired", ErrorCode.CacheUnauthorized).build());
+                Errors.cache("Signed URL expired", Cache.Unauthorized).build());
         
         // Verify signature
         immutable expected = signUrl(path ~ to!string(expiry));
         if (signature != expected)
             return Err!(bool, BuildError)(
-                Errors.cache("Invalid signature", ErrorCode.CacheUnauthorized).build());
+                Errors.cache("Invalid signature", Cache.Unauthorized).build());
         
         return Ok!(bool, BuildError)(true);
     }
@@ -197,7 +197,7 @@ final class CdnManager
                 return purgeFastly(path);
             default:
                 return VoidBuildResult.err(
-                    Errors.config("CDN provider '" ~ config.provider ~ "' not supported for purging", ErrorCode.NotSupported).build());
+                    Errors.config("CDN provider '" ~ config.provider ~ "' not supported for purging", Internal.NotSupported).build());
         }
     }
     
@@ -215,7 +215,7 @@ final class CdnManager
         
         if (config.distributionId.length == 0 || config.apiKey.length == 0)
             return VoidBuildResult.err(
-                Errors.config("CloudFront distribution ID or API key not configured", ErrorCode.ConfigError).build());
+                Errors.config("CloudFront distribution ID or API key not configured", Config.Error).build());
         
         // Create invalidation request
         JSONValue invalidation;
@@ -257,7 +257,7 @@ final class CdnManager
         
         if (config.distributionId.length == 0 || config.apiKey.length == 0)
             return VoidBuildResult.err(
-                Errors.config("Cloudflare zone ID or API key not configured", ErrorCode.ConfigError).build());
+                Errors.config("Cloudflare zone ID or API key not configured", Config.Error).build());
         
         // Create purge request
         JSONValue request;
@@ -300,13 +300,13 @@ final class CdnManager
                     .field("error", errorMsg)
                     .emit();
                 return VoidBuildResult.err(
-                    Errors.generic("Cloudflare purge failed: " ~ errorMsg, ErrorCode.NetworkError).build());
+                    Errors.generic("Cloudflare purge failed: " ~ errorMsg, Network.Error).build());
             }
         }
         catch (Exception e)
         {
             return VoidBuildResult.err(
-                Errors.generic("Failed to parse Cloudflare response: " ~ e.msg, ErrorCode.NetworkError).build());
+                Errors.generic("Failed to parse Cloudflare response: " ~ e.msg, Network.Error).build());
         }
     }
     
@@ -315,7 +315,7 @@ final class CdnManager
     {
         if (config.apiKey.length == 0)
             return VoidBuildResult.err(
-                Errors.config("Fastly API key not configured", ErrorCode.ConfigError).build());
+                Errors.config("Fastly API key not configured", Config.Error).build());
         
         immutable url = format("https://api.fastly.com/purge/%s%s",
             config.domain, path);
@@ -355,13 +355,13 @@ final class CdnManager
                     .field("error", errorMsg)
                     .emit();
                 return VoidBuildResult.err(
-                    Errors.generic("Fastly purge failed: " ~ errorMsg, ErrorCode.NetworkError).build());
+                    Errors.generic("Fastly purge failed: " ~ errorMsg, Network.Error).build());
             }
         }
         catch (Exception e)
         {
             return VoidBuildResult.err(
-                Errors.generic("Failed to parse Fastly response: " ~ e.msg, ErrorCode.NetworkError).build());
+                Errors.generic("Failed to parse Fastly response: " ~ e.msg, Network.Error).build());
         }
     }
     
@@ -408,7 +408,7 @@ final class CdnManager
         auto urlParts = parseHttpUrl(url);
         if (urlParts.host.length == 0)
             return Err!(ubyte[], BuildError)(
-                Errors.config("Invalid URL: " ~ url, ErrorCode.ConfigError).build());
+                Errors.config("Invalid URL: " ~ url, Config.Error).build());
         
         try
         {
@@ -428,7 +428,7 @@ final class CdnManager
             if (sent != requestStr.length)
             {
                 return Err!(ubyte[], BuildError)(
-                    Errors.network("Failed to send complete request", ErrorCode.NetworkError));
+                    Errors.network("Failed to send complete request", Network.Error));
             }
             
             // Receive response
@@ -455,13 +455,13 @@ final class CdnManager
             else
             {
                 return Err!(ubyte[], BuildError)(
-                    Errors.network(format("HTTP error %d: %s", response.statusCode, response.body_), ErrorCode.NetworkError));
+                    Errors.network(format("HTTP error %d: %s", response.statusCode, response.body_), Network.Error));
             }
         }
         catch (Exception e)
         {
             return Err!(ubyte[], BuildError)(
-                Errors.network("HTTP request failed: " ~ e.msg, ErrorCode.NetworkError));
+                Errors.network("HTTP request failed: " ~ e.msg, Network.Error));
         }
     }
     

@@ -677,7 +677,7 @@ class DistributedError : BaseBuildError
 {
     this(string message, string file = __FILE__, size_t line = __LINE__) @trusted
     {
-        super(ErrorCode.DistributedError, message);
+        super(Distributed.Error, message);
         addContext(ErrorContext("file", file));
         addContext(ErrorContext("line", line.to!string));
     }
@@ -694,14 +694,14 @@ class DistributedError : BaseBuildError
 class ExecutionError : DistributedError
 {
     this(string message, string file = __FILE__, size_t line = __LINE__) @safe =>
-        super(ErrorCode.SandboxError, "Execution failed: " ~ message, file, line);
+        super(Distributed.SandboxError, "Execution failed: " ~ message, file, line);
 }
 
 /// Worker errors (unavailable, failed, etc.)
 class WorkerError : DistributedError
 {
     this(string message, string file = __FILE__, size_t line = __LINE__) @safe =>
-        super(ErrorCode.WorkerFailed, "Worker error: " ~ message, file, line);
+        super(Distributed.WorkerFailed, "Worker error: " ~ message, file, line);
 }
 
 /// Unified distributed error factory

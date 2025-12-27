@@ -186,7 +186,7 @@ final class IncrementalTreeCache {
             if (parser is null || *parser is null) {
                 cacheMisses++;
                 return BuildResult!ParsedTree.err(
-                    Errors.generic("No parser for language: " ~ langId, ErrorCode.UnsupportedLanguage)
+                    Errors.generic("No parser for language: " ~ langId, Language.UnsupportedLanguage)
                         .withLocation(__FILE__, __LINE__)
                         .build());
             }
@@ -219,7 +219,7 @@ final class IncrementalTreeCache {
                 if (entry !is null) entry.release();
                 cache.remove(path);
                 return BuildResult!ParsedTree.err(
-                    Errors.generic("Parse failed: " ~ filePath, ErrorCode.ParseFailed)
+                    Errors.generic("Parse failed: " ~ filePath, Parse.Failed)
                         .withLocation(__FILE__, __LINE__)
                         .build());
             }
@@ -260,7 +260,7 @@ final class IncrementalTreeCache {
     ) @system {
         if (!exists(filePath))
             return BuildResult!ParsedTree.err(
-                Errors.generic("File not found: " ~ filePath, ErrorCode.FileNotFound)
+                Errors.generic("File not found: " ~ filePath, IO.FileNotFound)
                     .withLocation(__FILE__, __LINE__)
                     .build());
         
@@ -269,7 +269,7 @@ final class IncrementalTreeCache {
             return parseIncremental(filePath, content, langId, edits);
         } catch (Exception e) {
             return BuildResult!ParsedTree.err(
-                Errors.generic("Failed to read: " ~ filePath, ErrorCode.FileReadFailed)
+                Errors.generic("Failed to read: " ~ filePath, IO.FileReadFailed)
                     .withLocation(__FILE__, __LINE__)
                     .build());
         }

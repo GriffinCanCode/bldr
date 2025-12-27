@@ -51,7 +51,7 @@ final class RemoteCacheClient
     {
         if (!config.enabled())
             return Err!(ubyte[], BuildError)(
-                Errors.cache("Remote cache not configured", ErrorCode.CacheDisabled).build());
+                Errors.cache("Remote cache not configured", Cache.Disabled).build());
         
         immutable startTime = Clock.currStdTime();
         
@@ -102,7 +102,7 @@ final class RemoteCacheClient
                 auto error = result.unwrapErr();
                 if (auto cacheErr = cast(CacheError)error)
                 {
-                    if (cacheErr.code != ErrorCode.CacheNotFound)
+                    if (cacheErr.code != Cache.NotFound)
                         stats.errors++;
                 }
                 else
@@ -127,7 +127,7 @@ final class RemoteCacheClient
         auto parseResult = CDCManifest.deserialize(manifestData);
         if (parseResult.isErr)
             return Err!(ubyte[], BuildError)(
-                Errors.cache("Invalid CDC manifest: " ~ parseResult.unwrapErr(), ErrorCode.CacheCorrupted).build());
+                Errors.cache("Invalid CDC manifest: " ~ parseResult.unwrapErr(), Cache.Corrupted).build());
         
         auto manifest = parseResult.unwrap();
         
@@ -147,7 +147,7 @@ final class RemoteCacheClient
             auto chunkData = chunkResult.unwrap();
             if (chunkData.length != r.length)
                 return Err!(ubyte[], BuildError)(
-                    Errors.cache("Chunk size mismatch", ErrorCode.CacheCorrupted).build());
+                    Errors.cache("Chunk size mismatch", Cache.Corrupted).build());
             
             // Copy to output buffer
             output[r.offset .. r.offset + r.length] = chunkData[];
@@ -158,7 +158,7 @@ final class RemoteCacheClient
         immutable actualHash = FastHash.hashBytes(output);
         if (actualHash != contentHash)
             return Err!(ubyte[], BuildError)(
-                Errors.cache("Reassembled artifact hash mismatch", ErrorCode.CacheCorrupted).build());
+                Errors.cache("Reassembled artifact hash mismatch", Cache.Corrupted).build());
         
         synchronized (statsMutex)
         {
@@ -178,12 +178,12 @@ final class RemoteCacheClient
     {
         if (!config.enabled())
             return Err!(bool, BuildError)(
-                Errors.cache("Remote cache not configured", ErrorCode.CacheDisabled).build());
+                Errors.cache("Remote cache not configured", Cache.Disabled).build());
         
         // Check size limit
         if (data.length > config.maxArtifactSize)
             return Err!(bool, BuildError)(
-                Errors.cache("Artifact exceeds maximum size", ErrorCode.CacheTooLarge).build());
+                Errors.cache("Artifact exceeds maximum size", Cache.TooLarge).build());
         
         immutable startTime = Clock.currStdTime();
         
@@ -236,7 +236,7 @@ final class RemoteCacheClient
     {
         if (!config.enabled())
             return Err!(bool, BuildError)(
-                Errors.cache("Remote cache not configured", ErrorCode.CacheDisabled).build());
+                Errors.cache("Remote cache not configured", Cache.Disabled).build());
         
         immutable startTime = Clock.currStdTime();
         
@@ -351,8 +351,8 @@ final class RemoteCacheClient
             // Some cache errors are retryable
             if (auto cacheErr = cast(CacheError)error)
             {
-                return cacheErr.code == ErrorCode.NetworkError ||
-                       cacheErr.code == ErrorCode.CacheTimeout;
+                return cacheErr.code == Network.Error ||
+                       cacheErr.code == Cache.Timeout;
             }
             
             return false;
@@ -398,7 +398,7 @@ final class RemoteCacheClient
         // Check if file exists
         if (!exists(filePath))
             return Err!(ChunkBasedUpload, BuildError)(
-                Errors.io(filePath, "File not found: " ~ filePath, ErrorCode.FileNotFound).build());
+                Errors.io(filePath, "File not found: " ~ filePath, IO.FileNotFound).build());
         
         // Check file size threshold (only use chunking for files > 1MB)
         auto fileSize = getSize(filePath);
@@ -435,7 +435,7 @@ final class RemoteCacheClient
         
         if (uploadResult.isErr)
             return Err!(ChunkBasedUpload, BuildError)(
-                Errors.cache("Chunk upload failed: " ~ uploadResult.unwrapErr(), ErrorCode.CacheLoadFailed).build());
+                Errors.cache("Chunk upload failed: " ~ uploadResult.unwrapErr(), Cache.LoadFailed).build());
         
         auto manifest = uploadResult.unwrap();
         
@@ -443,7 +443,7 @@ final class RemoteCacheClient
         auto manifestResult = putManifest(fileHash, manifest);
         if (manifestResult.isErr)
             return Err!(ChunkBasedUpload, BuildError)(
-                Errors.cache("Failed to upload manifest: " ~ manifestResult.unwrapErr().message, ErrorCode.CacheLoadFailed).build());
+                Errors.cache("Failed to upload manifest: " ~ manifestResult.unwrapErr().message, Cache.LoadFailed).build());
         
         synchronized (statsMutex)
         {
@@ -507,7 +507,7 @@ final class RemoteCacheClient
         
         if (downloadResult.isErr)
             return Err!(TransferStats, BuildError)(
-                Errors.cache("Chunk download failed: " ~ downloadResult.unwrapErr(), ErrorCode.CacheLoadFailed).build());
+                Errors.cache("Chunk download failed: " ~ downloadResult.unwrapErr(), Cache.LoadFailed).build());
         
         synchronized (statsMutex)
         {
@@ -545,7 +545,7 @@ final class RemoteCacheClient
         auto chunkResult = ContentChunker.chunkFile(filePath);
         if (chunkResult.chunks.length == 0)
             return Err!(TransferStats, BuildError)(
-                Errors.cache("Failed to chunk file: " ~ filePath, ErrorCode.CacheLoadFailed).build());
+                Errors.cache("Failed to chunk file: " ~ filePath, Cache.LoadFailed).build());
         
         // Build new manifest
         ChunkManifest newManifest;
@@ -569,13 +569,13 @@ final class RemoteCacheClient
         
         if (uploadResult.isErr)
             return Err!(TransferStats, BuildError)(
-                Errors.cache("Incremental chunk upload failed: " ~ uploadResult.unwrapErr(), ErrorCode.CacheLoadFailed).build());
+                Errors.cache("Incremental chunk upload failed: " ~ uploadResult.unwrapErr(), Cache.LoadFailed).build());
         
         // Store new manifest
         auto manifestResult = putManifest(fileHash, newManifest);
         if (manifestResult.isErr)
             return Err!(TransferStats, BuildError)(
-                Errors.cache("Failed to upload manifest: " ~ manifestResult.unwrapErr().message, ErrorCode.CacheLoadFailed).build());
+                Errors.cache("Failed to upload manifest: " ~ manifestResult.unwrapErr().message, Cache.LoadFailed).build());
         
         synchronized (statsMutex)
         {
@@ -654,7 +654,7 @@ final class RemoteCacheClient
         catch (JSONException e)
         {
             return Err!(ChunkManifest, BuildError)(
-                Errors.cache("Failed to parse manifest: " ~ e.msg, ErrorCode.CacheCorrupted).build());
+                Errors.cache("Failed to parse manifest: " ~ e.msg, Cache.Corrupted).build());
         }
     }
 }
@@ -701,7 +701,7 @@ mixin template DeltaTransferOps()
     {
         if (_deltaCompressor is null)
             return Err!(DeltaUploadResult, BuildError)(
-                Errors.cache("Delta compressor not initialized", ErrorCode.CacheDisabled).build());
+                Errors.cache("Delta compressor not initialized", Cache.Disabled).build());
         
         // Get base data for delta computation
         auto baseResult = get(baseHash);

@@ -341,7 +341,7 @@ final class ReapiAdapter
         auto poolResult = GrpcConnectionPool.instance.getConnection(remoteUrl);
         if (poolResult.isErr)
             return Err!(GrpcConnection, BuildError)(
-                Errors.generic("gRPC connection failed: " ~ poolResult.unwrapErr(), ErrorCode.NetworkError));
+                Errors.generic("gRPC connection failed: " ~ poolResult.unwrapErr(), Network.Error));
         
         grpcConn = poolResult.unwrap();
         return Ok!(GrpcConnection, BuildError)(grpcConn);
@@ -366,19 +366,19 @@ final class ReapiAdapter
         auto streamResult = conn.serverStreamingCall(ReapiServices.execute().path, requestData, timeout);
         if (streamResult.isErr)
             return Err!(ExecuteResponse, BuildError)(
-                Errors.generic("Execute gRPC call failed: " ~ streamResult.unwrapErr(), ErrorCode.NetworkError));
+                Errors.generic("Execute gRPC call failed: " ~ streamResult.unwrapErr(), Network.Error));
         
         // Get final response from stream
         auto responses = streamResult.unwrap();
         if (responses.length == 0)
             return Err!(ExecuteResponse, BuildError)(
-                Errors.generic("No response from Execute stream", ErrorCode.NetworkError));
+                Errors.generic("No response from Execute stream", Network.Error));
         
         // Deserialize final response
         auto parseResult = ReapiCodec.deserializeExecuteResponse(responses[$ - 1]);
         if (parseResult.isErr)
             return Err!(ExecuteResponse, BuildError)(
-                Errors.generic("Failed to parse execute response: " ~ parseResult.unwrapErr(), ErrorCode.NetworkError));
+                Errors.generic("Failed to parse execute response: " ~ parseResult.unwrapErr(), Network.Error));
         
         return Ok!(ExecuteResponse, BuildError)(parseResult.unwrap());
     }
@@ -406,18 +406,18 @@ final class ReapiAdapter
         
         if (streamResult.isErr)
             return Err!(ExecuteResponse, BuildError)(
-                Errors.generic("WaitExecution gRPC call failed: " ~ streamResult.unwrapErr(), ErrorCode.NetworkError));
+                Errors.generic("WaitExecution gRPC call failed: " ~ streamResult.unwrapErr(), Network.Error));
         
         auto responses = streamResult.unwrap();
         if (responses.length == 0)
             return Err!(ExecuteResponse, BuildError)(
-                Errors.generic("No response from WaitExecution stream", ErrorCode.NetworkError));
+                Errors.generic("No response from WaitExecution stream", Network.Error));
         
         // Parse final Operation response
         auto parseResult = ReapiCodec.deserializeExecuteResponse(responses[$ - 1]);
         if (parseResult.isErr)
             return Err!(ExecuteResponse, BuildError)(
-                Errors.generic("Failed to parse operation status: " ~ parseResult.unwrapErr(), ErrorCode.NetworkError));
+                Errors.generic("Failed to parse operation status: " ~ parseResult.unwrapErr(), Network.Error));
         
         return Ok!(ExecuteResponse, BuildError)(parseResult.unwrap());
     }
@@ -447,14 +447,14 @@ final class ReapiAdapter
                 return Ok!(ActionResult, BuildError)(emptyResult);
             }
             return Err!(ActionResult, BuildError)(
-                Errors.generic("GetActionResult gRPC call failed: " ~ grpcResult.unwrapErr(), ErrorCode.NetworkError));
+                Errors.generic("GetActionResult gRPC call failed: " ~ grpcResult.unwrapErr(), Network.Error));
         }
         
         // Deserialize action result
         auto parseResult = deserializeActionResult(grpcResult.unwrap());
         if (parseResult.isErr)
             return Err!(ActionResult, BuildError)(
-                Errors.generic("Failed to parse action result: " ~ parseResult.unwrapErr(), ErrorCode.NetworkError));
+                Errors.generic("Failed to parse action result: " ~ parseResult.unwrapErr(), Network.Error));
         
         return Ok!(ActionResult, BuildError)(parseResult.unwrap());
     }
@@ -478,7 +478,7 @@ final class ReapiAdapter
         auto grpcResult = conn.unaryCall(ReapiServices.updateActionResult().path, requestData, timeout);
         if (grpcResult.isErr)
             return VoidBuildResult.err(
-                Errors.generic("UpdateActionResult gRPC call failed: " ~ grpcResult.unwrapErr(), ErrorCode.NetworkError));
+                Errors.generic("UpdateActionResult gRPC call failed: " ~ grpcResult.unwrapErr(), Network.Error));
         
         return Ok!BuildError();
     }

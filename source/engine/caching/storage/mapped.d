@@ -124,7 +124,7 @@ final class MappedBlobStore
         catch (Exception e)
         {
             return Err!(string, BuildError)(
-                createCacheError("Failed to store blob: " ~ e.msg, ErrorCode.CacheWriteFailed, blobPath)
+                createCacheError("Failed to store blob: " ~ e.msg, Cache.WriteFailed, blobPath)
             );
         }
     }
@@ -143,7 +143,7 @@ final class MappedBlobStore
             {
                 if (!exists(blobPath))
                     return Err!(const(ubyte)[], BuildError)(
-                        createCacheError("Blob not found: " ~ hash, ErrorCode.CacheNotFound, blobPath)
+                        createCacheError("Blob not found: " ~ hash, Cache.NotFound, blobPath)
                     );
                 
                 immutable size = getSize(blobPath);
@@ -177,7 +177,7 @@ final class MappedBlobStore
         catch (Exception e)
         {
             return Err!(const(ubyte)[], BuildError)(Errors.cache(
-                "Failed to read blob: " ~ e.msg, ErrorCode.CacheLoadFailed).build());
+                "Failed to read blob: " ~ e.msg, Cache.LoadFailed).build());
         }
     }
     
@@ -197,7 +197,7 @@ final class MappedBlobStore
             {
                 if (!exists(blobPath))
                     return Err!(MappedBlob, BuildError)(
-                        createCacheError("Blob not found: " ~ hash, ErrorCode.CacheNotFound, blobPath)
+                        createCacheError("Blob not found: " ~ hash, Cache.NotFound, blobPath)
                     );
                 
                 immutable size = getSize(blobPath);
@@ -205,14 +205,14 @@ final class MappedBlobStore
                 // Only map large blobs
                 if (size < MMAP_THRESHOLD)
                     return Err!(MappedBlob, BuildError)(
-                        createCacheError("Blob too small for mapping: " ~ hash, ErrorCode.CacheNotFound, blobPath)
+                        createCacheError("Blob too small for mapping: " ~ hash, Cache.NotFound, blobPath)
                     );
                 
                 string mapError;
                 auto region = MmapRegion.map(blobPath, MapMode.ReadOnly, 0, 0, &mapError);
                 if (region is null)
                     return Err!(MappedBlob, BuildError)(
-                        createCacheError("Failed to map blob: " ~ mapError, ErrorCode.CacheLoadFailed, blobPath)
+                        createCacheError("Failed to map blob: " ~ mapError, Cache.LoadFailed, blobPath)
                     );
                 
                 auto blob = new MappedBlob();
@@ -232,7 +232,7 @@ final class MappedBlobStore
         catch (Exception e)
         {
             return Err!(MappedBlob, BuildError)(Errors.cache(
-                "Failed to map blob: " ~ e.msg, ErrorCode.CacheLoadFailed).build());
+                "Failed to map blob: " ~ e.msg, Cache.LoadFailed).build());
         }
     }
     
@@ -255,14 +255,14 @@ final class MappedBlobStore
                 immutable path = getBlobPath(hash);
                 if (!exists(path))
                     return Err!(size_t, BuildError)(
-                        createCacheError("Blob not found", ErrorCode.CacheNotFound, path)
+                        createCacheError("Blob not found", Cache.NotFound, path)
                     );
                 return Ok!(size_t, BuildError)(getSize(path));
             }
         }
         catch (Exception e)
         {
-            return Err!(size_t, BuildError)(Errors.cache(e.msg, ErrorCode.CacheLoadFailed).build());
+            return Err!(size_t, BuildError)(Errors.cache(e.msg, Cache.LoadFailed).build());
         }
     }
     
@@ -300,7 +300,7 @@ final class MappedBlobStore
             {
                 if (refCounts.get(hash, 0) > 0)
                     return VoidBuildResult.err(Errors.cache(
-                        "Cannot delete blob with active references", ErrorCode.CacheInUse).build());
+                        "Cannot delete blob with active references", Cache.InUse).build());
                 
                 immutable blobPath = getBlobPath(hash);
                 if (exists(blobPath))
@@ -314,7 +314,7 @@ final class MappedBlobStore
         catch (Exception e)
         {
             return VoidBuildResult.err(Errors.cache(
-                "Failed to delete blob: " ~ e.msg, ErrorCode.CacheDeleteFailed).build());
+                "Failed to delete blob: " ~ e.msg, Cache.DeleteFailed).build());
         }
     }
     
@@ -434,7 +434,7 @@ final class MappedBlobStream
     {
         if (!exists(path))
             return Err!(MappedBlobStream, BuildError)(
-                Errors.cache("File not found: " ~ path, ErrorCode.CacheNotFound).build()
+                Errors.cache("File not found: " ~ path, Cache.NotFound).build()
             );
         
         auto stream = new MappedBlobStream();

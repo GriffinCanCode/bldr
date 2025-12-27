@@ -303,7 +303,7 @@ final class RemoteExecutionService : IRemoteExecutionService
             if (coordResult.isErr)
             {
                 return VoidBuildResult.err(
-                    Errors.generic("Failed to start coordinator: " ~ coordResult.unwrapErr().message(), ErrorCode.InitializationFailed)
+                    Errors.generic("Failed to start coordinator: " ~ coordResult.unwrapErr().message(), Internal.InitializationFailed)
                         .withLocation(__FILE__, __LINE__)
                         .build()
                 );
@@ -377,7 +377,7 @@ final class RemoteExecutionService : IRemoteExecutionService
         if (!atomicLoad(running))
         {
             return Err!(RemoteExecutionResult, BuildError)(
-                Errors.generic("Service not running", ErrorCode.NotInitialized)
+                Errors.generic("Service not running", Internal.NotInitialized)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -395,7 +395,7 @@ final class RemoteExecutionService : IRemoteExecutionService
         if (!config.enableReapi || reapiAdapter is null)
         {
             return Err!(ExecuteResponse, BuildError)(
-                Errors.generic("REAPI not enabled", ErrorCode.NotSupported)
+                Errors.generic("REAPI not enabled", Internal.NotSupported)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );

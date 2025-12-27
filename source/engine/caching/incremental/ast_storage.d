@@ -44,7 +44,7 @@ final class ASTStorage
             if (magic != MAGIC)
             {
                 return BuildResult!(FileAST[]).err(
-                    Errors.generic("Invalid AST cache format", ErrorCode.CacheCorrupted)
+                    Errors.generic("Invalid AST cache format", Cache.Corrupted)
                         .withLocation(__FILE__, __LINE__)
                         .build()
                 );
@@ -55,7 +55,7 @@ final class ASTStorage
             if (ver != VERSION)
             {
                 return BuildResult!(FileAST[]).err(
-                    Errors.generic("Unsupported AST cache version: " ~ ver.to!string, ErrorCode.CacheCorrupted)
+                    Errors.generic("Unsupported AST cache version: " ~ ver.to!string, Cache.Corrupted)
                         .withLocation(__FILE__, __LINE__)
                         .build()
                 );
@@ -127,7 +127,7 @@ final class ASTStorage
         catch (Exception e)
         {
             return BuildResult!(FileAST[]).err(
-                Errors.generic("Failed to load AST cache: " ~ e.msg, ErrorCode.CacheLoadFailed)
+                Errors.generic("Failed to load AST cache: " ~ e.msg, Cache.LoadFailed)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -204,7 +204,7 @@ final class ASTStorage
         catch (Exception e)
         {
             return Err!(bool, BuildError)(
-                Errors.generic("Failed to save AST cache: " ~ e.msg, ErrorCode.CacheSaveFailed)
+                Errors.generic("Failed to save AST cache: " ~ e.msg, Cache.SaveFailed)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );

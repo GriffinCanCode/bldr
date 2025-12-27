@@ -45,7 +45,7 @@ final class DarwinSyscallTracer : ISyscallTracer
     {
         if (!isDarwinTracingAvailable())
             return Err!(DarwinSyscallTracer, BuildError)(
-                Errors.system("sandbox-exec not available", ErrorCode.NotSupported).build());
+                Errors.system("sandbox-exec not available", Internal.NotSupported).build());
         
         // Create temp directories for profile and logs
         immutable baseDir = buildPath(tempDir(), "builder-trace");
@@ -57,7 +57,7 @@ final class DarwinSyscallTracer : ISyscallTracer
         catch (Exception e)
         {
             return Err!(DarwinSyscallTracer, BuildError)(
-                Errors.system("Cannot create trace dir: " ~ e.msg, ErrorCode.FileWriteFailed).build());
+                Errors.system("Cannot create trace dir: " ~ e.msg, IO.FileWriteFailed).build());
         }
         
         immutable sessionId = randomUUID().toString();
@@ -75,7 +75,7 @@ final class DarwinSyscallTracer : ISyscallTracer
         catch (Exception e)
         {
             return Err!(DarwinSyscallTracer, BuildError)(
-                Errors.system("Cannot write profile: " ~ e.msg, ErrorCode.FileWriteFailed).build());
+                Errors.system("Cannot write profile: " ~ e.msg, IO.FileWriteFailed).build());
         }
         
         return Ok!(DarwinSyscallTracer, BuildError)(
@@ -87,11 +87,11 @@ final class DarwinSyscallTracer : ISyscallTracer
     {
         if (!initialized)
             return Err!(TraceResult, BuildError)(
-                Errors.system("Tracer not initialized", ErrorCode.NotInitialized).build());
+                Errors.system("Tracer not initialized", Internal.NotInitialized).build());
         
         if (command.length == 0)
             return Err!(TraceResult, BuildError)(
-                Errors.system("Empty command", ErrorCode.InvalidInput).build());
+                Errors.system("Empty command", Config.InvalidInput).build());
         
         immutable startTime = MonoTime.currTime;
         

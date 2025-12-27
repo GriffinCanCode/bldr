@@ -134,7 +134,7 @@ final class FSEventsWatcher : IFileWatcher
         if (!exists(path) || !isDir(path))
         {
             return WatchResult.err(
-                Errors.io(path, "Directory not found", ErrorCode.FileNotFound)
+                Errors.io(path, "Directory not found", IO.FileNotFound)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -244,7 +244,7 @@ final class INotifyWatcher : IFileWatcher
         if (!exists(path) || !isDir(path))
         {
             return WatchResult.err(
-                Errors.io(path, "Directory not found", ErrorCode.FileNotFound)
+                Errors.io(path, "Directory not found", IO.FileNotFound)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -377,7 +377,7 @@ final class KQueueWatcher : IFileWatcher
         if (!exists(path) || !isDir(path))
         {
             return WatchResult.err(
-                Errors.io(path, "Directory not found", ErrorCode.FileNotFound)
+                Errors.io(path, "Directory not found", IO.FileNotFound)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -402,7 +402,7 @@ final class KQueueWatcher : IFileWatcher
         else
         {
             return WatchResult.err(
-                Errors.generic("kqueue not supported on this platform", ErrorCode.NotSupported)
+                Errors.generic("kqueue not supported on this platform", Internal.NotSupported)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -472,7 +472,7 @@ final class PollingWatcher : IFileWatcher
         if (!exists(path) || !isDir(path))
         {
             return WatchResult.err(
-                Errors.io(path, "Directory not found", ErrorCode.FileNotFound)
+                Errors.io(path, "Directory not found", IO.FileNotFound)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );

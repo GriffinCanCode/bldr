@@ -51,7 +51,7 @@ struct IntegrityVerifier
             {
                 auto error = new RepositoryError(
                     "Integrity check failed for " ~ filePath,
-                    ErrorCode.VerificationFailed
+                    Repository.ContentVerificationFailed
                 );
                 error.addSuggestion("Expected: " ~ expectedHex);
                 error.addSuggestion("Got:      " ~ actualHex);

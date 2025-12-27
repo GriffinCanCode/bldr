@@ -92,7 +92,7 @@ final class GoLockfileGenerator : ILockfileGenerator
         catch (Exception e)
         {
             return Err!(Lockfile, BuildError)(
-                Errors.parse(lockfilePath, "Failed to parse: " ~ e.msg, ErrorCode.InvalidConfiguration).build());
+                Errors.parse(lockfilePath, "Failed to parse: " ~ e.msg, Parse.InvalidConfiguration).build());
         }
     }
     

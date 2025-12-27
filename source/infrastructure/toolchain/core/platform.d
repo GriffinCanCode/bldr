@@ -75,14 +75,14 @@ struct Platform
         
         if (triple.empty)
             return Err!(Platform, BuildError)(
-                Errors.system("Empty platform triple", ErrorCode.InvalidInput)
+                Errors.system("Empty platform triple", Config.InvalidInput)
                     .withLocation(__FILE__, __LINE__)
                     .build());
         
         auto parts = triple.split("-");
         if (parts.length < 2)
             return Err!(Platform, BuildError)(
-                Errors.system("Invalid platform triple format: " ~ triple, ErrorCode.InvalidInput)
+                Errors.system("Invalid platform triple format: " ~ triple, Config.InvalidInput)
                     .withLocation(__FILE__, __LINE__)
                     .build());
         

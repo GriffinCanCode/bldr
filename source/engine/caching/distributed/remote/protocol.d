@@ -35,7 +35,7 @@ struct ArtifactMetadata
     {
         if (data.length < 8)
             return Err!(ArtifactMetadata, BuildError)(
-                Errors.cache("Invalid artifact metadata: insufficient data", ErrorCode.CacheCorrupted).build());
+                Errors.cache("Invalid artifact metadata: insufficient data", Cache.Corrupted).build());
         
         try
         {
@@ -43,7 +43,7 @@ struct ArtifactMetadata
             
             if (result.isErr)
                 return Err!(ArtifactMetadata, BuildError)(
-                    Errors.cache("Failed to deserialize artifact metadata: " ~ result.unwrapErr(), ErrorCode.CacheCorrupted).build());
+                    Errors.cache("Failed to deserialize artifact metadata: " ~ result.unwrapErr(), Cache.Corrupted).build());
             
             auto serializable = result.unwrap();
             auto meta = fromSerializable!ArtifactMetadata(serializable);
@@ -53,7 +53,7 @@ struct ArtifactMetadata
         catch (Exception e)
         {
             return Err!(ArtifactMetadata, BuildError)(
-                Errors.cache("Exception during deserialization: " ~ e.msg, ErrorCode.CacheCorrupted).build());
+                Errors.cache("Exception during deserialization: " ~ e.msg, Cache.Corrupted).build());
         }
     }
 }

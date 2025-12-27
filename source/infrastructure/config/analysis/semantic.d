@@ -369,7 +369,7 @@ struct SemanticAnalyzer
     
     private BuildResult!T error(T)(string message, Location loc) @system
     {
-        auto err = Errors.parse(loc.file, message, ErrorCode.InvalidFieldValue)
+        auto err = Errors.parse(loc.file, message, Parse.InvalidFieldValue)
             .withLocation(loc.file, loc.line)
             .build();
         return Err!(T, BuildError)(err);

@@ -58,7 +58,7 @@ struct Version
         
         if (str.empty)
             return Err!(Version, BuildError)(
-                Errors.system("Empty version string", ErrorCode.InvalidInput)
+                Errors.system("Empty version string", Config.InvalidInput)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -79,7 +79,7 @@ struct Version
         {
             try { ver.major = parts[0].strip().to!uint; }
             catch (Exception) { return Err!(Version, BuildError)(
-                Errors.system("Invalid version format", ErrorCode.InvalidInput)
+                Errors.system("Invalid version format", Config.InvalidInput)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             ); }
@@ -88,7 +88,7 @@ struct Version
         {
             try { ver.minor = parts[1].strip().to!uint; }
             catch (Exception) { return Err!(Version, BuildError)(
-                Errors.system("Invalid version format", ErrorCode.InvalidInput)
+                Errors.system("Invalid version format", Config.InvalidInput)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             ); }
@@ -97,7 +97,7 @@ struct Version
         {
             try { ver.patch = parts[2].strip().to!uint; }
             catch (Exception) { return Err!(Version, BuildError)(
-                Errors.system("Invalid version format", ErrorCode.InvalidInput)
+                Errors.system("Invalid version format", Config.InvalidInput)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             ); }
@@ -262,7 +262,7 @@ struct ToolchainRef
         
         if (str.empty)
             return Err!(ToolchainRef, BuildError)(
-                Errors.system("Empty toolchain reference", ErrorCode.InvalidInput)
+                Errors.system("Empty toolchain reference", Config.InvalidInput)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );

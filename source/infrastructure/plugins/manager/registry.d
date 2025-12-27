@@ -92,7 +92,7 @@ class PluginRegistry : IPluginRegistry {
         }
         
         return Err!(PluginInfo, BuildError)(
-            Errors.plugin("Plugin not found: " ~ name, ErrorCode.ToolNotFound)
+            Errors.plugin("Plugin not found: " ~ name, Plugin.ToolNotFound)
                 .withSuggestion("Install the plugin: brew install builder-plugin-" ~ name)
                 .withSuggestion("List available plugins: bldr plugin list")
                 .withSuggestion("Refresh plugin registry: bldr plugin refresh")
@@ -148,7 +148,7 @@ class NullPluginRegistry : IPluginRegistry {
     
     BuildResult!PluginInfo get(string name) @system {
         return Err!(PluginInfo, BuildError)(
-            Errors.plugin("Plugin not found: " ~ name, ErrorCode.ToolNotFound)
+            Errors.plugin("Plugin not found: " ~ name, Plugin.ToolNotFound)
                 .withLocation(__FILE__, __LINE__)
                 .build()
         );

@@ -111,7 +111,7 @@ struct DeterminismEnforcer
     {
         if (!initialized)
             return Err!(DeterminismResult, BuildError)(
-                Errors.system("Enforcer not initialized", ErrorCode.NotInitialized)
+                Errors.system("Enforcer not initialized", Internal.NotInitialized)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -148,7 +148,7 @@ struct DeterminismEnforcer
             return Err!(DeterminismResult, BuildError)(
                 Errors.system("Build violated determinism: " ~ 
                     result.violations.length.to!string ~ " violations detected",
-                    ErrorCode.BuildFailed)
+                    Build.Failed)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );

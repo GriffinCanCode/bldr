@@ -67,7 +67,7 @@ final class ConfigIndex
         auto rc = sqlite3_open(dbPath.toStringz, &db);
         if (rc != SQLITE_OK)
             throw Errors.cache("Failed to open config index: " ~ fromStringz(sqlite3_errmsg(db)).idup,
-                              ErrorCode.CacheLoadFailed).build();
+                              Cache.LoadFailed).build();
         
         // Optimize for sub-millisecond lookups
         execSQL("PRAGMA journal_mode=WAL");        // Concurrent reads + crash recovery
@@ -134,7 +134,7 @@ final class ConfigIndex
             
             if (sqlite3_step(stmtConfigGet) != SQLITE_ROW)
                 return Err!(ConfigEntry, BuildError)(
-                    Errors.cache("Config not found: " ~ workspacePath, ErrorCode.CacheLoadFailed).build());
+                    Errors.cache("Config not found: " ~ workspacePath, Cache.LoadFailed).build());
             
             ConfigEntry entry;
             entry.workspacePath = fromStringz(sqlite3_column_text(stmtConfigGet, 0)).idup;
@@ -172,7 +172,7 @@ final class ConfigIndex
             
             if (sqlite3_step(stmtConfigPut) != SQLITE_DONE)
                 throw Errors.cache("Failed to insert config: " ~ fromStringz(sqlite3_errmsg(db)).idup,
-                                  ErrorCode.CacheWriteFailed).build();
+                                  Cache.WriteFailed).build();
             
             commitJournal();
         }
@@ -209,7 +209,7 @@ final class ConfigIndex
             
             if (sqlite3_step(stmtTargetGet) != SQLITE_ROW)
                 return Err!(TargetEntry, BuildError)(
-                    Errors.cache("Target not found: " ~ targetId, ErrorCode.CacheLoadFailed).build());
+                    Errors.cache("Target not found: " ~ targetId, Cache.LoadFailed).build());
             
             TargetEntry entry;
             entry.targetId = fromStringz(sqlite3_column_text(stmtTargetGet, 0)).idup;
@@ -246,7 +246,7 @@ final class ConfigIndex
             
             if (sqlite3_step(stmtTargetPut) != SQLITE_DONE)
                 throw Errors.cache("Failed to insert target: " ~ fromStringz(sqlite3_errmsg(db)).idup,
-                                  ErrorCode.CacheWriteFailed).build();
+                                  Cache.WriteFailed).build();
             
             commitJournal();
         }

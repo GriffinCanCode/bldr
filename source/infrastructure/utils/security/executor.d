@@ -9,7 +9,8 @@ import std.range : empty;
 import infrastructure.utils.security.validation;
 import infrastructure.utils.logging;
 import engine.runtime.hermetic;
-import infrastructure.errors;
+import infrastructure.errors : ErrorCode, Errors, BuildError, BuildResult, Err, Ok, 
+    VoidBuildResult, IOError, SystemError, InternalError;
 
 
 /// Known safe build tool patterns that contain path separators but aren't actual paths
@@ -490,17 +491,17 @@ private ErrorCode toErrorCode(SecurityCode code) pure nothrow @safe @nogc
     final switch (code)
     {
         case SecurityCode.Unknown:
-            return ErrorCode.InternalError;
+            return Internal.Error;
         case SecurityCode.InvalidCommand:
-            return ErrorCode.InvalidInput;
+            return Config.InvalidInput;
         case SecurityCode.InjectionAttempt:
-            return ErrorCode.ValidationFailed;
+            return Language.ValidationFailed;
         case SecurityCode.PathTraversal:
-            return ErrorCode.PermissionDenied;
+            return IO.PermissionDenied;
         case SecurityCode.ExecutionFailure:
-            return ErrorCode.ProcessSpawnFailed;
+            return System.ProcessSpawnFailed;
         case SecurityCode.AccessDenied:
-            return ErrorCode.PermissionDenied;
+            return IO.PermissionDenied;
     }
 }
 
@@ -644,7 +645,7 @@ auto execute(
     // Test injection prevention
     auto badResult = exec.run(["echo", "hello; rm -rf /"]);
     assert(badResult.isErr);
-    assert(badResult.unwrapErr().code == ErrorCode.ValidationFailed);
+    assert(badResult.unwrapErr().code == Language.ValidationFailed);
     
     // Test builder pattern
     auto configured = SecureExecutor.create()

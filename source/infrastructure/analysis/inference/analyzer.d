@@ -57,7 +57,7 @@ class DependencyAnalyzer
     {
         if (incrementalAnalyzer is null)
         {
-            auto error = Errors.config("Incremental analyzer not injected - must be provided via constructor", ErrorCode.InvalidConfiguration)
+            auto error = Errors.config("Incremental analyzer not injected - must be provided via constructor", Parse.InvalidConfiguration)
                 .withLocation(__FILE__, __LINE__)
                 .build();
             return VoidBuildResult.err(error);
@@ -398,7 +398,7 @@ class DependencyAnalyzer
                     // Use builder pattern with typed suggestions
                     import infrastructure.errors.types.context : ErrorSuggestion;
                     
-                    auto error = ErrorBuilder!AnalysisError.create(target.name, "Failed to analyze dependencies: " ~ e.msg, ErrorCode.AnalysisFailed)
+                    auto error = ErrorBuilder!AnalysisError.create(target.name, "Failed to analyze dependencies: " ~ e.msg, Analysis.Failed)
                         .withContext("analyzing file", source)
                         .withFileCheck("Check if the source file has valid syntax")
                         .withFileCheck("Ensure the file encoding is correct (UTF-8)")

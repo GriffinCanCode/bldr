@@ -166,7 +166,7 @@ abstract class BaseLanguageHandler : LanguageHandler
                 auto error = new BuildFailureError(
                     context.target.name,
                     "Build command failed: " ~ result.error,
-                    ErrorCode.BuildFailed
+                    Build.Failed
                 );
                 error.addContext(ErrorContext(
                     "building target",
@@ -190,7 +190,7 @@ abstract class BaseLanguageHandler : LanguageHandler
             auto error = new BuildFailureError(
                 context.target.name,
                 "Build failed with exception: " ~ e.msg,
-                ErrorCode.BuildFailed
+                Build.Failed
             );
             error.addContext(ErrorContext(
                 "caught exception during build",

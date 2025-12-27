@@ -55,7 +55,7 @@ final class TreeSitterRegistry {
         auto entry = languageId in grammars;
         if (!entry)
             return BuildResult!TreeSitterParser.err(
-                Errors.generic("No grammar registered for: " ~ languageId, ErrorCode.UnsupportedLanguage)
+                Errors.generic("No grammar registered for: " ~ languageId, Language.UnsupportedLanguage)
                     .withLocation(__FILE__, __LINE__)
                     .build());
         
@@ -68,7 +68,7 @@ final class TreeSitterRegistry {
         
         if (!entry.grammar)
             return BuildResult!TreeSitterParser.err(
-                Errors.generic("Failed to load grammar for: " ~ languageId, ErrorCode.InternalError)
+                Errors.generic("Failed to load grammar for: " ~ languageId, Internal.Error)
                     .withLocation(__FILE__, __LINE__)
                     .build());
         

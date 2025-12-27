@@ -380,12 +380,12 @@ struct FlameError
     
     static FlameError generationFailed(string details) pure @system
     {
-        return FlameError("Flamegraph generation failed: " ~ details, ErrorCode.InternalError);
+        return FlameError("Flamegraph generation failed: " ~ details, Internal.Error);
     }
     
     static FlameError invalidData(string details) pure @system
     {
-        return FlameError("Invalid data: " ~ details, ErrorCode.TelemetryInvalid);
+        return FlameError("Invalid data: " ~ details, Telemetry.Invalid);
     }
     
     string toString() const pure nothrow @system

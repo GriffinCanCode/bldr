@@ -57,7 +57,7 @@ final class TreeSitterParser : BaseASTParser {
     override BuildResult!FileAST parseFile(string filePath) @system {
         if (!exists(filePath) || !isFile(filePath))
             return BuildResult!FileAST.err(
-                Errors.generic("File not found: " ~ filePath, ErrorCode.FileNotFound)
+                Errors.generic("File not found: " ~ filePath, IO.FileNotFound)
                     .withLocation(__FILE__, __LINE__)
                     .build());
         
@@ -66,7 +66,7 @@ final class TreeSitterParser : BaseASTParser {
             return parseContent(content, filePath);
         } catch (Exception e) {
             return BuildResult!FileAST.err(
-                Errors.generic("Failed to read file: " ~ filePath ~ " - " ~ e.msg, ErrorCode.FileReadFailed)
+                Errors.generic("Failed to read file: " ~ filePath ~ " - " ~ e.msg, IO.FileReadFailed)
                     .withLocation(__FILE__, __LINE__)
                     .build());
         }
@@ -102,7 +102,7 @@ final class TreeSitterParser : BaseASTParser {
                 auto parser = Parser(grammar);
                 if (!parser.handle())
                     return BuildResult!FileAST.err(
-                        Errors.generic("Failed to create parser", ErrorCode.InternalError)
+                        Errors.generic("Failed to create parser", Internal.Error)
                             .withLocation(__FILE__, __LINE__)
                             .build());
                 
@@ -111,7 +111,7 @@ final class TreeSitterParser : BaseASTParser {
                 
                 if (!treeWrapper.handle())
                     return BuildResult!FileAST.err(
-                        Errors.generic("Failed to parse: " ~ filePath, ErrorCode.ParseFailed)
+                        Errors.generic("Failed to parse: " ~ filePath, Parse.Failed)
                             .withLocation(__FILE__, __LINE__)
                             .build());
                 
@@ -121,7 +121,7 @@ final class TreeSitterParser : BaseASTParser {
             
             if (ts_node_is_null(root))
                 return BuildResult!FileAST.err(
-                    Errors.generic("Invalid parse tree for: " ~ filePath, ErrorCode.ParseFailed)
+                    Errors.generic("Invalid parse tree for: " ~ filePath, Parse.Failed)
                         .withLocation(__FILE__, __LINE__)
                         .build());
             
@@ -144,7 +144,7 @@ final class TreeSitterParser : BaseASTParser {
             return BuildResult!FileAST.ok(ast);
         } catch (Exception e) {
             return BuildResult!FileAST.err(
-                Errors.generic("Parse error: " ~ filePath ~ " - " ~ e.msg, ErrorCode.ParseFailed)
+                Errors.generic("Parse error: " ~ filePath ~ " - " ~ e.msg, Parse.Failed)
                     .withLocation(__FILE__, __LINE__)
                     .build());
         }
@@ -154,7 +154,7 @@ final class TreeSitterParser : BaseASTParser {
     BuildResult!FileAST parseFileWithEdits(string filePath, const TextEdit[] edits) @system {
         if (!exists(filePath) || !isFile(filePath))
             return BuildResult!FileAST.err(
-                Errors.generic("File not found: " ~ filePath, ErrorCode.FileNotFound)
+                Errors.generic("File not found: " ~ filePath, IO.FileNotFound)
                     .withLocation(__FILE__, __LINE__)
                     .build());
         
@@ -163,7 +163,7 @@ final class TreeSitterParser : BaseASTParser {
             return parseContentWithEdits(content, filePath, edits);
         } catch (Exception e) {
             return BuildResult!FileAST.err(
-                Errors.generic("Failed to read file: " ~ filePath ~ " - " ~ e.msg, ErrorCode.FileReadFailed)
+                Errors.generic("Failed to read file: " ~ filePath ~ " - " ~ e.msg, IO.FileReadFailed)
                     .withLocation(__FILE__, __LINE__)
                     .build());
         }

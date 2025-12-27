@@ -82,7 +82,7 @@ final class SourceRepository
                     return Err!(SourceRef, BuildError)(
                         createCacheError(
                             "Hash mismatch during source storage",
-                            ErrorCode.CacheCorrupted,
+                            Cache.Corrupted,
                             path
                         )
                     );
@@ -99,7 +99,7 @@ final class SourceRepository
             catch (Exception e)
             {
                 return Err!(SourceRef, BuildError)(
-                    Errors.io(path, "Failed to store source: " ~ e.msg, ErrorCode.FileReadFailed)
+                    Errors.io(path, "Failed to store source: " ~ e.msg, IO.FileReadFailed)
                         .withLocation(__FILE__, __LINE__)
                         .build()
                 );
@@ -166,7 +166,7 @@ final class SourceRepository
             catch (Exception e)
             {
                 return VoidBuildResult.err(
-                    Errors.io(targetPath, "Failed to materialize source: " ~ e.msg, ErrorCode.FileWriteFailed)
+                    Errors.io(targetPath, "Failed to materialize source: " ~ e.msg, IO.FileWriteFailed)
                         .withLocation(__FILE__, __LINE__)
                         .build()
                 );
@@ -207,7 +207,7 @@ final class SourceRepository
             auto hashOpt = index.lookup(path);
             if (!hashOpt.found)
                 return Err!(SourceRef, BuildError)(
-                    Errors.io(path, "Source not tracked", ErrorCode.CacheNotFound)
+                    Errors.io(path, "Source not tracked", Cache.NotFound)
                         .withLocation(__FILE__, __LINE__)
                         .build()
                 );
@@ -227,7 +227,7 @@ final class SourceRepository
             {
                 if (!exists(path))
                     return Err!(bool, BuildError)(
-                        Errors.io(path, "File not found", ErrorCode.FileNotFound)
+                        Errors.io(path, "File not found", IO.FileNotFound)
                             .withLocation(__FILE__, __LINE__)
                             .build()
                     );
@@ -242,7 +242,7 @@ final class SourceRepository
             catch (Exception e)
             {
                 return Err!(bool, BuildError)(
-                    Errors.io(path, "Verification failed: " ~ e.msg, ErrorCode.FileReadFailed)
+                    Errors.io(path, "Verification failed: " ~ e.msg, IO.FileReadFailed)
                         .withLocation(__FILE__, __LINE__)
                         .build()
                 );

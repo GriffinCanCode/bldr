@@ -55,7 +55,7 @@ final class MockCloudProvider : CloudProvider
             return Ok!(WorkerStatus, BuildError)(*status);
         }
         
-        auto error = Errors.generic("Worker not found: " ~ workerId.toString(), ErrorCode.TargetNotFound)
+        auto error = Errors.generic("Worker not found: " ~ workerId.toString(), Build.TargetNotFound)
             .withLocation(__FILE__, __LINE__)
             .build();
         return Err!(WorkerStatus, BuildError)(error);

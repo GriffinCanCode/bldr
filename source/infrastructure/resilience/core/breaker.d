@@ -220,7 +220,7 @@ final class CircuitBreaker
                 }
                 
                 return VoidBuildResult.err(
-                    Errors.system("Circuit breaker open for endpoint: " ~ endpoint, ErrorCode.NetworkError)
+                    Errors.system("Circuit breaker open for endpoint: " ~ endpoint, Network.Error)
                         .withLocation(__FILE__, __LINE__)
                         .build()
                 );
@@ -231,7 +231,7 @@ final class CircuitBreaker
                     if (halfOpenRequests >= config.halfOpenMaxRequests)
                     {
                         return VoidBuildResult.err(
-                            Errors.system("Circuit breaker half-open, max test requests reached: " ~ endpoint, ErrorCode.NetworkError)
+                            Errors.system("Circuit breaker half-open, max test requests reached: " ~ endpoint, Network.Error)
                                 .withLocation(__FILE__, __LINE__)
                                 .build()
                         );
@@ -411,11 +411,11 @@ final class CircuitBreaker
             return true;
         
         immutable code = error.code();
-        return code == ErrorCode.NetworkError ||
-               code == ErrorCode.CoordinatorTimeout ||
-               code == ErrorCode.WorkerTimeout ||
-               code == ErrorCode.ProcessTimeout ||
-               code == ErrorCode.ArtifactTransferFailed;
+        return code == Network.Error ||
+               code == Distributed.CoordinatorTimeout ||
+               code == Distributed.WorkerTimeout ||
+               code == System.ProcessTimeout ||
+               code == Distributed.ArtifactTransferFailed;
     }
 }
 

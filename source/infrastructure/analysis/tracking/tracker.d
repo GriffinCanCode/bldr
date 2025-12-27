@@ -53,7 +53,7 @@ final class FileChangeTracker : IFileChangeTracker
             catch (Exception e)
             {
                 return VoidBuildResult.err(
-                    Errors.io(path, "Failed to track file: " ~ e.msg, ErrorCode.FileReadFailed)
+                    Errors.io(path, "Failed to track file: " ~ e.msg, IO.FileReadFailed)
                         .withLocation(__FILE__, __LINE__)
                         .build()
                 );
@@ -155,7 +155,7 @@ final class FileChangeTracker : IFileChangeTracker
             catch (Exception e)
             {
                 return BuildResult!ChangeResult.err(
-                    Errors.io(path, "Failed to check file change: " ~ e.msg, ErrorCode.FileReadFailed)
+                    Errors.io(path, "Failed to check file change: " ~ e.msg, IO.FileReadFailed)
                         .withLocation(__FILE__, __LINE__)
                         .build()
                 );
@@ -189,7 +189,7 @@ final class FileChangeTracker : IFileChangeTracker
             if (state is null)
             {
                 return BuildResult!(FileState*).err(
-                    Errors.io(path, "File not tracked", ErrorCode.FileNotFound)
+                    Errors.io(path, "File not tracked", IO.FileNotFound)
                         .withLocation(__FILE__, __LINE__)
                         .build()
                 );
@@ -208,7 +208,7 @@ final class FileChangeTracker : IFileChangeTracker
             if (state is null)
             {
                 return VoidBuildResult.err(
-                    Errors.io(path, "File not tracked", ErrorCode.FileNotFound)
+                    Errors.io(path, "File not tracked", IO.FileNotFound)
                         .withLocation(__FILE__, __LINE__)
                         .build()
                 );

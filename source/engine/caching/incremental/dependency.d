@@ -113,7 +113,7 @@ final class DependencyCache
             auto depPtr = buildNormalizedPath(sourceFile) in dependencies;
             return depPtr is null 
                 ? BuildResult!(FileDependency*).err(
-                    Errors.generic("No dependencies recorded for: " ~ sourceFile, ErrorCode.FileNotFound)
+                    Errors.generic("No dependencies recorded for: " ~ sourceFile, IO.FileNotFound)
                         .withLocation(__FILE__, __LINE__)
                         .build())
                 : BuildResult!(FileDependency*).ok(depPtr);

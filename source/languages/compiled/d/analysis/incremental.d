@@ -51,7 +51,7 @@ final class DDependencyAnalyzer : BaseDependencyAnalyzer
         if (!exists(sourceFile) || !isFile(sourceFile))
         {
             return BuildResult!(string[]).err(
-                Errors.generic("Source file not found: " ~ sourceFile, ErrorCode.FileNotFound)
+                Errors.generic("Source file not found: " ~ sourceFile, IO.FileNotFound)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -96,7 +96,7 @@ final class DDependencyAnalyzer : BaseDependencyAnalyzer
         catch (Exception e)
         {
             return BuildResult!(string[]).err(
-                Errors.generic("Failed to analyze D dependencies for " ~ sourceFile ~ ": " ~ e.msg, ErrorCode.AnalysisFailed)
+                Errors.generic("Failed to analyze D dependencies for " ~ sourceFile ~ ": " ~ e.msg, Analysis.Failed)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );

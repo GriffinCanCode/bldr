@@ -89,7 +89,7 @@ struct ProvenanceSigner
     {
         if (envelope.signatures.length == 0)
             return Err!(ProvenanceStatement, BuildError)(
-                Errors.system("No signatures in envelope", ErrorCode.ValidationFailed)
+                Errors.system("No signatures in envelope", Language.ValidationFailed)
                     .withLocation(__FILE__, __LINE__)
                     .build());
         
@@ -99,7 +99,7 @@ struct ProvenanceSigner
             payloadBytes = Base64.decode(envelope.payload);
         catch (Exception e)
             return Err!(ProvenanceStatement, BuildError)(
-                Errors.system("Invalid payload encoding: " ~ e.msg, ErrorCode.ValidationFailed)
+                Errors.system("Invalid payload encoding: " ~ e.msg, Language.ValidationFailed)
                     .withLocation(__FILE__, __LINE__)
                     .build());
         
@@ -123,7 +123,7 @@ struct ProvenanceSigner
         
         if (!anyValid)
             return Err!(ProvenanceStatement, BuildError)(
-                Errors.system("Signature verification failed", ErrorCode.ValidationFailed)
+                Errors.system("Signature verification failed", Language.ValidationFailed)
                     .withLocation(__FILE__, __LINE__)
                     .build());
         

@@ -6,7 +6,7 @@ import std.array;
 import std.range;
 import std.format : formattedWrite;
 import infrastructure.errors.types.types;
-import infrastructure.errors.handling.codes;
+import infrastructure.errors.codes;
 import infrastructure.errors.types.context : ErrorSuggestion, ErrorContext;
 import infrastructure.errors.formatting.colors : ColorFormatter, Color;
 import infrastructure.errors.formatting.suggestions : SuggestionGenerator;

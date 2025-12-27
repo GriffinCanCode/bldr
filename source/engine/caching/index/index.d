@@ -55,7 +55,7 @@ final class CacheIndex
         auto rc = sqlite3_open(dbPath.toStringz, &db);
         if (rc != SQLITE_OK)
             throw Errors.cache("Failed to open cache index: " ~ fromStringz(sqlite3_errmsg(db)).idup, 
-                              ErrorCode.CacheLoadFailed).build();
+                              Cache.LoadFailed).build();
         
         // Enable WAL mode for crash recovery and concurrent reads
         execSQL("PRAGMA journal_mode=WAL");
@@ -129,7 +129,7 @@ final class CacheIndex
             
             if (sqlite3_step(stmtTargetGet) != SQLITE_ROW)
                 return Err!(TargetIndexEntry, BuildError)(
-                    Errors.cache("Target not found: " ~ key, ErrorCode.CacheNotFound).build());
+                    Errors.cache("Target not found: " ~ key, Cache.NotFound).build());
             
             TargetIndexEntry entry;
             entry.key = fromStringz(sqlite3_column_text(stmtTargetGet, 0)).idup;
@@ -165,7 +165,7 @@ final class CacheIndex
             
             if (sqlite3_step(stmtTargetPut) != SQLITE_DONE)
                 throw Errors.cache("Failed to insert target: " ~ fromStringz(sqlite3_errmsg(db)).idup,
-                                  ErrorCode.CacheWriteFailed).build();
+                                  Cache.WriteFailed).build();
             
             // Mark journal entry as committed
             commitJournal();
@@ -291,7 +291,7 @@ final class CacheIndex
             
             if (sqlite3_step(stmtActionGet) != SQLITE_ROW)
                 return Err!(ActionIndexEntry, BuildError)(
-                    Errors.cache("Action not found: " ~ key, ErrorCode.CacheNotFound).build());
+                    Errors.cache("Action not found: " ~ key, Cache.NotFound).build());
             
             ActionIndexEntry entry;
             entry.key = fromStringz(sqlite3_column_text(stmtActionGet, 0)).idup;
@@ -330,7 +330,7 @@ final class CacheIndex
             
             if (sqlite3_step(stmtActionPut) != SQLITE_DONE)
                 throw Errors.cache("Failed to insert action: " ~ fromStringz(sqlite3_errmsg(db)).idup,
-                                  ErrorCode.CacheWriteFailed).build();
+                                  Cache.WriteFailed).build();
             
             commitJournal();
         }

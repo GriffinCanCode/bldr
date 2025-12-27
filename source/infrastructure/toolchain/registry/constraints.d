@@ -243,7 +243,7 @@ struct VersionConstraint
             catch (Exception)
             {
                 return Err!(VersionConstraint, BuildError)(
-                    Errors.system("Invalid wildcard version: " ~ str, ErrorCode.InvalidInput));
+                    Errors.system("Invalid wildcard version: " ~ str, Config.InvalidInput));
             }
         }
         
@@ -254,7 +254,7 @@ struct VersionConstraint
             catch (Exception)
             {
                 return Err!(VersionConstraint, BuildError)(
-                    Errors.system("Invalid wildcard version: " ~ str, ErrorCode.InvalidInput));
+                    Errors.system("Invalid wildcard version: " ~ str, Config.InvalidInput));
             }
         }
         
@@ -269,12 +269,12 @@ struct VersionConstraint
         auto parts = str.split();
         if (parts.length != 2)
             return Err!(VersionConstraint, BuildError)(
-                Errors.system("Invalid range format: " ~ str, ErrorCode.InvalidInput));
+                Errors.system("Invalid range format: " ~ str, Config.InvalidInput));
         
         // Parse min version (>=X.Y.Z)
         if (!parts[0].startsWith(">="))
             return Err!(VersionConstraint, BuildError)(
-                Errors.system("Range must start with >=", ErrorCode.InvalidInput));
+                Errors.system("Range must start with >=", Config.InvalidInput));
         
         auto minStr = parts[0][2 .. $].strip();
         auto minResult = Version.parse(minStr);
@@ -284,7 +284,7 @@ struct VersionConstraint
         // Parse max version (<X.Y.Z)
         if (!parts[1].startsWith("<"))
             return Err!(VersionConstraint, BuildError)(
-                Errors.system("Range must have < for upper bound", ErrorCode.InvalidInput));
+                Errors.system("Range must have < for upper bound", Config.InvalidInput));
         
         auto maxStr = parts[1][1 .. $].strip();
         auto maxResult = Version.parse(maxStr);
@@ -320,7 +320,7 @@ struct ConstraintSolver
         
         if (candidates.empty)
             return Err!(const(Toolchain)*, BuildError)(
-                Errors.system("No toolchain satisfies constraints", ErrorCode.ToolNotFound));
+                Errors.system("No toolchain satisfies constraints", Plugin.ToolNotFound));
         
         // Sort by version (newest first)
         import std.algorithm : sort;

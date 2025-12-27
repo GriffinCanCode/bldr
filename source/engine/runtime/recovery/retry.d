@@ -209,7 +209,7 @@ final class RetryOrchestrator
                 if (ctx.currentAttempt > 0)
                 {
                     stats.recordAttempt(
-                        ctx.lastError ? ctx.lastError.code() : ErrorCode.InternalError,
+                        ctx.lastError ? ctx.lastError.code() : Internal.Error,
                         ctx.elapsed(),
                         true
                     );

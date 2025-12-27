@@ -51,13 +51,13 @@ struct RPCRequest {
             
             if (req.jsonrpc != JSONRPC_VERSION)
                 return Err!(RPCRequest, BuildError)(
-                    Errors.plugin("Invalid JSON-RPC version: " ~ req.jsonrpc, ErrorCode.InvalidMessage)
+                    Errors.plugin("Invalid JSON-RPC version: " ~ req.jsonrpc, Plugin.InvalidMessage)
                         .withSuggestion("Use JSON-RPC 2.0 protocol"));
             
             return Ok!(RPCRequest, BuildError)(req);
         } catch (Exception e) {
             return Err!(RPCRequest, BuildError)(
-                Errors.plugin("Failed to parse RPC request: " ~ e.msg, ErrorCode.InvalidMessage));
+                Errors.plugin("Failed to parse RPC request: " ~ e.msg, Plugin.InvalidMessage));
         }
     }
 }
@@ -99,7 +99,7 @@ struct RPCError {
             return Ok!(RPCError, BuildError)(RPCError(code, message, data));
         } catch (Exception e) {
             return Err!(RPCError, BuildError)(
-                Errors.plugin("Failed to parse RPC error: " ~ e.msg, ErrorCode.InvalidMessage));
+                Errors.plugin("Failed to parse RPC error: " ~ e.msg, Plugin.InvalidMessage));
         }
     }
 }
@@ -163,7 +163,7 @@ struct RPCResponse {
             
             if (resp.jsonrpc != JSONRPC_VERSION)
                 return Err!(RPCResponse, BuildError)(
-                    Errors.plugin("Invalid JSON-RPC version: " ~ resp.jsonrpc, ErrorCode.InvalidMessage)
+                    Errors.plugin("Invalid JSON-RPC version: " ~ resp.jsonrpc, Plugin.InvalidMessage)
                         .withSuggestion("Use JSON-RPC 2.0 protocol"));
             
             if ("result" in json) {
@@ -178,13 +178,13 @@ struct RPCResponse {
                 resp.result = JSONValue(null);
             } else {
                 return Err!(RPCResponse, BuildError)(
-                    Errors.plugin("Response must have either 'result' or 'error' field", ErrorCode.InvalidMessage));
+                    Errors.plugin("Response must have either 'result' or 'error' field", Plugin.InvalidMessage));
             }
             
             return Ok!(RPCResponse, BuildError)(resp);
         } catch (Exception e) {
             return Err!(RPCResponse, BuildError)(
-                Errors.plugin("Failed to parse RPC response: " ~ e.msg, ErrorCode.InvalidMessage));
+                Errors.plugin("Failed to parse RPC response: " ~ e.msg, Plugin.InvalidMessage));
         }
     }
 }
@@ -212,7 +212,7 @@ struct PluginDependency {
             return Ok!(PluginDependency, BuildError)(dep);
         } catch (Exception e) {
             return Err!(PluginDependency, BuildError)(
-                Errors.plugin("Failed to parse plugin dependency: " ~ e.msg, ErrorCode.InvalidMessage));
+                Errors.plugin("Failed to parse plugin dependency: " ~ e.msg, Plugin.InvalidMessage));
         }
     }
 }
@@ -306,7 +306,7 @@ struct PluginInfo {
             return Ok!(PluginInfo, BuildError)(info);
         } catch (Exception e) {
             return Err!(PluginInfo, BuildError)(
-                Errors.plugin("Failed to parse plugin info: " ~ e.msg, ErrorCode.InvalidMessage));
+                Errors.plugin("Failed to parse plugin info: " ~ e.msg, Plugin.InvalidMessage));
         }
     }
 }
@@ -359,7 +359,7 @@ struct PluginTarget {
             return Ok!(PluginTarget, BuildError)(target);
         } catch (Exception e) {
             return Err!(PluginTarget, BuildError)(
-                Errors.plugin("Failed to parse plugin target: " ~ e.msg, ErrorCode.InvalidMessage));
+                Errors.plugin("Failed to parse plugin target: " ~ e.msg, Plugin.InvalidMessage));
         }
     }
 }
@@ -451,7 +451,7 @@ struct HookResult {
             return Ok!(HookResult, BuildError)(result);
         } catch (Exception e) {
             return Err!(HookResult, BuildError)(
-                Errors.plugin("Failed to parse hook result: " ~ e.msg, ErrorCode.InvalidMessage));
+                Errors.plugin("Failed to parse hook result: " ~ e.msg, Plugin.InvalidMessage));
         }
     }
 }

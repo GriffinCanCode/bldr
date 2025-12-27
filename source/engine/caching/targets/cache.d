@@ -535,7 +535,7 @@ final class BuildCache
                 // Use builder pattern with typed suggestions for corruption
                 import infrastructure.errors.types.context : ErrorSuggestion;
                 
-                auto error = ErrorBuilder!CacheError.create("Cache signature verification failed - possible tampering or corruption detected", ErrorCode.CacheCorrupted)
+                auto error = ErrorBuilder!CacheError.create("Cache signature verification failed - possible tampering or corruption detected", Cache.Corrupted)
                     .withContext("verifying cache integrity", cacheFilePath)
                     .withFileCheck("The cache file may have been modified or corrupted")
                     .withCommand("Remove corrupted cache", "bldr clean")

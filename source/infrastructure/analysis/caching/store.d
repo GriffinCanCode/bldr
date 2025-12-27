@@ -70,7 +70,7 @@ final class AnalysisCache : IAnalysisCache
             catch (Exception e)
             {
                 missCount++;
-                auto error = Errors.cache("Failed to deserialize analysis: " ~ e.msg, ErrorCode.CacheLoadFailed)
+                auto error = Errors.cache("Failed to deserialize analysis: " ~ e.msg, Cache.LoadFailed)
                     .withLocation(__FILE__, __LINE__)
                     .build();
                 return BuildResult!(FileAnalysis*).err(error);
@@ -98,7 +98,7 @@ final class AnalysisCache : IAnalysisCache
             }
             catch (Exception e)
             {
-                auto error = Errors.cache("Failed to cache analysis: " ~ e.msg, ErrorCode.CacheWriteFailed)
+                auto error = Errors.cache("Failed to cache analysis: " ~ e.msg, Cache.WriteFailed)
                     .withLocation(__FILE__, __LINE__)
                     .build();
                 return VoidBuildResult.err(error);

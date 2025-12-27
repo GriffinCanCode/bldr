@@ -190,7 +190,7 @@ struct HermeticVerifier
         
         if (!initialized)
             return Err!(VerificationResult, BuildError)(
-                Errors.system("Verifier not initialized", ErrorCode.NotInitialized).build());
+                Errors.system("Verifier not initialized", Internal.NotInitialized).build());
         
         auto sw = StopWatch();
         sw.start();

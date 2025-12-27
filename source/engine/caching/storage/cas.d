@@ -63,7 +63,7 @@ final class ContentAddressableStorage
         catch (Exception e)
         {
             return Err!(string, BuildError)(
-                createCacheError("Failed to store blob: " ~ e.msg, ErrorCode.CacheWriteFailed, blobPath)
+                createCacheError("Failed to store blob: " ~ e.msg, Cache.WriteFailed, blobPath)
             );
         }
     }
@@ -80,7 +80,7 @@ final class ContentAddressableStorage
             {
                 if (!exists(blobPath))
                     return Err!(ubyte[], BuildError)(
-                        createCacheError("Blob not found: " ~ hash, ErrorCode.CacheNotFound, blobPath)
+                        createCacheError("Blob not found: " ~ hash, Cache.NotFound, blobPath)
                     );
                 
                 immutable size = getSize(blobPath);
@@ -101,7 +101,7 @@ final class ContentAddressableStorage
         catch (Exception e)
         {
             return Err!(ubyte[], BuildError)(Errors.cache(
-                "Failed to read blob: " ~ e.msg, ErrorCode.CacheLoadFailed).build());
+                "Failed to read blob: " ~ e.msg, Cache.LoadFailed).build());
         }
     }
     
@@ -150,7 +150,7 @@ final class ContentAddressableStorage
                 // Check reference count
                 if (refCounts.get(hash, 0) > 0)
                     return VoidBuildResult.err(Errors.cache(
-                        "Cannot delete blob with active references", ErrorCode.CacheInUse).build());
+                        "Cannot delete blob with active references", Cache.InUse).build());
                 
                 immutable blobPath = getBlobPath(hash);
                 if (exists(blobPath))
@@ -164,7 +164,7 @@ final class ContentAddressableStorage
         catch (Exception e)
         {
             return VoidBuildResult.err(Errors.cache(
-                "Failed to delete blob: " ~ e.msg, ErrorCode.CacheDeleteFailed).build());
+                "Failed to delete blob: " ~ e.msg, Cache.DeleteFailed).build());
         }
     }
     

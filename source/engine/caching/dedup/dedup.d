@@ -408,7 +408,7 @@ BuildResult!bool verifyBlob(DedupEngine engine, BlobRef ref_) @system
     {
         return Err!(bool, BuildError)(Errors.cache(
             "Blob integrity check failed: expected " ~ ref_.hash ~ ", got " ~ actualHash,
-            ErrorCode.CacheCorrupted).build());
+            Cache.Corrupted).build());
     }
     
     // Verify size
@@ -416,7 +416,7 @@ BuildResult!bool verifyBlob(DedupEngine engine, BlobRef ref_) @system
     {
         return Err!(bool, BuildError)(Errors.cache(
             "Blob size mismatch: expected " ~ ref_.size.to!string ~ ", got " ~ data.length.to!string,
-            ErrorCode.CacheCorrupted).build());
+            Cache.Corrupted).build());
     }
     
     return Ok!(bool, BuildError)(true);

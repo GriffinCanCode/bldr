@@ -219,7 +219,7 @@ struct SyscallTracer
         {
             return Err!(SyscallTracer, BuildError)(
                 Errors.system("Syscall tracing not supported on this platform", 
-                    ErrorCode.NotSupported).build());
+                    Internal.NotSupported).build());
         }
         
         st.initialized = true;
@@ -231,7 +231,7 @@ struct SyscallTracer
     {
         if (!initialized || tracer is null)
             return Err!(TraceResult, BuildError)(
-                Errors.system("Tracer not initialized", ErrorCode.NotInitialized).build());
+                Errors.system("Tracer not initialized", Internal.NotInitialized).build());
         
         return tracer.trace(command, workingDir);
     }

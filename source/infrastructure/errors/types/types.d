@@ -115,7 +115,7 @@ class BuildFailureError : BaseBuildError
     string targetId;
     string[] failedDeps;
     
-    this(string targetId, string message, ErrorCode code = Build.Failed) @system
+    this(string targetId, string message, ErrorCode code = ErrorCode.BuildFailed) @system
     {
         super(code, message);
         this.targetId = targetId;
@@ -141,14 +141,14 @@ class ParseError : BaseBuildError
     size_t column;
     string snippet;
     
-    this(string filePath, string message, ErrorCode code = Parse.Failed) @trusted
+    this(string filePath, string message, ErrorCode code = ErrorCode.ParseFailed) @trusted
     {
         super(code, message);
         this.filePath = filePath;
     }
     
     /// Constructor with line/column info
-    this(string filePath, string message, size_t line, size_t column, ErrorCode code = Parse.Failed) @trusted
+    this(string filePath, string message, size_t line, size_t column, ErrorCode code = ErrorCode.ParseFailed) @trusted
     {
         super(code, message);
         this.filePath = filePath;
@@ -191,7 +191,7 @@ class AnalysisError : BaseBuildError
     string[] unresolvedImports;
     string[] cyclePath;
     
-    this(string targetName, string message, ErrorCode code = Analysis.Failed) @system
+    this(string targetName, string message, ErrorCode code = ErrorCode.AnalysisFailed) @system
     {
         super(code, message);
         this.targetName = targetName;
@@ -217,7 +217,7 @@ class CacheError : BaseBuildError
 {
     string cachePath;
     
-    this(string message, ErrorCode code = Cache.LoadFailed) @system
+    this(string message, ErrorCode code = ErrorCode.CacheLoadFailed) @system
     {
         super(code, message);
     }
@@ -238,7 +238,7 @@ class IOError : BaseBuildError
 {
     string path;
     
-    this(string path, string message, ErrorCode code = IO.FileNotFound) @system
+    this(string path, string message, ErrorCode code = ErrorCode.FileNotFound) @system
     {
         super(code, message);
         this.path = path;
@@ -257,7 +257,7 @@ class GraphError : BaseBuildError
 {
     string[] nodePath;
     
-    this(string message, ErrorCode code = Graph.Invalid) @system
+    this(string message, ErrorCode code = ErrorCode.GraphInvalid) @system
     {
         super(code, message);
     }
@@ -281,7 +281,7 @@ class LanguageError : BaseBuildError
     size_t line;
     string compilerOutput;
     
-    this(string language, string message, ErrorCode code = Language.CompilationFailed)
+    this(string language, string message, ErrorCode code = ErrorCode.CompilationFailed)
     {
         super(code, message);
         this.language = language;
@@ -312,7 +312,7 @@ class SystemError : BaseBuildError
     string command;
     int exitCode;
     
-    this(string message, ErrorCode code = System.ProcessSpawnFailed)
+    this(string message, ErrorCode code = ErrorCode.ProcessSpawnFailed)
     {
         super(code, message);
     }
@@ -335,7 +335,7 @@ class InternalError : BaseBuildError
 {
     string stackTrace;
     
-    this(string message, ErrorCode code = Internal.Error)
+    this(string message, ErrorCode code = ErrorCode.InternalError)
     {
         super(code, message);
     }
@@ -366,7 +366,7 @@ class PluginError : BaseBuildError
     string pluginName;
     string pluginVersion;
     
-    this(string message, ErrorCode code = Plugin.Error)
+    this(string message, ErrorCode code = ErrorCode.PluginError)
     {
         super(code, message);
     }
@@ -391,7 +391,7 @@ class LSPError : BaseBuildError
     string documentUri;
     int position;
     
-    this(string message, ErrorCode code = LSP.Error)
+    this(string message, ErrorCode code = ErrorCode.LSPError)
     {
         super(code, message);
         position = -1;
@@ -418,7 +418,7 @@ class WatchError : BaseBuildError
     string watcherType;
     string[] watchPaths;
     
-    this(string message, ErrorCode code = Watch.Error)
+    this(string message, ErrorCode code = ErrorCode.WatchError)
     {
         super(code, message);
     }
@@ -448,7 +448,7 @@ class ConfigError : BaseBuildError
     string expectedType;
     string actualValue;
     
-    this(string message, ErrorCode code = Config.Error)
+    this(string message, ErrorCode code = ErrorCode.ConfigError)
     {
         super(code, message);
     }
@@ -556,74 +556,74 @@ struct ErrorBuilder(T : BaseBuildError)
 ///       .withContext("parsing config")
 ///       .withDocs("See syntax guide", "docs/syntax.md")
 ///   
-///   Errors.cache("Cache corrupted", ErrorCode.CacheCorrupted)
+///   Errors.cache("Cache corrupted", Cache.Corrupted)
 ///       .withCommand("Clear cache", "bldr clean --cache")
 struct Errors
 {
     @disable this();
     
     /// Build failure error
-    static ErrorBuilder!BuildFailureError build(string targetId, string message, ErrorCode code = Build.Failed)
+    static ErrorBuilder!BuildFailureError build(string targetId, string message, ErrorCode code = ErrorCode.BuildFailed)
     {
         return ErrorBuilder!BuildFailureError.create(targetId, message, code);
     }
     
     /// Parse/configuration error
-    static ErrorBuilder!ParseError parse(string filePath, string message, ErrorCode code = Parse.Failed)
+    static ErrorBuilder!ParseError parse(string filePath, string message, ErrorCode code = ErrorCode.ParseFailed)
     {
         return ErrorBuilder!ParseError.create(filePath, message, code);
     }
     
     /// Parse error with location
-    static ErrorBuilder!ParseError parseAt(string filePath, string message, size_t line, size_t col = 0, ErrorCode code = Parse.Failed)
+    static ErrorBuilder!ParseError parseAt(string filePath, string message, size_t line, size_t col = 0, ErrorCode code = ErrorCode.ParseFailed)
     {
         return ErrorBuilder!ParseError.create(filePath, message, line, col, code);
     }
     
     /// Analysis error
-    static ErrorBuilder!AnalysisError analysis(string targetName, string message, ErrorCode code = Analysis.Failed)
+    static ErrorBuilder!AnalysisError analysis(string targetName, string message, ErrorCode code = ErrorCode.AnalysisFailed)
     {
         return ErrorBuilder!AnalysisError.create(targetName, message, code);
     }
     
     /// Cache operation error
-    static ErrorBuilder!CacheError cache(string message, ErrorCode code = Cache.LoadFailed)
+    static ErrorBuilder!CacheError cache(string message, ErrorCode code = ErrorCode.CacheLoadFailed)
     {
         return ErrorBuilder!CacheError.create(message, code);
     }
     
     /// IO operation error
-    static ErrorBuilder!IOError io(string path, string message, ErrorCode code = IO.FileNotFound)
+    static ErrorBuilder!IOError io(string path, string message, ErrorCode code = ErrorCode.FileNotFound)
     {
         return ErrorBuilder!IOError.create(path, message, code);
     }
     
     /// Graph operation error
-    static ErrorBuilder!GraphError graph(string message, ErrorCode code = Graph.Invalid)
+    static ErrorBuilder!GraphError graph(string message, ErrorCode code = ErrorCode.GraphInvalid)
     {
         return ErrorBuilder!GraphError.create(message, code);
     }
     
     /// Language-specific error
-    static ErrorBuilder!LanguageError language(string lang, string message, ErrorCode code = Language.CompilationFailed)
+    static ErrorBuilder!LanguageError language(string lang, string message, ErrorCode code = ErrorCode.CompilationFailed)
     {
         return ErrorBuilder!LanguageError.create(lang, message, code);
     }
     
     /// System-level error
-    static ErrorBuilder!SystemError system(string message, ErrorCode code = System.ProcessSpawnFailed)
+    static ErrorBuilder!SystemError system(string message, ErrorCode code = ErrorCode.ProcessSpawnFailed)
     {
         return ErrorBuilder!SystemError.create(message, code);
     }
     
     /// Network communication error
-    static NetworkError network(string message, ErrorCode code = Network.Error)
+    static NetworkError network(string message, ErrorCode code = ErrorCode.NetworkError)
     {
         return new NetworkError(message, code);
     }
     
     /// Internal/unexpected error
-    static ErrorBuilder!InternalError internal(string message, ErrorCode code = Internal.Error)
+    static ErrorBuilder!InternalError internal(string message, ErrorCode code = ErrorCode.InternalError)
     {
         return ErrorBuilder!InternalError.create(message, code);
     }
@@ -635,25 +635,25 @@ struct Errors
     }
     
     /// Plugin system error
-    static ErrorBuilder!PluginError plugin(string message, ErrorCode code = Plugin.Error)
+    static ErrorBuilder!PluginError plugin(string message, ErrorCode code = ErrorCode.PluginError)
     {
         return ErrorBuilder!PluginError.create(message, code);
     }
     
     /// LSP server error
-    static ErrorBuilder!LSPError lsp(string message, ErrorCode code = LSP.Error)
+    static ErrorBuilder!LSPError lsp(string message, ErrorCode code = ErrorCode.LSPError)
     {
         return ErrorBuilder!LSPError.create(message, code);
     }
     
     /// Watch mode error
-    static ErrorBuilder!WatchError watch(string message, ErrorCode code = Watch.Error)
+    static ErrorBuilder!WatchError watch(string message, ErrorCode code = ErrorCode.WatchError)
     {
         return ErrorBuilder!WatchError.create(message, code);
     }
     
     /// Configuration/validation error
-    static ErrorBuilder!ConfigError config(string message, ErrorCode code = Config.Error)
+    static ErrorBuilder!ConfigError config(string message, ErrorCode code = ErrorCode.ConfigError)
     {
         return ErrorBuilder!ConfigError.create(message, code);
     }
@@ -946,7 +946,7 @@ BuildFailureError handlerNotFoundError(string language) @system
 }
 
 /// Create a plugin error with helpful suggestions
-PluginError pluginError(string pluginName, string message, ErrorCode code = Plugin.Error) @system
+PluginError pluginError(string pluginName, string message, ErrorCode code = ErrorCode.PluginError) @system
 {
     auto error = new PluginError(message, code);
     error.pluginName = pluginName;
@@ -961,7 +961,7 @@ PluginError pluginError(string pluginName, string message, ErrorCode code = Plug
 /// Create a plugin not found error
 PluginError pluginNotFoundError(string pluginName) @system
 {
-    auto error = new PluginError("Plugin not found: " ~ pluginName, Plugin.NotFound);
+    auto error = new PluginError("Plugin not found: " ~ pluginName, ErrorCode.PluginNotFound);
     error.pluginName = pluginName;
     
     error.addSuggestion(ErrorSuggestion.command("Install plugin", "brew install builder-plugin-" ~ pluginName));
@@ -972,7 +972,7 @@ PluginError pluginNotFoundError(string pluginName) @system
 }
 
 /// Create an LSP error with helpful suggestions
-LSPError lspError(string message, ErrorCode code = LSP.Error) @system
+LSPError lspError(string message, ErrorCode code = ErrorCode.LSPError) @system
 {
     auto error = new LSPError(message, code);
     
@@ -984,7 +984,7 @@ LSPError lspError(string message, ErrorCode code = LSP.Error) @system
 }
 
 /// Create a watch mode error with helpful suggestions
-WatchError watchError(string message, ErrorCode code = Watch.Error) @system
+WatchError watchError(string message, ErrorCode code = ErrorCode.WatchError) @system
 {
     auto error = new WatchError(message, code);
     
@@ -997,7 +997,7 @@ WatchError watchError(string message, ErrorCode code = Watch.Error) @system
 
 /// Create a configuration error with helpful suggestions
 ConfigError configError(string configPath, string fieldName, string message, 
-                        ErrorCode code = Config.Error) @system
+                        ErrorCode code = ErrorCode.ConfigError) @system
 {
     auto error = new ConfigError(message, code);
     error.configPath = configPath;

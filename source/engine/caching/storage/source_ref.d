@@ -24,7 +24,7 @@ struct SourceRef
         {
             if (!exists(path))
                 return Err!(SourceRef, BuildError)(
-                    Errors.io(path, "Source file not found", ErrorCode.FileNotFound)
+                    Errors.io(path, "Source file not found", IO.FileNotFound)
                         .withLocation(__FILE__, __LINE__)
                         .build()
                 );
@@ -63,7 +63,7 @@ struct SourceRef
         catch (Exception e)
         {
             return Err!(SourceRef, BuildError)(
-                Errors.io(path, "Failed to create source ref: " ~ e.msg, ErrorCode.FileReadFailed)
+                Errors.io(path, "Failed to create source ref: " ~ e.msg, IO.FileReadFailed)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );

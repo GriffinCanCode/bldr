@@ -333,7 +333,7 @@ final class OtlpHttpExporter : SpanExporter
             immutable sent = socket.send(request);
             if (sent != request.length)
                 return Err!(bool, BuildError)(
-                    Errors.network("Failed to send OTLP request", ErrorCode.TraceExportFailed));
+                    Errors.network("Failed to send OTLP request", Telemetry.TraceExportFailed));
             
             socket.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, config.timeout);
             auto responseResult = receiveResponse(socket);
@@ -345,12 +345,12 @@ final class OtlpHttpExporter : SpanExporter
                 return Ok!(bool, BuildError)(true);
             
             return Err!(bool, BuildError)(
-                Errors.network("OTLP export failed: HTTP " ~ statusCode.to!string, ErrorCode.TraceExportFailed));
+                Errors.network("OTLP export failed: HTTP " ~ statusCode.to!string, Telemetry.TraceExportFailed));
         }
         catch (Exception e)
         {
             return Err!(bool, BuildError)(
-                Errors.network("OTLP export error: " ~ e.msg, ErrorCode.TraceExportFailed));
+                Errors.network("OTLP export error: " ~ e.msg, Telemetry.TraceExportFailed));
         }
     }
     
@@ -437,19 +437,19 @@ final class OtlpHttpExporter : SpanExporter
         
         if (bytesRead <= 0)
             return Err!(int, BuildError)(
-                Errors.network("No response from OTLP endpoint", ErrorCode.TraceExportFailed));
+                Errors.network("No response from OTLP endpoint", Telemetry.TraceExportFailed));
         
         // Parse status line
         auto response = cast(string)buffer[0 .. bytesRead];
         auto lines = response.split("\r\n");
         if (lines.length == 0)
             return Err!(int, BuildError)(
-                Errors.network("Invalid OTLP response", ErrorCode.TraceExportFailed));
+                Errors.network("Invalid OTLP response", Telemetry.TraceExportFailed));
         
         auto statusParts = lines[0].split(" ");
         if (statusParts.length < 2)
             return Err!(int, BuildError)(
-                Errors.network("Invalid HTTP status", ErrorCode.TraceExportFailed));
+                Errors.network("Invalid HTTP status", Telemetry.TraceExportFailed));
         
         try
         {
@@ -458,7 +458,7 @@ final class OtlpHttpExporter : SpanExporter
         catch (Exception)
         {
             return Err!(int, BuildError)(
-                Errors.network("Cannot parse status code", ErrorCode.TraceExportFailed));
+                Errors.network("Cannot parse status code", Telemetry.TraceExportFailed));
         }
     }
     
@@ -495,7 +495,7 @@ final class OtlpHttpExporter : SpanExporter
         catch (Exception e)
         {
             return Err!(Socket, BuildError)(
-                Errors.network("OTLP connection failed: " ~ e.msg, ErrorCode.TraceExportFailed));
+                Errors.network("OTLP connection failed: " ~ e.msg, Telemetry.TraceExportFailed));
         }
     }
     

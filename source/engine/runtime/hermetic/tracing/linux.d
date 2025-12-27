@@ -136,7 +136,7 @@ final class LinuxSyscallTracer : ISyscallTracer
     {
         if (!isLinuxTracingAvailable())
             return Err!(LinuxSyscallTracer, BuildError)(
-                Errors.system("ptrace not available", ErrorCode.NotSupported).build());
+                Errors.system("ptrace not available", Internal.NotSupported).build());
         
         return Ok!(LinuxSyscallTracer, BuildError)(new LinuxSyscallTracer(policy));
     }
@@ -146,7 +146,7 @@ final class LinuxSyscallTracer : ISyscallTracer
     {
         if (command.length == 0)
             return Err!(TraceResult, BuildError)(
-                Errors.system("Empty command", ErrorCode.InvalidInput).build());
+                Errors.system("Empty command", Config.InvalidInput).build());
         
         events = [];
         tracedPids.clear();
@@ -157,7 +157,7 @@ final class LinuxSyscallTracer : ISyscallTracer
         int[2] stdoutPipe, stderrPipe;
         if (pipe(stdoutPipe.ptr) != 0 || pipe(stderrPipe.ptr) != 0)
             return Err!(TraceResult, BuildError)(
-                Errors.system("Failed to create pipes", ErrorCode.IOError).build());
+                Errors.system("Failed to create pipes", System.ProcessSpawnFailed).build());
         
         immutable pid = fork();
         
@@ -165,7 +165,7 @@ final class LinuxSyscallTracer : ISyscallTracer
         {
             closeAllPipes(stdoutPipe, stderrPipe);
             return Err!(TraceResult, BuildError)(
-                Errors.system("Fork failed: " ~ errnoString(), ErrorCode.SystemError).build());
+                Errors.system("Fork failed: " ~ errnoString(), System.ProcessSpawnFailed).build());
         }
         
         if (pid == 0)
@@ -187,7 +187,7 @@ final class LinuxSyscallTracer : ISyscallTracer
             close(stdoutPipe[0]);
             close(stderrPipe[0]);
             return Err!(TraceResult, BuildError)(
-                Errors.system("waitpid failed", ErrorCode.SystemError).build());
+                Errors.system("waitpid failed", System.ProcessCrashed).build());
         }
         
         // Set ptrace options
@@ -201,7 +201,7 @@ final class LinuxSyscallTracer : ISyscallTracer
             close(stdoutPipe[0]);
             close(stderrPipe[0]);
             return Err!(TraceResult, BuildError)(
-                Errors.system("PTRACE_SETOPTIONS failed", ErrorCode.SystemError).build());
+                Errors.system("PTRACE_SETOPTIONS failed", System.ProcessSpawnFailed).build());
         }
         
         tracedPids[pid] = 0;

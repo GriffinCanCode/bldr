@@ -93,14 +93,14 @@ final class AzureVmProvider : CloudProvider
         
         if (result.status != 0)
             return Err!(WorkerId, BuildError)(
-                Errors.system(format("Failed to create Azure VM: %s", result.output), ErrorCode.NetworkError));
+                Errors.system(format("Failed to create Azure VM: %s", result.output), Network.Error));
         
         // Parse VM ID from JSON output
         auto output = result.output;
         auto vmIdIdx = output.indexOf("\"id\":\"");
         if (vmIdIdx == -1)
             return Err!(WorkerId, BuildError)(
-                Errors.system("Failed to parse VM ID from Azure response", ErrorCode.NetworkError));
+                Errors.system("Failed to parse VM ID from Azure response", Network.Error));
         
         auto idStart = vmIdIdx + 6; // Length of "\"id\":\""
         auto idEnd = output.indexOf("\"", idStart);
@@ -141,7 +141,7 @@ final class AzureVmProvider : CloudProvider
         
         if (result.status != 0)
             return VoidBuildResult.err(
-                Errors.system(format("Failed to delete Azure VM %s: %s", workerId.toString(), result.output), ErrorCode.NetworkError));
+                Errors.system(format("Failed to delete Azure VM %s: %s", workerId.toString(), result.output), Network.Error));
         
         structuredLog.info("deleted_azure_vm_").field("detail", "Deleted Azure VM: " ~ workerId.toString()).emit();
         return Ok!BuildError();
@@ -171,7 +171,7 @@ final class AzureVmProvider : CloudProvider
         
         if (result.status != 0)
             return Err!(WorkerStatus, BuildError)(
-                Errors.system(format("Failed to describe Azure VM %s: %s", workerId.toString(), result.output), ErrorCode.NetworkError));
+                Errors.system(format("Failed to describe Azure VM %s: %s", workerId.toString(), result.output), Network.Error));
         
         // Parse JSON output
         WorkerStatus status;

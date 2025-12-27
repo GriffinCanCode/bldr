@@ -49,7 +49,7 @@ public import infrastructure.errors.codes.config      : Config, ConfigErrors;
 public import infrastructure.errors.codes.migration   : Migration, MigrationErrors;
 public import infrastructure.errors.codes.network     : Network, NetworkErrors;
 public import infrastructure.errors.codes.security    : Security, SecurityErrors;
-public import infrastructure.errors.codes.toolchain   : Toolchain, ToolchainErrors;
+public import infrastructure.errors.codes.toolchain   : ToolchainCode, ToolchainErrors;
 
 /// Unified error code enum for backward compatibility
 /// Maps to domain-specific enums while maintaining existing API

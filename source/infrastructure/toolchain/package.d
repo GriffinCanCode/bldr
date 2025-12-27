@@ -70,7 +70,7 @@ BuildResult!Toolchain getToolchainByName(string name, string versionConstraint =
         if (toolchains.empty)
         {
             return Err!(Toolchain, BuildError)(
-                Errors.system("Toolchain not found: " ~ name, ErrorCode.ToolNotFound)
+                Errors.system("Toolchain not found: " ~ name, Plugin.ToolNotFound)
                     .withLocation(__FILE__, __LINE__)
                     .build());
         }

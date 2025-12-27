@@ -149,7 +149,7 @@ class EconomicsError : BaseBuildError
 {
     this(string message, string file = __FILE__, size_t line = __LINE__) @trusted
     {
-        super(ErrorCode.ConfigError, message);
+        super(Config.Error, message);
         addContext(ErrorContext("file", file));
         addContext(ErrorContext("line", line.to!string));
     }

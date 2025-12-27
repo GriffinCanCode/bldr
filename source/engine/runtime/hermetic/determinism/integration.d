@@ -134,7 +134,7 @@ struct DeterminismIntegration
         
         if (!initialized)
             return Err!(VerificationReport, BuildError)(
-                Errors.system("Integration not initialized", ErrorCode.NotInitialized)
+                Errors.system("Integration not initialized", Internal.NotInitialized)
                     .withLocation(__FILE__, __LINE__)
                     .build());
         
@@ -241,7 +241,7 @@ struct DeterminismIntegration
             auto error = Errors.system(
                 "Build is non-deterministic: " ~ 
                 verifyResult.violations.length.to!string ~ " violations",
-                ErrorCode.BuildFailed)
+                Build.Failed)
                 .withLocation(__FILE__, __LINE__)
                 .build();
             return Err!(VerificationReport, BuildError)(error);

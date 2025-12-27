@@ -40,7 +40,7 @@ class LocalToolchainProvider : ToolchainProvider
         if (!exists(path))
         {
             return Err!(Toolchain[], BuildError)(
-                Errors.system("Toolchain path does not exist: " ~ path, ErrorCode.ToolNotFound)
+                Errors.system("Toolchain path does not exist: " ~ path, Plugin.ToolNotFound)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -51,7 +51,7 @@ class LocalToolchainProvider : ToolchainProvider
         if (tc.tools.empty)
         {
             return Err!(Toolchain[], BuildError)(
-                Errors.system("No tools found in path: " ~ path, ErrorCode.ToolNotFound)
+                Errors.system("No tools found in path: " ~ path, Plugin.ToolNotFound)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -160,7 +160,7 @@ class RepositoryToolchainProvider : ToolchainProvider
         auto registerResult = resolver.registerRule(rule);
         if (registerResult.isErr)
             return Err!(Toolchain[], BuildError)(
-                Errors.system("Failed to register repository: " ~ registerResult.unwrapErr().message(), ErrorCode.RepositoryError)
+                Errors.system("Failed to register repository: " ~ registerResult.unwrapErr().message(), Repository.Error)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -171,7 +171,7 @@ class RepositoryToolchainProvider : ToolchainProvider
         {
             auto err = resolveResult.unwrapErr();
             return Err!(Toolchain[], BuildError)(
-                Errors.system("Failed to fetch toolchain: " ~ err.message(), ErrorCode.RepositoryError)
+                Errors.system("Failed to fetch toolchain: " ~ err.message(), Repository.Error)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -345,7 +345,7 @@ struct ToolchainManifest
         catch (JSONException e)
         {
             return Err!(ToolchainManifest, BuildError)(
-                Errors.system("Invalid toolchain manifest: " ~ e.msg, ErrorCode.InvalidConfiguration)
+                Errors.system("Invalid toolchain manifest: " ~ e.msg, Parse.InvalidConfiguration)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -353,7 +353,7 @@ struct ToolchainManifest
         catch (Exception e)
         {
             return Err!(ToolchainManifest, BuildError)(
-                Errors.system("Failed to load manifest: " ~ e.msg, ErrorCode.FileNotFound)
+                Errors.system("Failed to load manifest: " ~ e.msg, IO.FileNotFound)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );

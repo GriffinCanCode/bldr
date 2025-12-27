@@ -21,7 +21,7 @@ struct RPCCodec {
             return RPCRequest.fromJSON(parsed);
         } catch (Exception e) {
             return Err!(RPCRequest, BuildError)(
-                Errors.plugin("Failed to decode JSON-RPC request: " ~ e.msg, ErrorCode.InvalidMessage)
+                Errors.plugin("Failed to decode JSON-RPC request: " ~ e.msg, Plugin.InvalidMessage)
                     .withContext("decoding request", "invalid JSON")
                     .withSuggestion("Check that the JSON is well-formed")
                     .withLocation(__FILE__, __LINE__)
@@ -42,7 +42,7 @@ struct RPCCodec {
             return RPCResponse.fromJSON(parsed);
         } catch (Exception e) {
             return Err!(RPCResponse, BuildError)(
-                Errors.plugin("Failed to decode JSON-RPC response: " ~ e.msg, ErrorCode.InvalidMessage)
+                Errors.plugin("Failed to decode JSON-RPC response: " ~ e.msg, Plugin.InvalidMessage)
                     .withContext("decoding response", "invalid JSON")
                     .withSuggestion("Check that the JSON is well-formed")
                     .withLocation(__FILE__, __LINE__)

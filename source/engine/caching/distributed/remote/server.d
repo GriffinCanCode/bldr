@@ -453,14 +453,14 @@ final class CacheServer
                 if (received.data.length > 1_000_000)
                 {
                     return Err!(HttpRequest, BuildError)(
-                        Errors.network("Request headers too large", ErrorCode.NetworkError));
+                        Errors.network("Request headers too large", Network.Error));
                 }
             }
             
             if (headerEnd < 0)
             {
                 return Err!(HttpRequest, BuildError)(
-                    Errors.network("Invalid HTTP request", ErrorCode.NetworkError));
+                    Errors.network("Invalid HTTP request", Network.Error));
             }
             
             // Parse request line and headers
@@ -470,7 +470,7 @@ final class CacheServer
             if (lines.length == 0)
             {
                 return Err!(HttpRequest, BuildError)(
-                    Errors.network("Empty HTTP request", ErrorCode.NetworkError));
+                    Errors.network("Empty HTTP request", Network.Error));
             }
             
             // Parse request line
@@ -478,7 +478,7 @@ final class CacheServer
             if (requestParts.length < 3)
             {
                 return Err!(HttpRequest, BuildError)(
-                    Errors.network("Invalid request line", ErrorCode.NetworkError));
+                    Errors.network("Invalid request line", Network.Error));
             }
             
             request.method = requestParts[0];
@@ -530,7 +530,7 @@ final class CacheServer
         catch (Exception e)
         {
             return Err!(HttpRequest, BuildError)(
-                Errors.network("Failed to receive request: " ~ e.msg, ErrorCode.NetworkError));
+                Errors.network("Failed to receive request: " ~ e.msg, Network.Error));
         }
     }
     

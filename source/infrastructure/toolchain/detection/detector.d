@@ -11,7 +11,8 @@ import std.conv : to;
 import infrastructure.toolchain.core.spec;
 import infrastructure.toolchain.core.platform;
 import infrastructure.utils.logging;
-import infrastructure.errors;
+import infrastructure.errors : ErrorCode, BuildError, BuildResult, Err, Ok, 
+    VoidBuildResult, Errors;
 
 /// Toolchain detector interface
 interface ToolchainDetector

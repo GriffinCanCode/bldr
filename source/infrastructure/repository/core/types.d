@@ -40,19 +40,19 @@ struct RepositoryRule
     {
         if (name.length == 0)
             return Result!RepositoryError.err(
-                new RepositoryError("Repository name cannot be empty", ErrorCode.InvalidConfiguration));
+                new RepositoryError("Repository name cannot be empty", Config.InvalidConfiguration));
         
         if (url.length == 0 && kind != RepositoryKind.Local)
             return Result!RepositoryError.err(
-                new RepositoryError("Repository URL is required for " ~ kind.to!string, ErrorCode.InvalidConfiguration));
+                new RepositoryError("Repository URL is required for " ~ kind.to!string, Config.InvalidConfiguration));
         
         if (kind == RepositoryKind.Http && integrity.length == 0)
             return Result!RepositoryError.err(
-                new RepositoryError("Integrity hash is required for HTTP repositories", ErrorCode.InvalidConfiguration));
+                new RepositoryError("Integrity hash is required for HTTP repositories", Config.InvalidConfiguration));
         
         if (kind == RepositoryKind.Git && gitCommit.length == 0 && gitTag.length == 0)
             return Result!RepositoryError.err(
-                new RepositoryError("Git commit or tag is required for Git repositories", ErrorCode.InvalidConfiguration));
+                new RepositoryError("Git commit or tag is required for Git repositories", Config.InvalidConfiguration));
         
         return Ok!RepositoryError();
     }
@@ -107,7 +107,7 @@ struct ResolvedRepository
 /// Import errors module for RepositoryError
 private import std.conv : to;
 private import infrastructure.errors.types.types : BaseBuildError;
-private import infrastructure.errors.handling.codes : ErrorCode, ErrorCategory;
+private import infrastructure.errors.codes : ErrorCode, ErrorCategory, Config, Repository;
 
 /// Repository-specific error
 final class RepositoryError : BaseBuildError

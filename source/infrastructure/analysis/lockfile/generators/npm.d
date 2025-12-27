@@ -114,7 +114,7 @@ final class NpmLockfileGenerator : ILockfileGenerator
             return parsePnpmLock(lockfilePath);
         
         return Err!(Lockfile, BuildError)(
-            Errors.parse(lockfilePath, "Unknown lockfile format", ErrorCode.InvalidConfiguration).build());
+            Errors.parse(lockfilePath, "Unknown lockfile format", Parse.InvalidConfiguration).build());
     }
     
     override BuildResult!void write(const ref Lockfile lockfile, string outputPath) @system
@@ -306,7 +306,7 @@ private:
         catch (Exception e)
         {
             return Err!(Lockfile, BuildError)(
-                Errors.parse(path, "Failed to parse: " ~ e.msg, ErrorCode.InvalidConfiguration).build());
+                Errors.parse(path, "Failed to parse: " ~ e.msg, Parse.InvalidConfiguration).build());
         }
     }
     
@@ -395,7 +395,7 @@ private:
         catch (Exception e)
         {
             return Err!(Lockfile, BuildError)(
-                Errors.parse(path, "Failed to parse yarn.lock: " ~ e.msg, ErrorCode.InvalidConfiguration).build());
+                Errors.parse(path, "Failed to parse yarn.lock: " ~ e.msg, Parse.InvalidConfiguration).build());
         }
     }
     
@@ -474,7 +474,7 @@ private:
         catch (Exception e)
         {
             return Err!(Lockfile, BuildError)(
-                Errors.parse(path, "Failed to parse pnpm-lock.yaml: " ~ e.msg, ErrorCode.InvalidConfiguration).build());
+                Errors.parse(path, "Failed to parse pnpm-lock.yaml: " ~ e.msg, Parse.InvalidConfiguration).build());
         }
     }
     

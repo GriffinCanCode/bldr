@@ -65,7 +65,7 @@ abstract class BaseMigrator : IMigrator
     {
         import infrastructure.errors : ErrorCode;
         
-        auto builder = Errors.parse(filePath, message, ErrorCode.MigrationFailed);
+        auto builder = Errors.parse(filePath, message, Migration.Failed);
         if (context.length > 0)
             builder = builder.withContext("migration_context", context);
         return builder

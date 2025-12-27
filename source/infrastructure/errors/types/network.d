@@ -9,7 +9,7 @@ import infrastructure.errors.types.context;
 final class NetworkError : BaseBuildError
 {
     /// Constructor with message
-    this(string message, ErrorCode code = Network.Error,
+    this(string message, ErrorCode code = ErrorCode.NetworkError,
          string file = __FILE__, size_t line = __LINE__) @trusted
     {
         super(code, message);

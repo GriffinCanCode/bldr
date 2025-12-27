@@ -482,7 +482,7 @@ final class BuildGraph
         if (key in nodes)
         {
             auto error = ErrorBuilder!GraphError
-                .create("Duplicate target in build graph: " ~ key, ErrorCode.GraphInvalid)
+                .create("Duplicate target in build graph: " ~ key, Graph.Invalid)
                 .withContext("adding target to graph", "target: " ~ key)
                 .withSuggestion(ErrorSuggestion.fileCheck("Check for duplicate target definitions in Builderfile"))
                 .withSuggestion(ErrorSuggestion.fileCheck("Ensure each target has a unique name"))
@@ -504,7 +504,7 @@ final class BuildGraph
         if (key in nodes)
         {
             auto error = ErrorBuilder!GraphError
-                .create("Duplicate target ID in build graph: " ~ key, ErrorCode.GraphInvalid)
+                .create("Duplicate target ID in build graph: " ~ key, Graph.Invalid)
                 .withContext("adding target by ID", "targetId: " ~ key)
                 .withSuggestion(ErrorSuggestion.fileCheck("Check for duplicate target IDs"))
                 .withSuggestion(ErrorSuggestion.fileCheck("Ensure all TargetId values are unique"))
@@ -563,7 +563,7 @@ final class BuildGraph
             // Use builder pattern with typed suggestions for cycle errors
             import infrastructure.errors.types.context : ErrorSuggestion;
             
-            auto error = ErrorBuilder!GraphError.create("Circular dependency detected: adding '" ~ from ~ "' -> '" ~ to ~ "' would create a cycle", ErrorCode.GraphCycle)
+            auto error = ErrorBuilder!GraphError.create("Circular dependency detected: adding '" ~ from ~ "' -> '" ~ to ~ "' would create a cycle", Graph.Cycle)
                 .withContext("adding dependency", "would create cycle")
                 .withCommand("Visualize the dependency cycle", "bldr graph")
                 .withFileCheck("Remove or reorder dependencies to break the cycle")
@@ -598,7 +598,7 @@ final class BuildGraph
         
         if (fromKey !in nodes)
             return VoidBuildResult.err(
-                Errors.graph("Target '" ~ fromKey ~ "' not found in dependency graph", ErrorCode.NodeNotFound)
+                Errors.graph("Target '" ~ fromKey ~ "' not found in dependency graph", Graph.NodeNotFound)
                     .withContext("adding dependency", "from: " ~ fromKey ~ ", to: " ~ toKey)
                     .withSuggestion("Ensure target '" ~ fromKey ~ "' is defined in your Builderfile")
                     .withCommand("See all available targets", "bldr graph")
@@ -607,7 +607,7 @@ final class BuildGraph
         
         if (toKey !in nodes)
             return VoidBuildResult.err(
-                Errors.graph("Target '" ~ toKey ~ "' not found in dependency graph", ErrorCode.NodeNotFound)
+                Errors.graph("Target '" ~ toKey ~ "' not found in dependency graph", Graph.NodeNotFound)
                     .withContext("adding dependency", "from: " ~ fromKey ~ ", to: " ~ toKey)
                     .withSuggestion("Ensure target '" ~ toKey ~ "' is defined in your Builderfile")
                     .withCommand("See all available targets", "bldr graph")
@@ -622,7 +622,7 @@ final class BuildGraph
         {
         if (wouldCreateCycle(fromNode, toNode))
             return VoidBuildResult.err(
-                Errors.graph("Circular dependency detected: adding '" ~ fromKey ~ "' -> '" ~ toKey ~ "' would create a cycle", ErrorCode.GraphCycle)
+                Errors.graph("Circular dependency detected: adding '" ~ fromKey ~ "' -> '" ~ toKey ~ "' would create a cycle", Graph.Cycle)
                     .withContext("adding dependency", "would create cycle")
                     .withCommand("Visualize the dependency cycle", "bldr graph")
                     .withSuggestion("Remove or reorder dependencies to break the cycle")
@@ -943,7 +943,7 @@ final class BuildGraph
         auto key = id.toString();
         if (key !in nodes)
             return VoidBuildResult.err(
-                Errors.graph("Target not found: " ~ key, ErrorCode.NodeNotFound).build());
+                Errors.graph("Target not found: " ~ key, Graph.NodeNotFound).build());
         
         auto node = nodes[key];
         

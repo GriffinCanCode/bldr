@@ -124,7 +124,7 @@ final class ASTIncrementalEngine
         catch (Exception e)
         {
             return BuildResult!ASTChangeAnalysis.err(
-                Errors.analysis("", "AST analysis failed: " ~ e.msg, ErrorCode.AnalysisFailed).build());
+                Errors.analysis("", "AST analysis failed: " ~ e.msg, Analysis.Failed).build());
         }
     }
     

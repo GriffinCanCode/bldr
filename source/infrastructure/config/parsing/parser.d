@@ -98,7 +98,7 @@ class ConfigParser
                     auto error = createParseError(
                         root,
                         "No Builderfile found and no build targets could be automatically inferred",
-                        ErrorCode.InvalidConfiguration
+                        Parse.InvalidConfiguration
                     );
                     error.addSuggestion(ErrorSuggestion.command("Create a Builderfile", "bldr init"));
                     error.addSuggestion(ErrorSuggestion.docs("See zero-config mode", "docs/user-guides/examples.md"));
@@ -122,7 +122,7 @@ class ConfigParser
                 auto error = createParseError(
                     root,
                     "Failed to automatically infer build targets: " ~ e.msg,
-                    ErrorCode.AnalysisFailed
+                    Analysis.Failed
                 );
                 error.addSuggestion(ErrorSuggestion.command("Create a Builderfile manually", "bldr init"));
                 error.addSuggestion(ErrorSuggestion.command("Run with verbose output", "bldr build --verbose"));

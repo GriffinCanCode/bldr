@@ -289,7 +289,7 @@ class LifecycleManager {
             
             if (ctx.failMode == PluginFailMode.Required) {
                 return VoidBuildResult.err(
-                    Errors.plugin(msg, ErrorCode.PluginError)
+                    Errors.plugin(msg, Plugin.Error)
                         .withContext("last_error", health.lastError)
                         .withSuggestion("Plugin will automatically retry after " ~ 
                             health.resetTimeout.total!"seconds".to!string ~ " seconds")
@@ -360,7 +360,7 @@ class LifecycleManager {
         
         if (!hookResult.success) {
             return VoidBuildResult.err(
-                Errors.plugin("Pre-build hook failed: " ~ ctx.plugin.name, ErrorCode.BuildFailed)
+                Errors.plugin("Pre-build hook failed: " ~ ctx.plugin.name, Build.Failed)
                     .withContext("plugin", ctx.plugin.name));
         }
         

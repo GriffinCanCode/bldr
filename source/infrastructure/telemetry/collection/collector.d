@@ -318,17 +318,17 @@ struct TelemetryError
     
     static TelemetryError noActiveSession() pure @system
     {
-        return TelemetryError("No active build session", ErrorCode.TelemetryNoSession);
+        return TelemetryError("No active build session", Telemetry.NoSession);
     }
     
     static TelemetryError storageError(string details) pure @system
     {
-        return TelemetryError("Storage error: " ~ details, ErrorCode.TelemetryStorage);
+        return TelemetryError("Storage error: " ~ details, Telemetry.Storage);
     }
     
     static TelemetryError invalidData(string details) pure @system
     {
-        return TelemetryError("Invalid data: " ~ details, ErrorCode.TelemetryInvalid);
+        return TelemetryError("Invalid data: " ~ details, Telemetry.Invalid);
     }
     
     string toString() const pure nothrow @system

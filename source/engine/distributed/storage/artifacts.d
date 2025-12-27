@@ -135,7 +135,7 @@ final class ArtifactStore
         
         // Artifact not found
         return Err!(InputArtifact, BuildError)(
-            Errors.cache("Artifact not found: " ~ spec.id.toString(), ErrorCode.CacheNotFound));
+            Errors.cache("Artifact not found: " ~ spec.id.toString(), Cache.NotFound));
     }
     
     /// Upload artifact - uses FastCDC for large artifacts (>100MB)
@@ -149,7 +149,7 @@ final class ArtifactStore
         if (actualHash[0 .. 32] != id.hash[0 .. 32])
             return VoidBuildResult.err(
                 Errors.generic("Artifact hash mismatch: expected " ~ id.toString() ~ 
-                    " but got " ~ toHexString(actualHash[0 .. 32]).toLower(), ErrorCode.CacheCorrupted));
+                    " but got " ~ toHexString(actualHash[0 .. 32]).toLower(), Cache.Corrupted));
         
         // Use FastCDC for large artifacts (>100MB)
         if (shouldChunk(data.length) && config.enableRemote && config.remoteUrl.length > 0)
@@ -194,7 +194,7 @@ final class ArtifactStore
         
         if (chunkResult.chunks.length == 0)
             return VoidBuildResult.err(
-                Errors.cache("FastCDC chunking failed", ErrorCode.CacheWriteFailed).build());
+                Errors.cache("FastCDC chunking failed", Cache.WriteFailed).build());
         
         // Upload each chunk
         size_t chunksUploaded = 0;
@@ -463,7 +463,7 @@ final class ArtifactStore
             immutable headersEnd = responseStr.indexOf("\r\n\r\n");
             if (headersEnd < 0)
             {
-                auto error = new DistributedError(ErrorCode.NetworkError, "Invalid HTTP response");
+                auto error = new DistributedError(Network.Error, "Invalid HTTP response");
                 return Err!(ubyte[], BuildError)(error);
             }
             
@@ -473,18 +473,18 @@ final class ArtifactStore
             auto parts = firstLine.split(' ');
             if (parts.length < 2)
             {
-                auto error = new DistributedError(ErrorCode.NetworkError, "Invalid HTTP status line");
+                auto error = new DistributedError(Network.Error, "Invalid HTTP status line");
                 return Err!(ubyte[], BuildError)(error);
             }
             
             immutable statusCode = parts[1].to!int;
             if (statusCode == 404)
                 return Err!(ubyte[], BuildError)(
-                    Errors.cache("Artifact not found", ErrorCode.CacheNotFound));
+                    Errors.cache("Artifact not found", Cache.NotFound));
             else if (statusCode >= 400)
             {
                 auto error = new DistributedError(
-                    ErrorCode.NetworkError,
+                    Network.Error,
                     "HTTP error: " ~ statusCode.to!string
                 );
                 return Err!(ubyte[], BuildError)(error);
@@ -496,7 +496,7 @@ final class ArtifactStore
         }
         catch (Exception e)
         {
-            auto error = new DistributedError(ErrorCode.NetworkError, "HTTP GET failed: " ~ e.msg);
+            auto error = new DistributedError(Network.Error, "HTTP GET failed: " ~ e.msg);
             return Err!(ubyte[], BuildError)(error);
         }
     }
@@ -583,7 +583,7 @@ final class ArtifactStore
                     if (statusCode >= 400)
                     {
                         auto error = new DistributedError(
-                            ErrorCode.NetworkError,
+                            Network.Error,
                             "HTTP PUT error: " ~ statusCode.to!string
                         );
                         return VoidBuildResult.err(error);
@@ -595,7 +595,7 @@ final class ArtifactStore
         }
         catch (Exception e)
         {
-            auto error = new DistributedError(ErrorCode.NetworkError, "HTTP PUT failed: " ~ e.msg);
+            auto error = new DistributedError(Network.Error, "HTTP PUT failed: " ~ e.msg);
             return VoidBuildResult.err(error);
         }
     }

@@ -93,7 +93,7 @@ struct DeterminismVerifier
             return Err!(VerificationResult, BuildError)(
                 Errors.system("Different number of output files: " ~ 
                     sorted1.length.to!string ~ " vs " ~ sorted2.length.to!string,
-                    ErrorCode.ValidationFailed)
+                    Language.ValidationFailed)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -145,7 +145,7 @@ struct DeterminismVerifier
         if (!exists(dir1) || !exists(dir2))
         {
             return Err!(VerificationResult, BuildError)(
-                Errors.system("Directory not found", ErrorCode.DirectoryNotFound)
+                Errors.system("Directory not found", IO.DirectoryNotFound)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );

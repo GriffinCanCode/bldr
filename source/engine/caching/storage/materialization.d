@@ -228,7 +228,7 @@ final class WorkspaceMaterializer
             catch (Exception e)
             {
                 return Err!(CleanupResult, BuildError)(
-                    Errors.io(workspaceRoot, "Workspace cleanup failed: " ~ e.msg, ErrorCode.FileDeleteFailed)
+                    Errors.io(workspaceRoot, "Workspace cleanup failed: " ~ e.msg, IO.FileDeleteFailed)
                         .withLocation(__FILE__, __LINE__)
                         .build()
                 );

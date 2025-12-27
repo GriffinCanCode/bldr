@@ -64,7 +64,7 @@ enum SandboxErrorKind
 BuildError sandboxError(SandboxErrorKind kind, string msg) @trusted
 {
     import std.conv : to;
-    return Errors.system(msg, ErrorCode.SandboxError)
+    return Errors.system(msg, Distributed.SandboxError)
         .withContext("kind", kind.to!string)
         .build();
 }
