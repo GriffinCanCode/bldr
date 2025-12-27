@@ -19,6 +19,7 @@ import std.traits;
 /// - Minimal CAS contention on steal operations
 /// - Dynamic circular buffer with automatic resizing
 /// - Cache-friendly: owner operations access bottom, stealers access top
+/// - Cache line padding prevents false sharing between bottom/top indices
 /// 
 /// References:
 /// - Chase & Lev: "Dynamic Circular Work-Stealing Deque" (2005)
@@ -72,6 +73,7 @@ struct WorkStealingDeque(T) if (is(T == class) || is(T == interface))
     
     private shared CircularArray* array;
     private shared long bottom;  // Bottom index (owner side)
+    private ubyte[64] _padBottom; // Cache line padding to prevent false sharing
     private shared long top;     // Top index (stealer side)
     
     @disable this(this);  // Non-copyable

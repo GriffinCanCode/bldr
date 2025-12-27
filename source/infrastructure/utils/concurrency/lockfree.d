@@ -18,6 +18,7 @@ import std.range;
 /// - Zero allocation after initialization
 /// - No mutex contention between workers
 /// - Cache-friendly circular buffer design
+/// - Cache line padding prevents false sharing between enqueue/dequeue positions
 struct LockFreeQueue(T) if (is(T == class))
 {
     private struct Node
@@ -28,6 +29,7 @@ struct LockFreeQueue(T) if (is(T == class))
     
     private Node[] buffer;
     private shared size_t enqueuePos;
+    private ubyte[64] _padEnqueue; // Cache line padding to prevent false sharing
     private shared size_t dequeuePos;
     private immutable size_t mask;
     

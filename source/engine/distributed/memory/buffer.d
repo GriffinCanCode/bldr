@@ -7,6 +7,9 @@ import std.algorithm : max, min;
 /// Ring buffer for bounded queues
 /// Lock-free single-producer single-consumer
 /// 
+/// Performance:
+/// - Cache line padding prevents false sharing between reader/writer positions
+/// 
 /// Use Cases:
 /// - Message queues between threads
 /// - Bounded action buffers
@@ -15,6 +18,7 @@ struct RingBuffer(T)
 {
     private T[] buffer;
     private shared size_t readPos;
+    private ubyte[64] _padRead; // Cache line padding to prevent false sharing
     private shared size_t writePos;
     private immutable size_t capacity;
     private immutable size_t mask;
