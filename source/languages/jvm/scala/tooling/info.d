@@ -7,6 +7,7 @@ import std.algorithm;
 import std.array;
 import std.conv;
 import languages.jvm.scala.core.config;
+import infrastructure.utils.logging : structuredLog;
 
 /// Scala runtime and compiler information
 struct ScalaInfo

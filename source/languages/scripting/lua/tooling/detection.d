@@ -8,6 +8,7 @@ import std.conv;
 import std.regex;
 import languages.scripting.lua.core.config;
 import infrastructure.utils.process : isCommandAvailable;
+import infrastructure.utils.logging : structuredLog;
 
 /// Detect the best available Lua runtime
 LuaRuntime detectRuntime()

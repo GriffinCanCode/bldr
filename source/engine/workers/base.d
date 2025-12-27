@@ -218,12 +218,13 @@ abstract class BasePersistentWorkerFactory : IWorkerFactory
     /// Log worker lifecycle event with structured fields
     protected void logWorkerEvent(WorkerId id, string event, LogFields fields = LogFields.init) @trusted
     {
-        auto enriched = fields
-            .add("worker_id", id.toString())
-            .add("worker_type", workerType())
-            .add("event", event);
-        
-        structuredLog.info("worker_").field("detail", "Worker " ~ event, enriched).emit();
+        auto builder = structuredLog.info("worker_event")
+            .field("worker_id", id.toString())
+            .field("worker_type", workerType())
+            .field("event", event);
+        foreach (k, v; fields.pairs)
+            builder.field(k, v);
+        builder.emit();
     }
     
     /// Log worker error with context

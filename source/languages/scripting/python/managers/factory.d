@@ -14,6 +14,7 @@ import languages.scripting.python.managers.hatch;
 import languages.scripting.python.managers.conda;
 import languages.scripting.python.managers.pipenv;
 import languages.scripting.python.tooling.detection : ToolDetection;
+import infrastructure.utils.logging : structuredLog;
 alias PyTools = ToolDetection;
 
 /// Factory for creating package managers
