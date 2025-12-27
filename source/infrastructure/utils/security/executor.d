@@ -3,11 +3,12 @@ module infrastructure.utils.security.executor;
 import std.process;
 import std.algorithm : canFind, filter, map, remove;
 import std.array;
-import std.string : startsWith, endsWith, replace, indexOf, toUpper, strip;
+import std.string : replace, indexOf, toUpper, strip;
 import std.path : baseName, dirName;
 import std.range : empty;
 import infrastructure.utils.security.validation;
 import infrastructure.utils.logging;
+import infrastructure.utils.simd.strings : SIMDStrings;
 import engine.runtime.hermetic;
 import infrastructure.errors : ErrorCode, Errors, BuildError, BuildResult, Err, Ok, 
     VoidBuildResult, IOError, SystemError, InternalError, Security;
@@ -19,16 +20,18 @@ private alias ProcessConfig = std.process.Config;
 
 /// Known safe build tool patterns that contain path separators but aren't actual paths
 /// These patterns are used by build tools (Go, Bazel, etc.) as package/target specifiers
+/// SIMD-accelerated prefix/suffix matching
 private bool isKnownSafeBuildPattern(string arg) nothrow
 {
     try
     {
-        // Go wildcard patterns: ./..., ./pkg/..., etc.
-        if (arg == "./..." || (arg.startsWith("./") && arg.endsWith("/...")))
+        // Go wildcard patterns: ./..., ./pkg/..., etc. (SIMD-accelerated)
+        if (SIMDStrings.equal(arg, "./...") || 
+            (SIMDStrings.startsWith(arg, "./") && SIMDStrings.endsWith(arg, "/...")))
             return true;
         
         // Bazel-style target patterns: //..., //pkg:target
-        if (arg.startsWith("//"))
+        if (SIMDStrings.startsWith(arg, "//"))
             return true;
         
         return false;
@@ -282,13 +285,13 @@ struct SecureExecutor
         if (!SecurityValidator.isPathSafe(dir))
             return false;
         
-        // Check for absolute system paths
+        // Check for absolute system paths (SIMD-accelerated)
         version(Posix)
         {
             immutable systemPaths = ["/etc", "/proc", "/sys", "/dev", "/boot"];
             foreach (sysPath; systemPaths)
             {
-                if (dir == sysPath || dir.startsWith(sysPath ~ "/"))
+                if (SIMDStrings.equal(dir, sysPath) || SIMDStrings.startsWith(dir, sysPath ~ "/"))
                     return false;
             }
         }
@@ -549,8 +552,8 @@ auto execute(
         // If argument contains path separators, validate as path
         if (arg.canFind('/') || arg.canFind('\\'))
         {
-            // Allow flags starting with - even if they contain slashes
-            if (!arg.startsWith("-") && !arg.startsWith("--"))
+            // Allow flags starting with - even if they contain slashes (SIMD-accelerated)
+            if (!SIMDStrings.startsWith(arg, "-") && !SIMDStrings.startsWith(arg, "--"))
             {
                 // Allow known safe build tool patterns (Go wildcards, etc.)
                 if (!isKnownSafeBuildPattern(arg) && !SecurityValidator.isPathSafe(arg))
@@ -569,13 +572,13 @@ auto execute(
                 .withSuggestion("Use safe directory path")
                 .withContext("security validation").build();
         
-        // Additional check for system directories
+        // Additional check for system directories (SIMD-accelerated)
         version(Posix)
         {
             immutable systemDirs = ["/etc", "/proc", "/sys", "/dev", "/boot", "/root"];
             foreach (sysDir; systemDirs)
             {
-                if (workDir == sysDir || workDir.startsWith(sysDir ~ "/"))
+                if (SIMDStrings.equal(workDir, sysDir) || SIMDStrings.startsWith(workDir, sysDir ~ "/"))
                     throw Errors.io(workDir.idup, "Cannot execute in system directory", Security.AccessDenied)
                         .withSuggestion("Use a user-writable directory")
                         .withContext("security validation").build();

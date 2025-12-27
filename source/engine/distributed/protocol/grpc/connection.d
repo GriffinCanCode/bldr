@@ -2,12 +2,13 @@ module engine.distributed.protocol.grpc.connection;
 
 import std.datetime : Duration, seconds, msecs;
 import std.conv : to;
-import std.string : indexOf, startsWith;
+import std.string : indexOf;
 import std.algorithm : min;
 import core.sync.mutex : Mutex;
 import engine.distributed.protocol.grpc.http2;
 import engine.distributed.protocol.grpc.frame;
 import infrastructure.errors : Result, Ok, Err;
+import infrastructure.utils.simd.strings : SIMDStrings;
 
 /**
  * gRPC Connection Pool
@@ -87,19 +88,24 @@ final class GrpcConnection {
         parseEndpoint();
     }
     
+    /// SIMD-accelerated URL scheme parsing for high-throughput connection setup
     private void parseEndpoint() @trusted {
         string remaining = endpoint;
         port = 443;
         useTls = true;
         
-        if (remaining.startsWith("http://")) {
+        // SIMD-accelerated scheme prefix matching
+        if (SIMDStrings.startsWith(remaining, "http://")) {
             remaining = remaining[7 .. $];
             port = 80;
             useTls = false;
-        } else if (remaining.startsWith("https://") || remaining.startsWith("grpcs://")) {
-            remaining = remaining[remaining.startsWith("https://") ? 8 : 8 .. $];
+        } else if (SIMDStrings.startsWith(remaining, "https://")) {
+            remaining = remaining[8 .. $];
             useTls = true;
-        } else if (remaining.startsWith("grpc://")) {
+        } else if (SIMDStrings.startsWith(remaining, "grpcs://")) {
+            remaining = remaining[8 .. $];
+            useTls = true;
+        } else if (SIMDStrings.startsWith(remaining, "grpc://")) {
             remaining = remaining[7 .. $];
             port = 443;
             useTls = false;

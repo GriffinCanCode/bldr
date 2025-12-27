@@ -950,13 +950,14 @@ private final class MultiplexPool {
 /// Factory for creating gRPC CAS transports
 struct GrpcCasFactory {
     /// Create transport from URL
+    /// SIMD-accelerated URL scheme parsing
     static BuildResult!GrpcCasTransport fromUrl(string url, string instanceName = "") @trusted {
-        import std.algorithm : startsWith;
+        import infrastructure.utils.simd.strings : SIMDStrings;
         
         GrpcConfig config;
-        if (url.startsWith("grpc://")) {
+        if (SIMDStrings.startsWith(url, "grpc://")) {
             config = GrpcConfig.insecure(url[7 .. $]);
-        } else if (url.startsWith("grpcs://")) {
+        } else if (SIMDStrings.startsWith(url, "grpcs://")) {
             config = GrpcConfig.secure(url[8 .. $]);
         } else {
             return Err!(GrpcCasTransport, BuildError)(

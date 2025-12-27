@@ -10,6 +10,7 @@ import std.path : baseName, buildPath, dirName, extension;
 import core.sync.mutex : Mutex;
 import infrastructure.utils.files.hash : FastHash;
 import infrastructure.utils.simd.hash : SIMDHash;
+import infrastructure.utils.simd.strings : SIMDStrings;
 import engine.caching.index : CacheIndex;
 import engine.caching.policies.eviction : EvictionPolicy;
 import infrastructure.utils.security.integrity : IntegrityValidator, SignedData;
@@ -699,11 +700,12 @@ BMIKey createBMIKey(
         key.compiler = BMICompiler.Unknown;
     
     // Hash relevant flags (exclude non-semantic flags like -o, paths)
-    auto relevantFlags = flags.filter!(f => 
-        f.startsWith("-std") || f.startsWith("-O") || f.startsWith("-f") ||
-        f.startsWith("-D") || f.startsWith("-m") || f.startsWith("/std") ||
-        f.startsWith("/O") || f.startsWith("/D")
-    ).array;
+    // SIMD-accelerated prefix matching for compiler flag classification
+    auto relevantFlags = flags.filter!((f) @trusted {
+        return SIMDStrings.startsWith(f, "-std") || SIMDStrings.startsWith(f, "-O") || SIMDStrings.startsWith(f, "-f") ||
+               SIMDStrings.startsWith(f, "-D") || SIMDStrings.startsWith(f, "-m") || SIMDStrings.startsWith(f, "/std") ||
+               SIMDStrings.startsWith(f, "/O") || SIMDStrings.startsWith(f, "/D");
+    }).array;
     key.flagsHash = FastHash.hashStrings(relevantFlags);
     
     // Hash source content

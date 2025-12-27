@@ -11,6 +11,7 @@ import infrastructure.errors;
 import languages.registry;
 import infrastructure.utils.files.glob;
 import infrastructure.utils.security.validation;
+import infrastructure.utils.simd.strings : SIMDStrings;
 
 /// Semantic Analyzer - Converts AST to semantic objects (Targets, Repositories)
 /// 
@@ -199,9 +200,9 @@ struct SemanticAnalyzer
             auto parsedLang = parseLanguageName(fieldName);
             
             // If it's a recognized language (not Generic), treat it as a config block
-            // Also handle common patterns like "jsConfig", "goConfig", etc.
+            // Also handle common patterns like "jsConfig", "goConfig", etc. (SIMD-accelerated)
             bool isLangConfig = parsedLang != TargetLanguage.Generic || 
-                               fieldName.endsWith("config");
+                               (() @trusted => SIMDStrings.endsWith(fieldName, "config"))();
             
             if (isLangConfig)
             {

@@ -7,6 +7,7 @@ import frontend.lsp.core.protocol;
 import frontend.lsp.workspace.workspace;
 import infrastructure.config.workspace.ast;
 import infrastructure.config.parsing.lexer;
+import infrastructure.utils.simd.strings : SIMDStrings;
 
 /// Completion provider for Builderfile
 struct CompletionProvider
@@ -122,8 +123,8 @@ struct CompletionProvider
                 item.documentation = "Depends on target: " ~ target;
             }
             
-            // Format dependency reference
-            if (target.startsWith("//"))
+            // Format dependency reference (SIMD-accelerated prefix check)
+            if ((() @trusted => SIMDStrings.startsWith(target, "//"))())
                 item.insertText = "\"" ~ target ~ "\"";
             else
                 item.insertText = "\":\" ~ target ~ \"\"";
@@ -131,8 +132,9 @@ struct CompletionProvider
             items ~= item;
         }
         
-        // Sort by relevance (local targets first)
-        items.sort!((a, b) => !a.label.startsWith("//") && b.label.startsWith("//"));
+        // Sort by relevance (local targets first, SIMD-accelerated)
+        items.sort!((a, b) => !(() @trusted => SIMDStrings.startsWith(a.label, "//"))() && 
+                              (() @trusted => SIMDStrings.startsWith(b.label, "//"))());
         
         return items;
     }
@@ -263,9 +265,9 @@ struct CompletionProvider
             return CompletionContext(ContextType.ArrayItem);
         }
         
-        // Check if we're after a closing brace (field position)
+        // Check if we're after a closing brace (field position, SIMD-accelerated)
         auto trimmed = beforeCursor.stripRight;
-        if (trimmed.endsWith("{") || trimmed.endsWith(";"))
+        if ((() @trusted => SIMDStrings.endsWith(trimmed, "{") || SIMDStrings.endsWith(trimmed, ";"))())
             return CompletionContext(ContextType.Field);
         
         // Default: unknown context

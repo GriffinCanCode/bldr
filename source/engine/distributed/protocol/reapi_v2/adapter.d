@@ -563,11 +563,13 @@ final class ReapiV2Server {
     ReapiV2Adapter getAdapter() @safe => adapter;
     
     /// Handle incoming REAPI request
+    /// SIMD-accelerated path routing for high-throughput RPC
     Result!(ubyte[], string) handleRequest(string path, string method, const ubyte[] body_) @trusted {
-        import std.string : startsWith, indexOf;
+        import std.string : indexOf;
+        import infrastructure.utils.simd.strings : SIMDStrings;
         
-        // Capabilities endpoint
-        if (path.startsWith("/v2/") && path.indexOf("/capabilities") >= 0) {
+        // Capabilities endpoint (SIMD-accelerated prefix match)
+        if (SIMDStrings.startsWith(path, "/v2/") && path.indexOf("/capabilities") >= 0) {
             auto caps = adapter.buildServerCapabilities();
             return Ok!(ubyte[], string)(ReapiV2Codec.encodeServerCapabilities(caps));
         }

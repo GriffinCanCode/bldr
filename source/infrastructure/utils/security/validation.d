@@ -7,6 +7,7 @@ import std.algorithm;
 import std.array;
 import std.regex;
 import infrastructure.errors : Errors, Security;
+import infrastructure.utils.simd.strings : SIMDStrings;
 
 
 /// Security utilities for validating and sanitizing file paths and arguments
@@ -69,6 +70,7 @@ struct SecurityValidator
     }
     
     /// Validates that a path doesn't contain path traversal sequences
+    /// SIMD-accelerated string matching for faster security validation
     /// 
     /// Security checks:
     /// 1. Common traversal patterns (../, ..\)
@@ -85,8 +87,8 @@ struct SecurityValidator
             if (path.canFind("../") || path.canFind("..\\"))
                 return false;
             
-            // Check if path ends with ..
-            if (path.endsWith(".."))
+            // Check if path ends with .. (SIMD-accelerated)
+            if (SIMDStrings.endsWith(path, ".."))
                 return false;
             
             // Check for hidden traversal sequences
@@ -98,6 +100,7 @@ struct SecurityValidator
                 return false;
             
             // Check for absolute path to sensitive locations (on Unix)
+            // SIMD-accelerated prefix matching
             version(Posix)
             {
                 const string[] sensitivePaths = [
@@ -106,12 +109,13 @@ struct SecurityValidator
                 ];
                 foreach (sensPath; sensitivePaths)
                 {
-                    if (path.startsWith(sensPath))
+                    if (SIMDStrings.startsWith(path, sensPath))
                         return false;
                 }
             }
             
             // Check for Windows device names (security issue on Windows)
+            // SIMD-accelerated prefix matching
             version(Windows)
             {
                 auto upperPath = path.toUpper();
@@ -122,8 +126,10 @@ struct SecurityValidator
                 ];
                 foreach (device; deviceNames)
                 {
-                    if (upperPath == device || upperPath.startsWith(device ~ ".") || 
-                        upperPath.startsWith(device ~ ":") || upperPath.startsWith(device ~ "\\"))
+                    if (SIMDStrings.equal(upperPath, device) || 
+                        SIMDStrings.startsWith(upperPath, device ~ ".") || 
+                        SIMDStrings.startsWith(upperPath, device ~ ":") || 
+                        SIMDStrings.startsWith(upperPath, device ~ "\\"))
                         return false;
                 }
             }
@@ -169,8 +175,8 @@ struct SecurityValidator
             auto normalPath = buildNormalizedPath(absolutePath(path));
             auto normalBase = buildNormalizedPath(absolutePath(baseDir));
             
-            // Check if path starts with base directory
-            return normalPath.startsWith(normalBase);
+            // Check if path starts with base directory (SIMD-accelerated)
+            return SIMDStrings.startsWith(normalPath, normalBase);
         }
         catch (Exception)
         {

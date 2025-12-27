@@ -366,13 +366,15 @@ struct ReapiRouter {
     }
     
     /// Route request based on path and method
+    /// SIMD-accelerated path prefix matching for high-throughput RPC routing
     Result!(ubyte[], string) route(string method, string path, const ubyte[] body_) @trusted {
-        import std.string : indexOf, startsWith;
+        import std.string : indexOf;
+        import infrastructure.utils.simd.strings : SIMDStrings;
         
-        // Extract instance name from path
+        // Extract instance name from path (SIMD-accelerated)
         // Format: /v2/{instance_name}/...
         string instanceName = "";
-        if (path.startsWith("/v2/")) {
+        if (SIMDStrings.startsWith(path, "/v2/")) {
             auto rest = path[4 .. $];
             auto slashIdx = rest.indexOf('/');
             if (slashIdx > 0)
@@ -415,8 +417,8 @@ struct ReapiRouter {
             return routeBlobAccess(method, path, instanceName, body_);
         }
         
-        // Operations
-        if (path.startsWith("/v2/operations/")) {
+        // Operations (SIMD-accelerated prefix match)
+        if (SIMDStrings.startsWith(path, "/v2/operations/")) {
             return routeOperation(method, path, body_);
         }
         

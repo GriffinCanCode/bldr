@@ -4,11 +4,12 @@ import std.algorithm : map, filter;
 import std.array : array, empty;
 import std.path : buildPath, baseName;
 import std.file : exists, dirEntries, SpanMode;
-import std.string : startsWith, endsWith, strip;
+import std.string : strip;
 import infrastructure.toolchain.core.spec;
 import infrastructure.toolchain.core.platform;
 import infrastructure.repository;
 import infrastructure.utils.logging;
+import infrastructure.utils.simd.strings : SIMDStrings;
 import infrastructure.errors;
 
 /// Toolchain provider interface
@@ -113,14 +114,14 @@ class LocalToolchainProvider : ToolchainProvider
         auto name = baseName(path);
         tool.name = name;
         
-        // Detect tool type from name
-        if (name.startsWith("gcc") || name.startsWith("g++") || name.startsWith("clang"))
+        // Detect tool type from name (SIMD-accelerated prefix/suffix matching)
+        if ((() @trusted => SIMDStrings.startsWith(name, "gcc") || SIMDStrings.startsWith(name, "g++") || SIMDStrings.startsWith(name, "clang"))())
             tool.type = ToolchainType.Compiler;
-        else if (name.startsWith("ld") || name == "lld")
+        else if ((() @trusted => SIMDStrings.startsWith(name, "ld"))() || name == "lld")
             tool.type = ToolchainType.Linker;
-        else if (name == "ar" || name.endsWith("-ar"))
+        else if (name == "ar" || (() @trusted => SIMDStrings.endsWith(name, "-ar"))())
             tool.type = ToolchainType.Archiver;
-        else if (name.startsWith("as"))
+        else if ((() @trusted => SIMDStrings.startsWith(name, "as"))())
             tool.type = ToolchainType.Assembler;
         else
             tool.type = ToolchainType.BuildTool;

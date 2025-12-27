@@ -8,6 +8,7 @@ import infrastructure.migration.core.base;
 import infrastructure.migration.core.common;
 import infrastructure.config.schema.schema : TargetType, TargetLanguage;
 import infrastructure.errors;
+import infrastructure.utils.simd.strings : SIMDStrings;
 
 /// Migrator for Makefile
 final class MakeMigrator : BaseMigrator
@@ -73,16 +74,16 @@ final class MakeMigrator : BaseMigrator
             string targetName = match[1];
             string depsLine = match[2];
             
-            // Skip special targets
+            // Skip special targets (SIMD-accelerated prefix matching)
             if (targetName == "all" || targetName == "clean" || 
-                targetName == ".PHONY" || targetName.startsWith("."))
+                targetName == ".PHONY" || (() @trusted => SIMDStrings.startsWith(targetName, "."))())
                 continue;
             
             MigrationTarget target;
             target.name = targetName;
             
-            // Infer type from name patterns
-            if (targetName.endsWith(".a") || targetName.endsWith(".so") ||
+            // Infer type from name patterns (SIMD-accelerated suffix matching)
+            if ((() @trusted => SIMDStrings.endsWith(targetName, ".a") || SIMDStrings.endsWith(targetName, ".so"))() ||
                 targetName.indexOf("lib") >= 0)
                 target.type = TargetType.Library;
             else if (targetName == "test" || targetName.indexOf("test") >= 0)
@@ -112,10 +113,12 @@ final class MakeMigrator : BaseMigrator
             else if ("CFLAGS" in variables)
                 target.flags = variables["CFLAGS"].split();
             
-            // Parse dependencies (other targets)
-            auto deps = depsLine.split().filter!(d => !d.endsWith(".o") && 
-                                                       !d.endsWith(".c") && 
-                                                       !d.endsWith(".cpp")).array;
+            // Parse dependencies (other targets, SIMD-accelerated suffix filtering)
+            auto deps = depsLine.split().filter!((d) @trusted {
+                return !SIMDStrings.endsWith(d, ".o") && 
+                       !SIMDStrings.endsWith(d, ".c") && 
+                       !SIMDStrings.endsWith(d, ".cpp");
+            }).array;
             target.dependencies = deps;
             
             target.output = targetName;
