@@ -183,3 +183,12 @@ public import engine.runtime.services.speculation.speculator :
     ConfirmCallback,
     AbortCallback,
     createSpeculator;
+
+// Predictor pre-warming (startup optimization)
+public import engine.runtime.services.speculation.warmer :
+    PredictorWarmer,
+    WarmupStatus,
+    WarmupMetrics,
+    WarmerConfig,
+    PredictionCache,
+    createWarmedPredictor;

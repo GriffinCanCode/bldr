@@ -20,6 +20,7 @@ import infrastructure.utils.concurrency.priority : Priority;
 // Integration with new components
 import engine.runtime.services.speculation.predictor : ChangePredictor, ChangeProbability;
 import engine.runtime.services.speculation.history : HistoryTracker, ChangeType;
+import engine.runtime.services.speculation.warmer : PredictorWarmer, WarmerConfig, WarmupStatus;
 
 /// Speculation policy configuration
 /// Controls the aggressiveness and budget for speculative execution
@@ -254,6 +255,7 @@ final class SpeculationService : ISpeculationService
     // New components for probability-based speculation
     private ChangePredictor _predictor;
     private HistoryTracker _history;
+    private PredictorWarmer _warmer;
     private bool _usePredictiveMode;
     
     this(CostEstimator estimator, BuildGraph graph = null) @trusted
@@ -285,6 +287,65 @@ final class SpeculationService : ISpeculationService
             _usePredictiveMode = true;
             structuredLog.debug_("speculation_initialized_predictive_mode").emit();
         }
+    }
+    
+    /// Initialize with pre-warmed predictor for sub-millisecond startup
+    /// Background warmup loads state and pre-computes predictions asynchronously
+    void initializeWithWarmer(WarmerConfig config = WarmerConfig.init) @trusted
+    {
+        synchronized (_mutex)
+        {
+            _warmer = new PredictorWarmer(config);
+            _warmer.start();
+            
+            // Non-blocking - predictor/history populated when ready
+            _usePredictiveMode = true;
+            structuredLog.debug_("speculation_initialized_with_warmer").emit();
+        }
+    }
+    
+    /// Wait for pre-warming to complete (for eager initialization)
+    bool awaitWarmup(Duration timeout = Duration.zero) @trusted
+    {
+        if (_warmer is null) return true;
+        
+        if (!_warmer.awaitReady(timeout)) return false;
+        
+        // Transfer warmed components
+        synchronized (_mutex)
+        {
+            _predictor = _warmer.predictor();
+            _history = _warmer.history();
+        }
+        return true;
+    }
+    
+    /// Check if predictor is warmed and ready
+    @property bool isWarmed() const @safe nothrow
+        => _warmer is null || _warmer.isReady;
+    
+    /// Get warmup status
+    @property WarmupStatus warmupStatus() const @safe nothrow
+        => _warmer !is null ? _warmer.status : WarmupStatus.Ready;
+    
+    /// Get pre-warmed prediction (O(1) lookup after warmup)
+    Nullable!ChangeProbability getWarmedPrediction(TargetId targetId) @trusted
+    {
+        if (_warmer is null || !_warmer.isReady)
+            return Nullable!ChangeProbability.init;
+        
+        auto pred = _warmer.getCachedPrediction(targetId);
+        return pred !is null ? nullable(*pred) : Nullable!ChangeProbability.init;
+    }
+    
+    /// Get top N pre-warmed predictions
+    ChangeProbability[] getTopWarmedPredictions(size_t n = 100) @trusted
+        => _warmer !is null ? _warmer.topPredictions(n) : [];
+    
+    /// Get the warmer for metrics/monitoring
+    PredictorWarmer getWarmer() @trusted
+    {
+        synchronized (_mutex) { return _warmer; }
     }
     
     /// Get the change predictor (for external use)
@@ -515,6 +576,13 @@ final class SpeculationService : ISpeculationService
         // Save predictor state to history for persistence
         synchronized (_mutex)
         {
+            // Ensure we have predictor/history from warmer if used
+            if (_warmer !is null && _warmer.isReady)
+            {
+                if (_predictor is null) _predictor = _warmer.predictor();
+                if (_history is null) _history = _warmer.history();
+            }
+            
             if (_history !is null && _predictor !is null)
             {
                 _history.updatePredictorState(_predictor.exportState());
@@ -564,12 +632,21 @@ private:
     {
         SpeculationCandidate[] candidates;
         
-        // Get change predictions if available
+        // Get change predictions - prefer warmer's O(1) cache if available
         ChangeProbability[string] predictions;
-        if (_usePredictiveMode && _predictor !is null)
+        if (_usePredictiveMode)
         {
-            foreach (pred; _predictor.predict())
-                predictions[pred.targetId.toString()] = pred;
+            if (_warmer !is null && _warmer.isReady)
+            {
+                // Use pre-computed cache for O(1) lookups
+                predictions = _warmer.predictionCache().byTarget.dup;
+            }
+            else if (_predictor !is null)
+            {
+                // Fallback to computing predictions
+                foreach (pred; _predictor.predict())
+                    predictions[pred.targetId.toString()] = pred;
+            }
         }
         
         foreach (key, node; _graph.nodes)

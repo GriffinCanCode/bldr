@@ -74,6 +74,38 @@ Persists learned patterns between build sessions.
 
 **Persistence:** JSON file in `.builder-cache/speculation/history.json`
 
+### PredictorWarmer (`warmer.d`)
+
+Pre-warms the Bayesian predictor at startup from persisted state.
+
+**Features:**
+- Async background loading (non-blocking startup)
+- Pre-computes predictions for all known targets
+- O(1) prediction lookups after warmup
+- Warmup status monitoring
+
+**Usage:**
+```d
+import engine.runtime.services.speculation;
+
+// Option 1: Direct warmer usage
+auto warmer = createWarmedPredictor(".builder-cache/speculation");
+warmer.awaitReady(500.msecs);
+
+// Get pre-computed predictions
+auto top10 = warmer.topPredictions(10);
+auto pred = warmer.getCachedPrediction(targetId);
+
+// Option 2: Via SpeculationService
+auto service = new SpeculationService(estimator, graph);
+service.initializeWithWarmer();
+
+// Non-blocking warmup check
+if (service.isWarmed) {
+    auto predictions = service.getTopWarmedPredictions(100);
+}
+```
+
 ### SpeculativeEngine (`engine.d`)
 
 Background execution engine with dedicated worker threads.
@@ -215,6 +247,17 @@ auto policy = SpeculationPolicy.aggressive();
 | Predictable patterns | Better accuracy over time |
 | Cold start (no history) | Falls back to critical path |
 | Random changes | Minimal benefit |
+
+### Startup Performance (with Pre-warming)
+
+| Operation | Cold Start | Warm Start |
+|-----------|------------|------------|
+| Load persisted state | N/A | ~5-50ms |
+| Pre-compute predictions | N/A | ~10-100ms |
+| First prediction lookup | ~50ms | <1ms (O(1)) |
+| Warmup total | N/A | ~15-150ms |
+
+Pre-warming runs asynchronously and doesn't block application startup. The predictor is fully functional before warmup completes - it falls back to on-demand computation until the cache is populated.
 
 ## Configuration
 
