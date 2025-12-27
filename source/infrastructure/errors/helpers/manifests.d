@@ -5,7 +5,7 @@ import std.string : format;
 import std.file : exists;
 import infrastructure.errors.types.types;
 import infrastructure.errors.types.context;
-import infrastructure.errors.handling.codes;
+import infrastructure.errors.codes;
 import infrastructure.errors.helpers.builders : createParseError, createFileReadError;
 
 /// Manifest-specific error helpers for ecosystem integration
@@ -80,7 +80,7 @@ auto manifestParseError(
     auto error = createParseError(
         manifestPath,
         fullMessage,
-        ErrorCode.ParseFailed,
+        Parse.Failed,
         file,
         line
     );
@@ -110,7 +110,7 @@ auto manifestMissingFieldError(
     auto error = createParseError(
         manifestPath,
         message,
-        ErrorCode.MissingField,
+        Parse.MissingField,
         file,
         line
     );
@@ -171,7 +171,7 @@ auto manifestInvalidFieldError(
     auto error = createParseError(
         manifestPath,
         message,
-        ErrorCode.InvalidFieldValue,
+        Parse.InvalidFieldValue,
         file,
         line
     );
@@ -214,7 +214,7 @@ auto manifestDependencyError(
     auto error = createParseError(
         manifestPath,
         message,
-        ErrorCode.MissingDependency,
+        Analysis.MissingDependency,
         file,
         line
     );
@@ -279,7 +279,7 @@ auto manifestVersionError(
     auto error = createParseError(
         manifestPath,
         message,
-        ErrorCode.InvalidConfiguration,
+        Parse.InvalidConfiguration,
         file,
         line
     );
@@ -308,7 +308,7 @@ auto ecosystemToolMissingError(
         manifestType
     );
     
-    auto error = new LanguageError(manifestType, message, ErrorCode.MissingCompiler);
+    auto error = new LanguageError(manifestType, message, Language.MissingCompiler);
     
     error.addContext(ErrorContext(
         "checking ecosystem tool availability",

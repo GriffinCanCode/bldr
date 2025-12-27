@@ -1,7 +1,7 @@
 module infrastructure.errors.types.network;
 
 import infrastructure.errors.types.types;
-import infrastructure.errors.handling.codes;
+import infrastructure.errors.codes;
 import infrastructure.errors.types.context;
 
 /// Network communication error
@@ -9,7 +9,7 @@ import infrastructure.errors.types.context;
 final class NetworkError : BaseBuildError
 {
     /// Constructor with message
-    this(string message, ErrorCode code = ErrorCode.NetworkError,
+    this(string message, ErrorCode code = Network.Error,
          string file = __FILE__, size_t line = __LINE__) @trusted
     {
         super(code, message);

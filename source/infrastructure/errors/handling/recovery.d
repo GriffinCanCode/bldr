@@ -2,7 +2,7 @@ module infrastructure.errors.handling.recovery;
 
 import std.datetime;
 import infrastructure.errors.types.types;
-import infrastructure.errors.handling.codes;
+import infrastructure.errors.codes;
 
 /// Recovery strategy for handling errors
 interface RecoveryStrategy
@@ -180,9 +180,9 @@ RecoveryManager createDefaultRecoveryManager()
     // Retry transient errors
     auto retryStrategy = new RetryStrategy(3, 1.seconds, 2.0);
     manager.registerStrategyForCodes([
-        ErrorCode.BuildTimeout,
-        ErrorCode.ProcessTimeout,
-        ErrorCode.CacheLoadFailed
+        Build.Timeout,
+        System.ProcessTimeout,
+        Cache.LoadFailed
     ], retryStrategy);
     
     return manager;
@@ -234,32 +234,32 @@ unittest
     auto strategy = new RetryStrategy(3, 10.msecs, 2.0);
     
     // Create a cache error (recoverable)
-    auto cacheError = new CacheError("Cache temporarily unavailable", ErrorCode.CacheLoadFailed);
+    auto cacheError = new CacheError("Cache temporarily unavailable", Cache.LoadFailed);
     
     // First retry should succeed
     assert(strategy.recover(cacheError));
-    assert(strategy.getAttemptCount(ErrorCode.CacheLoadFailed) == 1);
+    assert(strategy.getAttemptCount(Cache.LoadFailed) == 1);
     
     // Second retry should succeed
     assert(strategy.recover(cacheError));
-    assert(strategy.getAttemptCount(ErrorCode.CacheLoadFailed) == 2);
+    assert(strategy.getAttemptCount(Cache.LoadFailed) == 2);
     
     // Third retry should succeed
     assert(strategy.recover(cacheError));
-    assert(strategy.getAttemptCount(ErrorCode.CacheLoadFailed) == 3);
+    assert(strategy.getAttemptCount(Cache.LoadFailed) == 3);
     
     // Fourth retry should fail (max attempts reached)
     assert(!strategy.recover(cacheError));
-    assert(strategy.getAttemptCount(ErrorCode.CacheLoadFailed) == 0);  // Counter reset
+    assert(strategy.getAttemptCount(Cache.LoadFailed) == 0);  // Counter reset
     
     // Test reset functionality
     strategy.reset();
-    auto newError = new CacheError("Another cache error", ErrorCode.CacheLoadFailed);
+    auto newError = new CacheError("Another cache error", Cache.LoadFailed);
     assert(strategy.recover(newError));
-    assert(strategy.getAttemptCount(ErrorCode.CacheLoadFailed) == 1);
+    assert(strategy.getAttemptCount(Cache.LoadFailed) == 1);
     
     // Test non-recoverable error
-    auto parseError = new ParseError("test.txt", "Syntax error", ErrorCode.ParseFailed);
+    auto parseError = new ParseError("test.txt", "Syntax error", Parse.Failed);
     assert(!strategy.recover(parseError));  // Parse errors are not recoverable
     
     writeln("RetryStrategy tests passed!");
@@ -274,11 +274,11 @@ unittest
     auto manager = createDefaultRecoveryManager();
     
     // Test that default strategies are registered
-    assert(manager.getStrategy(ErrorCode.BuildTimeout) !is null);
-    assert(manager.getStrategy(ErrorCode.CacheLoadFailed) !is null);
+    assert(manager.getStrategy(Build.Timeout) !is null);
+    assert(manager.getStrategy(Cache.LoadFailed) !is null);
     
     // Test recovery attempt
-    auto cacheError = new CacheError("Cache error", ErrorCode.CacheLoadFailed);
+    auto cacheError = new CacheError("Cache error", Cache.LoadFailed);
     bool recovered = manager.attemptRecovery(cacheError);
     assert(recovered);  // Should succeed first time
     

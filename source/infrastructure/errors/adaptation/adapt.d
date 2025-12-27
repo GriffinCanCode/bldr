@@ -4,13 +4,13 @@ import std.conv;
 import std.exception;
 import infrastructure.errors.handling.result;
 import infrastructure.errors.types.types;
-import infrastructure.errors.handling.codes;
+import infrastructure.errors.codes;
 import infrastructure.config.schema.schema : LanguageBuildResult;
 
 /// Adapters for integrating new error system with legacy code
 
 /// Convert exception to BuildError with strongly-typed suggestions
-BuildError fromException(Exception e, ErrorCode code = ErrorCode.InternalError)
+BuildError fromException(Exception e, ErrorCode code = Internal.Error)
 {
     import infrastructure.errors.types.context : ErrorSuggestion;
     
