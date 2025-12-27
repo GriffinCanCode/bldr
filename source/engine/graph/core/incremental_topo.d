@@ -75,10 +75,9 @@ struct IncrementalTopoOrder
         if (!_valid)
             return size_t.max;
         
-        // Look up node to get index, then use index for position lookup
-        if (auto nodePtr = nodeId in _graph.nodes)
-            return getPositionByIndex((*nodePtr)._nodeIndex);
-        return size_t.max;
+        // Use indexed lookup (no direct AA access)
+        auto idx = _graph.getIndexByKey(nodeId);
+        return idx != uint.max ? getPositionByIndex(idx) : size_t.max;
     }
     
     /// Get topological order, computing if needed
@@ -144,13 +143,11 @@ struct IncrementalTopoOrder
         if (!_valid)
             return;
         
-        // Look up node to get index
-        auto key = id.toString();
-        auto nodePtr = key in _graph.nodes;
-        if (nodePtr is null)
+        // Use indexed lookup
+        auto nodeIndex = _graph.getIndexByKey(id.toString());
+        if (nodeIndex == uint.max)
             return;
         
-        auto nodeIndex = (*nodePtr)._nodeIndex;
         auto pos = getPositionByIndex(nodeIndex);
         if (pos == size_t.max)
             return;
@@ -194,23 +191,12 @@ struct IncrementalTopoOrder
             
             visiting[node._nodeIndex] = true;
             
-            // Fast path: indexed access
-            if (node.dependencyIndices.length == node.dependencyIds.length && _graph._nodeArray.length > 0)
+            // O(1) indexed access via dependencyIndices
+            foreach (idx; node.dependencyIndices)
             {
-                foreach (idx; node.dependencyIndices)
-                {
-                    if (idx < _graph._nodeArray.length && _graph._nodeArray[idx] !is null)
-                        visit(_graph._nodeArray[idx]);
-                }
-            }
-            else
-            {
-                foreach (depId; node.dependencyIds)
-                {
-                    auto depKey = depId.toString();
-                    if (depKey in _graph.nodes)
-                        visit(_graph.nodes[depKey]);
-                }
+                auto dep = _graph.getNodeByIndex(idx);
+                if (dep !is null)
+                    visit(dep);
             }
             
             visiting.remove(node._nodeIndex);
@@ -276,21 +262,14 @@ struct IncrementalTopoOrder
             localVisiting[node._nodeIndex] = true;
             
             // Fast path: indexed access
-            if (node.dependencyIndices.length == node.dependencyIds.length && _graph._nodeArray.length > 0)
+            // O(1) indexed access
+            foreach (idx; node.dependencyIndices)
             {
-                foreach (idx; node.dependencyIndices)
+                if (idx in affectedSet)
                 {
-                    if (idx in affectedSet && idx < _graph._nodeArray.length && _graph._nodeArray[idx] !is null)
-                        localVisit(_graph._nodeArray[idx]);
-                }
-            }
-            else
-            {
-                foreach (depId; node.dependencyIds)
-                {
-                    auto depKey = depId.toString();
-                    if (depKey in _graph.nodes && node._nodeIndex in affectedSet)
-                        localVisit(_graph.nodes[depKey]);
+                    auto dep = _graph.getNodeByIndex(idx);
+                    if (dep !is null)
+                        localVisit(dep);
                 }
             }
             
@@ -350,28 +329,18 @@ struct IncrementalTopoOrder
             seen[node._nodeIndex] = true;
             affected ~= node;
             
-            // Fast path: indexed access
-            if (node.dependentIndices.length == node.dependentIds.length && _graph._nodeArray.length > 0)
+            // O(1) indexed access via dependentIndices
+            foreach (idx; node.dependentIndices)
             {
-                foreach (idx; node.dependentIndices)
-                {
-                    if (idx < _graph._nodeArray.length && _graph._nodeArray[idx] !is null)
-                        collectDependents(_graph._nodeArray[idx]);
-                }
-            }
-            else
-            {
-                foreach (depId; node.dependentIds)
-                {
-                    auto depKey = depId.toString();
-                    if (depKey in _graph.nodes)
-                        collectDependents(_graph.nodes[depKey]);
-                }
+                auto dep = _graph.getNodeByIndex(idx);
+                if (dep !is null)
+                    collectDependents(dep);
             }
         }
         
-        if (auto nodePtr = changedNode.toString() in _graph.nodes)
-            collectDependents(*nodePtr);
+        auto startNode = _graph.getNodeByKey(changedNode.toString());
+        if (startNode !is null)
+            collectDependents(startNode);
         
         // Sort affected by topological order using index-based positions (no string hashing)
         affected.sort!((a, b) => getPositionByIndex(a._nodeIndex) < getPositionByIndex(b._nodeIndex));
@@ -387,11 +356,10 @@ struct IncrementalTopoOrder
             return false;
         
         // A must precede B if B depends on A (directly or transitively)
-        auto bKey = b.toString();
-        if (bKey !in _graph.nodes)
+        auto bNode = _graph.getNodeByKey(b.toString());
+        if (bNode is null)
             return false;
         
-        auto bNode = _graph.nodes[bKey];
         bool[uint] visited;  // Index-based for O(1) lookup
         
         bool checkDep(BuildNode node)
@@ -403,25 +371,12 @@ struct IncrementalTopoOrder
             if (node.id == a)
                 return true;
             
-            // Fast path: indexed access
-            if (node.dependencyIndices.length == node.dependencyIds.length && _graph._nodeArray.length > 0)
+            // Use indexed access (always available with dependencyIndices)
+            foreach (idx; node.dependencyIndices)
             {
-                foreach (idx; node.dependencyIndices)
-                {
-                    if (idx < _graph._nodeArray.length && _graph._nodeArray[idx] !is null)
-                        if (checkDep(_graph._nodeArray[idx]))
-                            return true;
-                }
-            }
-            else
-            {
-                foreach (depId; node.dependencyIds)
-                {
-                    auto depKey = depId.toString();
-                    if (depKey in _graph.nodes)
-                        if (checkDep(_graph.nodes[depKey]))
-                            return true;
-                }
+                auto dep = _graph.getNodeByIndex(idx);
+                if (dep !is null && checkDep(dep))
+                    return true;
             }
             return false;
         }

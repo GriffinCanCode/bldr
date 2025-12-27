@@ -36,11 +36,13 @@ struct GraphStorage
     {
         // Convert to serializable format
         SerializableBuildGraph serializable;
+        serializable.nodes.reserve(graph.nodeCount);
         
-        // Convert nodes
-        foreach (key, node; graph.nodes)
+        // Convert nodes using _nodeArray for cache locality
+        foreach (node; graph._nodeArray)
         {
-            serializable.nodes ~= toSerializable(node);
+            if (node !is null)
+                serializable.nodes ~= toSerializable(node);
         }
         
         // Convert roots

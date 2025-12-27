@@ -169,18 +169,11 @@ final class DistributedScheduler
         // 2. Calculate dependencies count
         size_t dependencyCount = 0;
         // Use graph if available (more reliable for determining dependencies)
+        BuildNode graphNode;
         if (targetId != TargetId.init)
         {
-             auto targetIdStr = targetId.toString();
-             if (auto nodePtr = targetIdStr in graph.nodes)
-             {
-                 dependencyCount = nodePtr.dependencyIds.length;
-             }
-             else
-             {
-                 // Fallback to input specs if node not found in graph (rare)
-                 dependencyCount = request.inputs.length;
-             }
+            graphNode = graph.getNodeByKey(targetId.toString());
+            dependencyCount = graphNode !is null ? graphNode.dependencyIds.length : request.inputs.length;
         }
         else
         {
@@ -198,22 +191,14 @@ final class DistributedScheduler
             
             // If no dependencies, it's ready immediately
             if (dependencyCount == 0)
-            {
                 addReady(shard, info);
-            }
         }
 
         // 4. Check dependencies (The "Insert then Check" pattern)
-        if (dependencyCount > 0 && targetId != TargetId.init)
+        if (dependencyCount > 0 && graphNode !is null)
         {
-            auto targetIdStr = targetId.toString();
-            if (auto nodePtr = targetIdStr in graph.nodes)
-            {
-                foreach (depId; nodePtr.dependencyIds)
-                {
-                    checkDependencyAndDecrement(depId, request.id, shardIdx);
-                }
-            }
+            foreach (depId; graphNode.dependencyIds)
+                checkDependencyAndDecrement(depId, request.id, shardIdx);
         }
         else if (dependencyCount > 0)
         {
@@ -430,11 +415,10 @@ final class DistributedScheduler
         // 2. Notify dependents
         if (foundTarget)
         {
-             auto targetIdStr = targetId.toString();
-             if (auto nodePtr = targetIdStr in graph.nodes)
+             if (auto node = graph.getNodeByKey(targetId.toString()))
              {
                  // Use Graph to find dependent TargetIds
-                 foreach (dependentTargetId; nodePtr.dependentIds)
+                 foreach (dependentTargetId; node.dependentIds)
                  {
                      // Find ActionId for dependent TargetId
                      auto targetShard = targetShards[getTargetShardIndex(dependentTargetId)];
@@ -528,13 +512,10 @@ final class DistributedScheduler
             // This is potentially risky if we loop back. 
             // But propagation goes downstream.
             
-            auto targetIdStr = targetId.toString();
-            if (auto nodePtr = targetIdStr in graph.nodes)
+            if (auto node = graph.getNodeByKey(targetId.toString()))
             {
-                foreach (dependentTargetId; nodePtr.dependentIds)
-                {
+                foreach (dependentTargetId; node.dependentIds)
                     markDependentFailed(dependentTargetId);
-                }
             }
         }
     }

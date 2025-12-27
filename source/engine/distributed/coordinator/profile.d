@@ -105,8 +105,8 @@ final class ProfileGuidedScheduler
         synchronized (mutex)
         {
             // Look up node to get index
-            if (auto nodePtr = targetId in graph.nodes)
-                return getProfileByIndex((*nodePtr)._nodeIndex);
+            if (auto node = graph.getNodeByKey(targetId))
+                return getProfileByIndex(node._nodeIndex);
             return null;
         }
     }
@@ -122,10 +122,10 @@ final class ProfileGuidedScheduler
         {
             size_t cost = 0, depth = 0, dependents = 0;
             
-            // Use index-based lookup (no string hashing)
-            if (auto nodePtr = targetId.toString() in graph.nodes)
+            // Use index-based lookup
+            if (auto node = graph.getNodeByKey(targetId.toString()))
             {
-                if (auto profile = (*nodePtr)._nodeIndex in profiles)
+                if (auto profile = node._nodeIndex in profiles)
                 {
                     cost = profile.criticalPathCost;
                     depth = profile.depth;
@@ -212,11 +212,11 @@ private:
             }
             else
             {
-                foreach (dependentId; node.dependentIds)
+                foreach (idx; node.dependentIndices)
                 {
-                    auto depKey = dependentId.toString();
-                    if (depKey in graph.nodes)
-                        maxDownstreamCost = max(maxDownstreamCost, visit(graph.nodes[depKey]));
+                    auto dep = graph.getNodeByIndex(idx);
+                    if (dep !is null)
+                        maxDownstreamCost = max(maxDownstreamCost, visit(dep));
                 }
             }
             
@@ -279,9 +279,9 @@ private:
     size_t getSchedulingScore(ActionId actionId, TargetId targetId) @trusted
     {
         // Use index-based lookup
-        if (auto nodePtr = targetId.toString() in graph.nodes)
+        if (auto node = graph.getNodeByKey(targetId.toString()))
         {
-            if (auto profile = (*nodePtr)._nodeIndex in profiles)
+            if (auto profile = node._nodeIndex in profiles)
                 return profile.schedulingScore();
         }
         return 0;

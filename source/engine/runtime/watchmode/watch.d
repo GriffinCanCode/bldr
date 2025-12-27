@@ -322,7 +322,7 @@ final class WatchModeService
             if (_cachedGraph !is null && graph.hasValidTopoCache)
             {
                 auto currentVersion = graph.topoCacheVersion;
-                if (currentVersion == _lastTopoVersion && graph.nodes.length == _cachedGraph.nodes.length)
+                if (currentVersion == _lastTopoVersion && graph.nodeCount == _cachedGraph.nodeCount)
                 {
                     usedIncrementalOrder = true;
                     _incrementalHits++;

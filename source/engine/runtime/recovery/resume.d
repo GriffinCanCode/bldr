@@ -114,12 +114,12 @@ final class ResumePlanner
         // Restore successful builds
         checkpoint.mergeWith(graph);
         
-        // Retry all failed targets
+        // Retry all failed targets using indexed lookup
         foreach (targetId; checkpoint.failedTargetIds)
         {
-            if (targetId in graph.nodes)
+            auto node = graph.getNodeByKey(targetId);
+            if (node !is null)
             {
-                auto node = graph.nodes[targetId];
                 node.status = BuildStatus.Pending;
                 plan.targetsToRetry ~= targetId;
             }
@@ -141,15 +141,16 @@ final class ResumePlanner
     {
         checkpoint.mergeWith(graph);
         
-        plan.targetsToSkip = checkpoint.failedTargetIds.filter!(id => id in graph.nodes).array ~
+        plan.targetsToSkip = checkpoint.failedTargetIds.filter!(id => graph.hasKey(id)).array ~
                              checkpoint.nodeStates.keys.filter!(id => checkpoint.nodeStates[id] == BuildStatus.Success).array;
     }
     
     private void planRebuildAll(BuildGraph graph, ref ResumePlan plan) @system
     {
-        // Clear all node states
-        foreach (node; graph.nodes.values)
-            node.status = BuildStatus.Pending;
+        // Clear all node states using _nodeArray
+        foreach (node; graph._nodeArray)
+            if (node !is null)
+                node.status = BuildStatus.Pending;
         
         plan.message = "Rebuilding all targets (checkpoint ignored)";
     }
@@ -170,21 +171,21 @@ final class ResumePlanner
             
             foreach (targetId; invalidated)
             {
-                if (targetId in graph.nodes)
+                auto node = graph.getNodeByKey(targetId);
+                if (node !is null)
                 {
-                    auto node = graph.nodes[targetId];
                     node.status = BuildStatus.Pending;
                     plan.targetsToRetry ~= targetId;
                 }
             }
         }
         
-        // Retry failed targets
+        // Retry failed targets using indexed lookup
         foreach (targetId; checkpoint.failedTargetIds)
         {
-            if (targetId in graph.nodes && !canFind(plan.targetsToRetry, targetId))
+            auto node = graph.getNodeByKey(targetId);
+            if (node !is null && !canFind(plan.targetsToRetry, targetId))
             {
-                auto node = graph.nodes[targetId];
                 node.status = BuildStatus.Pending;
                 plan.targetsToRetry ~= targetId;
             }
@@ -217,8 +218,11 @@ final class ResumePlanner
         // Use cache to check if sources changed
         auto cache = new BuildCache(".builder-cache", CacheConfig.fromEnvironment());
         
-        foreach (targetId, node; graph.nodes)
+        foreach (node; graph._nodeArray)
         {
+            if (node is null) continue;
+            auto targetId = node.id.toString();
+            
             // Skip if not in checkpoint
             if (targetId !in checkpoint.nodeStates)
                 continue;
@@ -245,42 +249,40 @@ final class ResumePlanner
         ref ResumePlan plan
     ) @system
     {
-        import std.range : chain;
-        
-        bool[string] visited;
+        bool[uint] visited;  // Index-based
         
         void markRecursive(BuildNode node)
         {
-            if (node.id.toString() in visited)
+            if (node._nodeIndex in visited)
                 return;
             
-            visited[node.id.toString()] = true;
+            visited[node._nodeIndex] = true;
             
             // Mark as pending and add to retry list
             node.status = BuildStatus.Pending;
             plan.targetsToRetry ~= node.id.toString();
             
-            // Recursively mark dependents
-            foreach (dependentId; node.dependentIds)
+            // Recursively mark dependents using indexed access
+            foreach (idx; node.dependentIndices)
             {
-                auto depKey = dependentId.toString();
-                if (depKey in graph.nodes)
-                    markRecursive(graph.nodes[depKey]);
+                auto dep = graph.getNodeByIndex(idx);
+                if (dep !is null)
+                    markRecursive(dep);
             }
         }
         
-        // Start from changed targets
+        // Start from changed targets using indexed lookup
         foreach (targetId; changedTargets)
         {
-            if (targetId !in graph.nodes)
+            auto node = graph.getNodeByKey(targetId);
+            if (node is null)
                 continue;
             
-            auto node = graph.nodes[targetId];
-            foreach (dependentId; node.dependentIds)
+            foreach (idx; node.dependentIndices)
             {
-                auto depKey = dependentId.toString();
-                if (depKey in graph.nodes)
-                    markRecursive(graph.nodes[depKey]);
+                auto dep = graph.getNodeByIndex(idx);
+                if (dep !is null)
+                    markRecursive(dep);
             }
         }
     }

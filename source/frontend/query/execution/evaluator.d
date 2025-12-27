@@ -101,8 +101,9 @@ final class QueryEvaluator : QueryVisitor
         node.to.accept(this);
         auto toTargets = currentResult;
         
-        // Find all paths between any from -> to pair
-        bool[BuildNode] allPathNodes;
+        // Find all paths between any from -> to pair (index-based set)
+        bool[uint] seenIdx;
+        BuildNode[] allPathNodes;
         
         foreach (from; fromTargets)
         {
@@ -111,13 +112,18 @@ final class QueryEvaluator : QueryVisitor
                 if (from is null || to is null || from is to)
                     continue;
                 
-                auto pathNodes = allPaths(graph, from, to);
-                foreach (pathNode; pathNodes)
-                    allPathNodes[pathNode] = true;
+                foreach (pathNode; allPaths(graph, from, to))
+                {
+                    if (pathNode._nodeIndex !in seenIdx)
+                    {
+                        seenIdx[pathNode._nodeIndex] = true;
+                        allPathNodes ~= pathNode;
+                    }
+                }
             }
         }
         
-        currentResult = allPathNodes.keys;
+        currentResult = allPathNodes;
     }
     
     /// Visit somepath expression
@@ -239,8 +245,8 @@ final class QueryEvaluator : QueryVisitor
         if (searchPath.startsWith("//"))
             searchPath = searchPath[2 .. $];
         
-        // Find all targets whose Builderfile matches
-        foreach (graphNode; graph.nodes.values)
+        // Find all targets whose Builderfile matches (use _nodeArray for cache locality)
+        foreach (graphNode; graph._nodeArray)
         {
             if (graphNode is null)
                 continue;
@@ -324,25 +330,29 @@ final class QueryEvaluator : QueryVisitor
         variables.remove(node.variable);
     }
     
-    /// Helper: Get direct dependencies only
+    /// Helper: Get direct dependencies only using indexed access
     private BuildNode[] getDirectDependencies(BuildNode[] targets) @system
     {
-        bool[BuildNode] result;
+        bool[uint] seen;  // Index-based for O(1) lookup
+        BuildNode[] result;
         
         foreach (target; targets)
         {
             if (target is null)
                 continue;
             
-            foreach (depId; target.dependencyIds)
+            foreach (idx; target.dependencyIndices)
             {
-                auto depKey = depId.toString();
-                if (depKey in graph.nodes)
-                    result[graph.nodes[depKey]] = true;
+                auto dep = graph.getNodeByIndex(idx);
+                if (dep !is null && dep._nodeIndex !in seen)
+                {
+                    seen[dep._nodeIndex] = true;
+                    result ~= dep;
+                }
             }
         }
         
-        return result.keys;
+        return result;
     }
 }
 
@@ -489,17 +499,24 @@ final class OptimizedQueryEvaluator : QueryVisitor
         node.to.accept(this);
         auto toTargets = currentResult;
         
-        bool[BuildNode] allPathNodes;
+        bool[uint] seenIdx;
+        BuildNode[] allPathNodes;
         foreach (from; fromTargets)
         {
             foreach (to; toTargets)
             {
                 if (from is null || to is null || from is to) continue;
                 foreach (pathNode; allPaths(graph, from, to))
-                    allPathNodes[pathNode] = true;
+                {
+                    if (pathNode._nodeIndex !in seenIdx)
+                    {
+                        seenIdx[pathNode._nodeIndex] = true;
+                        allPathNodes ~= pathNode;
+                    }
+                }
             }
         }
-        currentResult = allPathNodes.keys;
+        currentResult = allPathNodes;
     }
     
     override void visit(SomePathExpr node) @system
@@ -559,7 +576,7 @@ final class OptimizedQueryEvaluator : QueryVisitor
         string searchPath = node.pattern;
         if (searchPath.startsWith("//")) searchPath = searchPath[2 .. $];
         
-        foreach (graphNode; graph.nodes.values)
+        foreach (graphNode; graph._nodeArray)
         {
             if (graphNode is null) continue;
             string targetId = graphNode.idString;
@@ -609,27 +626,30 @@ final class OptimizedQueryEvaluator : QueryVisitor
         variables.remove(node.variable);
     }
     
-    /// Get direct dependencies with predicate filtering
+    /// Get direct dependencies with predicate filtering using indexed access
     private BuildNode[] getDirectDependenciesFiltered(BuildNode[] targets, Predicate[] predicates) @system
     {
-        bool[BuildNode] result;
+        bool[uint] seen;  // Index-based
+        BuildNode[] result;
         
         foreach (target; targets)
         {
             if (target is null) continue;
             
-            foreach (depId; target.dependencyIds)
+            foreach (idx; target.dependencyIndices)
             {
-                auto depKey = depId.toString();
-                if (depKey !in graph.nodes) continue;
+                auto dep = graph.getNodeByIndex(idx);
+                if (dep is null || dep._nodeIndex in seen) continue;
                 
-                auto dep = graph.nodes[depKey];
                 if (predicates.all!(p => p.matches(dep)))
-                    result[dep] = true;
+                {
+                    seen[dep._nodeIndex] = true;
+                    result ~= dep;
+                }
             }
         }
         
-        return result.keys;
+        return result;
     }
 }
 

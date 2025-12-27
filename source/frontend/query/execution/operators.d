@@ -6,35 +6,45 @@ import engine.graph;
 
 /// Set operations on BuildNode collections
 /// 
-/// Implements efficient set algebra using D's associative arrays
-/// for O(1) membership testing
+/// Uses index-based sets (bool[uint]) for O(1) membership testing
+/// with better memory locality than pointer-based sets.
 
 /// Union: A ∪ B (all elements in A or B)
 /// 
 /// Complexity: O(|A| + |B|)
-/// Memory: O(|A| + |B|) for result set
 BuildNode[] union_(BuildNode[] a, BuildNode[] b) @system
 {
-    bool[BuildNode] set;
+    bool[uint] seen;
+    BuildNode[] result;
+    result.reserve(a.length + b.length);
     
     foreach (node; a)
-        if (node !is null)
-            set[node] = true;
+    {
+        if (node !is null && node._nodeIndex !in seen)
+        {
+            seen[node._nodeIndex] = true;
+            result ~= node;
+        }
+    }
     
     foreach (node; b)
-        if (node !is null)
-            set[node] = true;
+    {
+        if (node !is null && node._nodeIndex !in seen)
+        {
+            seen[node._nodeIndex] = true;
+            result ~= node;
+        }
+    }
     
-    return set.keys;
+    return result;
 }
 
 /// Intersection: A ∩ B (elements in both A and B)
 /// 
 /// Complexity: O(|A| + |B|)
-/// Memory: O(min(|A|, |B|)) for result set
 BuildNode[] intersect(BuildNode[] a, BuildNode[] b) @system
 {
-    // Optimization: build set from smaller array
+    // Build set from smaller array
     if (b.length < a.length)
     {
         auto temp = a;
@@ -42,20 +52,20 @@ BuildNode[] intersect(BuildNode[] a, BuildNode[] b) @system
         b = temp;
     }
     
-    bool[BuildNode] setA;
+    bool[uint] setA;
     foreach (node; a)
         if (node !is null)
-            setA[node] = true;
+            setA[node._nodeIndex] = true;
     
     BuildNode[] result;
-    bool[BuildNode] seen;  // Prevent duplicates
+    bool[uint] seen;
     
     foreach (node; b)
     {
-        if (node !is null && node in setA && node !in seen)
+        if (node !is null && node._nodeIndex in setA && node._nodeIndex !in seen)
         {
             result ~= node;
-            seen[node] = true;
+            seen[node._nodeIndex] = true;
         }
     }
     
@@ -65,17 +75,16 @@ BuildNode[] intersect(BuildNode[] a, BuildNode[] b) @system
 /// Difference: A \ B (elements in A but not in B)
 /// 
 /// Complexity: O(|A| + |B|)
-/// Memory: O(|A|) for result set
 BuildNode[] except(BuildNode[] a, BuildNode[] b) @system
 {
-    bool[BuildNode] setB;
+    bool[uint] setB;
     foreach (node; b)
         if (node !is null)
-            setB[node] = true;
+            setB[node._nodeIndex] = true;
     
     BuildNode[] result;
     foreach (node; a)
-        if (node !is null && node !in setB)
+        if (node !is null && node._nodeIndex !in setB)
             result ~= node;
     
     return result;
@@ -84,30 +93,26 @@ BuildNode[] except(BuildNode[] a, BuildNode[] b) @system
 /// Symmetric difference: A △ B (elements in A or B but not both)
 /// 
 /// Complexity: O(|A| + |B|)
-/// Memory: O(|A| + |B|)
 BuildNode[] symmetricDifference(BuildNode[] a, BuildNode[] b) @system
 {
-    bool[BuildNode] setA;
-    bool[BuildNode] setB;
+    bool[uint] setA, setB;
     
     foreach (node; a)
         if (node !is null)
-            setA[node] = true;
+            setA[node._nodeIndex] = true;
     
     foreach (node; b)
         if (node !is null)
-            setB[node] = true;
+            setB[node._nodeIndex] = true;
     
     BuildNode[] result;
     
-    // Elements in A but not B
     foreach (node; a)
-        if (node !is null && node !in setB)
+        if (node !is null && node._nodeIndex !in setB)
             result ~= node;
     
-    // Elements in B but not A
     foreach (node; b)
-        if (node !is null && node !in setA)
+        if (node !is null && node._nodeIndex !in setA)
             result ~= node;
     
     return result;
@@ -116,18 +121,18 @@ BuildNode[] symmetricDifference(BuildNode[] a, BuildNode[] b) @system
 /// Remove duplicates from array
 /// 
 /// Complexity: O(n)
-/// Memory: O(n)
 BuildNode[] unique(BuildNode[] nodes) @system
 {
-    bool[BuildNode] seen;
+    bool[uint] seen;
     BuildNode[] result;
+    result.reserve(nodes.length);
     
     foreach (node; nodes)
     {
-        if (node !is null && node !in seen)
+        if (node !is null && node._nodeIndex !in seen)
         {
             result ~= node;
-            seen[node] = true;
+            seen[node._nodeIndex] = true;
         }
     }
     
@@ -142,13 +147,13 @@ bool setEqual(BuildNode[] a, BuildNode[] b) @system
     if (a.length != b.length)
         return false;
     
-    bool[BuildNode] setA;
+    bool[uint] setA;
     foreach (node; a)
         if (node !is null)
-            setA[node] = true;
+            setA[node._nodeIndex] = true;
     
     foreach (node; b)
-        if (node is null || node !in setA)
+        if (node is null || node._nodeIndex !in setA)
             return false;
     
     return true;
@@ -159,32 +164,27 @@ bool setEqual(BuildNode[] a, BuildNode[] b) @system
 /// Complexity: O(|A| + |B|)
 bool isSubset(BuildNode[] a, BuildNode[] b) @system
 {
-    bool[BuildNode] setB;
+    bool[uint] setB;
     foreach (node; b)
         if (node !is null)
-            setB[node] = true;
+            setB[node._nodeIndex] = true;
     
     foreach (node; a)
-        if (node is null || node !in setB)
+        if (node is null || node._nodeIndex !in setB)
             return false;
     
     return true;
 }
 
 /// Check if A is a superset of B (A ⊇ B)
-/// 
-/// Complexity: O(|A| + |B|)
-bool isSuperset(BuildNode[] a, BuildNode[] b) @system
-{
-    return isSubset(b, a);
-}
+bool isSuperset(BuildNode[] a, BuildNode[] b) @system => isSubset(b, a);
 
 /// Check if two sets are disjoint (A ∩ B = ∅)
 /// 
 /// Complexity: O(|A| + |B|)
 bool isDisjoint(BuildNode[] a, BuildNode[] b) @system
 {
-    // Optimization: build set from smaller array
+    // Build set from smaller array
     if (b.length < a.length)
     {
         auto temp = a;
@@ -192,13 +192,13 @@ bool isDisjoint(BuildNode[] a, BuildNode[] b) @system
         b = temp;
     }
     
-    bool[BuildNode] setA;
+    bool[uint] setA;
     foreach (node; a)
         if (node !is null)
-            setA[node] = true;
+            setA[node._nodeIndex] = true;
     
     foreach (node; b)
-        if (node !is null && node in setA)
+        if (node !is null && node._nodeIndex in setA)
             return false;
     
     return true;
@@ -209,10 +209,9 @@ bool isDisjoint(BuildNode[] a, BuildNode[] b) @system
 /// Complexity: O(n)
 size_t cardinality(BuildNode[] nodes) @system
 {
-    bool[BuildNode] set;
+    bool[uint] set;
     foreach (node; nodes)
         if (node !is null)
-            set[node] = true;
+            set[node._nodeIndex] = true;
     return set.length;
 }
-

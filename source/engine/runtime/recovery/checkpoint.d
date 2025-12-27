@@ -36,8 +36,8 @@ struct Checkpoint
     {
         import std.algorithm : all;
         
-        return graph.nodes.length == totalTargets && 
-               nodeStates.byKey.all!(id => id in graph.nodes);
+        return graph.nodeCount == totalTargets && 
+               nodeStates.byKey.all!(id => graph.hasKey(id));
     }
     
     /// Merge with current graph state (preserves successful builds)
@@ -102,10 +102,13 @@ final class CheckpointManager
         Checkpoint checkpoint;
         checkpoint.workspaceRoot = absolutePath(workspaceRoot);
         checkpoint.timestamp = Clock.currTime();
-        checkpoint.totalTargets = graph.nodes.length;
+        checkpoint.totalTargets = graph.nodeCount;
         
-        foreach (targetId, node; graph.nodes)
+        foreach (node; graph._nodeArray)
         {
+            if (node is null) continue;
+            auto targetId = node.id.toString();
+            
             checkpoint.nodeStates[targetId] = node.status;
             
             if (!node.hash.empty)

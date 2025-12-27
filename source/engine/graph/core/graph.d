@@ -284,34 +284,17 @@ final class BuildNode
     /// 3. atomicLoad() ensures memory-safe concurrent reads
     /// 4. Read-only operation with no mutations
     /// 
-    /// Performance: Uses O(1) indexed access when available, falls back to hash lookup.
+    /// Performance: O(1) indexed access via dependencyIndices.
     /// 
     /// Invariants:
-    /// - dependencyIds/dependencyIndices arrays must NOT be modified after graph construction
+    /// - dependencyIndices array must NOT be modified after graph construction
     /// - All dependency nodes must remain valid in the graph
     bool isReady(const BuildGraph graph) const @system nothrow
     {
-        // Fast path: use indexed access (no hash overhead)
-        if (dependencyIndices.length == dependencyIds.length && graph._nodeArray.length > 0)
+        foreach (idx; dependencyIndices)
         {
-            foreach (idx; dependencyIndices)
-            {
-                if (idx >= graph._nodeArray.length) continue;  // Defensive
-                auto dep = graph._nodeArray[idx];
-                if (dep is null) continue;
-                auto depStatus = atomicLoad(dep._status);
-                if (depStatus != BuildStatus.Success && depStatus != BuildStatus.Cached)
-                    return false;
-            }
-            return true;
-        }
-        
-        // Fallback: hash-based lookup
-        foreach (depId; dependencyIds)
-        {
-            auto depKey = depId.toString();
-            if (depKey !in graph.nodes) continue;
-            auto dep = graph.nodes[depKey];
+            auto dep = graph.getNodeByIndex(idx);
+            if (dep is null) continue;
             auto depStatus = atomicLoad(dep._status);
             if (depStatus != BuildStatus.Success && depStatus != BuildStatus.Cached)
                 return false;
@@ -323,50 +306,30 @@ final class BuildNode
     private size_t _cachedDepth = size_t.max;
     
     /// Get topological depth for scheduling (memoized)
-    /// Requires graph reference to resolve dependency IDs to nodes
     /// 
     /// Performance: O(V+E) total across all nodes due to memoization.
-    /// Uses O(1) indexed access when available, avoiding hash overhead.
+    /// Uses O(1) indexed access via dependencyIndices.
     /// 
-    /// Note: Not const because it modifies internal cache (_cachedDepth) for memoization.
+    /// Note: Not const because it modifies internal cache (_cachedDepth).
     size_t depth(BuildGraph graph) @system nothrow
     {
         if (_cachedDepth != size_t.max)
             return _cachedDepth;
         
-        if (dependencyIds.empty)
+        if (dependencyIndices.empty)
         {
             _cachedDepth = 0;
             return 0;
         }
         
         size_t maxDepth = 0;
-        
-        // Fast path: indexed access
-        if (dependencyIndices.length == dependencyIds.length && graph._nodeArray.length > 0)
+        foreach (idx; dependencyIndices)
         {
-            foreach (idx; dependencyIndices)
-            {
-                if (idx >= graph._nodeArray.length) continue;
-                auto dep = graph._nodeArray[idx];
-                if (dep is null) continue;
-                auto depDepth = dep.depth(graph);
-                if (depDepth > maxDepth)
-                    maxDepth = depDepth;
-            }
-        }
-        else
-        {
-            // Fallback: hash-based lookup
-            foreach (depId; dependencyIds)
-            {
-                auto depKey = depId.toString();
-                if (depKey !in graph.nodes) continue;
-                auto dep = graph.nodes[depKey];
-                auto depDepth = dep.depth(graph);
-                if (depDepth > maxDepth)
-                    maxDepth = depDepth;
-            }
+            auto dep = graph.getNodeByIndex(idx);
+            if (dep is null) continue;
+            auto depDepth = dep.depth(graph);
+            if (depDepth > maxDepth)
+                maxDepth = depDepth;
         }
         
         _cachedDepth = maxDepth + 1;
@@ -432,6 +395,7 @@ final class BuildGraph
 {
     BuildNode[string] nodes;  // Keep string keys for backward compatibility
     BuildNode[] _nodeArray;   // Parallel array for O(1) indexed access in hot paths
+    uint[string] _stringToIndex;  // String → index map for O(1) indexed lookup from string keys
     BuildNode[] roots;
     private ValidationMode _validationMode;
     private bool _validated;
@@ -482,6 +446,31 @@ final class BuildGraph
         return idx < _nodeArray.length ? _nodeArray[idx] : null;
     }
     
+    /// Get node by string key using indexed lookup (O(1) + hash)
+    /// Preferred over direct nodes[key] access for consistency
+    /// Returns null if key not found
+    inout(BuildNode) getNodeByKey(string key) inout @system nothrow
+    {
+        if (auto idxPtr = key in _stringToIndex)
+            return getNodeByIndex(*idxPtr);
+        return null;
+    }
+    
+    /// Get node index by string key for O(1) subsequent lookups
+    /// Returns uint.max if key not found
+    uint getIndexByKey(string key) const @system nothrow
+    {
+        if (auto idxPtr = key in _stringToIndex)
+            return *idxPtr;
+        return uint.max;
+    }
+    
+    /// Check if key exists using indexed lookup
+    bool hasKey(string key) const @system nothrow
+    {
+        return (key in _stringToIndex) !is null;
+    }
+    
     /// Validate entire graph for cycles (O(V+E))
     /// 
     /// Must be called when using ValidationMode.Deferred before execution.
@@ -504,6 +493,12 @@ final class BuildGraph
     @property bool isValidated() const @system pure nothrow @nogc
     {
         return _validated || _validationMode == ValidationMode.Immediate;
+    }
+    
+    /// Get node count (excludes nulled-out removed nodes)
+    @property size_t nodeCount() const @system pure nothrow @nogc
+    {
+        return _stringToIndex.length;
     }
     
     /// Get validation mode (for serialization)
@@ -533,7 +528,7 @@ final class BuildGraph
         auto id = target.id;
         auto key = id.toString();
         
-        if (key in nodes)
+        if (key in _stringToIndex)
         {
             auto error = ErrorBuilder!GraphError
                 .create("Duplicate target in build graph: " ~ key, Graph.Invalid)
@@ -545,8 +540,10 @@ final class BuildGraph
             return VoidBuildResult.err(cast(BuildError) error);
         }
         
-        nodes[key] = createNode(id, target);
-        _incrementalTopo.notifyNodeAdded(id); // Notify incremental order
+        auto node = createNode(id, target);
+        _stringToIndex[key] = node._nodeIndex;
+        nodes[key] = node;  // Keep for backward compatibility
+        _incrementalTopo.notifyNodeAdded(id);
         return Ok!BuildError();
     }
     
@@ -555,7 +552,7 @@ final class BuildGraph
     VoidBuildResult addTargetById(TargetId id, Target target) @system
     {
         auto key = id.toString();
-        if (key in nodes)
+        if (key in _stringToIndex)
         {
             auto error = ErrorBuilder!GraphError
                 .create("Duplicate target ID in build graph: " ~ key, Graph.Invalid)
@@ -567,12 +564,21 @@ final class BuildGraph
             return VoidBuildResult.err(cast(BuildError) error);
         }
         
-        nodes[key] = createNode(id, target);
-        _incrementalTopo.notifyNodeAdded(id); // Notify incremental order
+        auto node = createNode(id, target);
+        _stringToIndex[key] = node._nodeIndex;
+        nodes[key] = node;  // Keep for backward compatibility
+        _incrementalTopo.notifyNodeAdded(id);
         return Ok!BuildError();
     }
     
-    /// Get node by TargetId
+    /// Get node by TargetId using indexed lookup
+    BuildNode getNodeById(TargetId id) @system nothrow
+    {
+        return getNodeByKey(id.toString());
+    }
+    
+    /// Get node by TargetId (pointer version for backward compatibility)
+    /// Prefer getNodeById() for new code
     BuildNode* getNode(TargetId id) @system
     {
         auto key = id.toString();
@@ -582,32 +588,29 @@ final class BuildGraph
     }
     
     /// Check if graph contains a target by TargetId
-    bool hasTarget(TargetId id) @system
+    bool hasTarget(TargetId id) @system nothrow
     {
-        return (id.toString() in nodes) !is null;
+        return hasKey(id.toString());
     }
     
     /// Add dependency between two targets (string version for backward compatibility)
     VoidBuildResult addDependency(in string from, in string to) @system
     {
-        if (from !in nodes)
+        auto fromNode = getNodeByKey(from);
+        if (fromNode is null)
         {
-            // Use smart constructor for target not found errors
             auto error = targetNotFoundError(from);
             error.addContext(ErrorContext("adding dependency", "from: " ~ from ~ ", to: " ~ to));
             return VoidBuildResult.err(cast(BuildError) error);
         }
         
-        if (to !in nodes)
+        auto toNode = getNodeByKey(to);
+        if (toNode is null)
         {
-            // Use smart constructor for target not found errors
             auto error = targetNotFoundError(to);
             error.addContext(ErrorContext("adding dependency", "from: " ~ from ~ ", to: " ~ to));
             return VoidBuildResult.err(cast(BuildError) error);
         }
-        
-        auto fromNode = nodes[from];
-        auto toNode = nodes[to];
         
         // Check for cycles only in immediate mode
         if (_validationMode == ValidationMode.Immediate)
@@ -652,7 +655,8 @@ final class BuildGraph
         auto fromKey = from.toString();
         auto toKey = to.toString();
         
-        if (fromKey !in nodes)
+        auto fromNode = getNodeByKey(fromKey);
+        if (fromNode is null)
             return VoidBuildResult.err(
                 Errors.graph("Target '" ~ fromKey ~ "' not found in dependency graph", Graph.NodeNotFound)
                     .withContext("adding dependency", "from: " ~ fromKey ~ ", to: " ~ toKey)
@@ -661,7 +665,8 @@ final class BuildGraph
                     .withSuggestion("Check for typos in the target name")
                     .build());
         
-        if (toKey !in nodes)
+        auto toNode = getNodeByKey(toKey);
+        if (toNode is null)
             return VoidBuildResult.err(
                 Errors.graph("Target '" ~ toKey ~ "' not found in dependency graph", Graph.NodeNotFound)
                     .withContext("adding dependency", "from: " ~ fromKey ~ ", to: " ~ toKey)
@@ -669,9 +674,6 @@ final class BuildGraph
                     .withCommand("See all available targets", "bldr graph")
                     .withSuggestion("Check for typos in the target name")
                     .build());
-        
-        auto fromNode = nodes[fromKey];
-        auto toNode = nodes[toKey];
         
         // Check for cycles only in immediate mode
         if (_validationMode == ValidationMode.Immediate)
@@ -737,9 +739,9 @@ final class BuildGraph
             {
                 foreach (dependentId; n.dependentIds)
                 {
-                    auto depKey = dependentId.toString();
-                    if (depKey in nodes)
-                        invalidateRecursive(nodes[depKey]);
+                    auto dep = getNodeByKey(dependentId.toString());
+                    if (dep !is null)
+                        invalidateRecursive(dep);
                 }
             }
         }
@@ -780,10 +782,9 @@ final class BuildGraph
             {
                 foreach (depId; node.dependencyIds)
                 {
-                    auto depKey = depId.toString();
-                    if (depKey in nodes)
-                        if (dfs(nodes[depKey]))
-                            return true;
+                    auto dep = getNodeByKey(depId.toString());
+                    if (dep !is null && dfs(dep))
+                        return true;
                 }
             }
             
@@ -1017,35 +1018,33 @@ final class BuildGraph
     VoidBuildResult removeTarget(TargetId id) @system
     {
         auto key = id.toString();
-        if (key !in nodes)
+        auto node = getNodeByKey(key);
+        if (node is null)
             return VoidBuildResult.err(
                 Errors.graph("Target not found: " ~ key, Graph.NodeNotFound).build());
         
-        auto node = nodes[key];
         auto removedIdx = node._nodeIndex;
         
-        // Remove from dependents of dependencies (both IDs and indices)
-        foreach (i, depId; node.dependencyIds)
+        // Remove from dependents of dependencies (use indexed access)
+        foreach (idx; node.dependencyIndices)
         {
-            auto depKey = depId.toString();
-            if (depKey in nodes)
+            auto dep = getNodeByIndex(idx);
+            if (dep !is null)
             {
-                auto dep = nodes[depKey];
                 dep.dependentIds = dep.dependentIds.filter!(d => d != id).array;
-                dep.dependentIndices = dep.dependentIndices.filter!(idx => idx != removedIdx).array;
+                dep.dependentIndices = dep.dependentIndices.filter!(i => i != removedIdx).array;
             }
         }
         
-        // Remove from dependencies of dependents (both IDs and indices)
-        foreach (i, depId; node.dependentIds)
+        // Remove from dependencies of dependents (use indexed access)
+        foreach (idx; node.dependentIndices)
         {
-            auto depKey = depId.toString();
-            if (depKey in nodes)
+            auto dep = getNodeByIndex(idx);
+            if (dep !is null)
             {
-                auto dep = nodes[depKey];
                 dep.dependencyIds = dep.dependencyIds.filter!(d => d != id).array;
-                dep.dependencyIndices = dep.dependencyIndices.filter!(idx => idx != removedIdx).array;
-                invalidateDepthCascade(dep); // Invalidate depth for affected nodes
+                dep.dependencyIndices = dep.dependencyIndices.filter!(i => i != removedIdx).array;
+                invalidateDepthCascade(dep);
             }
         }
         
@@ -1053,6 +1052,7 @@ final class BuildGraph
         if (removedIdx < _nodeArray.length)
             _nodeArray[removedIdx] = null;
         
+        _stringToIndex.remove(key);
         nodes.remove(key);
         _incrementalTopo.notifyNodeRemoved(id);
         
@@ -1093,11 +1093,11 @@ final class BuildGraph
             }
             else
             {
-                foreach (dependentId; node.dependentIds)
+                foreach (idx; node.dependentIndices)
                 {
-                    auto depKey = dependentId.toString();
-                    if (depKey in nodes)
-                        maxDependentCost = max(maxDependentCost, visit(nodes[depKey]));
+                    auto dep = getNodeByIndex(idx);
+                    if (dep !is null)
+                        maxDependentCost = max(maxDependentCost, visit(dep));
                 }
             }
             

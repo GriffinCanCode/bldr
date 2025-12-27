@@ -172,7 +172,7 @@ final class SpeculationExecutor
         // Targets with high cache hit probability can start before deps complete
         if (_cacheHitSpeculator !is null)
         {
-            auto nodes = _graph.nodes.values.filter!(n => n.status == BuildStatus.Pending).array;
+            auto nodes = _graph._nodeArray.filter!(n => n !is null && n.status == BuildStatus.Pending).array;
             auto cacheHitCandidates = _cacheHitSpeculator.getCandidates(nodes, 4);
             
             if (cacheHitCandidates.length > 0)
@@ -183,12 +183,12 @@ final class SpeculationExecutor
                 
                 foreach (candidateId; cacheHitCandidates)
                 {
-                    auto nodePtr = candidateId.toString() in _graph.nodes;
-                    if (nodePtr is null) continue;
+                    auto node = _graph.getNodeByKey(candidateId.toString());
+                    if (node is null) continue;
                     
                     // Register with confirm/abort callbacks
                     _cacheHitSpeculator.executeSpeculatively(
-                        *nodePtr,
+                        node,
                         () @system { atomicOp!"+="(_speculativeHits, 1); },
                         () @system { atomicOp!"+="(_speculativeMisses, 1); }
                     );
@@ -277,20 +277,17 @@ final class SpeculationExecutor
         
         // When a target starts building, we can speculate on its dependents
         // if they're on the critical path and likely to be needed
-        auto nodePtr = targetId.toString() in _graph.nodes;
-        if (nodePtr is null)
+        auto node = _graph.getNodeByKey(targetId.toString());
+        if (node is null)
             return;
-        
-        auto node = *nodePtr;
         
         // Consider speculating on dependents that have only this one remaining dep
         foreach (dependentId; node.dependentIds)
         {
-            auto depPtr = dependentId.toString() in _graph.nodes;
-            if (depPtr is null)
+            auto dependent = _graph.getNodeByKey(dependentId.toString());
+            if (dependent is null)
                 continue;
             
-            auto dependent = *depPtr;
             if (dependent.pendingDeps == 1)  // This node is the only remaining dep
             {
                 auto task = _speculation.speculate(dependentId);

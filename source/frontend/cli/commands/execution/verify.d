@@ -223,7 +223,7 @@ struct VerifyCommand
         auto graph = graphResult.unwrap();
         
         // Find target
-        auto targetNode = targetSpec in graph.nodes;
+        auto targetNode = graph.getNodeByKey(targetSpec);
         if (targetNode is null)
         {
             writeln(formatter.formatError("Target not found: " ~ targetSpec));

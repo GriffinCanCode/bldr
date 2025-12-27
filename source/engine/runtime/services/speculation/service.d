@@ -377,7 +377,7 @@ final class SpeculationService : ISpeculationService
             _profiler.computeProfiles();
             _candidates = computeCandidates();
             
-            structuredLog.debug_("speculation_analyzed_").field("detail", "Speculation: analyzed " ~ graph.nodes.length.to!string ~ 
+            structuredLog.debug_("speculation_analyzed_").field("detail", "Speculation: analyzed " ~ graph.nodeCount.to!string ~ 
                            " nodes, found " ~ _candidates.length.to!string ~ " candidates").emit();
         }
     }
@@ -409,8 +409,8 @@ final class SpeculationService : ISpeculationService
             }
             
             // Get node and profile
-            auto nodePtr = key in _graph.nodes;
-            if (nodePtr is null)
+            auto node = _graph.getNodeByKey(key);
+            if (node is null)
                 return null;
             
             auto profile = _profiler.getProfile(key);
@@ -649,8 +649,10 @@ private:
             }
         }
         
-        foreach (key, node; _graph.nodes)
+        foreach (node; _graph._nodeArray)
         {
+            if (node is null) continue;
+            auto key = node.id.toString();
             auto profile = _profiler.getProfile(key);
             if (profile is null)
                 continue;

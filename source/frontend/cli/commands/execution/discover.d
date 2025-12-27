@@ -52,13 +52,13 @@ void discoverCommand(string[] args)
     import engine.runtime.core.engine.discovery;
     DiscoveryMarker.markCodeGenTargets(dynamicGraph);
     
-    // Count discoverable targets
+    // Count discoverable targets (use _nodeArray for cache locality)
     size_t discoverableCount = 0;
     string[] discoverableTargets;
     
-    foreach (node; graph.nodes.values)
+    foreach (node; graph._nodeArray)
     {
-        if (dynamicGraph.isDiscoverable(node.id))
+        if (node !is null && dynamicGraph.isDiscoverable(node.id))
         {
             discoverableCount++;
             discoverableTargets ~= node.idString;
@@ -80,16 +80,12 @@ void discoverCommand(string[] args)
             writeln("  • " ~ target);
             
             // Show what each target will discover
-            if (auto node = target in graph.nodes)
+            if (auto node = graph.getNodeByKey(target))
             {
                 if (node.target.language.to!string == "protobuf")
-                {
                     writeln("    └─ Will discover: Generated source files + compile targets");
-                }
                 else if (node.target.type.to!string == "custom")
-                {
                     writeln("    └─ Will discover: Custom generated targets");
-                }
             }
         }
         

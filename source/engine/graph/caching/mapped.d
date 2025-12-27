@@ -399,15 +399,17 @@ final class MappedGraphStorage
                 // Build string table
                 StringTableBuilder strings;
                 
-                // Collect node data
+                // Collect node data (use _nodeArray for cache locality)
                 MappedNode[] nodes;
-                nodes.reserve(graph.nodes.length);
+                nodes.reserve(graph.nodeCount);
                 
                 uint[string] nodeIndexMap;
                 uint nodeIndex = 0;
                 
-                foreach (key, node; graph.nodes)
+                foreach (node; graph._nodeArray)
                 {
+                    if (node is null) continue;
+                    auto key = node.id.toString();
                     nodeIndexMap[key] = nodeIndex++;
                     
                     MappedNode mn;
@@ -437,8 +439,10 @@ final class MappedGraphStorage
                 MappedEdge[] edges;
                 uint edgeIndex = 0;
                 
-                foreach (key, node; graph.nodes)
+                foreach (node; graph._nodeArray)
                 {
+                    if (node is null) continue;
+                    auto key = node.id.toString();
                     auto fromIdx = nodeIndexMap.get(key, uint.max);
                     if (fromIdx == uint.max) continue;
                     
@@ -642,17 +646,18 @@ final class MappedGraphStorage
                 if (mappedNode.hash != (ubyte[32]).init)
                     node.hash = cast(string)(cast(char[])mappedNode.hash[]);
                 
+                graph._stringToIndex[targetIdStr] = node._nodeIndex;
                 graph.nodes[targetIdStr] = node;
                 indexToId[cast(uint)i] = targetIdStr;
             }
             
-            // Second pass: restore edges
+            // Second pass: restore edges using indexed lookup
             foreach (i, mappedNode; view)
             {
                 auto nodeId = indexToId.get(cast(uint)i, null);
                 if (nodeId is null) continue;
                 
-                auto node = graph.nodes.get(nodeId, null);
+                auto node = graph.getNodeByKey(nodeId);
                 if (node is null) continue;
                 
                 foreach (edgeIdx; 0 .. mappedNode.edgeCount)
@@ -761,6 +766,8 @@ unittest
         auto node1 = graph.createNode(id1, t1);
         auto node2 = graph.createNode(id2, t2);
         
+        graph._stringToIndex["test:lib1"] = node1._nodeIndex;
+        graph._stringToIndex["test:lib2"] = node2._nodeIndex;
         graph.nodes["test:lib1"] = node1;
         graph.nodes["test:lib2"] = node2;
         

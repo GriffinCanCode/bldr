@@ -223,11 +223,9 @@ final class SpeculativeEngine
             }
             
             // Get node from graph
-            auto nodePtr = key in _graph.nodes;
-            if (nodePtr is null)
+            auto node = _graph.getNodeByKey(key);
+            if (node is null)
                 return false;
-            
-            auto node = *nodePtr;
             
             // Skip if already building or built
             if (node.status != BuildStatus.Pending)
@@ -274,11 +272,10 @@ final class SpeculativeEngine
                     continue;
                 
                 // Check if this result depends on the changed file
-                auto nodePtr = key in _graph.nodes;
-                if (nodePtr is null)
+                auto node = _graph.getNodeByKey(key);
+                if (node is null)
                     continue;
                 
-                auto node = *nodePtr;
                 if (dependsOnPath(node, path))
                 {
                     toInvalidate ~= key;
@@ -324,10 +321,8 @@ final class SpeculativeEngine
             }
             
             // Verify inputs haven't changed since speculation
-            auto nodePtr = key in _graph.nodes;
-            if (nodePtr !is null)
+            if (auto node = _graph.getNodeByKey(key))
             {
-                auto node = *nodePtr;
                 if (inputsChanged(node))
                 {
                     result.isValid = false;

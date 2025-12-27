@@ -134,7 +134,7 @@ class DependencyAnalyzer
         
         // Analyze each target and resolve dependencies
         // Filter targets that are in the graph
-        auto targetsToAnalyze = config.targets.filter!(t => t.name in graph.nodes).array;
+        auto targetsToAnalyze = config.targets.filter!(t => graph.hasKey(t.name)).array;
         
         if (targetsToAnalyze.length > 1)
         {
@@ -170,7 +170,7 @@ class DependencyAnalyzer
                 // Add resolved dependencies to graph (no cycle check yet)
                 foreach (dep; analysis.dependencies)
                 {
-                    if (dep.targetName in graph.nodes)
+                    if (graph.hasKey(dep.targetName))
                     {
                         auto addResult = graph.addDependency(target.name, dep.targetName);
                         if (addResult.isErr)
@@ -211,7 +211,7 @@ class DependencyAnalyzer
                     // Add resolved dependencies to graph
                     foreach (dep; analysis.dependencies)
                     {
-                        if (dep.targetName in graph.nodes)
+                        if (graph.hasKey(dep.targetName))
                         {
                             auto addResult = graph.addDependency(target.name, dep.targetName);
                             if (addResult.isErr)
@@ -288,11 +288,12 @@ class DependencyAnalyzer
     private BuildGraph filterGraph(BuildGraph graph, string targetFilter) @trusted
     {
         // Arena-allocate with upper bound of original graph size
-        auto filteredGraph = new BuildGraph(graph.validationMode, graph.nodes.length);
+        auto filteredGraph = new BuildGraph(graph.validationMode, graph.nodeCount);
         
-        // Add matching targets
-        foreach (key, node; graph.nodes)
+        // Add matching targets using _nodeArray for cache locality
+        foreach (node; graph._nodeArray)
         {
+            if (node is null) continue;
             bool shouldInclude = matchesFilter(node.target.name, targetFilter) ||
                                node.target.id.matches(targetFilter);
             
@@ -308,15 +309,17 @@ class DependencyAnalyzer
         }
         
         // Add dependencies between filtered targets
-        foreach (key, node; filteredGraph.nodes)
+        foreach (node; filteredGraph._nodeArray)
         {
-            auto origNode = graph.nodes.get(key, null);
+            if (node is null) continue;
+            auto key = node.id.toString();
+            auto origNode = graph.getNodeByKey(key);
             if (origNode !is null)
             {
                 foreach (depId; origNode.dependencyIds)
                 {
                     auto depKey = depId.toString();
-                    if (depKey in filteredGraph.nodes)
+                    if (filteredGraph.hasKey(depKey))
                     {
                         auto result = filteredGraph.addDependency(key, depKey);
                         if (result.isErr)

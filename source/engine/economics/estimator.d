@@ -35,8 +35,9 @@ final class CostEstimator
             Duration totalTime;
             size_t totalCores, totalMemory, totalNetwork, totalDiskIO;
             
-            foreach (node; graph.nodes.values)
+            foreach (node; graph._nodeArray)
             {
+                if (node is null) continue;
                 auto nodeEstimateResult = estimateNode(node);
                 if (nodeEstimateResult.isErr)
                     return Err!(BuildEstimate, BuildError)(nodeEstimateResult.unwrapErr());
@@ -50,7 +51,7 @@ final class CostEstimator
                 totalDiskIO += nodeEstimate.usage.diskIOBytes;
             }
             
-            immutable avgCores = graph.nodes.length > 0 ? (totalCores / graph.nodes.length) : 4;
+            immutable avgCores = graph.nodeCount > 0 ? (totalCores / graph.nodeCount) : 4;
             
             return Ok!(BuildEstimate, BuildError)(BuildEstimate(
                 totalTime,
@@ -115,13 +116,18 @@ final class CostEstimator
     /// Estimate cache hit probability for graph
     float estimateCacheHitProbability(BuildGraph graph) @trusted
     {
-        if (graph.nodes.length == 0) return 0.0f;
+        if (graph._nodeArray.length == 0) return 0.0f;
         
         float totalProb = 0.0f;
-        foreach (node; graph.nodes.values)
+        size_t count = 0;
+        foreach (node; graph._nodeArray)
+        {
+            if (node is null) continue;
             totalProb += estimateCacheHitProbabilityForNode(node);
+            count++;
+        }
         
-        return totalProb / graph.nodes.length;
+        return count > 0 ? totalProb / count : 0.0f;
     }
     
     /// Estimate cache hit probability for single node

@@ -40,9 +40,10 @@ struct GraphAdapter
         // Clear existing data
         index.clear();
         
-        // Persist all nodes
-        foreach (key, node; graph.nodes)
+        // Persist all nodes using _nodeArray for cache locality
+        foreach (node; graph._nodeArray)
         {
+            if (node is null) continue;
             GraphNodeEntry entry;
             entry.nodeId = node.id.toString();
             entry.targetType = node.target.type.to!string;
@@ -57,8 +58,9 @@ struct GraphAdapter
         }
         
         // Persist all edges
-        foreach (key, node; graph.nodes)
+        foreach (node; graph._nodeArray)
         {
+            if (node is null) continue;
             auto nodeId = node.id.toString();
             foreach (depId; node.dependencyIds)
                 index.addEdge(nodeId, depId.toString());
@@ -91,20 +93,20 @@ struct GraphAdapter
             target.type = entry.targetType.to!TargetType;
             target.outputPath = entry.outputPath;
             
-            // Add to graph
+            // Add to graph (createNode adds to _nodeArray and sets _nodeIndex)
             auto node = graph.createNode(idResult.unwrap(), target);
             node.status = entry.status;
             node.hash = entry.hash;
             
+            graph._stringToIndex[entry.nodeId] = node._nodeIndex;
             graph.nodes[entry.nodeId] = node;
         }
         
-        // Second pass: restore edges
+        // Second pass: restore edges using indexed lookup
         foreach (nodeId; nodeIds)
         {
-            if (nodeId !in graph.nodes) continue;
-            
-            auto node = graph.nodes[nodeId];
+            auto node = graph.getNodeByKey(nodeId);
+            if (node is null) continue;
             auto deps = index.getDependencies(nodeId);
             
             foreach (depId; deps)
@@ -138,9 +140,8 @@ struct GraphAdapter
     /// Sync node from BuildGraph to SQLite (single node update)
     void syncNode(BuildGraph graph, string nodeId) @system
     {
-        if (nodeId !in graph.nodes) return;
-        
-        auto node = graph.nodes[nodeId];
+        auto node = graph.getNodeByKey(nodeId);
+        if (node is null) return;
         
         GraphNodeEntry entry;
         entry.nodeId = node.id.toString();

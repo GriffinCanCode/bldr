@@ -390,7 +390,7 @@ final class BuildServices : IServiceContainer
         auto service = new SpeculationService(estimator, graph);
         
         structuredLog.debug_("created_speculation_service_for_graph_wi").field("detail", "Created speculation service for graph with " ~ 
-                       graph.nodes.length.to!string ~ " nodes").emit();
+                       graph.nodeCount.to!string ~ " nodes").emit();
         return service;
     }
     
@@ -714,11 +714,11 @@ final class BuildServices : IServiceContainer
             WorkerInfo("Python", "BUILDER_PYTHON_WORKERS", "15-50x", 1500),
         ];
         
-        // Collect unique languages from graph
+        // Collect unique languages from graph (use _nodeArray for cache locality)
         TargetLanguage[] detectedLangs;
-        foreach (node; graph.nodes.values)
+        foreach (node; graph._nodeArray)
         {
-            if (!detectedLangs.canFind(node.target.language))
+            if (node !is null && !detectedLangs.canFind(node.target.language))
                 detectedLangs ~= node.target.language;
         }
         
@@ -765,7 +765,7 @@ final class BuildServices : IServiceContainer
         
         // Log remote cache recommendation if not configured
         auto remoteUrl = environment.get("BUILDER_REMOTE_CACHE_URL", "");
-        if (remoteUrl.length == 0 && graph.nodes.length > 20)
+        if (remoteUrl.length == 0 && graph.nodeCount > 20)
         {
             structuredLog.info("optimization_recommendation")
                 .field("type", "remote_cache")
