@@ -8,7 +8,6 @@ import std.path;
 import std.process;
 import std.string;
 import languages.compiled.cpp.core.config;
-// import toolchain; // Replaced by unified toolchain system
 import infrastructure.toolchain.core.spec;
 import languages.compiled.cpp.builders.base;
 import languages.compiled.cpp.analysis.incremental;
@@ -19,13 +18,14 @@ import engine.compilation.incremental.ast_engine;
 import engine.caching.incremental.dependency;
 import engine.caching.incremental.ast_dependency;
 import engine.caching.actions.action;
+import engine.linking.incremental;
 import infrastructure.analysis.ast.parser;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.logging;
 import infrastructure.errors;
 
-/// Incremental C++ builder with AST-level dependency tracking
-/// Only recompiles files/symbols affected by changes
+/// Incremental C++ builder with AST-level dependency tracking and incremental linking
+/// Only recompiles files/symbols affected by changes, uses platform-optimal linker
 class IncrementalCppBuilder : BaseCppBuilder
 {
     private const(Toolchain)* toolchain;
@@ -34,10 +34,13 @@ class IncrementalCppBuilder : BaseCppBuilder
     private ASTDependencyCache astCache;
     private IncrementalEngine incEngine;
     private HybridIncrementalEngine astEngine;
+    private IncrementalLinker incLinker;
     private CppDependencyAnalyzer analyzer;
     private bool useASTLevel;
+    private bool useIncrementalLink;
     
-    this(CppConfig config, ActionCache actionCache = null, DependencyCache depCache = null, bool enableASTLevel = true)
+    this(CppConfig config, ActionCache actionCache = null, DependencyCache depCache = null, 
+         bool enableASTLevel = true, bool enableIncrementalLink = true)
     {
         super(config);
         
@@ -51,18 +54,15 @@ class IncrementalCppBuilder : BaseCppBuilder
         // Priority: config-specified > clang > gcc
         if (!config.customCompiler.empty)
         {
-            // Look for specific compiler by name
             auto toolchains = registry.getByName(config.customCompiler);
             if (!toolchains.empty)
                 this.toolchain = &toolchains[0];
         }
         else
         {
-            // Auto-detect based on compiler preference
             auto detector = new AutoDetector();
             auto allToolchains = detector.detectAll();
             
-            // Find C++ capable toolchain
             foreach (ref tc; allToolchains)
             {
                 auto compiler = tc.getToolByName("g++");
@@ -81,43 +81,36 @@ class IncrementalCppBuilder : BaseCppBuilder
             structuredLog.warning("no_c_compiler_toolchain_detected_build_m").emit();
         
         // Initialize caches
-        if (actionCache is null)
-        {
-            auto cacheConfig = ActionCacheConfig.fromEnvironment();
-            this.actionCache = new ActionCache(".builder-cache/actions/cpp", cacheConfig);
-        }
-        else
-        {
-            this.actionCache = actionCache;
-        }
+        this.actionCache = actionCache !is null ? actionCache : 
+            new ActionCache(".builder-cache/actions/cpp", ActionCacheConfig.fromEnvironment());
         
-        if (depCache is null)
-        {
-            this.depCache = new DependencyCache(".builder-cache/incremental/cpp");
-        }
-        else
-        {
-            this.depCache = depCache;
-        }
+        this.depCache = depCache !is null ? depCache : 
+            new DependencyCache(".builder-cache/incremental/cpp");
         
         // Initialize AST cache
         this.astCache = new ASTDependencyCache(".builder-cache/ast-incremental/cpp");
         
-        // Initialize incremental engines
+        // Initialize incremental compilation engine
         this.incEngine = new IncrementalEngine(this.depCache, this.actionCache);
         
         auto astIncEngine = new ASTIncrementalEngine(this.astCache, this.depCache, this.actionCache);
         this.astEngine = new HybridIncrementalEngine(astIncEngine, enableASTLevel);
         this.useASTLevel = enableASTLevel;
         
+        // Initialize incremental linker - key for large C++ projects
+        this.incLinker = new IncrementalLinker(".builder-cache/linking/cpp", this.actionCache);
+        this.useIncrementalLink = enableIncrementalLink && incLinker.isIncrementalAvailable();
+        
         // Initialize dependency analyzer
         this.analyzer = new CppDependencyAnalyzer(config.includeDirs);
-        
-        // Initialize AST parsers
         initializeASTParsers();
         
         if (enableASTLevel)
             structuredLog.info("astlevel_incremental_compilation_enabled").emit();
+        if (useIncrementalLink)
+            structuredLog.info("incremental_linking_enabled")
+                .field("linker", incLinker.getLinkerConfig().type.to!string)
+                .emit();
     }
     
     override CppCompileResult build(
@@ -435,7 +428,7 @@ class IncrementalCppBuilder : BaseCppBuilder
         return result;
     }
     
-    /// Link object files
+    /// Link object files with incremental linking support
     private CppCompileResult linkObjects(
         string[] objects,
         string outputFile,
@@ -446,15 +439,12 @@ class IncrementalCppBuilder : BaseCppBuilder
     {
         CppCompileResult result;
         
-        // Use compiler as linker (standard practice)
         const(Tool)* linkerTool = isCpp ? 
-            toolchain.getToolByName("g++") : 
-            toolchain.getToolByName("gcc");
+            toolchain.getToolByName("g++") : toolchain.getToolByName("gcc");
         
         if (linkerTool is null)
             linkerTool = isCpp ? 
-                toolchain.getToolByName("clang++") : 
-                toolchain.getToolByName("clang");
+                toolchain.getToolByName("clang++") : toolchain.getToolByName("clang");
         
         if (linkerTool is null)
         {
@@ -463,14 +453,50 @@ class IncrementalCppBuilder : BaseCppBuilder
         }
         
         string linker = linkerTool.path;
-        
         auto linkerFlags = buildLinkerFlags(config);
+        string linkerFlagsStr = linkerFlags.join(" ");
         
-        // Build link command
+        // Analyze for incremental linking opportunity
+        auto linkAnalysis = incLinker.analyze(
+            outputFile, objects, config.libs, linkerFlagsStr
+        );
+        
+        // Check if fully cached
+        if (linkAnalysis.objectsToLink.empty && linkAnalysis.reductionPercent >= 100.0)
+        {
+            structuredLog.debug_("linking_cached")
+                .field("output", baseName(outputFile))
+                .emit();
+            result.success = true;
+            return result;
+        }
+        
+        // Build link command with optimal flags
         string[] cmd = [linker];
         cmd ~= ["-o", outputFile];
+        
+        // Add incremental linking flags if beneficial
+        if (useIncrementalLink && linkAnalysis.canIncrementalLink())
+        {
+            cmd ~= incLinker.getLinkerFlags(linkAnalysis);
+            structuredLog.info("incremental_link")
+                .field("output", baseName(outputFile))
+                .field("changed", linkAnalysis.changedObjects.length)
+                .field("total", objects.length)
+                .field("reduction", linkAnalysis.reductionPercent)
+                .emit();
+        }
+        
         cmd ~= objects;
         cmd ~= linkerFlags;
+        
+        // Add library paths and libraries
+        foreach (libDir; config.libDirs)
+            cmd ~= ["-L", libDir];
+        foreach (lib; config.libs)
+            cmd ~= "-l" ~ lib;
+        foreach (sysLib; config.sysLibs)
+            cmd ~= "-l" ~ sysLib;
         
         structuredLog.info("linking_").field("detail", "Linking: " ~ outputFile).emit();
         structuredLog.debug_("__command_").field("detail", "  Command: " ~ cmd.join(" ")).emit();
@@ -480,6 +506,7 @@ class IncrementalCppBuilder : BaseCppBuilder
         if (res.status != 0)
         {
             result.error = "Linking failed: " ~ res.output;
+            incLinker.invalidate(outputFile);
             return result;
         }
         
@@ -488,6 +515,12 @@ class IncrementalCppBuilder : BaseCppBuilder
             result.hadWarnings = true;
             result.warnings ~= "Linker: " ~ res.output;
         }
+        
+        // Record successful link for future incremental builds
+        incLinker.recordLink(
+            outputFile, objects, config.libs, linkerFlagsStr,
+            linkAnalysis.canIncrementalLink()
+        );
         
         result.success = true;
         return result;
@@ -552,9 +585,14 @@ class IncrementalCppBuilder : BaseCppBuilder
             case "incremental":
             case "dependency_tracking":
                 return true;
+            case "incremental_linking":
+                return useIncrementalLink;
             default:
                 return super.supportsFeature(feature);
         }
     }
+    
+    /// Get incremental linking statistics
+    auto getLinkingStats() @system => incLinker.getStats();
 }
 

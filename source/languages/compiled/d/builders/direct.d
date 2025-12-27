@@ -15,15 +15,18 @@ import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
+import engine.linking.incremental;
 
-/// Direct compiler invocation builder (dmd/ldc/gdc) with action-level caching
+/// Direct compiler invocation builder (dmd/ldc/gdc) with action-level caching and incremental linking
 class DirectCompilerBuilder : DBuilder
 {
     private DConfig config;
     private string compilerCmd;
     private ActionCache actionCache;
+    private IncrementalLinker incLinker;
+    private bool useIncrementalLink;
     
-    this(DConfig config, ActionCache cache = null)
+    this(DConfig config, ActionCache cache = null, bool enableIncrementalLink = true) @system
     {
         this.config = config;
         this.compilerCmd = getCompilerCommand(config.compiler, config.customCompiler);
@@ -37,6 +40,15 @@ class DirectCompilerBuilder : DBuilder
         {
             actionCache = cache;
         }
+        
+        // Initialize incremental linker for D's linking phase (esp. LDC which uses LLVM)
+        incLinker = new IncrementalLinker(".builder-cache/linking/d", actionCache);
+        useIncrementalLink = enableIncrementalLink && incLinker.isIncrementalAvailable();
+        
+        if (useIncrementalLink)
+            structuredLog.debug_("d_incremental_link_enabled")
+                .field("linker", incLinker.getLinkerConfig().type.to!string)
+                .emit();
     }
     
     DCompileResult build(

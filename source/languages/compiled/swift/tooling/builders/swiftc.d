@@ -16,13 +16,16 @@ import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.logging;
 import engine.caching.actions.action;
+import engine.linking.incremental;
 
-/// Direct swiftc compiler builder with action-level caching
+/// Direct swiftc compiler builder with action-level caching and incremental linking
 class SwiftcBuilder : SwiftBuilder
 {
     private ActionCache actionCache;
+    private IncrementalLinker incLinker;
+    private bool useIncrementalLink;
     
-    this(ActionCache cache = null)
+    this(ActionCache cache = null, bool enableIncrementalLink = true) @system
     {
         if (cache is null)
         {
@@ -33,6 +36,15 @@ class SwiftcBuilder : SwiftBuilder
         {
             actionCache = cache;
         }
+        
+        // Initialize incremental linker (limited support on macOS ld64)
+        incLinker = new IncrementalLinker(".builder-cache/linking/swift", actionCache);
+        useIncrementalLink = enableIncrementalLink && incLinker.isIncrementalAvailable();
+        
+        if (useIncrementalLink)
+            structuredLog.debug_("swift_incremental_link_enabled")
+                .field("linker", incLinker.getLinkerConfig().type.to!string)
+                .emit();
     }
     SwiftBuildResult build(
         in string[] sources,
@@ -495,7 +507,7 @@ class SwiftcBuilder : SwiftBuilder
         return result;
     }
     
-    /// Link object files with caching
+    /// Link object files with caching and incremental linking support
     private SwiftBuildResult linkObjects(
         string[] objectFiles,
         string outputPath,
@@ -505,22 +517,21 @@ class SwiftcBuilder : SwiftBuilder
     {
         SwiftBuildResult result;
         
-        // Build metadata for cache validation
+        string linkerFlagsStr = config.buildSettings.linkerFlags.join(" ");
+        
         string[string] metadata;
         metadata["projectType"] = config.projectType.to!string;
         metadata["libraryType"] = config.libraryType.to!string;
         metadata["triple"] = config.triple;
-        metadata["linkerFlags"] = config.buildSettings.linkerFlags.join(" ");
+        metadata["linkerFlags"] = linkerFlagsStr;
         metadata["linkedLibraries"] = config.buildSettings.linkedLibraries.join(" ");
         
-        // Create action ID for linking
         ActionId actionId;
         actionId.targetId = target.name;
         actionId.type = ActionType.Link;
         actionId.subId = baseName(outputPath);
         actionId.inputHash = FastHash.hashStrings(objectFiles);
         
-        // Check if linking is cached
         if (actionCache.isCached(actionId, objectFiles, metadata) && exists(outputPath))
         {
             structuredLog.debug_("__cached_linking_").field("detail", "  [Cached] Linking: " ~ outputPath).emit();
@@ -528,70 +539,63 @@ class SwiftcBuilder : SwiftBuilder
             return result;
         }
         
+        // Analyze for incremental linking
+        auto linkAnalysis = incLinker.analyze(
+            outputPath, objectFiles, config.buildSettings.linkedLibraries, linkerFlagsStr
+        );
+        bool doIncremental = useIncrementalLink && linkAnalysis.canIncrementalLink();
+        
+        if (doIncremental)
+            structuredLog.info("swift_incremental_link")
+                .field("output", baseName(outputPath))
+                .field("changed", linkAnalysis.changedObjects.length)
+                .field("total", objectFiles.length)
+                .emit();
+        
         // Build swiftc link command
         string[] cmd = [config.swiftcPath.empty ? "swiftc" : config.swiftcPath];
-        
-        // Output
         cmd ~= ["-o", outputPath];
-        
-        // Object files
         cmd ~= objectFiles;
         
-        // Target triple
         if (!config.triple.empty)
             cmd ~= ["-target", config.triple];
         
-        // Framework paths
         version(OSX)
         {
             foreach (framework; config.buildSettings.linkedFrameworks)
-            {
                 cmd ~= ["-framework", framework];
-            }
         }
         
-        // Linked libraries
         foreach (lib; config.buildSettings.linkedLibraries)
-        {
             cmd ~= ["-l" ~ lib];
+        
+        // Add incremental linker flags via -Xlinker
+        if (doIncremental)
+        {
+            auto incFlags = incLinker.getLinkerFlags(linkAnalysis);
+            foreach (flag; incFlags)
+                cmd ~= ["-Xlinker", flag];
         }
         
-        // Linker flags
         foreach (flag; config.buildSettings.linkerFlags)
-        {
             cmd ~= ["-Xlinker", flag];
-        }
         
         structuredLog.debug_("linking_").field("detail", "Linking: " ~ outputPath).emit();
         
         auto res = execute(cmd, config.env);
         
-        bool success = (res.status == 0);
-        
-        if (!success)
+        if (res.status != 0)
         {
             result.error = "Linking failed: " ~ res.output;
-            
-            // Update cache with failure
-            actionCache.update(
-                actionId,
-                objectFiles,
-                [],
-                metadata,
-                false
-            );
-            
+            actionCache.update(actionId, objectFiles, [], metadata, false);
+            incLinker.invalidate(outputPath);
             return result;
         }
         
-        // Update cache with success
-        actionCache.update(
-            actionId,
-            objectFiles,
-            [outputPath],
-            metadata,
-            true
-        );
+        // Record successful link
+        actionCache.update(actionId, objectFiles, [outputPath], metadata, true);
+        incLinker.recordLink(outputPath, objectFiles, config.buildSettings.linkedLibraries, 
+                            linkerFlagsStr, doIncremental);
         
         result.success = true;
         return result;

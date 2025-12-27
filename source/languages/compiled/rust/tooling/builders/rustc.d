@@ -14,13 +14,16 @@ import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.logging;
 import engine.caching.actions.action;
+import engine.linking.incremental;
 
-/// Direct rustc builder - compiles without cargo with action-level caching
+/// Direct rustc builder - compiles without cargo with action-level caching and incremental linking
 class RustcBuilder : RustBuilder
 {
     private ActionCache actionCache;
+    private IncrementalLinker incLinker;
+    private bool useIncrementalLink;
     
-    this(ActionCache cache = null)
+    this(ActionCache cache = null, bool enableIncrementalLink = true) @system
     {
         if (cache is null)
         {
@@ -31,6 +34,15 @@ class RustcBuilder : RustBuilder
         {
             actionCache = cache;
         }
+        
+        // Initialize incremental linker for Rust's linking phase
+        incLinker = new IncrementalLinker(".builder-cache/linking/rust", actionCache);
+        useIncrementalLink = enableIncrementalLink && incLinker.isIncrementalAvailable();
+        
+        if (useIncrementalLink)
+            structuredLog.debug_("rust_incremental_link_enabled")
+                .field("linker", incLinker.getLinkerConfig().type.to!string)
+                .emit();
     }
     RustCompileResult build(
         in string[] sources,
@@ -382,7 +394,7 @@ class RustcBuilder : RustBuilder
         return result;
     }
     
-    /// Link compiled modules with caching
+    /// Link compiled modules with caching and incremental linking support
     private RustCompileResult linkModules(
         string[] modules,
         string outputPath,
@@ -392,7 +404,6 @@ class RustcBuilder : RustBuilder
     {
         RustCompileResult result;
         
-        // Build metadata for cache validation
         string[string] metadata;
         metadata["crateType"] = crateTypeToString(config.crateType);
         metadata["release"] = config.release.to!string;
@@ -400,14 +411,12 @@ class RustcBuilder : RustBuilder
         metadata["target"] = config.target;
         metadata["rustcFlags"] = config.rustcFlags.join(" ");
         
-        // Create action ID for linking
         ActionId actionId;
         actionId.targetId = target.name;
         actionId.type = ActionType.Link;
         actionId.subId = baseName(outputPath);
         actionId.inputHash = FastHash.hashStrings(modules);
         
-        // Check if linking is cached
         if (actionCache.isCached(actionId, modules, metadata) && exists(outputPath))
         {
             structuredLog.debug_("__cached_linking_").field("detail", "  [Cached] Linking: " ~ outputPath).emit();
@@ -415,18 +424,25 @@ class RustcBuilder : RustBuilder
             return result;
         }
         
+        // Analyze for incremental linking
+        auto linkAnalysis = incLinker.analyze(outputPath, modules, [], config.rustcFlags.join(" "));
+        bool doIncremental = useIncrementalLink && linkAnalysis.canIncrementalLink();
+        
+        if (doIncremental)
+            structuredLog.info("rust_incremental_link")
+                .field("output", baseName(outputPath))
+                .field("changed", linkAnalysis.changedObjects.length)
+                .field("total", modules.length)
+                .emit();
+        
         // Build link command
         string[] cmd = ["rustc"];
         cmd ~= ["--crate-type", crateTypeToString(config.crateType)];
         cmd ~= ["-o", outputPath];
         cmd ~= ["--edition", editionToString(config.edition)];
         
-        // Add compiled modules as external crates
         foreach (mod_; modules)
-        {
-            string dir = dirName(mod_);
-            cmd ~= ["-L", dir];
-        }
+            cmd ~= ["-L", dirName(mod_)];
         
         if (config.release)
             cmd ~= ["-C", "opt-level=" ~ optLevelToString(config.optLevel)];
@@ -437,43 +453,35 @@ class RustcBuilder : RustBuilder
         if (!config.target.empty)
             cmd ~= ["--target", config.target];
         
+        // Add incremental linker flags via -C link-arg
+        if (doIncremental)
+        {
+            auto incFlags = incLinker.getLinkerFlags(linkAnalysis);
+            foreach (flag; incFlags)
+                cmd ~= ["-C", "link-arg=" ~ flag];
+        }
+        
         cmd ~= config.rustcFlags;
         
         structuredLog.debug_("linking_").field("detail", "Linking: " ~ outputPath).emit();
         
-        // Set environment variables
         string[string] env = null;
         if (!config.env.empty)
             env = cast(string[string])config.env.dup;
         
         auto res = execute(cmd, env);
         
-        bool success = (res.status == 0);
-        
-        if (!success)
+        if (res.status != 0)
         {
             result.error = "Linking failed: " ~ res.output;
-            
-            // Update cache with failure
-            actionCache.update(
-                actionId,
-                modules,
-                [],
-                metadata,
-                false
-            );
-            
+            actionCache.update(actionId, modules, [], metadata, false);
+            incLinker.invalidate(outputPath);
             return result;
         }
         
-        // Update cache with success
-        actionCache.update(
-            actionId,
-            modules,
-            [outputPath],
-            metadata,
-            true
-        );
+        // Record successful link
+        actionCache.update(actionId, modules, [outputPath], metadata, true);
+        incLinker.recordLink(outputPath, modules, [], config.rustcFlags.join(" "), doIncremental);
         
         result.success = true;
         return result;

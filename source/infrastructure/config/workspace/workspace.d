@@ -582,6 +582,13 @@ struct WorkspaceAnalyzer
             config.options.incremental = boolResult.unwrap();
         }
         
+        if (auto field = decl.getField("incrementalLinking"))
+        {
+            auto boolResult = extractBool(field.value);
+            if (boolResult.isErr) return error("Field 'incrementalLinking' must be a boolean (true/false)");
+            config.options.incrementalLinking = boolResult.unwrap();
+        }
+        
         if (auto field = decl.getField("verbose"))
         {
             auto boolResult = extractBool(field.value);

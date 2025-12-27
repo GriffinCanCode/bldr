@@ -16,13 +16,16 @@ import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.logging;
 import engine.caching.actions.action;
+import engine.linking.incremental;
 
-/// Builder using direct zig compile commands with action-level caching
+/// Builder using direct zig compile commands with action-level caching and incremental linking
 class CompileBuilder : ZigBuilder
 {
     private ActionCache actionCache;
+    private IncrementalLinker incLinker;
+    private bool useIncrementalLink;
     
-    this(ActionCache cache = null)
+    this(ActionCache cache = null, bool enableIncrementalLink = true) @system
     {
         if (cache is null)
         {
@@ -33,6 +36,15 @@ class CompileBuilder : ZigBuilder
         {
             actionCache = cache;
         }
+        
+        // Initialize incremental linker for Zig's linking phase
+        incLinker = new IncrementalLinker(".builder-cache/linking/zig", actionCache);
+        useIncrementalLink = enableIncrementalLink && incLinker.isIncrementalAvailable();
+        
+        if (useIncrementalLink)
+            structuredLog.debug_("zig_incremental_link_enabled")
+                .field("linker", incLinker.getLinkerConfig().type.to!string)
+                .emit();
     }
     ZigCompileResult build(
         const string[] sources,
@@ -622,7 +634,7 @@ class CompileBuilder : ZigBuilder
         return result;
     }
     
-    /// Link object files with caching
+    /// Link object files with caching and incremental linking support
     private ZigCompileResult linkObjects(
         string[] objectFiles,
         string outputPath,
@@ -633,7 +645,6 @@ class CompileBuilder : ZigBuilder
     {
         ZigCompileResult result;
         
-        // Build metadata for cache validation
         string[string] metadata;
         metadata["outputType"] = config.outputType.to!string;
         metadata["linkMode"] = config.linkMode.to!string;
@@ -642,20 +653,30 @@ class CompileBuilder : ZigBuilder
         metadata["lto"] = config.lto.to!string;
         metadata["sysLibs"] = config.sysLibs.join(" ");
         
-        // Create action ID for linking
         ActionId actionId;
         actionId.targetId = target.name;
         actionId.type = ActionType.Link;
         actionId.subId = baseName(outputPath);
         actionId.inputHash = FastHash.hashStrings(objectFiles);
         
-        // Check if linking is cached
+        // Check action cache first
         if (actionCache.isCached(actionId, objectFiles, metadata) && exists(outputPath))
         {
             structuredLog.debug_("__cached_linking_").field("detail", "  [Cached] Linking: " ~ outputPath).emit();
             result.success = true;
             return result;
         }
+        
+        // Analyze for incremental linking
+        auto linkAnalysis = incLinker.analyze(outputPath, objectFiles, config.sysLibs, "");
+        bool doIncremental = useIncrementalLink && linkAnalysis.canIncrementalLink();
+        
+        if (doIncremental)
+            structuredLog.info("zig_incremental_link")
+                .field("output", baseName(outputPath))
+                .field("changed", linkAnalysis.changedObjects.length)
+                .field("total", objectFiles.length)
+                .emit();
         
         // Determine zig command based on output type
         string[] cmd;
@@ -667,89 +688,62 @@ class CompileBuilder : ZigBuilder
             case OutputType.Obj: cmd = ["zig", "build-obj"]; break;
         }
         
-        // Add object files
         cmd ~= objectFiles;
-        
-        // Output path
         cmd ~= ["-femit-bin=" ~ outputPath];
         
-        // Add target
         if (config.target.isCross())
         {
             cmd ~= "-target";
             cmd ~= config.target.toTargetFlag();
         }
         
-        // Add link mode
         if (config.linkMode == LinkMode.Static)
         {
-            version(OSX)
-            {
-                structuredLog.debug_("skipping_static_flag_on_macos_not_suppor").emit();
-            }
-            else
-            {
-                cmd ~= "-static";
-            }
+            version(OSX) {}
+            else { cmd ~= "-static"; }
         }
         
-        // Add strip mode
         final switch (config.strip)
         {
             case StripMode.None: break;
-            case StripMode.Debug: cmd ~= "-fstrip"; break;
-            case StripMode.All: cmd ~= "-fstrip"; break;
+            case StripMode.Debug, StripMode.All: cmd ~= "-fstrip"; break;
         }
         
-        // Add LTO
         if (config.lto)
             cmd ~= "-flto";
         
-        // Add system libraries
-        foreach (lib; config.sysLibs)
+        // Add incremental linker flags via passthrough to system linker
+        if (doIncremental)
         {
-            cmd ~= "-l" ~ lib;
+            auto incFlags = incLinker.getLinkerFlags(linkAnalysis);
+            foreach (flag; incFlags)
+                cmd ~= "-Wl," ~ flag;  // Pass to system linker
         }
+        
+        foreach (lib; config.sysLibs)
+            cmd ~= "-l" ~ lib;
         
         structuredLog.debug_("linking_").field("detail", "Linking: " ~ outputPath).emit();
         
-        // Prepare environment
         string[string] env;
         foreach (key, value; environment.toAA())
             env[key] = value;
-        
-        // Add custom environment variables
         foreach (key, value; config.env)
             env[key] = value;
         
         auto res = execute(cmd, env);
         
-        bool success = (res.status == 0);
-        
-        if (!success)
+        if (res.status != 0)
         {
             result.error = "Linking failed: " ~ res.output;
-            
-            // Update cache with failure
-            actionCache.update(
-                actionId,
-                objectFiles,
-                [],
-                metadata,
-                false
-            );
-            
+            actionCache.update(actionId, objectFiles, [], metadata, false);
+            incLinker.invalidate(outputPath);
             return result;
         }
         
-        // Update cache with success
-        actionCache.update(
-            actionId,
-            objectFiles,
-            [outputPath],
-            metadata,
-            true
-        );
+        // Record successful link
+        actionCache.update(actionId, objectFiles, [outputPath], metadata, true);
+        incLinker.recordLink(outputPath, objectFiles, config.sysLibs, "", doIncremental);
         
         result.success = true;
         return result;

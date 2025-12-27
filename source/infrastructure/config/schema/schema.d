@@ -585,6 +585,7 @@ struct BuildOptions
 {
     bool verbose;
     bool incremental = true;
+    bool incrementalLinking = true;  // Enable incremental linking (ld.lld --incremental, MSVC /INCREMENTAL)
     bool parallel = true;
     size_t maxJobs = 0; // 0 = auto
     string cacheDir = ".builder-cache";
@@ -592,6 +593,25 @@ struct BuildOptions
     DistributedConfig distributed;
     EconomicsConfig economics;
     DeterminismOptions determinism;
+    
+    /// Load linking options from environment
+    static BuildOptions fromEnvironment() @safe
+    {
+        import std.process : environment;
+        
+        BuildOptions opts;
+        
+        auto incLink = environment.get("BUILDER_INCREMENTAL_LINK", "true");
+        opts.incrementalLinking = (incLink == "1" || incLink == "true");
+        
+        auto inc = environment.get("BUILDER_INCREMENTAL", "true");
+        opts.incremental = (inc == "1" || inc == "true");
+        
+        auto verbose = environment.get("BUILDER_VERBOSE", "");
+        opts.verbose = (verbose == "1" || verbose == "true");
+        
+        return opts;
+    }
 }
 
 /// Language-specific build result

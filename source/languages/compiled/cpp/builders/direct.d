@@ -19,16 +19,19 @@ import infrastructure.utils.files.hash;
 import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
 import engine.caching.modules.bmi : BMICache, BMICacheConfig;
+import engine.linking.incremental;
 
-/// Direct compiler builder - compiles without external build system with action-level caching
+/// Direct compiler builder - compiles without external build system with action-level caching and incremental linking
 class DirectBuilder : BaseCppBuilder
 {
     private Toolchain toolchain;
     private ActionCache actionCache;
     private BMICache bmiCache;
     private ModuleBuilder moduleBuilder;
+    private IncrementalLinker incLinker;
+    private bool useIncrementalLink;
     
-    this(CppConfig config, ActionCache cache = null, BMICache bmiCacheParam = null)
+    this(CppConfig config, ActionCache cache = null, BMICache bmiCacheParam = null, bool enableIncrementalLink = true) @system
     {
         super(config);
         // Get toolchain from registry
@@ -92,6 +95,15 @@ class DirectBuilder : BaseCppBuilder
         // Initialize module builder (lazy - only when modules enabled)
         if (config.modules)
             moduleBuilder = new ModuleBuilder(toolchain, bmiCache);
+        
+        // Initialize incremental linker for faster linking on large projects
+        incLinker = new IncrementalLinker(".builder-cache/linking/cpp-direct", actionCache);
+        useIncrementalLink = enableIncrementalLink && incLinker.isIncrementalAvailable();
+        
+        if (useIncrementalLink)
+            structuredLog.debug_("cpp_direct_incremental_link_enabled")
+                .field("linker", incLinker.getLinkerConfig().type.to!string)
+                .emit();
     }
     
     override CppCompileResult build(
@@ -413,7 +425,7 @@ class DirectBuilder : BaseCppBuilder
         return result;
     }
     
-    /// Link object files to final output with action-level caching
+    /// Link object files to final output with action-level caching and incremental linking
     private CppCompileResult linkObjects(
         string[] objects,
         string outputFile,
@@ -424,42 +436,34 @@ class DirectBuilder : BaseCppBuilder
     {
         CppCompileResult result;
         
-        // Use C++ compiler for linking if any C++ code
-        // Get compiler/linker path
         auto comp = toolchain.compiler();
         if (comp is null)
         {
-            CppCompileResult errorResult;
-            errorResult.error = "No compiler available in toolchain for linking";
-            return errorResult;
+            result.error = "No compiler available in toolchain for linking";
+            return result;
         }
         
         string linker = comp.path;
-        // For C++, use g++ or clang++ for linking
         if (isCpp && (comp.name == "gcc" || comp.name == "clang"))
         {
             import std.string : replace;
             linker = comp.path.replace("gcc", "g++").replace("clang", "clang++");
         }
         
-        // Build linker flags
         auto linkerFlags = buildLinkerFlags(config);
+        string linkerFlagsStr = linkerFlags.join(" ");
         
-        // Build metadata for cache validation
         string[string] metadata;
         metadata["linker"] = linker;
-        metadata["linkerFlags"] = linkerFlags.join(" ");
+        metadata["linkerFlags"] = linkerFlagsStr;
         metadata["isCpp"] = isCpp.to!string;
         
-        // Create action ID for linking
         ActionId actionId;
         actionId.targetId = target.name;
         actionId.type = ActionType.Link;
         actionId.subId = baseName(outputFile);
-        // Hash all object files together for input hash
         actionId.inputHash = FastHash.hashStrings(objects);
         
-        // Check if linking is cached
         if (actionCache.isCached(actionId, objects, metadata) && exists(outputFile))
         {
             structuredLog.debug_("__cached_linking_").field("detail", "  [Cached] Linking: " ~ outputFile).emit();
@@ -467,57 +471,58 @@ class DirectBuilder : BaseCppBuilder
             return result;
         }
         
+        // Analyze for incremental linking opportunity
+        auto linkAnalysis = incLinker.analyze(outputFile, objects, config.libs, linkerFlagsStr);
+        bool doIncremental = useIncrementalLink && linkAnalysis.canIncrementalLink();
+        
+        if (doIncremental)
+            structuredLog.info("cpp_direct_incremental_link")
+                .field("output", baseName(outputFile))
+                .field("changed", linkAnalysis.changedObjects.length)
+                .field("total", objects.length)
+                .emit();
+        
         // Build link command
         string[] cmd = [linker];
-        
-        // Output file
         cmd ~= ["-o", outputFile];
         
-        // Object files
-        cmd ~= objects;
+        // Add incremental flags if beneficial
+        if (doIncremental)
+            cmd ~= incLinker.getLinkerFlags(linkAnalysis);
         
-        // Linker flags
+        cmd ~= objects;
         cmd ~= linkerFlags;
+        
+        // Add library paths and libraries
+        foreach (libDir; config.libDirs)
+            cmd ~= ["-L", libDir];
+        foreach (lib; config.libs)
+            cmd ~= "-l" ~ lib;
+        foreach (sysLib; config.sysLibs)
+            cmd ~= "-l" ~ sysLib;
         
         structuredLog.debug_("linking_").field("detail", "Linking: " ~ outputFile).emit();
         structuredLog.debug_("__command_").field("detail", "  Command: " ~ cmd.join(" ")).emit();
         
-        // Execute linking
         auto res = execute(cmd);
         
-        bool success = (res.status == 0);
-        
-        if (!success)
+        if (res.status != 0)
         {
             result.error = "Linking failed: " ~ res.output;
-            
-            // Update cache with failure
-            actionCache.update(
-                actionId,
-                objects,
-                [],
-                metadata,
-                false
-            );
-            
+            actionCache.update(actionId, objects, [], metadata, false);
+            incLinker.invalidate(outputFile);
             return result;
         }
         
-        // Check for warnings
         if (!res.output.empty)
         {
             result.hadWarnings = true;
             result.warnings ~= "Linker: " ~ res.output;
         }
         
-        // Update cache with success
-        actionCache.update(
-            actionId,
-            objects,
-            [outputFile],
-            metadata,
-            true
-        );
+        // Record successful link
+        actionCache.update(actionId, objects, [outputFile], metadata, true);
+        incLinker.recordLink(outputFile, objects, config.libs, linkerFlagsStr, doIncremental);
         
         result.success = true;
         return result;
