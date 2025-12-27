@@ -11,7 +11,7 @@ import engine.caching.storage.chunked : ChunkedCAS;
 import infrastructure.utils.files.hash : FastHash;
 import infrastructure.utils.files.cdc : shouldChunk, LARGE_ARTIFACT_THRESHOLD, ChunkManifest;
 import infrastructure.utils.serialization : Codec;
-import infrastructure.utils.simd.bloom : BloomFilter;
+import infrastructure.utils.simd.bloom : BloomFilter, LockFreeBloomFilter;
 import infrastructure.utils.crypto.merkle : MerkleTree, MerkleProof;
 import infrastructure.errors;
 
@@ -97,7 +97,7 @@ private struct AtomicDedupStats
 /// Concurrency:
 /// - Sharded locking: 32 ref-count shards for parallel store/fetch
 /// - Lock-free stats: atomic counters eliminate stats contention
-/// - Bloom reads are lock-free (writes use dedicated mutex)
+/// - Lock-free bloom: atomic OR for concurrent insertions, no mutex needed
 final class DedupEngine
 {
     private ContentAddressableStorage cas;
@@ -107,10 +107,9 @@ final class DedupEngine
     private enum SHARD_COUNT = 32;
     private RefCountShard[SHARD_COUNT] shards;
     
-    // Bloom filter for fast negative lookups (avoids disk I/O)
-    // Reads are thread-safe; writes need bloomMutex
-    private BloomFilter bloomFilter;
-    private Mutex bloomMutex;  // Only for bloom writes
+    // Lock-free bloom filter for fast negative lookups (avoids disk I/O)
+    // Uses atomic OR for concurrent insertions - no mutex needed
+    private LockFreeBloomFilter bloomFilter;
     private enum BLOOM_EXPECTED_ITEMS = 100_000;
     private enum BLOOM_FPR = 0.001;  // 0.1% false positive rate
     
@@ -120,8 +119,7 @@ final class DedupEngine
     this(ContentAddressableStorage cas) @system
     {
         this.cas = cas;
-        this.bloomMutex = new Mutex();
-        this.bloomFilter = BloomFilter.create(BLOOM_EXPECTED_ITEMS, BLOOM_FPR);
+        this.bloomFilter = LockFreeBloomFilter.create(BLOOM_EXPECTED_ITEMS, BLOOM_FPR);
         foreach (i; 0 .. SHARD_COUNT)
             shards[i] = RefCountShard.create();
     }
@@ -131,8 +129,7 @@ final class DedupEngine
     {
         this.cas = cas;
         this.chunkedCas = chunkedCas;
-        this.bloomMutex = new Mutex();
-        this.bloomFilter = BloomFilter.create(BLOOM_EXPECTED_ITEMS, BLOOM_FPR);
+        this.bloomFilter = LockFreeBloomFilter.create(BLOOM_EXPECTED_ITEMS, BLOOM_FPR);
         foreach (i; 0 .. SHARD_COUNT)
             shards[i] = RefCountShard.create();
     }
@@ -174,9 +171,9 @@ final class DedupEngine
                 shards[shardIdx].refCounts[ref_.hash] = prevCount + 1;
             }
             
-            // Bloom write needs its own lock
+            // Lock-free bloom filter insertion (atomic OR)
             if (bloomFilter.valid)
-                synchronized (bloomMutex) bloomFilter.insert(ref_.hash);
+                bloomFilter.insert(ref_.hash);
             
             // Atomic stats update (lock-free)
             if (prevCount == 0) {
@@ -205,9 +202,9 @@ final class DedupEngine
             shards[shardIdx].refCounts[ref_.hash] = prevCount + 1;
         }
         
-        // Bloom write needs its own lock
+        // Lock-free bloom filter insertion (atomic OR)
         if (bloomFilter.valid)
-            synchronized (bloomMutex) bloomFilter.insert(ref_.hash);
+            bloomFilter.insert(ref_.hash);
         
         // Atomic stats update (lock-free)
         if (prevCount == 0)
