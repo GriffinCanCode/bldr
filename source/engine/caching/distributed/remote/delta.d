@@ -13,6 +13,7 @@ import engine.caching.distributed.remote.artifact;
 import engine.caching.storage.chunked : ChunkedCAS;
 import infrastructure.utils.files.cdc : ChunkManifest, DeltaStats, FastCDC;
 import infrastructure.utils.crypto.blake3 : Blake3, toHexString;
+import infrastructure.utils.crypto.merkle : MerkleTree, MerkleProof;
 import infrastructure.errors;
 
 /// Rolling Checksum (rsync-style Adler32 variant)
@@ -621,7 +622,7 @@ final class DeltaTransfer
         return Ok!(TransferResult, BuildError)(result);
     }
     
-    /// Download artifact using delta transfer
+    /// Download artifact using delta transfer with Merkle verification
     @system
     BuildResult!(ubyte[]) download(string blobHash)
     {
@@ -642,21 +643,37 @@ final class DeltaTransfer
         
         // Identify chunks we already have locally
         auto localMissing = appender!(ubyte[32][])();
-        foreach (ref r; manifest.refs)
+        uint[] missingIndices;
+        
+        foreach (i, ref r; manifest.refs)
         {
             auto chunkResult = localStore.getChunk(r.hash);
             if (chunkResult.isErr)
+            {
                 localMissing ~= r.hash;
+                missingIndices ~= cast(uint)i;
+            }
         }
         
-        // Download missing chunks
-        foreach (hash; localMissing[])
+        // Download missing chunks with Merkle proof verification
+        foreach (j, hash; localMissing[])
         {
             auto chunkResult = transport.get(toHexString(hash[]));
             if (chunkResult.isErr)
                 return Err!(ubyte[], BuildError)(chunkResult.unwrapErr());
             
-            auto storeResult = localStore.putChunk(chunkResult.unwrap(), hash);
+            auto chunkData = chunkResult.unwrap();
+            
+            // Verify chunk with Merkle proof if available
+            if (config.verifyChunks)
+            {
+                auto proof = manifest.generateProof(missingIndices[j]);
+                if (!ChunkedCAS.verifyChunkAgainstRoot(chunkData, hash, proof, manifest.merkleRoot))
+                    return Err!(ubyte[], BuildError)(Errors.cache(
+                        "Chunk verification failed: " ~ toHexString(hash[]), Cache.Corrupted).build());
+            }
+            
+            auto storeResult = localStore.putChunk(chunkData, hash);
             if (storeResult.isErr)
                 return Err!(ubyte[], BuildError)(storeResult.unwrapErr());
         }
@@ -667,6 +684,99 @@ final class DeltaTransfer
             return Err!(ubyte[], BuildError)(storeResult.unwrapErr());
         
         return localStore.get(blobHash);
+    }
+    
+    /// Download with incremental verification using Merkle tree diff
+    /// Only downloads chunks that differ from local version
+    @system
+    BuildResult!TransferResult downloadIncremental(string blobHash, string localBlobHash)
+    {
+        auto startTime = MonoTime.currTime;
+        TransferResult result;
+        result.blobHash = blobHash;
+        
+        // Get both manifests
+        auto remoteManifest = transport.get("manifest:" ~ blobHash);
+        if (remoteManifest.isErr)
+        {
+            auto fullResult = transport.get(blobHash);
+            if (fullResult.isErr)
+                return Err!(TransferResult, BuildError)(fullResult.unwrapErr());
+            
+            auto data = fullResult.unwrap();
+            result.totalSize = data.length;
+            result.bytesTransferred = data.length;
+            result.chunksTotal = 1;
+            result.chunksTransferred = 1;
+            result.duration = MonoTime.currTime - startTime;
+            return Ok!(TransferResult, BuildError)(result);
+        }
+        
+        auto parseResult = ChunkManifest.deserialize(remoteManifest.unwrap());
+        if (parseResult.isErr)
+            return Err!(TransferResult, BuildError)(Errors.cache(
+                "Failed to parse remote manifest", Cache.LoadFailed).build());
+        
+        auto remoteMf = parseResult.unwrap();
+        result.totalSize = remoteMf.totalSize;
+        result.chunksTotal = remoteMf.chunkCount;
+        
+        // Get local manifest for diff
+        auto localManifest = localStore.getManifest(localBlobHash);
+        
+        uint[] changedIndices;
+        if (localManifest.isOk)
+        {
+            // Use Merkle tree diff to find changed chunks (O(log n) for sparse changes)
+            auto localMf = localManifest.unwrap();
+            changedIndices = remoteMf.findChanged(localMf);
+        }
+        else
+        {
+            // No local version - download all chunks
+            foreach (i; 0 .. remoteMf.chunkCount)
+                changedIndices ~= cast(uint)i;
+        }
+        
+        result.chunksTransferred = changedIndices.length;
+        
+        // Download only changed chunks
+        foreach (idx; changedIndices)
+        {
+            if (idx >= remoteMf.refs.length)
+                continue;
+            
+            auto ref_ = remoteMf.refs[idx];
+            auto chunkResult = transport.get(toHexString(ref_.hash[]));
+            if (chunkResult.isErr)
+                return Err!(TransferResult, BuildError)(chunkResult.unwrapErr());
+            
+            auto chunkData = chunkResult.unwrap();
+            result.bytesTransferred += chunkData.length;
+            
+            // Verify with Merkle proof
+            if (config.verifyChunks)
+            {
+                auto proof = remoteMf.generateProof(idx);
+                if (!ChunkedCAS.verifyChunkAgainstRoot(chunkData, ref_.hash, proof, remoteMf.merkleRoot))
+                    return Err!(TransferResult, BuildError)(Errors.cache(
+                        "Incremental chunk verification failed", Cache.Corrupted).build());
+            }
+            
+            auto storeResult = localStore.putChunk(chunkData, ref_.hash);
+            if (storeResult.isErr)
+                return Err!(TransferResult, BuildError)(storeResult.unwrapErr());
+        }
+        
+        // Store new manifest
+        auto storeResult = localStore.storeManifest(blobHash, remoteMf);
+        if (storeResult.isErr)
+            return Err!(TransferResult, BuildError)(storeResult.unwrapErr());
+        
+        result.bytesSaved = result.totalSize - result.bytesTransferred;
+        result.duration = MonoTime.currTime - startTime;
+        
+        return Ok!(TransferResult, BuildError)(result);
     }
     
     /// Check if delta transfer is beneficial for size

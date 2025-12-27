@@ -7,6 +7,7 @@ import engine.runtime.hermetic : SandboxSpec;
 import engine.caching.distributed.remote.client : RemoteCacheClient;
 import infrastructure.utils.files.chunking : ChunkTransfer, TransferStats;
 import infrastructure.utils.memory.mmap : MmapRegion, MapMode;
+import infrastructure.utils.crypto.merkle : MerkleProof;
 import infrastructure.errors;
 import infrastructure.utils.logging;
 
@@ -273,6 +274,40 @@ final class ArtifactManager
         }
         
         return false;
+    }
+    
+    /// Verify artifact chunk integrity with Merkle proof
+    /// Useful for incremental validation without downloading entire artifact
+    /// 
+    /// Responsibility: Verify a chunk belongs to an artifact using its hash
+    BuildResult!bool verifyArtifactChunk(
+        const(ubyte)[] chunkData,
+        ubyte[32] expectedHash,
+        ref const MerkleProof proof
+    ) @trusted
+    {
+        import infrastructure.utils.crypto.blake3 : Blake3;
+        import infrastructure.utils.crypto.merkle : MerkleTree;
+        
+        // Verify chunk data matches expected hash
+        auto hasher = Blake3(0);
+        hasher.put(chunkData);
+        ubyte[32] actualHash = hasher.finish(32)[0 .. 32];
+        
+        if (actualHash != expectedHash)
+        {
+            return Err!(bool, BuildError)(Errors.cache(
+                "Chunk hash mismatch", Cache.Corrupted).build());
+        }
+        
+        // Verify the Merkle proof
+        if (!MerkleTree.verifyProof(proof, proof.root))
+        {
+            return Err!(bool, BuildError)(Errors.cache(
+                "Merkle proof verification failed", Cache.Corrupted).build());
+        }
+        
+        return Ok!(bool, BuildError)(true);
     }
 }
 

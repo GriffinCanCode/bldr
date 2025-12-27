@@ -8,9 +8,10 @@ import core.sync.mutex : Mutex;
 import engine.caching.storage.cas : ContentAddressableStorage;
 import engine.caching.storage.chunked : ChunkedCAS;
 import infrastructure.utils.files.hash : FastHash;
-import infrastructure.utils.files.cdc : shouldChunk, LARGE_ARTIFACT_THRESHOLD;
+import infrastructure.utils.files.cdc : shouldChunk, LARGE_ARTIFACT_THRESHOLD, ChunkManifest;
 import infrastructure.utils.serialization : Codec;
 import infrastructure.utils.simd.bloom : BloomFilter;
+import infrastructure.utils.crypto.merkle : MerkleTree, MerkleProof;
 import infrastructure.errors;
 
 /// Blob reference - pointer to content-addressed blob
@@ -420,5 +421,74 @@ BuildResult!bool verifyBlob(DedupEngine engine, BlobRef ref_) @system
     }
     
     return Ok!(bool, BuildError)(true);
+}
+
+/// Verify large blob integrity using Merkle tree (partial verification)
+/// Only verifies the Merkle root matches - individual chunks verified lazily
+BuildResult!bool verifyBlobMerkle(DedupEngine engine, BlobRef ref_) @system
+{
+    if (!ref_.isValid)
+        return Ok!(bool, BuildError)(true);
+    
+    // Check if this is a chunked blob
+    if (engine.chunkedCas is null)
+        return verifyBlob(engine, ref_);  // Fallback to full verification
+    
+    // Try to get manifest for Merkle verification
+    auto manifestResult = engine.chunkedCas.getManifest(ref_.hash);
+    if (manifestResult.isErr)
+        return verifyBlob(engine, ref_);  // No manifest, use full verification
+    
+    auto manifest = manifestResult.unwrap();
+    
+    // Rebuild Merkle tree from stored chunk hashes
+    auto tree = manifest.rebuildMerkleTree();
+    
+    // Verify Merkle root matches stored root
+    if (tree.root != manifest.merkleRoot)
+    {
+        return Err!(bool, BuildError)(Errors.cache(
+            "Merkle root mismatch for blob: " ~ ref_.hash, Cache.Corrupted).build());
+    }
+    
+    // Verify total size
+    if (manifest.totalSize != ref_.size)
+    {
+        return Err!(bool, BuildError)(Errors.cache(
+            "Blob size mismatch: expected " ~ ref_.size.to!string ~ 
+            ", manifest reports " ~ manifest.totalSize.to!string, Cache.Corrupted).build());
+    }
+    
+    return Ok!(bool, BuildError)(true);
+}
+
+/// Verify specific chunk of a large blob with Merkle proof
+/// Useful for partial artifact validation without downloading entire blob
+BuildResult!bool verifyChunkWithProof(
+    DedupEngine engine, 
+    string blobHash, 
+    uint chunkIndex
+) @system
+{
+    if (engine.chunkedCas is null)
+        return Err!(bool, BuildError)(Errors.cache(
+            "ChunkedCAS not available", Cache.NotFound).build());
+    
+    return Ok!(bool, BuildError)(engine.chunkedCas.verifyChunkWithProof(blobHash, chunkIndex));
+}
+
+/// Find which chunks differ between two versions of a blob
+/// Uses Merkle tree diff for O(log n) detection of sparse changes
+BuildResult!(uint[]) findChangedChunks(
+    DedupEngine engine,
+    string oldBlobHash,
+    string newBlobHash
+) @system
+{
+    if (engine.chunkedCas is null)
+        return Err!(uint[], BuildError)(Errors.cache(
+            "ChunkedCAS not available", Cache.NotFound).build());
+    
+    return engine.chunkedCas.findChangedChunks(oldBlobHash, newBlobHash);
 }
 

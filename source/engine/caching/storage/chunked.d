@@ -9,6 +9,7 @@ import engine.caching.storage.cas : ContentAddressableStorage;
 import infrastructure.utils.files.cdc;
 import infrastructure.utils.files.hash : FastHash;
 import infrastructure.utils.crypto.blake3 : Blake3, toHexString;
+import infrastructure.utils.crypto.merkle : MerkleTree, MerkleProof;
 import infrastructure.errors;
 
 /// Chunked Content-Addressable Storage
@@ -201,6 +202,141 @@ final class ChunkedCAS
             return stats;
     }
     
+    /// Verify blob integrity using Merkle tree
+    /// Returns: true if all chunks verify, false otherwise
+    @system
+    bool verifyBlobIntegrity(string blobHash)
+    {
+        auto manifestResult = getManifest(blobHash);
+        if (manifestResult.isErr)
+            return false;
+        
+        auto manifest = manifestResult.unwrap();
+        return verifyManifestIntegrity(manifest);
+    }
+    
+    /// Verify manifest integrity using Merkle tree
+    @system
+    bool verifyManifestIntegrity(ref const ChunkManifest manifest)
+    {
+        // Rebuild tree from chunks and compare root
+        auto hashes = new ubyte[32][manifest.refs.length];
+        
+        foreach (i, ref r; manifest.refs)
+        {
+            auto chunkPath = getChunkPath(r.hash);
+            
+            synchronized (storageMutex)
+            {
+                if (!exists(chunkPath))
+                    return false;
+                
+                // Verify chunk hash
+                auto chunkData = cast(ubyte[])read(chunkPath);
+                auto hasher = Blake3(0);
+                hasher.put(chunkData);
+                auto actualHash = hasher.finish(32)[0 .. 32];
+                
+                if (actualHash != r.hash)
+                    return false;
+            }
+            
+            hashes[i] = r.hash;
+        }
+        
+        // Verify Merkle root
+        auto tree = MerkleTree.build(hashes);
+        return tree.root == manifest.merkleRoot;
+    }
+    
+    /// Verify single chunk with Merkle proof (for partial validation)
+    @system
+    bool verifyChunkWithProof(string blobHash, uint chunkIndex)
+    {
+        auto manifestResult = getManifest(blobHash);
+        if (manifestResult.isErr)
+            return false;
+        
+        auto manifest = manifestResult.unwrap();
+        if (chunkIndex >= manifest.refs.length)
+            return false;
+        
+        // Generate proof
+        auto proof = manifest.generateProof(chunkIndex);
+        
+        // Get chunk and verify
+        auto chunkResult = getChunk(manifest.refs[chunkIndex].hash);
+        if (chunkResult.isErr)
+            return false;
+        
+        auto chunkData = chunkResult.unwrap();
+        auto hasher = Blake3(0);
+        hasher.put(chunkData);
+        auto actualHash = hasher.finish(32)[0 .. 32];
+        
+        if (actualHash != manifest.refs[chunkIndex].hash)
+            return false;
+        
+        return MerkleTree.verifyProof(proof, manifest.merkleRoot);
+    }
+    
+    /// Find changed chunks between two blobs using Merkle tree diff
+    /// Returns indices of chunks that differ (for incremental sync)
+    @system
+    BuildResult!(uint[]) findChangedChunks(string oldBlobHash, string newBlobHash)
+    {
+        auto oldManifest = getManifest(oldBlobHash);
+        auto newManifest = getManifest(newBlobHash);
+        
+        if (oldManifest.isErr)
+            return Err!(uint[], BuildError)(oldManifest.unwrapErr());
+        if (newManifest.isErr)
+            return Err!(uint[], BuildError)(newManifest.unwrapErr());
+        
+        auto old_ = oldManifest.unwrap();
+        auto new_ = newManifest.unwrap();
+        
+        auto changed = old_.findChanged(new_);
+        return Ok!(uint[], BuildError)(changed);
+    }
+    
+    /// Generate Merkle proof for a chunk (for remote validation)
+    @system
+    BuildResult!MerkleProof generateChunkProof(string blobHash, uint chunkIndex)
+    {
+        auto manifestResult = getManifest(blobHash);
+        if (manifestResult.isErr)
+            return Err!(MerkleProof, BuildError)(manifestResult.unwrapErr());
+        
+        auto manifest = manifestResult.unwrap();
+        if (chunkIndex >= manifest.refs.length)
+            return Err!(MerkleProof, BuildError)(Errors.cache(
+                "Chunk index out of range", Cache.NotFound).build());
+        
+        auto proof = manifest.generateProof(chunkIndex);
+        return Ok!(MerkleProof, BuildError)(proof);
+    }
+    
+    /// Verify a chunk against expected Merkle root (for incremental download)
+    @system
+    static bool verifyChunkAgainstRoot(
+        const(ubyte)[] chunkData,
+        ubyte[32] expectedChunkHash,
+        ref const MerkleProof proof,
+        ubyte[32] expectedRoot
+    )
+    {
+        // Verify chunk hash
+        auto hasher = Blake3(0);
+        hasher.put(chunkData);
+        auto actualHash = hasher.finish(32)[0 .. 32];
+        
+        if (actualHash != expectedChunkHash)
+            return false;
+        
+        return MerkleTree.verifyProof(proof, expectedRoot);
+    }
+    
     /// Delete blob (removes chunks if chunked)
     @system
     VoidBuildResult remove(string blobHash)
@@ -358,6 +494,8 @@ struct ChunkStats
     size_t chunkHits;          // Chunk dedup hits
     size_t manifestsStored;    // Manifests created
     size_t blobHits;           // Full blob dedup hits
+    size_t merkleVerifications;   // Successful Merkle verifications
+    size_t merkleProofsGenerated; // Proofs generated for partial validation
     
     /// Chunk deduplication ratio
     double dedupRatio() const pure @safe nothrow @nogc
