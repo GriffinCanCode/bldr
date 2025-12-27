@@ -39,6 +39,12 @@ struct Intern
         _hash = hashOf(s);
     }
     
+    /// Construct from already-interned string (used by ShardedStringPool)
+    static Intern fromString(string s) pure nothrow @nogc @system
+    {
+        return Intern(s);
+    }
+    
     /// Get string representation
     string toString() const pure nothrow @nogc @system
     {
