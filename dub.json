@@ -34,6 +34,8 @@
                 "bin/obj/simd_ops.o",
                 "bin/obj/cpu_detect.o",
                 "bin/obj/bloom.o",
+                "bin/obj/bloom_simd.o",
+                "bin/obj/strings.o",
                 "bin/obj/ts_loader.o",
                 "source/infrastructure/utils/serialization/c/varint.o",
                 "source/infrastructure/utils/serialization/c/memops.o"
@@ -61,6 +63,8 @@
                 "bin/obj/simd_ops.o",
                 "bin/obj/cpu_detect.o",
                 "bin/obj/bloom.o",
+                "bin/obj/bloom_simd.o",
+                "bin/obj/strings.o",
                 "bin/obj/ts_loader.o",
                 "source/infrastructure/utils/serialization/c/varint.o",
                 "source/infrastructure/utils/serialization/c/memops.o"
@@ -105,6 +109,8 @@
                 "bin/obj/simd_ops.o",
                 "bin/obj/cpu_detect.o",
                 "bin/obj/bloom.o",
+                "bin/obj/bloom_simd.o",
+                "bin/obj/strings.o",
                 "bin/obj/ts_loader.o",
                 "source/infrastructure/utils/serialization/c/varint.o",
                 "source/infrastructure/utils/serialization/c/memops.o"

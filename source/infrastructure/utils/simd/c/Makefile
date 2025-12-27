@@ -37,7 +37,7 @@ else ifeq ($(UNAME_M),aarch64)
 endif
 
 # Source files
-SOURCES = cpu_detect.c blake3_dispatch.c simd_ops.c bloom.c bloom_simd.c
+SOURCES = cpu_detect.c blake3_dispatch.c simd_ops.c bloom.c bloom_simd.c strings.c
 
 # x86/x64 SIMD sources
 ifeq ($(ARCH_X86),1)
@@ -93,6 +93,15 @@ simd_ops.o: simd_ops.c simd_ops.h cpu_detect.h
 
 bloom.o: bloom.c bloom.h bloom_simd.h cpu_detect.h
 	$(CC) $(CFLAGS) -c $< -o $@
+
+# strings.c needs SIMD flags for string comparison
+ifeq ($(ARCH_X86),1)
+strings.o: strings.c strings.h cpu_detect.h
+	$(CC) $(CFLAGS) $(SIMD_FLAGS_AVX2) -mavx512f -mavx512bw -msse4.2 -c $< -o $@
+else
+strings.o: strings.c strings.h cpu_detect.h
+	$(CC) $(CFLAGS) -c $< -o $@
+endif
 
 # bloom_simd.c needs SIMD flags for vectorized probing
 ifeq ($(ARCH_X86),1)

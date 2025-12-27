@@ -5,6 +5,7 @@ import std.array;
 import std.file;
 import std.path;
 import infrastructure.errors;
+import infrastructure.utils.simd.strings : SIMDStrings;
 
 /// Language-agnostic dependency analyzer interface
 /// Each language implements this to extract file-level dependencies
@@ -63,9 +64,13 @@ abstract class BaseDependencyAnalyzer : DependencyAnalyzer
     }
     
     /// Default external check - checks if in system paths
+    /// SIMD-accelerated prefix matching for faster dependency resolution
     bool isExternalDependency(string dependency) @system
     {
-        return systemPaths.any!(path => dependency.startsWith(path));
+        foreach (path; systemPaths)
+            if ((() @trusted => SIMDStrings.startsWith(dependency, path))())
+                return true;
+        return false;
     }
 }
 

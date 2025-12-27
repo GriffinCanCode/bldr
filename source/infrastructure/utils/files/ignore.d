@@ -7,6 +7,7 @@ import std.string;
 import std.file;
 import std.stdio;
 import infrastructure.config.schema.schema : TargetLanguage;
+import infrastructure.utils.simd.strings : SIMDStrings;
 
 /// Language-specific dependency and build directories that should be ignored during scanning
 /// to avoid performance issues and false positives
@@ -265,17 +266,20 @@ class IgnoreRegistry
     }
     
     /// Check if a directory/file should be ignored
-    static bool shouldIgnore(string name, TargetLanguage lang = TargetLanguage.Generic)
+    /// SIMD-accelerated string comparisons for faster scanning
+    static bool shouldIgnore(string name, TargetLanguage lang = TargetLanguage.Generic) @trusted
     {
         immutable baseName = name.baseName;
         
-        // Always ignore VCS directories
-        if (vcsIgnores.canFind(baseName))
-            return true;
+        // Always ignore VCS directories (SIMD linear search)
+        foreach (vcs; vcsIgnores)
+            if (SIMDStrings.equal(baseName, vcs))
+                return true;
         
         // Check common ignores
-        if (commonIgnores.canFind(baseName))
-            return true;
+        foreach (common; commonIgnores)
+            if (SIMDStrings.equal(baseName, common))
+                return true;
         
         // Check language-specific ignores
         if (lang in languageIgnores)
@@ -283,19 +287,19 @@ class IgnoreRegistry
             auto patterns = languageIgnores[lang];
             
             // First check if the full name/path matches (for patterns like "vendor/bundle")
-            if (patterns.directories.canFind(name))
-                return true;
+            foreach (dir; patterns.directories)
+                if (SIMDStrings.equal(name, dir))
+                    return true;
             
             // Then check basename for simple patterns
-            if (patterns.directories.canFind(baseName))
-                return true;
-            
-            // Check prefixes
-            foreach (prefix; patterns.prefixes)
-            {
-                if (baseName.startsWith(prefix))
+            foreach (dir; patterns.directories)
+                if (SIMDStrings.equal(baseName, dir))
                     return true;
-            }
+            
+            // Check prefixes (SIMD prefix matching)
+            foreach (prefix; patterns.prefixes)
+                if (SIMDStrings.startsWith(baseName, prefix))
+                    return true;
         }
         
         return false;
@@ -315,17 +319,20 @@ class IgnoreRegistry
     }
     
     /// Check if a directory should be ignored (exact match)
-    static bool shouldIgnoreDirectory(string dirName, TargetLanguage lang = TargetLanguage.Generic)
+    /// SIMD-accelerated for faster directory filtering
+    static bool shouldIgnoreDirectory(string dirName, TargetLanguage lang = TargetLanguage.Generic) @trusted
     {
         immutable baseName = dirName.baseName;
         
         // Always ignore VCS directories
-        if (vcsIgnores.canFind(baseName))
-            return true;
+        foreach (vcs; vcsIgnores)
+            if (SIMDStrings.equal(baseName, vcs))
+                return true;
         
         // Check common ignores
-        if (commonIgnores.canFind(baseName))
-            return true;
+        foreach (common; commonIgnores)
+            if (SIMDStrings.equal(baseName, common))
+                return true;
         
         // Check language-specific ignores
         if (lang != TargetLanguage.Generic && lang in languageIgnores)
@@ -333,15 +340,14 @@ class IgnoreRegistry
             auto patterns = languageIgnores[lang];
             
             // Exact directory match
-            if (patterns.directories.canFind(baseName))
-                return true;
+            foreach (dir; patterns.directories)
+                if (SIMDStrings.equal(baseName, dir))
+                    return true;
             
             // Prefix match
             foreach (prefix; patterns.prefixes)
-            {
-                if (baseName.startsWith(prefix))
+                if (SIMDStrings.startsWith(baseName, prefix))
                     return true;
-            }
         }
         
         return false;
@@ -349,32 +355,35 @@ class IgnoreRegistry
     
     /// Check if a directory should be ignored for any common language
     /// Use this when language is unknown or for general scanning
-    static bool shouldIgnoreDirectoryAny(string dirName)
+    /// SIMD-accelerated for high-throughput file scanning
+    static bool shouldIgnoreDirectoryAny(string dirName) @trusted
     {
         immutable baseName = dirName.baseName;
         
         // Always ignore VCS and common
-        if (vcsIgnores.canFind(baseName))
-            return true;
-        if (commonIgnores.canFind(baseName))
-            return true;
+        foreach (vcs; vcsIgnores)
+            if (SIMDStrings.equal(baseName, vcs))
+                return true;
+        foreach (common; commonIgnores)
+            if (SIMDStrings.equal(baseName, common))
+                return true;
         
         // Check against all language patterns
         foreach (patterns; languageIgnores)
         {
             // Check full path for patterns like "vendor/bundle"
-            if (patterns.directories.canFind(dirName))
-                return true;
+            foreach (dir; patterns.directories)
+                if (SIMDStrings.equal(dirName, dir))
+                    return true;
             
             // Check basename
-            if (patterns.directories.canFind(baseName))
-                return true;
+            foreach (dir; patterns.directories)
+                if (SIMDStrings.equal(baseName, dir))
+                    return true;
             
             foreach (prefix; patterns.prefixes)
-            {
-                if (baseName.startsWith(prefix))
+                if (SIMDStrings.startsWith(baseName, prefix))
                     return true;
-            }
         }
         
         return false;
@@ -450,26 +459,27 @@ class IgnoreRegistry
     }
     
     /// Simple wildcard pattern matching (* only)
-    private static bool simplePatternMatch(string text, string pattern)
+    /// SIMD-accelerated prefix/suffix checks
+    private static bool simplePatternMatch(string text, string pattern) @trusted
     {
-        if (pattern == "*")
+        if (SIMDStrings.equal(pattern, "*"))
             return true;
         
         if (!pattern.canFind("*"))
-            return text == pattern;
+            return SIMDStrings.equal(text, pattern);
         
         // Split on * and check each part
         auto parts = pattern.split("*");
         
         if (parts.length == 1)
-            return text == pattern;
+            return SIMDStrings.equal(text, pattern);
         
-        // Check prefix
-        if (!parts[0].empty && !text.startsWith(parts[0]))
+        // Check prefix (SIMD accelerated)
+        if (!parts[0].empty && !SIMDStrings.startsWith(text, parts[0]))
             return false;
         
-        // Check suffix
-        if (parts.length > 1 && !parts[$-1].empty && !text.endsWith(parts[$-1]))
+        // Check suffix (SIMD accelerated)
+        if (parts.length > 1 && !parts[$-1].empty && !SIMDStrings.endsWith(text, parts[$-1]))
             return false;
         
         return true;

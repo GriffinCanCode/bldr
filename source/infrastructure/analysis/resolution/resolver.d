@@ -10,6 +10,7 @@ import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.errors;
 import infrastructure.repository.resolution.resolver : RepositoryResolver;
+import infrastructure.utils.simd.strings : SIMDStrings;
 
 /// Resolves import statements to build targets
 class DependencyResolver
@@ -46,10 +47,11 @@ class DependencyResolver
     }
     
     /// Resolve a dependency reference to a target name
-    string resolve(string dep, string fromTarget)
+    /// SIMD-accelerated prefix matching for faster resolution
+    string resolve(string dep, string fromTarget) @trusted
     {
         // External repository reference: @repo//path:target
-        if (dep.startsWith("@"))
+        if (SIMDStrings.startsWith(dep, "@"))
         {
             if (repoResolver !is null)
             {
@@ -62,11 +64,11 @@ class DependencyResolver
         }
         
         // Absolute reference: //path/to:target
-        if (dep.startsWith("//"))
+        if (SIMDStrings.startsWith(dep, "//"))
             return dep;
         
         // Relative reference: :target (same package)
-        if (dep.startsWith(":"))
+        if (SIMDStrings.startsWith(dep, ":"))
         {
             auto parts = fromTarget.split(":");
             if (parts.length > 0)
@@ -78,12 +80,13 @@ class DependencyResolver
     }
     
     /// Resolve a dependency reference to a TargetId (type-safe version)
-    BuildResult!TargetId resolveToId(string dep, TargetId fromTarget)
+    /// SIMD-accelerated prefix matching for faster resolution
+    BuildResult!TargetId resolveToId(string dep, TargetId fromTarget) @trusted
     {
         import infrastructure.errors : ParseError;
         
         // External repository reference: @repo//path:target
-        if (dep.startsWith("@"))
+        if (SIMDStrings.startsWith(dep, "@"))
         {
             if (repoResolver !is null)
             {
@@ -114,7 +117,7 @@ class DependencyResolver
         }
         
         // Relative reference: :target (same package)
-        if (dep.startsWith(":"))
+        if (SIMDStrings.startsWith(dep, ":"))
         {
             auto newName = dep[1 .. $];  // Remove leading ":"
             auto resolved = TargetId(fromTarget.workspace, fromTarget.path, newName);
@@ -276,12 +279,12 @@ class DependencyResolver
         return "";
     }
     
-    private string resolveJSImport(string importName)
+    private string resolveJSImport(string importName) @trusted
     {
         // Convert JS/TS import to target
         
-        // Skip external packages
-        if (!importName.startsWith(".") && !importName.startsWith("/"))
+        // Skip external packages (SIMD prefix check)
+        if (!SIMDStrings.startsWith(importName, ".") && !SIMDStrings.startsWith(importName, "/"))
             return "";
         
         foreach (ref target; config.targets)
