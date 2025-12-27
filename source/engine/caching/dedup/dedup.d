@@ -4,6 +4,7 @@ import std.algorithm : map, filter, sum, each;
 import std.array : array, appender;
 import std.conv : to;
 import std.datetime : Clock, SysTime;
+import core.atomic : atomicOp, atomicLoad, atomicStore;
 import core.sync.mutex : Mutex;
 import engine.caching.storage.cas : ContentAddressableStorage;
 import engine.caching.storage.chunked : ChunkedCAS;
@@ -40,6 +41,48 @@ struct BlobRef
     bool isValid() const pure @safe => hash.length > 0;
 }
 
+/// Shard for reference count map - reduces lock contention via striping
+private struct RefCountShard
+{
+    Mutex mutex;
+    size_t[string] refCounts;
+    
+    static RefCountShard create() @system
+    {
+        RefCountShard shard;
+        shard.mutex = new Mutex();
+        return shard;
+    }
+}
+
+/// Atomic statistics counters for lock-free updates
+private struct AtomicDedupStats
+{
+    shared long uniqueBlobs;
+    shared long duplicateRefs;
+    shared long uniqueBytes;
+    shared long savedBytes;
+    shared long totalStores;
+    shared long totalFetches;
+    shared long bloomFilterSaves;
+    shared long largeBlobs;
+    
+    /// Snapshot to regular DedupStats for reporting
+    DedupStats snapshot() const @trusted nothrow @nogc
+    {
+        DedupStats s;
+        s.uniqueBlobs = cast(size_t)atomicLoad(uniqueBlobs);
+        s.duplicateRefs = cast(size_t)atomicLoad(duplicateRefs);
+        s.uniqueBytes = cast(size_t)atomicLoad(uniqueBytes);
+        s.savedBytes = cast(size_t)atomicLoad(savedBytes);
+        s.totalStores = cast(size_t)atomicLoad(totalStores);
+        s.totalFetches = cast(size_t)atomicLoad(totalFetches);
+        s.bloomFilterSaves = cast(size_t)atomicLoad(bloomFilterSaves);
+        s.largeBlobs = cast(size_t)atomicLoad(largeBlobs);
+        return s;
+    }
+}
+
 /// Content deduplication engine
 /// Maps action outputs to content-addressed blobs, achieving 30-70% storage reduction
 /// 
@@ -50,26 +93,37 @@ struct BlobRef
 /// - Batch-optimized: minimize I/O for bulk operations
 /// - Bloom filter prefilter: eliminates 80-95% of negative lookups
 /// - FastCDC: Large blobs (>100MB) use content-defined chunking
+/// 
+/// Concurrency:
+/// - Sharded locking: 32 ref-count shards for parallel store/fetch
+/// - Lock-free stats: atomic counters eliminate stats contention
+/// - Bloom reads are lock-free (writes use dedicated mutex)
 final class DedupEngine
 {
     private ContentAddressableStorage cas;
     private ChunkedCAS chunkedCas;  // For large blobs (>100MB)
-    private Mutex dedupMutex;
-    private size_t[string] refCounts;  // hash -> reference count
+    
+    // Sharded ref counts - 32 shards for lock striping
+    private enum SHARD_COUNT = 32;
+    private RefCountShard[SHARD_COUNT] shards;
     
     // Bloom filter for fast negative lookups (avoids disk I/O)
+    // Reads are thread-safe; writes need bloomMutex
     private BloomFilter bloomFilter;
+    private Mutex bloomMutex;  // Only for bloom writes
     private enum BLOOM_EXPECTED_ITEMS = 100_000;
     private enum BLOOM_FPR = 0.001;  // 0.1% false positive rate
     
-    // Statistics
-    private DedupStats stats;
+    // Lock-free statistics
+    private AtomicDedupStats stats;
     
     this(ContentAddressableStorage cas) @system
     {
         this.cas = cas;
-        this.dedupMutex = new Mutex();
+        this.bloomMutex = new Mutex();
         this.bloomFilter = BloomFilter.create(BLOOM_EXPECTED_ITEMS, BLOOM_FPR);
+        foreach (i; 0 .. SHARD_COUNT)
+            shards[i] = RefCountShard.create();
     }
     
     /// Constructor with ChunkedCAS for large blob support
@@ -77,8 +131,21 @@ final class DedupEngine
     {
         this.cas = cas;
         this.chunkedCas = chunkedCas;
-        this.dedupMutex = new Mutex();
+        this.bloomMutex = new Mutex();
         this.bloomFilter = BloomFilter.create(BLOOM_EXPECTED_ITEMS, BLOOM_FPR);
+        foreach (i; 0 .. SHARD_COUNT)
+            shards[i] = RefCountShard.create();
+    }
+    
+    /// Get shard index from hash (FNV-1a for fast distribution)
+    private static size_t shardIndex(string hash) pure @safe nothrow @nogc
+    {
+        if (hash.length == 0) return 0;
+        // Use first 8 chars of hash for shard selection
+        size_t h = 0;
+        foreach (c; hash[0 .. (hash.length < 8 ? hash.length : 8)])
+            h = h * 31 + c;
+        return h & (SHARD_COUNT - 1);
     }
     
     /// Store blob and get reference (deduplicates automatically)
@@ -90,62 +157,70 @@ final class DedupEngine
             return Ok!(BlobRef, BuildError)(BlobRef.nil);
         
         auto ref_ = BlobRef.fromData(data, path, executable);
+        immutable shardIdx = shardIndex(ref_.hash);
         
-        synchronized (dedupMutex)
+        // Use ChunkedCAS for large blobs (>100MB)
+        if (shouldChunk(data.length) && chunkedCas !is null)
         {
-            // Use ChunkedCAS for large blobs (>100MB)
-            if (shouldChunk(data.length) && chunkedCas !is null)
-            {
-                auto storeResult = chunkedCas.put(data);
-                if (storeResult.isErr)
-                    return Err!(BlobRef, BuildError)(storeResult.unwrapErr());
-                
-                // Track reference
-                auto count = refCounts.get(ref_.hash, 0);
-                refCounts[ref_.hash] = count + 1;
-                
-                if (bloomFilter.valid)
-                    bloomFilter.insert(ref_.hash);
-                
-                if (count == 0) {
-                    stats.uniqueBlobs++;
-                    stats.uniqueBytes += data.length;
-                    stats.largeBlobs++;
-                } else {
-                    stats.duplicateRefs++;
-                    stats.savedBytes += data.length;
-                }
-                stats.totalStores++;
-                
-                return Ok!(BlobRef, BuildError)(ref_);
-            }
-            
-            // Store in CAS (handles dedup internally)
-            auto storeResult = cas.putBlob(data);
+            auto storeResult = chunkedCas.put(data);
             if (storeResult.isErr)
                 return Err!(BlobRef, BuildError)(storeResult.unwrapErr());
             
-            // Track reference
-            auto count = refCounts.get(ref_.hash, 0);
-            refCounts[ref_.hash] = count + 1;
+            // Track reference in shard
+            size_t prevCount;
+            synchronized (shards[shardIdx].mutex)
+            {
+                prevCount = shards[shardIdx].refCounts.get(ref_.hash, 0);
+                shards[shardIdx].refCounts[ref_.hash] = prevCount + 1;
+            }
             
-            // Add to bloom filter for fast future lookups
+            // Bloom write needs its own lock
             if (bloomFilter.valid)
-                bloomFilter.insert(ref_.hash);
+                synchronized (bloomMutex) bloomFilter.insert(ref_.hash);
             
-            // Update stats
-            if (count == 0)
-            {
-                stats.uniqueBlobs++;
-                stats.uniqueBytes += data.length;
+            // Atomic stats update (lock-free)
+            if (prevCount == 0) {
+                atomicOp!"+="(stats.uniqueBlobs, 1);
+                atomicOp!"+="(stats.uniqueBytes, cast(long)data.length);
+                atomicOp!"+="(stats.largeBlobs, 1);
+            } else {
+                atomicOp!"+="(stats.duplicateRefs, 1);
+                atomicOp!"+="(stats.savedBytes, cast(long)data.length);
             }
-            else
-            {
-                stats.duplicateRefs++;
-                stats.savedBytes += data.length;
-            }
-            stats.totalStores++;
+            atomicOp!"+="(stats.totalStores, 1);
+            
+            return Ok!(BlobRef, BuildError)(ref_);
         }
+        
+        // Store in CAS (handles dedup internally)
+        auto storeResult = cas.putBlob(data);
+        if (storeResult.isErr)
+            return Err!(BlobRef, BuildError)(storeResult.unwrapErr());
+        
+        // Track reference in shard
+        size_t prevCount;
+        synchronized (shards[shardIdx].mutex)
+        {
+            prevCount = shards[shardIdx].refCounts.get(ref_.hash, 0);
+            shards[shardIdx].refCounts[ref_.hash] = prevCount + 1;
+        }
+        
+        // Bloom write needs its own lock
+        if (bloomFilter.valid)
+            synchronized (bloomMutex) bloomFilter.insert(ref_.hash);
+        
+        // Atomic stats update (lock-free)
+        if (prevCount == 0)
+        {
+            atomicOp!"+="(stats.uniqueBlobs, 1);
+            atomicOp!"+="(stats.uniqueBytes, cast(long)data.length);
+        }
+        else
+        {
+            atomicOp!"+="(stats.duplicateRefs, 1);
+            atomicOp!"+="(stats.savedBytes, cast(long)data.length);
+        }
+        atomicOp!"+="(stats.totalStores, 1);
         
         return Ok!(BlobRef, BuildError)(ref_);
     }
@@ -175,17 +250,13 @@ final class DedupEngine
         if (!ref_.isValid)
             return Ok!(ubyte[], BuildError)(null);
         
-        synchronized (dedupMutex)
-        {
-            stats.totalFetches++;
-        }
+        // Atomic stats update (lock-free)
+        atomicOp!"+="(stats.totalFetches, 1);
         
         // Try ChunkedCAS first for large blobs
         if (chunkedCas !is null && ref_.size >= LARGE_ARTIFACT_THRESHOLD)
-        {
             if (chunkedCas.has(ref_.hash))
                 return chunkedCas.get(ref_.hash);
-        }
         
         return cas.getBlob(ref_.hash);
     }
@@ -208,14 +279,15 @@ final class DedupEngine
     }
     
     /// Check if blob exists (bloom filter prefiltered)
+    /// Bloom reads are lock-free; stats use atomic ops
     bool exists(BlobRef ref_) @system
     {
         if (!ref_.isValid) return false;
         
-        // Fast path: bloom filter says definitely not present
+        // Fast path: bloom filter says definitely not present (lock-free read)
         if (bloomFilter.valid && !bloomFilter.mayContain(ref_.hash))
         {
-            synchronized (dedupMutex) { stats.bloomFilterSaves++; }
+            atomicOp!"+="(stats.bloomFilterSaves, 1);
             return false;
         }
         
@@ -224,14 +296,15 @@ final class DedupEngine
     }
     
     /// Check if hash exists (bloom filter prefiltered)
+    /// Bloom reads are lock-free; stats use atomic ops
     bool existsHash(string hash) @system
     {
         if (hash.length == 0) return false;
         
-        // Fast path: bloom filter says definitely not present
+        // Fast path: bloom filter says definitely not present (lock-free read)
         if (bloomFilter.valid && !bloomFilter.mayContain(hash))
         {
-            synchronized (dedupMutex) { stats.bloomFilterSaves++; }
+            atomicOp!"+="(stats.bloomFilterSaves, 1);
             return false;
         }
         
@@ -239,6 +312,7 @@ final class DedupEngine
     }
     
     /// Batch check existence (SIMD-accelerated bloom filter)
+    /// Bloom reads are lock-free; stats batched via atomic add
     bool[] existsBatch(const(string)[] hashes) @system
     {
         auto results = new bool[hashes.length];
@@ -251,22 +325,23 @@ final class DedupEngine
         }
         
         // Pre-filter with bloom - only check disk for potential matches
+        long bloomSaves = 0;
         foreach (i, hash; hashes)
         {
             if (hash.length == 0)
-            {
                 results[i] = false;
-            }
             else if (!bloomFilter.mayContain(hash))
             {
                 results[i] = false;
-                synchronized (dedupMutex) { stats.bloomFilterSaves++; }
+                bloomSaves++;
             }
             else
-            {
                 results[i] = cas.hasBlob(hash);
-            }
         }
+        
+        // Batch atomic update
+        if (bloomSaves > 0)
+            atomicOp!"+="(stats.bloomFilterSaves, bloomSaves);
         
         return results;
     }
@@ -274,10 +349,9 @@ final class DedupEngine
     /// Add reference to blob (when action result references it)
     void addRef(string hash) @system
     {
-        synchronized (dedupMutex)
-        {
-            refCounts[hash] = refCounts.get(hash, 0) + 1;
-        }
+        immutable shardIdx = shardIndex(hash);
+        synchronized (shards[shardIdx].mutex)
+            shards[shardIdx].refCounts[hash] = shards[shardIdx].refCounts.get(hash, 0) + 1;
         cas.addRef(hash);
     }
     
@@ -285,74 +359,96 @@ final class DedupEngine
     /// Returns: true if blob has no more references
     bool removeRef(string hash) @system
     {
-        synchronized (dedupMutex)
+        immutable shardIdx = shardIndex(hash);
+        synchronized (shards[shardIdx].mutex)
         {
-            auto countPtr = hash in refCounts;
-            if (countPtr !is null)
+            auto countPtr = hash in shards[shardIdx].refCounts;
+            if (countPtr !is null && --(*countPtr) <= 0)
             {
-                if (--(*countPtr) <= 0)
-                {
-                    stats.uniqueBlobs--;
-                    refCounts.remove(hash);
-                }
+                atomicOp!"-="(stats.uniqueBlobs, 1);
+                shards[shardIdx].refCounts.remove(hash);
             }
         }
         return cas.removeRef(hash);
     }
     
     /// Bulk add references (optimized for manifest loading)
+    /// Groups by shard to minimize lock acquisitions
     void addRefs(const(string)[] hashes) @system
     {
-        synchronized (dedupMutex)
+        // Group hashes by shard for batched locking
+        size_t[][SHARD_COUNT] shardGroups;
+        foreach (i, hash; hashes)
+            shardGroups[shardIndex(hash)] ~= i;
+        
+        foreach (shardIdx; 0 .. SHARD_COUNT)
         {
-            foreach (hash; hashes)
+            if (shardGroups[shardIdx].length == 0) continue;
+            
+            synchronized (shards[shardIdx].mutex)
             {
-                refCounts[hash] = refCounts.get(hash, 0) + 1;
-                cas.addRef(hash);
+                foreach (idx; shardGroups[shardIdx])
+                {
+                    auto hash = hashes[idx];
+                    shards[shardIdx].refCounts[hash] = shards[shardIdx].refCounts.get(hash, 0) + 1;
+                    cas.addRef(hash);
+                }
             }
         }
     }
     
     /// Bulk remove references (optimized for eviction)
+    /// Groups by shard to minimize lock acquisitions
     string[] removeRefs(const(string)[] hashes) @system
     {
-        string[] orphans;
+        auto orphans = appender!(string[])();
+        long removedCount = 0;
         
-        synchronized (dedupMutex)
+        // Group hashes by shard for batched locking
+        size_t[][SHARD_COUNT] shardGroups;
+        foreach (i, hash; hashes)
+            shardGroups[shardIndex(hash)] ~= i;
+        
+        foreach (shardIdx; 0 .. SHARD_COUNT)
         {
-            foreach (hash; hashes)
+            if (shardGroups[shardIdx].length == 0) continue;
+            
+            synchronized (shards[shardIdx].mutex)
             {
-                auto countPtr = hash in refCounts;
-                if (countPtr !is null && --(*countPtr) <= 0)
+                foreach (idx; shardGroups[shardIdx])
                 {
-                    stats.uniqueBlobs--;
-                    refCounts.remove(hash);
-                    if (cas.removeRef(hash))
-                        orphans ~= hash;
+                    auto hash = hashes[idx];
+                    auto countPtr = hash in shards[shardIdx].refCounts;
+                    if (countPtr !is null && --(*countPtr) <= 0)
+                    {
+                        removedCount++;
+                        shards[shardIdx].refCounts.remove(hash);
+                        if (cas.removeRef(hash))
+                            orphans ~= hash;
+                    }
                 }
             }
         }
         
-        return orphans;
+        // Batch atomic update
+        if (removedCount > 0)
+            atomicOp!"-="(stats.uniqueBlobs, removedCount);
+        
+        return orphans[];
     }
     
-    /// Get deduplication statistics
-    DedupStats getStats() const @system
+    /// Get deduplication statistics (lock-free snapshot)
+    DedupStats getStats() const @trusted nothrow @nogc
     {
-        synchronized (cast(Mutex)dedupMutex)
-        {
-            return stats;
-        }
+        return stats.snapshot();
     }
     
-    /// Get estimated storage savings
-    float getSavingsRatio() const @system
+    /// Get estimated storage savings (lock-free)
+    float getSavingsRatio() const @trusted nothrow @nogc
     {
-        synchronized (cast(Mutex)dedupMutex)
-        {
-            immutable total = stats.uniqueBytes + stats.savedBytes;
-            return total > 0 ? (stats.savedBytes * 100.0f) / total : 0;
-        }
+        immutable s = stats.snapshot();
+        immutable total = s.uniqueBytes + s.savedBytes;
+        return total > 0 ? (s.savedBytes * 100.0f) / total : 0;
     }
 }
 
