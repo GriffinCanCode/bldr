@@ -301,6 +301,9 @@ abstract class BaseCppBuilder : CppBuilder
             flags ~= "-fmodules";
         }
         
+        // Advanced optimizations (CPU targeting, PGO, vectorization, etc.)
+        flags ~= config.advancedOpt.toFlags(config.compiler);
+        
         // Include directories
         foreach (inc; config.includeDirs)
         {

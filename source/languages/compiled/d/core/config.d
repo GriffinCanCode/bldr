@@ -425,6 +425,218 @@ struct ToolingConfig
     bool runDubTest = false;
 }
 
+/// CPU target mode for D
+enum DCpuTarget
+{
+    Generic,        // No CPU-specific optimizations
+    Native,         // -mcpu=native (LDC) or auto-detect
+    Custom          // Custom -mcpu value
+}
+
+/// PGO mode for D (LDC only)
+enum DPgoMode
+{
+    Off,            // No PGO
+    Generate,       // -fprofile-generate
+    Use             // -fprofile-use
+}
+
+/// D optimization preset
+enum DOptPreset
+{
+    None,           // Manual configuration
+    Debug,          // Fast compile, full debug info
+    ReleaseFast,    // Fast execution (LDC -O3, native CPU)
+    ReleaseSmall,   // Small binary (-Os, strip)
+    ReleaseLto,     // Max optimization (LTO, native, single codegen)
+    ProfileGen,     // Generate PGO data
+    ProfileUse      // Use PGO data + full optimization
+}
+
+/// Advanced D optimization configuration (primarily for LDC)
+struct DAdvancedOpt
+{
+    /// Optimization preset
+    DOptPreset preset = DOptPreset.None;
+    
+    /// CPU targeting
+    DCpuTarget cpuTarget = DCpuTarget.Generic;
+    
+    /// Custom -mcpu value (when cpuTarget == Custom)
+    string mcpu;
+    
+    /// CPU features to enable (e.g., "+avx2,+fma")
+    string cpuFeatures;
+    
+    /// PGO mode (LDC only)
+    DPgoMode pgo = DPgoMode.Off;
+    
+    /// PGO profile directory
+    string pgoProfileDir = ".pgo-data";
+    
+    /// Enable LTO (Link Time Optimization)
+    bool lto = false;
+    
+    /// LTO mode: "full" or "thin"
+    string ltoMode = "thin";
+    
+    /// Fast math optimizations
+    bool fastMath = false;
+    
+    /// Disable bounds checking
+    bool noBoundsCheck = false;
+    
+    /// Enable function inlining
+    bool inlining = true;
+    
+    /// Enable cross-module inlining (LDC)
+    bool crossModuleInline = false;
+    
+    /// Enable flattening (LDC)
+    bool flattening = false;
+    
+    /// Enable loop unrolling
+    bool unrollLoops = false;
+    
+    /// Enable vectorization
+    bool vectorize = true;
+    
+    /// Strip debug info from release
+    bool strip = false;
+    
+    /// Frame pointer (for profiling)
+    bool framePointer = false;
+    
+    /// Single-object compilation (better LTO)
+    bool singleObj = false;
+    
+    /// Convert to compiler flags (LDC format)
+    string[] toLdcFlags() const pure
+    {
+        string[] flags;
+        
+        // CPU targeting
+        final switch (cpuTarget) with (DCpuTarget)
+        {
+            case Generic: break;
+            case Native:
+                flags ~= "-mcpu=native";
+                break;
+            case Custom:
+                if (mcpu.length)
+                    flags ~= "-mcpu=" ~ mcpu;
+                break;
+        }
+        
+        // CPU features
+        if (cpuFeatures.length)
+            flags ~= "-mattr=" ~ cpuFeatures;
+        
+        // PGO
+        final switch (pgo) with (DPgoMode)
+        {
+            case Off: break;
+            case Generate:
+                flags ~= "-fprofile-generate=" ~ pgoProfileDir;
+                break;
+            case Use:
+                flags ~= "-fprofile-use=" ~ pgoProfileDir ~ "/default.profdata";
+                break;
+        }
+        
+        // LTO
+        if (lto)
+        {
+            if (ltoMode == "full")
+                flags ~= "-flto=full";
+            else
+                flags ~= "-flto=thin";
+        }
+        
+        // Fast math
+        if (fastMath)
+            flags ~= "-ffast-math";
+        
+        // Bounds checking
+        if (noBoundsCheck)
+            flags ~= "--boundscheck=off";
+        
+        // Inlining
+        if (!inlining)
+            flags ~= "-O0"; // Disable inlining via O0 (crude but effective)
+        
+        // Cross-module inlining
+        if (crossModuleInline)
+            flags ~= "--enable-cross-module-inlining";
+        
+        // Flattening
+        if (flattening)
+            flags ~= "--enable-inlining";
+        
+        // Vectorization
+        if (!vectorize)
+            flags ~= "-vectorize=false";
+        
+        // Frame pointer
+        if (framePointer)
+            flags ~= "-frame-pointer=all";
+        
+        // Single object
+        if (singleObj)
+            flags ~= "-singleobj";
+        
+        return flags;
+    }
+    
+    /// Apply preset
+    static DAdvancedOpt fromPreset(DOptPreset preset) pure
+    {
+        DAdvancedOpt cfg;
+        cfg.preset = preset;
+        
+        final switch (preset) with (DOptPreset)
+        {
+            case None: break;
+            case Debug:
+                cfg.inlining = false;
+                cfg.vectorize = false;
+                break;
+            case ReleaseFast:
+                cfg.cpuTarget = DCpuTarget.Native;
+                cfg.inlining = true;
+                cfg.vectorize = true;
+                cfg.unrollLoops = true;
+                break;
+            case ReleaseSmall:
+                cfg.strip = true;
+                cfg.inlining = true;
+                break;
+            case ReleaseLto:
+                cfg.cpuTarget = DCpuTarget.Native;
+                cfg.lto = true;
+                cfg.ltoMode = "full";
+                cfg.crossModuleInline = true;
+                cfg.singleObj = true;
+                cfg.inlining = true;
+                cfg.vectorize = true;
+                cfg.unrollLoops = true;
+                break;
+            case ProfileGen:
+                cfg.pgo = DPgoMode.Generate;
+                break;
+            case ProfileUse:
+                cfg.pgo = DPgoMode.Use;
+                cfg.cpuTarget = DCpuTarget.Native;
+                cfg.lto = true;
+                cfg.inlining = true;
+                cfg.vectorize = true;
+                break;
+        }
+        
+        return cfg;
+    }
+}
+
 /// D-specific build configuration
 struct DConfig
 {
@@ -463,6 +675,9 @@ struct DConfig
     
     /// Tooling configuration
     ToolingConfig tooling;
+    
+    /// Advanced optimizations (LDC-specific)
+    DAdvancedOpt advancedOpt;
     
     /// Environment variables
     string[string] env;
@@ -860,6 +1075,119 @@ struct DConfig
             foreach (string ekey, value; json["env"].object)
             {
                 config.env[ekey] = value.str;
+            }
+        }
+        
+        // Advanced optimizations
+        if ("advancedOpt" in json || "advanced_opt" in json || "optimization" in json)
+        {
+            string optKey = "advancedOpt" in json ? "advancedOpt" : 
+                           ("advanced_opt" in json ? "advanced_opt" : "optimization");
+            auto optObj = json[optKey].object;
+            
+            // Preset
+            if ("preset" in optObj)
+            {
+                string presetStr = optObj["preset"].str.toLower.replace("-", "").replace("_", "");
+                switch (presetStr)
+                {
+                    case "debug": config.advancedOpt = DAdvancedOpt.fromPreset(DOptPreset.Debug); break;
+                    case "releasefast": config.advancedOpt = DAdvancedOpt.fromPreset(DOptPreset.ReleaseFast); break;
+                    case "releasesmall": config.advancedOpt = DAdvancedOpt.fromPreset(DOptPreset.ReleaseSmall); break;
+                    case "releaselto": config.advancedOpt = DAdvancedOpt.fromPreset(DOptPreset.ReleaseLto); break;
+                    case "profilegen": config.advancedOpt = DAdvancedOpt.fromPreset(DOptPreset.ProfileGen); break;
+                    case "profileuse": config.advancedOpt = DAdvancedOpt.fromPreset(DOptPreset.ProfileUse); break;
+                    default: break;
+                }
+            }
+            
+            // CPU targeting
+            if ("cpuTarget" in optObj || "cpu_target" in optObj || "cpu" in optObj)
+            {
+                string cpuKey = "cpuTarget" in optObj ? "cpuTarget" : 
+                               ("cpu_target" in optObj ? "cpu_target" : "cpu");
+                string cpuStr = optObj[cpuKey].str.toLower;
+                switch (cpuStr)
+                {
+                    case "generic": config.advancedOpt.cpuTarget = DCpuTarget.Generic; break;
+                    case "native": config.advancedOpt.cpuTarget = DCpuTarget.Native; break;
+                    case "custom": config.advancedOpt.cpuTarget = DCpuTarget.Custom; break;
+                    default: break;
+                }
+            }
+            if ("mcpu" in optObj)
+                config.advancedOpt.mcpu = optObj["mcpu"].str;
+            if ("cpuFeatures" in optObj || "cpu_features" in optObj)
+            {
+                string cfKey = "cpuFeatures" in optObj ? "cpuFeatures" : "cpu_features";
+                config.advancedOpt.cpuFeatures = optObj[cfKey].str;
+            }
+            
+            // PGO
+            if ("pgo" in optObj)
+            {
+                string pgoStr = optObj["pgo"].str.toLower;
+                switch (pgoStr)
+                {
+                    case "off": config.advancedOpt.pgo = DPgoMode.Off; break;
+                    case "generate": case "gen": config.advancedOpt.pgo = DPgoMode.Generate; break;
+                    case "use": config.advancedOpt.pgo = DPgoMode.Use; break;
+                    default: break;
+                }
+            }
+            if ("pgoProfileDir" in optObj || "pgo_profile_dir" in optObj)
+            {
+                string pdKey = "pgoProfileDir" in optObj ? "pgoProfileDir" : "pgo_profile_dir";
+                config.advancedOpt.pgoProfileDir = optObj[pdKey].str;
+            }
+            
+            // LTO
+            if ("lto" in optObj)
+                config.advancedOpt.lto = optObj["lto"].type == JSONType.true_;
+            if ("ltoMode" in optObj || "lto_mode" in optObj)
+            {
+                string lmKey = "ltoMode" in optObj ? "ltoMode" : "lto_mode";
+                config.advancedOpt.ltoMode = optObj[lmKey].str;
+            }
+            
+            // Boolean flags
+            if ("fastMath" in optObj || "fast_math" in optObj)
+            {
+                string fmKey = "fastMath" in optObj ? "fastMath" : "fast_math";
+                config.advancedOpt.fastMath = optObj[fmKey].type == JSONType.true_;
+            }
+            if ("noBoundsCheck" in optObj || "no_bounds_check" in optObj)
+            {
+                string nbKey = "noBoundsCheck" in optObj ? "noBoundsCheck" : "no_bounds_check";
+                config.advancedOpt.noBoundsCheck = optObj[nbKey].type == JSONType.true_;
+            }
+            if ("inlining" in optObj)
+                config.advancedOpt.inlining = optObj["inlining"].type == JSONType.true_;
+            if ("crossModuleInline" in optObj || "cross_module_inline" in optObj)
+            {
+                string cmKey = "crossModuleInline" in optObj ? "crossModuleInline" : "cross_module_inline";
+                config.advancedOpt.crossModuleInline = optObj[cmKey].type == JSONType.true_;
+            }
+            if ("flattening" in optObj)
+                config.advancedOpt.flattening = optObj["flattening"].type == JSONType.true_;
+            if ("unrollLoops" in optObj || "unroll_loops" in optObj)
+            {
+                string ulKey = "unrollLoops" in optObj ? "unrollLoops" : "unroll_loops";
+                config.advancedOpt.unrollLoops = optObj[ulKey].type == JSONType.true_;
+            }
+            if ("vectorize" in optObj)
+                config.advancedOpt.vectorize = optObj["vectorize"].type == JSONType.true_;
+            if ("strip" in optObj)
+                config.advancedOpt.strip = optObj["strip"].type == JSONType.true_;
+            if ("framePointer" in optObj || "frame_pointer" in optObj)
+            {
+                string fpKey = "framePointer" in optObj ? "framePointer" : "frame_pointer";
+                config.advancedOpt.framePointer = optObj[fpKey].type == JSONType.true_;
+            }
+            if ("singleObj" in optObj || "single_obj" in optObj)
+            {
+                string soKey = "singleObj" in optObj ? "singleObj" : "single_obj";
+                config.advancedOpt.singleObj = optObj[soKey].type == JSONType.true_;
             }
         }
         

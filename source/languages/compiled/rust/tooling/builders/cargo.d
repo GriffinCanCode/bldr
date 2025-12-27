@@ -252,10 +252,14 @@ class CargoBuilder : RustBuilder
         if (!config.env.empty)
             env = cast(string[string])config.env.dup;
         
-        // Add RUSTFLAGS
-        if (!config.rustcFlags.empty)
+        // Build RUSTFLAGS from config and advanced optimizations
+        string[] rustflagsArr;
+        rustflagsArr ~= config.rustcFlags;
+        rustflagsArr ~= config.advancedOpt.toRustcFlags();
+        
+        if (!rustflagsArr.empty)
         {
-            string rustflags = config.rustcFlags.join(" ");
+            string rustflags = rustflagsArr.join(" ");
             if (env is null)
                 env = ["RUSTFLAGS": rustflags];
             else

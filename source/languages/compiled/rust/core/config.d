@@ -118,6 +118,199 @@ enum Codegen
     Custom
 }
 
+/// CPU target mode for architecture-specific optimizations
+enum RustCpuTarget
+{
+    Generic,        // Target default CPU
+    Native,         // -C target-cpu=native
+    Custom          // Custom -C target-cpu=X
+}
+
+/// PGO mode for Rust
+enum RustPgoMode
+{
+    Off,            // No PGO
+    Generate,       // -C profile-generate
+    Use             // -C profile-use
+}
+
+/// Rust optimization preset
+enum RustOptPreset
+{
+    None,           // Manual configuration
+    Dev,            // Fast compile, debug info
+    Release,        // Standard release (opt-level=3)
+    ReleaseFast,    // Max speed (native CPU, LTO thin)
+    ReleaseLto,     // Max optimization (LTO fat, single codegen)
+    ReleaseSmall,   // Min size (opt-level=z, LTO)
+    ProfileGen,     // Generate PGO profile
+    ProfileUse      // Use PGO profile + LTO
+}
+
+/// Advanced Rust optimization configuration
+struct RustAdvancedOpt
+{
+    /// Optimization preset
+    RustOptPreset preset = RustOptPreset.None;
+    
+    /// CPU targeting
+    RustCpuTarget cpuTarget = RustCpuTarget.Generic;
+    
+    /// Custom target CPU (when cpuTarget == Custom)
+    string targetCpu;
+    
+    /// Enable target features (e.g., "+avx2,+fma")
+    string targetFeatures;
+    
+    /// PGO mode
+    RustPgoMode pgo = RustPgoMode.Off;
+    
+    /// PGO profile directory
+    string pgoProfileDir = ".pgo-data";
+    
+    /// Panic strategy (unwind or abort)
+    string panic = "unwind";
+    
+    /// Enable overflow checks (false for max perf)
+    bool overflowChecks = true;
+    
+    /// Strip symbols (none, debuginfo, symbols)
+    string strip = "none";
+    
+    /// Embed bitcode for LTO
+    bool embedBitcode = true;
+    
+    /// Split debug info
+    bool splitDebuginfo = false;
+    
+    /// Remap path prefix for reproducible builds
+    string remapPathPrefix;
+    
+    /// Enable inline assembly optimization
+    bool inlineAsm = true;
+    
+    /// Force frame pointers (for profiling)
+    bool forceFramePointers = false;
+    
+    /// Linker plugin LTO (cross-language LTO)
+    bool linkerPluginLto = false;
+    
+    /// Convert RUSTFLAGS based on config
+    string[] toRustcFlags() const pure
+    {
+        string[] flags;
+        
+        // CPU targeting
+        final switch (cpuTarget) with (RustCpuTarget)
+        {
+            case Generic: break;
+            case Native:
+                flags ~= "-C target-cpu=native";
+                break;
+            case Custom:
+                if (targetCpu.length)
+                    flags ~= "-C target-cpu=" ~ targetCpu;
+                break;
+        }
+        
+        // Target features
+        if (targetFeatures.length)
+            flags ~= "-C target-feature=" ~ targetFeatures;
+        
+        // PGO
+        final switch (pgo) with (RustPgoMode)
+        {
+            case Off: break;
+            case Generate:
+                flags ~= "-C profile-generate=" ~ pgoProfileDir;
+                break;
+            case Use:
+                flags ~= "-C profile-use=" ~ pgoProfileDir ~ "/merged.profdata";
+                break;
+        }
+        
+        // Panic strategy
+        if (panic == "abort")
+            flags ~= "-C panic=abort";
+        
+        // Overflow checks
+        if (!overflowChecks)
+            flags ~= "-C overflow-checks=no";
+        
+        // Strip
+        if (strip != "none")
+            flags ~= "-C strip=" ~ strip;
+        
+        // Embed bitcode
+        if (!embedBitcode)
+            flags ~= "-C embed-bitcode=no";
+        
+        // Split debuginfo
+        if (splitDebuginfo)
+            flags ~= "-C split-debuginfo=packed";
+        
+        // Remap path
+        if (remapPathPrefix.length)
+            flags ~= "--remap-path-prefix=" ~ remapPathPrefix;
+        
+        // Force frame pointers
+        if (forceFramePointers)
+            flags ~= "-C force-frame-pointers=yes";
+        
+        // Linker plugin LTO
+        if (linkerPluginLto)
+            flags ~= "-C linker-plugin-lto";
+        
+        return flags;
+    }
+    
+    /// Apply preset
+    static RustAdvancedOpt fromPreset(RustOptPreset preset) pure
+    {
+        RustAdvancedOpt cfg;
+        cfg.preset = preset;
+        
+        final switch (preset) with (RustOptPreset)
+        {
+            case None: break;
+            case Dev:
+                cfg.overflowChecks = true;
+                break;
+            case Release:
+                cfg.panic = "unwind";
+                break;
+            case ReleaseFast:
+                cfg.cpuTarget = RustCpuTarget.Native;
+                cfg.panic = "abort";
+                cfg.overflowChecks = false;
+                cfg.strip = "symbols";
+                break;
+            case ReleaseLto:
+                cfg.cpuTarget = RustCpuTarget.Native;
+                cfg.panic = "abort";
+                cfg.overflowChecks = false;
+                cfg.strip = "symbols";
+                cfg.embedBitcode = true;
+                break;
+            case ReleaseSmall:
+                cfg.panic = "abort";
+                cfg.strip = "symbols";
+                break;
+            case ProfileGen:
+                cfg.pgo = RustPgoMode.Generate;
+                break;
+            case ProfileUse:
+                cfg.pgo = RustPgoMode.Use;
+                cfg.cpuTarget = RustCpuTarget.Native;
+                cfg.panic = "abort";
+                cfg.overflowChecks = false;
+                break;
+        }
+        
+        return cfg;
+    }
+}
+
 /// Rust-specific configuration
 struct RustConfig
 {
@@ -273,6 +466,9 @@ struct RustConfig
     
     /// Path mappings for remapping
     string[string] remap;
+    
+    /// Advanced optimization settings
+    RustAdvancedOpt advancedOpt;
     
     /// Parse from JSON
     static RustConfig fromJSON(JSONValue json)
@@ -533,6 +729,110 @@ struct RustConfig
             foreach (string key, value; json["remap"].object)
             {
                 config.remap[key] = value.str;
+            }
+        }
+        
+        // Advanced optimizations
+        if ("advancedOpt" in json || "advanced_opt" in json || "optimization" in json)
+        {
+            string optKey = "advancedOpt" in json ? "advancedOpt" : 
+                           ("advanced_opt" in json ? "advanced_opt" : "optimization");
+            auto optObj = json[optKey].object;
+            
+            // Preset
+            if ("preset" in optObj)
+            {
+                string presetStr = optObj["preset"].str.toLower.replace("-", "").replace("_", "");
+                switch (presetStr)
+                {
+                    case "dev": case "debug": config.advancedOpt = RustAdvancedOpt.fromPreset(RustOptPreset.Dev); break;
+                    case "release": config.advancedOpt = RustAdvancedOpt.fromPreset(RustOptPreset.Release); break;
+                    case "releasefast": config.advancedOpt = RustAdvancedOpt.fromPreset(RustOptPreset.ReleaseFast); break;
+                    case "releaselto": config.advancedOpt = RustAdvancedOpt.fromPreset(RustOptPreset.ReleaseLto); break;
+                    case "releasesmall": config.advancedOpt = RustAdvancedOpt.fromPreset(RustOptPreset.ReleaseSmall); break;
+                    case "profilegen": config.advancedOpt = RustAdvancedOpt.fromPreset(RustOptPreset.ProfileGen); break;
+                    case "profileuse": config.advancedOpt = RustAdvancedOpt.fromPreset(RustOptPreset.ProfileUse); break;
+                    default: break;
+                }
+            }
+            
+            // CPU targeting
+            if ("cpuTarget" in optObj || "cpu_target" in optObj || "cpu" in optObj)
+            {
+                string cpuKey = "cpuTarget" in optObj ? "cpuTarget" : 
+                               ("cpu_target" in optObj ? "cpu_target" : "cpu");
+                string cpuStr = optObj[cpuKey].str.toLower;
+                switch (cpuStr)
+                {
+                    case "generic": config.advancedOpt.cpuTarget = RustCpuTarget.Generic; break;
+                    case "native": config.advancedOpt.cpuTarget = RustCpuTarget.Native; break;
+                    case "custom": config.advancedOpt.cpuTarget = RustCpuTarget.Custom; break;
+                    default: break;
+                }
+            }
+            if ("targetCpu" in optObj || "target_cpu" in optObj)
+            {
+                string tcKey = "targetCpu" in optObj ? "targetCpu" : "target_cpu";
+                config.advancedOpt.targetCpu = optObj[tcKey].str;
+            }
+            if ("targetFeatures" in optObj || "target_features" in optObj)
+            {
+                string tfKey = "targetFeatures" in optObj ? "targetFeatures" : "target_features";
+                config.advancedOpt.targetFeatures = optObj[tfKey].str;
+            }
+            
+            // PGO
+            if ("pgo" in optObj)
+            {
+                string pgoStr = optObj["pgo"].str.toLower;
+                switch (pgoStr)
+                {
+                    case "off": config.advancedOpt.pgo = RustPgoMode.Off; break;
+                    case "generate": case "gen": config.advancedOpt.pgo = RustPgoMode.Generate; break;
+                    case "use": config.advancedOpt.pgo = RustPgoMode.Use; break;
+                    default: break;
+                }
+            }
+            if ("pgoProfileDir" in optObj || "pgo_profile_dir" in optObj)
+            {
+                string pdKey = "pgoProfileDir" in optObj ? "pgoProfileDir" : "pgo_profile_dir";
+                config.advancedOpt.pgoProfileDir = optObj[pdKey].str;
+            }
+            
+            // String fields
+            if ("panic" in optObj) config.advancedOpt.panic = optObj["panic"].str;
+            if ("strip" in optObj) config.advancedOpt.strip = optObj["strip"].str;
+            if ("remapPathPrefix" in optObj || "remap_path_prefix" in optObj)
+            {
+                string rpKey = "remapPathPrefix" in optObj ? "remapPathPrefix" : "remap_path_prefix";
+                config.advancedOpt.remapPathPrefix = optObj[rpKey].str;
+            }
+            
+            // Boolean fields
+            if ("overflowChecks" in optObj || "overflow_checks" in optObj)
+            {
+                string ocKey = "overflowChecks" in optObj ? "overflowChecks" : "overflow_checks";
+                config.advancedOpt.overflowChecks = optObj[ocKey].type == JSONType.true_;
+            }
+            if ("embedBitcode" in optObj || "embed_bitcode" in optObj)
+            {
+                string ebKey = "embedBitcode" in optObj ? "embedBitcode" : "embed_bitcode";
+                config.advancedOpt.embedBitcode = optObj[ebKey].type == JSONType.true_;
+            }
+            if ("splitDebuginfo" in optObj || "split_debuginfo" in optObj)
+            {
+                string sdKey = "splitDebuginfo" in optObj ? "splitDebuginfo" : "split_debuginfo";
+                config.advancedOpt.splitDebuginfo = optObj[sdKey].type == JSONType.true_;
+            }
+            if ("forceFramePointers" in optObj || "force_frame_pointers" in optObj)
+            {
+                string ffpKey = "forceFramePointers" in optObj ? "forceFramePointers" : "force_frame_pointers";
+                config.advancedOpt.forceFramePointers = optObj[ffpKey].type == JSONType.true_;
+            }
+            if ("linkerPluginLto" in optObj || "linker_plugin_lto" in optObj)
+            {
+                string lplKey = "linkerPluginLto" in optObj ? "linkerPluginLto" : "linker_plugin_lto";
+                config.advancedOpt.linkerPluginLto = optObj[lplKey].type == JSONType.true_;
             }
         }
         

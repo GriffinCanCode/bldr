@@ -281,6 +281,277 @@ struct CoverageConfig
     string outputDir = "coverage";
 }
 
+/// CPU target mode for architecture-specific optimizations
+enum CpuTarget
+{
+    Generic,        // No arch-specific optimizations (default)
+    Native,         // -march=native -mtune=native (best for local builds)
+    Baseline,       // Baseline SIMD (SSE2 for x86_64, NEON for ARM64)
+    Custom          // Custom -march/-mtune strings
+}
+
+/// Profile-Guided Optimization mode
+enum PgoMode
+{
+    Off,            // No PGO
+    Generate,       // Generate profile data (-fprofile-generate)
+    Use,            // Use profile data (-fprofile-use)
+    Sample,         // Sampling-based PGO (AutoFDO)
+    Csir            // Context-sensitive IR PGO (LLVM)
+}
+
+/// Vectorization level
+enum VectorizationLevel
+{
+    Off,            // Disable vectorization
+    Default,        // Compiler default
+    Aggressive,     // Aggressive loop vectorization
+    FullSlp         // Full SLP + loop vectorization
+}
+
+/// Optimization preset - pre-configured optimization bundles
+enum OptPreset
+{
+    None,           // No preset (manual configuration)
+    Debug,          // O0, debug info, no optimizations
+    Release,        // O2, strip, moderate optimizations
+    ReleaseFast,    // O3, aggressive inlining, vectorization
+    ReleaseNative,  // O3 + march=native + LTO thin
+    ReleaseLto,     // O3 + full LTO + aggressive opts
+    ProfileGen,     // O2 + profile generation
+    ProfileUse,     // O3 + profile use + LTO
+    MinSize         // Os + LTO thin + size opts
+}
+
+/// Advanced optimization configuration
+/// Fine-grained control over compiler optimizations beyond -O levels
+struct AdvancedOptConfig
+{
+    /// Optimization preset (overrides individual settings if not None)
+    OptPreset preset = OptPreset.None;
+    
+    /// CPU target architecture
+    CpuTarget cpuTarget = CpuTarget.Generic;
+    
+    /// Custom -march value (when cpuTarget == Custom)
+    string march;
+    
+    /// Custom -mtune value (when cpuTarget == Custom)
+    string mtune;
+    
+    /// Profile-guided optimization mode
+    PgoMode pgo = PgoMode.Off;
+    
+    /// PGO profile directory (for generate/use)
+    string pgoProfileDir = ".pgo-data";
+    
+    /// Vectorization level
+    VectorizationLevel vectorization = VectorizationLevel.Default;
+    
+    /// Enable fast-math optimizations (may sacrifice IEEE compliance)
+    bool fastMath = false;
+    
+    /// Enable loop unrolling
+    bool unrollLoops = false;
+    
+    /// Enable aggressive function inlining
+    bool aggressiveInline = false;
+    
+    /// Inline function size threshold (0 = compiler default)
+    uint inlineThreshold = 0;
+    
+    /// Omit frame pointer (better perf, harder debugging)
+    bool omitFramePointer = false;
+    
+    /// LTO partition mode (faster parallel LTO compilation)
+    /// Options: "none", "one", "balanced", "max"
+    string ltoPartition = "balanced";
+    
+    /// Enable Polly polyhedral optimizer (Clang only)
+    bool polly = false;
+    
+    /// Enable BOLT post-link optimization (requires separate BOLT pass)
+    bool bolt = false;
+    
+    /// BOLT profile data path
+    string boltProfile;
+    
+    /// Strict aliasing optimization
+    bool strictAliasing = true;
+    
+    /// Thread-local storage model (global-dynamic, local-dynamic, initial-exec, local-exec)
+    string tlsModel;
+    
+    /// Enable sized deallocation (C++14+)
+    bool sizedDeallocation = true;
+    
+    /// Stack protector level (none, basic, strong, all)
+    string stackProtector = "strong";
+    
+    /// Build compiler flags from this config
+    string[] toFlags(Compiler compiler) const pure
+    {
+        string[] flags;
+        
+        // CPU targeting
+        final switch (cpuTarget) with (CpuTarget)
+        {
+            case Generic: break;
+            case Native:
+                flags ~= ["-march=native", "-mtune=native"];
+                break;
+            case Baseline:
+                // SSE2 baseline for x86_64
+                version (X86_64) flags ~= "-march=x86-64";
+                break;
+            case Custom:
+                if (march.length) flags ~= "-march=" ~ march;
+                if (mtune.length) flags ~= "-mtune=" ~ mtune;
+                break;
+        }
+        
+        // PGO flags
+        final switch (pgo) with (PgoMode)
+        {
+            case Off: break;
+            case Generate:
+                flags ~= compiler == Compiler.Clang || compiler == Compiler.Auto
+                    ? "-fprofile-generate=" ~ pgoProfileDir
+                    : "-fprofile-dir=" ~ pgoProfileDir ~ " -fprofile-generate";
+                break;
+            case Use:
+                flags ~= compiler == Compiler.Clang || compiler == Compiler.Auto
+                    ? "-fprofile-use=" ~ pgoProfileDir
+                    : "-fprofile-dir=" ~ pgoProfileDir ~ " -fprofile-use -fprofile-correction";
+                break;
+            case Sample:
+                // AutoFDO / sampling PGO (Clang)
+                flags ~= "-fprofile-sample-use=" ~ pgoProfileDir ~ "/profile.afdo";
+                break;
+            case Csir:
+                // Context-sensitive IR PGO (LLVM)
+                flags ~= ["-fcs-profile-generate=" ~ pgoProfileDir];
+                break;
+        }
+        
+        // Vectorization
+        final switch (vectorization) with (VectorizationLevel)
+        {
+            case Off:
+                flags ~= ["-fno-vectorize", "-fno-slp-vectorize"];
+                break;
+            case Default: break;
+            case Aggressive:
+                flags ~= ["-fvectorize", "-fslp-vectorize", "-fvectorize-interleave=4"];
+                break;
+            case FullSlp:
+                flags ~= ["-fvectorize", "-fslp-vectorize", "-fvectorize-interleave=8",
+                          "-mllvm", "-slp-vectorize-hor=true"];
+                break;
+        }
+        
+        // Fast math
+        if (fastMath) flags ~= "-ffast-math";
+        
+        // Loop unrolling
+        if (unrollLoops) flags ~= "-funroll-loops";
+        
+        // Aggressive inlining
+        if (aggressiveInline)
+        {
+            flags ~= "-finline-functions";
+            if (inlineThreshold > 0)
+                flags ~= "-finline-limit=" ~ inlineThreshold.to!string;
+        }
+        
+        // Frame pointer
+        if (omitFramePointer) flags ~= "-fomit-frame-pointer";
+        
+        // LTO partitioning (Clang)
+        if (ltoPartition.length && ltoPartition != "none")
+            flags ~= "-flto-partition=" ~ ltoPartition;
+        
+        // Polly
+        if (polly) flags ~= ["-mllvm", "-polly"];
+        
+        // Strict aliasing
+        if (!strictAliasing) flags ~= "-fno-strict-aliasing";
+        
+        // TLS model
+        if (tlsModel.length) flags ~= "-ftls-model=" ~ tlsModel;
+        
+        // Sized deallocation
+        if (sizedDeallocation) flags ~= "-fsized-deallocation";
+        
+        // Stack protector
+        if (stackProtector.length)
+        {
+            if (stackProtector == "none") flags ~= "-fno-stack-protector";
+            else if (stackProtector == "basic") flags ~= "-fstack-protector";
+            else if (stackProtector == "strong") flags ~= "-fstack-protector-strong";
+            else if (stackProtector == "all") flags ~= "-fstack-protector-all";
+        }
+        
+        return flags;
+    }
+    
+    /// Apply preset, returning modified config
+    static AdvancedOptConfig fromPreset(OptPreset preset) pure
+    {
+        AdvancedOptConfig cfg;
+        cfg.preset = preset;
+        
+        final switch (preset) with (OptPreset)
+        {
+            case None: break;
+            case Debug:
+                cfg.omitFramePointer = false;
+                cfg.strictAliasing = false;
+                break;
+            case Release:
+                cfg.omitFramePointer = true;
+                break;
+            case ReleaseFast:
+                cfg.unrollLoops = true;
+                cfg.aggressiveInline = true;
+                cfg.omitFramePointer = true;
+                cfg.vectorization = VectorizationLevel.Aggressive;
+                break;
+            case ReleaseNative:
+                cfg.cpuTarget = CpuTarget.Native;
+                cfg.unrollLoops = true;
+                cfg.aggressiveInline = true;
+                cfg.omitFramePointer = true;
+                cfg.vectorization = VectorizationLevel.Aggressive;
+                break;
+            case ReleaseLto:
+                cfg.cpuTarget = CpuTarget.Native;
+                cfg.unrollLoops = true;
+                cfg.aggressiveInline = true;
+                cfg.omitFramePointer = true;
+                cfg.vectorization = VectorizationLevel.FullSlp;
+                cfg.polly = true;
+                break;
+            case ProfileGen:
+                cfg.pgo = PgoMode.Generate;
+                break;
+            case ProfileUse:
+                cfg.pgo = PgoMode.Use;
+                cfg.cpuTarget = CpuTarget.Native;
+                cfg.unrollLoops = true;
+                cfg.aggressiveInline = true;
+                cfg.vectorization = VectorizationLevel.Aggressive;
+                break;
+            case MinSize:
+                cfg.omitFramePointer = true;
+                cfg.sizedDeallocation = true;
+                break;
+        }
+        
+        return cfg;
+    }
+}
+
 /// C/C++ configuration
 struct CppConfig
 {
@@ -385,6 +656,9 @@ struct CppConfig
     
     /// Code coverage
     CoverageConfig coverage;
+    
+    /// Advanced optimizations (CPU targeting, PGO, vectorization, etc.)
+    AdvancedOptConfig advancedOpt;
     
     /// Runtime library (MSVC)
     RuntimeLib runtimeLib = RuntimeLib.Auto;
@@ -734,6 +1008,141 @@ struct CppConfig
                 config.unity.filesPerUnit = unityObj[key].integer.to!size_t;
             }
             if ("prefix" in unityObj) config.unity.prefix = unityObj["prefix"].str;
+        }
+        
+        // Advanced optimizations
+        if ("advancedOpt" in json || "advanced_opt" in json || "optimization" in json)
+        {
+            string key = "advancedOpt" in json ? "advancedOpt" : 
+                        ("advanced_opt" in json ? "advanced_opt" : "optimization");
+            auto optObj = json[key].object;
+            
+            // Preset (shortcut for common configurations)
+            if ("preset" in optObj)
+            {
+                string presetStr = optObj["preset"].str.toLower.replace("-", "").replace("_", "");
+                switch (presetStr)
+                {
+                    case "debug": config.advancedOpt = AdvancedOptConfig.fromPreset(OptPreset.Debug); break;
+                    case "release": config.advancedOpt = AdvancedOptConfig.fromPreset(OptPreset.Release); break;
+                    case "releasefast": config.advancedOpt = AdvancedOptConfig.fromPreset(OptPreset.ReleaseFast); break;
+                    case "releasenative": config.advancedOpt = AdvancedOptConfig.fromPreset(OptPreset.ReleaseNative); break;
+                    case "releaselto": config.advancedOpt = AdvancedOptConfig.fromPreset(OptPreset.ReleaseLto); break;
+                    case "profilegen": config.advancedOpt = AdvancedOptConfig.fromPreset(OptPreset.ProfileGen); break;
+                    case "profileuse": config.advancedOpt = AdvancedOptConfig.fromPreset(OptPreset.ProfileUse); break;
+                    case "minsize": config.advancedOpt = AdvancedOptConfig.fromPreset(OptPreset.MinSize); break;
+                    default: break;
+                }
+            }
+            
+            // CPU targeting
+            if ("cpuTarget" in optObj || "cpu_target" in optObj || "cpu" in optObj)
+            {
+                string cpuKey = "cpuTarget" in optObj ? "cpuTarget" : 
+                               ("cpu_target" in optObj ? "cpu_target" : "cpu");
+                string cpuStr = optObj[cpuKey].str.toLower;
+                switch (cpuStr)
+                {
+                    case "generic": config.advancedOpt.cpuTarget = CpuTarget.Generic; break;
+                    case "native": config.advancedOpt.cpuTarget = CpuTarget.Native; break;
+                    case "baseline": config.advancedOpt.cpuTarget = CpuTarget.Baseline; break;
+                    case "custom": config.advancedOpt.cpuTarget = CpuTarget.Custom; break;
+                    default: break;
+                }
+            }
+            if ("march" in optObj) config.advancedOpt.march = optObj["march"].str;
+            if ("mtune" in optObj) config.advancedOpt.mtune = optObj["mtune"].str;
+            
+            // PGO
+            if ("pgo" in optObj)
+            {
+                string pgoStr = optObj["pgo"].str.toLower;
+                switch (pgoStr)
+                {
+                    case "off": config.advancedOpt.pgo = PgoMode.Off; break;
+                    case "generate": case "gen": config.advancedOpt.pgo = PgoMode.Generate; break;
+                    case "use": config.advancedOpt.pgo = PgoMode.Use; break;
+                    case "sample": case "autofdo": config.advancedOpt.pgo = PgoMode.Sample; break;
+                    case "csir": config.advancedOpt.pgo = PgoMode.Csir; break;
+                    default: break;
+                }
+            }
+            if ("pgoProfileDir" in optObj || "pgo_profile_dir" in optObj)
+            {
+                string pgoKey = "pgoProfileDir" in optObj ? "pgoProfileDir" : "pgo_profile_dir";
+                config.advancedOpt.pgoProfileDir = optObj[pgoKey].str;
+            }
+            
+            // Vectorization
+            if ("vectorization" in optObj || "vectorize" in optObj)
+            {
+                string vecKey = "vectorization" in optObj ? "vectorization" : "vectorize";
+                string vecStr = optObj[vecKey].str.toLower;
+                switch (vecStr)
+                {
+                    case "off": config.advancedOpt.vectorization = VectorizationLevel.Off; break;
+                    case "default": config.advancedOpt.vectorization = VectorizationLevel.Default; break;
+                    case "aggressive": config.advancedOpt.vectorization = VectorizationLevel.Aggressive; break;
+                    case "fullslp": case "full": config.advancedOpt.vectorization = VectorizationLevel.FullSlp; break;
+                    default: break;
+                }
+            }
+            
+            // Boolean flags
+            if ("fastMath" in optObj || "fast_math" in optObj)
+            {
+                string fmKey = "fastMath" in optObj ? "fastMath" : "fast_math";
+                config.advancedOpt.fastMath = optObj[fmKey].type == JSONType.true_;
+            }
+            if ("unrollLoops" in optObj || "unroll_loops" in optObj)
+            {
+                string ulKey = "unrollLoops" in optObj ? "unrollLoops" : "unroll_loops";
+                config.advancedOpt.unrollLoops = optObj[ulKey].type == JSONType.true_;
+            }
+            if ("aggressiveInline" in optObj || "aggressive_inline" in optObj)
+            {
+                string aiKey = "aggressiveInline" in optObj ? "aggressiveInline" : "aggressive_inline";
+                config.advancedOpt.aggressiveInline = optObj[aiKey].type == JSONType.true_;
+            }
+            if ("inlineThreshold" in optObj || "inline_threshold" in optObj)
+            {
+                string itKey = "inlineThreshold" in optObj ? "inlineThreshold" : "inline_threshold";
+                config.advancedOpt.inlineThreshold = optObj[itKey].integer.to!uint;
+            }
+            if ("omitFramePointer" in optObj || "omit_frame_pointer" in optObj)
+            {
+                string ofpKey = "omitFramePointer" in optObj ? "omitFramePointer" : "omit_frame_pointer";
+                config.advancedOpt.omitFramePointer = optObj[ofpKey].type == JSONType.true_;
+            }
+            if ("polly" in optObj)
+                config.advancedOpt.polly = optObj["polly"].type == JSONType.true_;
+            if ("bolt" in optObj)
+                config.advancedOpt.bolt = optObj["bolt"].type == JSONType.true_;
+            if ("boltProfile" in optObj || "bolt_profile" in optObj)
+            {
+                string bpKey = "boltProfile" in optObj ? "boltProfile" : "bolt_profile";
+                config.advancedOpt.boltProfile = optObj[bpKey].str;
+            }
+            if ("strictAliasing" in optObj || "strict_aliasing" in optObj)
+            {
+                string saKey = "strictAliasing" in optObj ? "strictAliasing" : "strict_aliasing";
+                config.advancedOpt.strictAliasing = optObj[saKey].type == JSONType.true_;
+            }
+            if ("ltoPartition" in optObj || "lto_partition" in optObj)
+            {
+                string lpKey = "ltoPartition" in optObj ? "ltoPartition" : "lto_partition";
+                config.advancedOpt.ltoPartition = optObj[lpKey].str;
+            }
+            if ("tlsModel" in optObj || "tls_model" in optObj)
+            {
+                string tlsKey = "tlsModel" in optObj ? "tlsModel" : "tls_model";
+                config.advancedOpt.tlsModel = optObj[tlsKey].str;
+            }
+            if ("stackProtector" in optObj || "stack_protector" in optObj)
+            {
+                string spKey = "stackProtector" in optObj ? "stackProtector" : "stack_protector";
+                config.advancedOpt.stackProtector = optObj[spKey].str;
+            }
         }
         
         return config;

@@ -505,11 +505,18 @@ class DirectCompilerBuilder : DBuilder
                 cmd ~= "-fPIC";
         }
         
-        // LTO (LDC only)
-        if (config.compilerConfig.lto && isLDC())
+        // LTO (LDC only) - check both legacy and advanced opt
+        if ((config.compilerConfig.lto || config.advancedOpt.lto) && isLDC())
         {
-            cmd ~= "-flto=full";
+            if (config.advancedOpt.lto)
+                cmd ~= config.advancedOpt.ltoMode == "full" ? "-flto=full" : "-flto=thin";
+            else
+                cmd ~= "-flto=full";
         }
+        
+        // Advanced optimizations (LDC-specific)
+        if (isLDC())
+            cmd ~= config.advancedOpt.toLdcFlags();
         
         // Static linking
         if (config.compilerConfig.staticLink)
