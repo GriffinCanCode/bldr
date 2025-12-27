@@ -367,10 +367,13 @@ struct TargetStats
     }
 }
 
-/// Co-change correlation matrix (sparse representation)
+/// Co-change correlation matrix (sparse representation with indexed lookup)
+/// Uses uint indices internally for O(1) lookups, avoiding nested string hash overhead
 struct CoChangeMatrix
 {
-    private size_t[string][string] _matrix;  // [source][target] → count
+    private size_t[uint][uint] _matrix;     // [sourceIdx][targetIdx] → count
+    private uint[string] _stringToIndex;    // String → index mapping
+    private string[] _indexToString;        // Index → string (for serialization)
     private size_t _maxTargets;
     private size_t _totalEdges;
     
@@ -379,55 +382,87 @@ struct CoChangeMatrix
         _maxTargets = maxTargets;
     }
     
+    /// Get or assign index for a target string
+    private uint getOrAssignIndex(string key) @trusted
+    {
+        if (auto idx = key in _stringToIndex)
+            return *idx;
+        
+        if (_stringToIndex.length >= _maxTargets)
+            return uint.max; // At capacity
+        
+        auto newIdx = cast(uint)_indexToString.length;
+        _stringToIndex[key] = newIdx;
+        _indexToString ~= key;
+        return newIdx;
+    }
+    
     void recordCoChange(string source, string target) @trusted
     {
-        if (source !in _matrix)
-        {
-            if (_matrix.length >= _maxTargets)
-                return; // Limit matrix size
-            _matrix[source] = (size_t[string]).init;
-        }
+        auto sourceIdx = getOrAssignIndex(source);
+        auto targetIdx = getOrAssignIndex(target);
         
-        if (target !in _matrix[source])
+        if (sourceIdx == uint.max || targetIdx == uint.max)
+            return; // At capacity
+        
+        if (sourceIdx !in _matrix)
+            _matrix[sourceIdx] = (size_t[uint]).init;
+        
+        if (targetIdx !in _matrix[sourceIdx])
         {
-            _matrix[source][target] = 0;
+            _matrix[sourceIdx][targetIdx] = 0;
             _totalEdges++;
         }
         
-        _matrix[source][target]++;
+        _matrix[sourceIdx][targetIdx]++;
     }
     
     float getCorrelation(string source, string target) const @trusted
     {
-        if (source !in _matrix) return 0.0f;
-        auto row = _matrix[source];
-        if (target !in row) return 0.0f;
+        auto sourceIdxPtr = source in _stringToIndex;
+        auto targetIdxPtr = target in _stringToIndex;
+        
+        if (sourceIdxPtr is null || targetIdxPtr is null)
+            return 0.0f;
+        
+        auto sourceIdx = *sourceIdxPtr;
+        auto targetIdx = *targetIdxPtr;
+        
+        if (sourceIdx !in _matrix) return 0.0f;
+        auto row = _matrix[sourceIdx];
+        if (targetIdx !in row) return 0.0f;
         
         // Normalize by total co-occurrences from source
         auto total = row.values.sum;
-        return total == 0 ? 0.0f : cast(float)row[target] / cast(float)total;
+        return total == 0 ? 0.0f : cast(float)row[targetIdx] / cast(float)total;
     }
     
     @property size_t relationshipCount() const @safe nothrow @nogc => _totalEdges;
     
-    /// Export for serialization
+    /// Export for serialization (converts indices back to strings)
     string exportMatrix() const @trusted
     {
         import std.json : JSONValue;
         JSONValue root;
         
-        foreach (source, targets; _matrix)
+        foreach (sourceIdx, targets; _matrix)
         {
+            if (sourceIdx >= _indexToString.length) continue;
+            auto source = _indexToString[sourceIdx];
+            
             JSONValue row;
-            foreach (target, count; targets)
-                row[target] = JSONValue(count);
+            foreach (targetIdx, count; targets)
+            {
+                if (targetIdx >= _indexToString.length) continue;
+                row[_indexToString[targetIdx]] = JSONValue(count);
+            }
             root[source] = row;
         }
         
         return root.toString();
     }
     
-    /// Import from serialization
+    /// Import from serialization (rebuilds index mappings)
     void importMatrix(string json) @trusted
     {
         import std.json : parseJSON, JSONType;
@@ -443,12 +478,18 @@ struct CoChangeMatrix
             {
                 if (targets.type != JSONType.object) continue;
                 
-                _matrix[source] = (size_t[string]).init;
+                auto sourceIdx = getOrAssignIndex(source);
+                if (sourceIdx == uint.max) continue;
+                
+                _matrix[sourceIdx] = (size_t[uint]).init;
                 foreach (target, count; targets.objectNoRef)
                 {
                     if (count.type == JSONType.integer)
                     {
-                        _matrix[source][target] = cast(size_t)count.integer;
+                        auto targetIdx = getOrAssignIndex(target);
+                        if (targetIdx == uint.max) continue;
+                        
+                        _matrix[sourceIdx][targetIdx] = cast(size_t)count.integer;
                         _totalEdges++;
                     }
                 }

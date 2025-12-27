@@ -85,14 +85,22 @@ struct NodeArena
 /// Memory Optimization: Stores TargetId[] instead of BuildNode[] to avoid GC cycles
 /// from bidirectional references. This reduces memory pressure and prevents potential
 /// memory leaks from circular references between dependencies and dependents.
+/// 
+/// Performance: Uses integer index for O(1) array lookups in hot paths,
+/// avoiding hash overhead of associative array access.
 final class BuildNode
 {
     TargetId id;  // Strongly-typed identifier
     Target target;
     TargetId[] dependencyIds;  // IDs instead of pointers to avoid GC cycles
     TargetId[] dependentIds;   // IDs instead of pointers to avoid GC cycles
+    uint[] dependencyIndices;  // Parallel indices for O(1) hot path lookups
+    uint[] dependentIndices;   // Parallel indices for O(1) hot path lookups
     private shared BuildStatus _status;  // Atomic access only
     string hash;
+    
+    /// Index into BuildGraph._nodeArray for O(1) indexed access (uint.max = unassigned)
+    uint _nodeIndex = uint.max;
     
     // Retry metadata
     private shared size_t _retryAttempts;  // Atomic access only
@@ -110,8 +118,10 @@ final class BuildNode
         atomicStore(this._pendingDeps, cast(size_t)0);
         
         // Pre-allocate reasonable capacity to avoid reallocations
-        dependencyIds.reserve(8);  // Most targets have <8 dependencies
+        dependencyIds.reserve(8);   // Most targets have <8 dependencies
         dependentIds.reserve(4);    // Fewer dependents on average
+        dependencyIndices.reserve(8);
+        dependentIndices.reserve(4);
     }
     
     /// Get strongly-typed target identifier (accessor for consistency)
@@ -274,22 +284,33 @@ final class BuildNode
     /// 3. atomicLoad() ensures memory-safe concurrent reads
     /// 4. Read-only operation with no mutations
     /// 
-    /// Invariants:
-    /// - dependencyIds array must NOT be modified after graph construction
-    /// - All dependency nodes must remain valid in the graph
+    /// Performance: Uses O(1) indexed access when available, falls back to hash lookup.
     /// 
-    /// What could go wrong:
-    /// - If dependencyIds array is modified during iteration: undefined behavior
-    /// - If dependency nodes are removed from graph: lookup fails
-    /// - These are prevented by design: graph is immutable after construction
+    /// Invariants:
+    /// - dependencyIds/dependencyIndices arrays must NOT be modified after graph construction
+    /// - All dependency nodes must remain valid in the graph
     bool isReady(const BuildGraph graph) const @system nothrow
     {
+        // Fast path: use indexed access (no hash overhead)
+        if (dependencyIndices.length == dependencyIds.length && graph._nodeArray.length > 0)
+        {
+            foreach (idx; dependencyIndices)
+            {
+                if (idx >= graph._nodeArray.length) continue;  // Defensive
+                auto dep = graph._nodeArray[idx];
+                if (dep is null) continue;
+                auto depStatus = atomicLoad(dep._status);
+                if (depStatus != BuildStatus.Success && depStatus != BuildStatus.Cached)
+                    return false;
+            }
+            return true;
+        }
+        
+        // Fallback: hash-based lookup
         foreach (depId; dependencyIds)
         {
             auto depKey = depId.toString();
-            if (depKey !in graph.nodes)
-                continue;  // Skip missing dependencies (defensive)
-            
+            if (depKey !in graph.nodes) continue;
             auto dep = graph.nodes[depKey];
             auto depStatus = atomicLoad(dep._status);
             if (depStatus != BuildStatus.Success && depStatus != BuildStatus.Cached)
@@ -305,7 +326,7 @@ final class BuildNode
     /// Requires graph reference to resolve dependency IDs to nodes
     /// 
     /// Performance: O(V+E) total across all nodes due to memoization.
-    /// Without memoization, this would be O(E^depth) - exponential for deep graphs.
+    /// Uses O(1) indexed access when available, avoiding hash overhead.
     /// 
     /// Note: Not const because it modifies internal cache (_cachedDepth) for memoization.
     size_t depth(BuildGraph graph) @system nothrow
@@ -320,16 +341,32 @@ final class BuildNode
         }
         
         size_t maxDepth = 0;
-        foreach (depId; dependencyIds)
+        
+        // Fast path: indexed access
+        if (dependencyIndices.length == dependencyIds.length && graph._nodeArray.length > 0)
         {
-            auto depKey = depId.toString();
-            if (depKey !in graph.nodes)
-                continue;  // Skip missing dependencies (defensive)
-            
-            auto dep = graph.nodes[depKey];
-            auto depDepth = dep.depth(graph);
-            if (depDepth > maxDepth)
-                maxDepth = depDepth;
+            foreach (idx; dependencyIndices)
+            {
+                if (idx >= graph._nodeArray.length) continue;
+                auto dep = graph._nodeArray[idx];
+                if (dep is null) continue;
+                auto depDepth = dep.depth(graph);
+                if (depDepth > maxDepth)
+                    maxDepth = depDepth;
+            }
+        }
+        else
+        {
+            // Fallback: hash-based lookup
+            foreach (depId; dependencyIds)
+            {
+                auto depKey = depId.toString();
+                if (depKey !in graph.nodes) continue;
+                auto dep = graph.nodes[depKey];
+                auto depDepth = dep.depth(graph);
+                if (depDepth > maxDepth)
+                    maxDepth = depDepth;
+            }
         }
         
         _cachedDepth = maxDepth + 1;
@@ -394,6 +431,7 @@ enum ValidationMode
 final class BuildGraph
 {
     BuildNode[string] nodes;  // Keep string keys for backward compatibility
+    BuildNode[] _nodeArray;   // Parallel array for O(1) indexed access in hot paths
     BuildNode[] roots;
     private ValidationMode _validationMode;
     private bool _validated;
@@ -416,16 +454,32 @@ final class BuildGraph
     }
     
     /// Create arena-backed node (falls back to GC if arena full)
-    /// Public for use during graph construction and deserialization
+    /// Assigns index for O(1) array access. Public for use during graph construction.
     BuildNode createNode(TargetId id, Target target) @system
     {
+        BuildNode node;
         if (_arena !is null)
         {
-            if (auto node = _arena.allocate(id, target))
-                return node;
-            // Arena full, fallback to GC allocation
+            node = _arena.allocate(id, target);
+            if (node is null)
+                node = new BuildNode(id, target);  // Arena full, fallback
         }
-        return new BuildNode(id, target);
+        else
+        {
+            node = new BuildNode(id, target);
+        }
+        
+        // Assign index and add to parallel array
+        node._nodeIndex = cast(uint)_nodeArray.length;
+        _nodeArray ~= node;
+        return node;
+    }
+    
+    /// Get node by index for O(1) hot path access (no hash overhead)
+    /// Returns null if index out of bounds
+    inout(BuildNode) getNodeByIndex(uint idx) inout @system pure nothrow @nogc
+    {
+        return idx < _nodeArray.length ? _nodeArray[idx] : null;
     }
     
     /// Validate entire graph for cycles (O(V+E))
@@ -575,7 +629,9 @@ final class BuildGraph
         }
         
         fromNode.dependencyIds ~= toNode.id;
+        fromNode.dependencyIndices ~= toNode._nodeIndex;  // O(1) index for hot paths
         toNode.dependentIds ~= fromNode.id;
+        toNode.dependentIndices ~= fromNode._nodeIndex;   // O(1) index for hot paths
         
         // Invalidate depth cache for affected nodes
         invalidateDepthCascade(fromNode);
@@ -632,7 +688,9 @@ final class BuildGraph
         }
         
         fromNode.dependencyIds ~= toNode.id;
+        fromNode.dependencyIndices ~= toNode._nodeIndex;  // O(1) index for hot paths
         toNode.dependentIds ~= fromNode.id;
+        toNode.dependentIndices ~= fromNode._nodeIndex;   // O(1) index for hot paths
         
         // Invalidate depth cache for affected nodes
         invalidateDepthCascade(fromNode);
@@ -656,22 +714,33 @@ final class BuildGraph
     /// (cycles will be detected later during validation).
     private void invalidateDepthCascade(BuildNode node) @system nothrow
     {
-        bool[string] visited;
+        bool[uint] visited;  // Use index for faster visited check
         
         void invalidateRecursive(BuildNode n) nothrow
         {
-            auto key = n.id.toString();
-            if (key in visited)
+            if (n._nodeIndex in visited)
                 return;
             
-            visited[key] = true;
+            visited[n._nodeIndex] = true;
             n.invalidateDepthCache();
             
-            foreach (dependentId; n.dependentIds)
+            // Fast path: indexed access
+            if (n.dependentIndices.length == n.dependentIds.length && _nodeArray.length > 0)
             {
-                auto depKey = dependentId.toString();
-                if (depKey in nodes)
-                    invalidateRecursive(nodes[depKey]);
+                foreach (idx; n.dependentIndices)
+                {
+                    if (idx < _nodeArray.length && _nodeArray[idx] !is null)
+                        invalidateRecursive(_nodeArray[idx]);
+                }
+            }
+            else
+            {
+                foreach (dependentId; n.dependentIds)
+                {
+                    auto depKey = dependentId.toString();
+                    if (depKey in nodes)
+                        invalidateRecursive(nodes[depKey]);
+                }
             }
         }
         
@@ -680,34 +749,41 @@ final class BuildGraph
     
     /// Check if adding an edge would create a cycle (O(V+E) worst case)
     /// 
-    /// Note: This function could potentially be @system as it only performs
-    /// safe operations (AA access, reference comparisons, array traversal).
-    /// Marked @system conservatively for nested function with closure.
-    /// 
+    /// Uses O(1) indexed access when available for hot path optimization.
     /// Used only in Immediate validation mode. For large graphs, prefer
     /// Deferred mode with a single O(V+E) topological sort.
     private bool wouldCreateCycle(BuildNode from, BuildNode to) @system
     {
-        bool[string] visited;
+        bool[uint] visited;  // Use index for faster visited check
         
         bool dfs(BuildNode node)
         {
             if (node == from)
                 return true;
             
-            auto nodeKey = node.id.toString();
-            if (nodeKey in visited)
+            if (node._nodeIndex in visited)
                 return false;
             
-            visited[nodeKey] = true;
+            visited[node._nodeIndex] = true;
             
-            foreach (depId; node.dependencyIds)
+            // Fast path: indexed access
+            if (node.dependencyIndices.length == node.dependencyIds.length && _nodeArray.length > 0)
             {
-                auto depKey = depId.toString();
-                if (depKey in nodes)
+                foreach (idx; node.dependencyIndices)
                 {
-                    if (dfs(nodes[depKey]))
-                        return true;
+                    if (idx < _nodeArray.length && _nodeArray[idx] !is null)
+                        if (dfs(_nodeArray[idx]))
+                            return true;
+                }
+            }
+            else
+            {
+                foreach (depId; node.dependencyIds)
+                {
+                    auto depKey = depId.toString();
+                    if (depKey in nodes)
+                        if (dfs(nodes[depKey]))
+                            return true;
                 }
             }
             
@@ -946,29 +1022,36 @@ final class BuildGraph
                 Errors.graph("Target not found: " ~ key, Graph.NodeNotFound).build());
         
         auto node = nodes[key];
+        auto removedIdx = node._nodeIndex;
         
-        // Remove from dependents of dependencies
-        foreach (depId; node.dependencyIds)
+        // Remove from dependents of dependencies (both IDs and indices)
+        foreach (i, depId; node.dependencyIds)
         {
             auto depKey = depId.toString();
             if (depKey in nodes)
             {
                 auto dep = nodes[depKey];
                 dep.dependentIds = dep.dependentIds.filter!(d => d != id).array;
+                dep.dependentIndices = dep.dependentIndices.filter!(idx => idx != removedIdx).array;
             }
         }
         
-        // Remove from dependencies of dependents
-        foreach (depId; node.dependentIds)
+        // Remove from dependencies of dependents (both IDs and indices)
+        foreach (i, depId; node.dependentIds)
         {
             auto depKey = depId.toString();
             if (depKey in nodes)
             {
                 auto dep = nodes[depKey];
                 dep.dependencyIds = dep.dependencyIds.filter!(d => d != id).array;
+                dep.dependencyIndices = dep.dependencyIndices.filter!(idx => idx != removedIdx).array;
                 invalidateDepthCascade(dep); // Invalidate depth for affected nodes
             }
         }
+        
+        // Null out in parallel array (lazy deletion - preserves other indices)
+        if (removedIdx < _nodeArray.length)
+            _nodeArray[removedIdx] = null;
         
         nodes.remove(key);
         _incrementalTopo.notifyNodeRemoved(id);
@@ -987,24 +1070,34 @@ final class BuildGraph
     size_t[string] calculateCriticalPath(size_t delegate(BuildNode) @system estimateCost) @system
     {
         size_t[string] costs;
-        bool[string] visited;
+        bool[uint] visited;  // Index-based for faster check
         
         size_t visit(BuildNode node) @system
         {
-            if (node.id.toString() in visited)
-                return costs[node.id.toString()];
+            if (node._nodeIndex in visited)
+                return costs.get(node.id.toString(), 0);
             
-            visited[node.id.toString()] = true;
+            visited[node._nodeIndex] = true;
             
             // Get max cost of dependents (reverse direction - who depends on me)
             size_t maxDependentCost = 0;
-            foreach (dependentId; node.dependentIds)
+            
+            // Fast path: indexed access
+            if (node.dependentIndices.length == node.dependentIds.length && _nodeArray.length > 0)
             {
-                auto depKey = dependentId.toString();
-                if (depKey in nodes)
+                foreach (idx; node.dependentIndices)
                 {
-                    immutable depCost = visit(nodes[depKey]);
-                    maxDependentCost = max(maxDependentCost, depCost);
+                    if (idx < _nodeArray.length && _nodeArray[idx] !is null)
+                        maxDependentCost = max(maxDependentCost, visit(_nodeArray[idx]));
+                }
+            }
+            else
+            {
+                foreach (dependentId; node.dependentIds)
+                {
+                    auto depKey = dependentId.toString();
+                    if (depKey in nodes)
+                        maxDependentCost = max(maxDependentCost, visit(nodes[depKey]));
                 }
             }
             
@@ -1014,8 +1107,9 @@ final class BuildGraph
             return cost;
         }
         
-        foreach (node; nodes.values)
-            visit(node);
+        foreach (node; _nodeArray)
+            if (node !is null)
+                visit(node);
         
         return costs;
     }

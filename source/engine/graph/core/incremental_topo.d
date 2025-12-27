@@ -27,7 +27,7 @@ import infrastructure.errors;
 struct IncrementalTopoOrder
 {
     private BuildNode[] _cachedOrder;       // Cached topological order (leaves first)
-    private size_t[string] _positionMap;    // Node ID → position in cached order
+    private size_t[uint] _positionMap;      // Node index → position (O(1) lookup, no hash overhead)
     private ulong _version;                 // Version counter for invalidation
     private bool _valid;                    // Whether cache is valid
     private BuildGraph _graph;              // Reference to graph (for lookups)
@@ -56,15 +56,28 @@ struct IncrementalTopoOrder
         _version++;
     }
     
-    /// Get position of node in topological order (O(1))
+    /// Get position of node by index in topological order (O(1), no hash overhead)
+    /// Returns size_t.max if node not found or cache invalid
+    size_t getPositionByIndex(uint nodeIndex) const @system nothrow @nogc
+    {
+        if (!_valid)
+            return size_t.max;
+        
+        if (auto pos = nodeIndex in _positionMap)
+            return *pos;
+        return size_t.max;
+    }
+    
+    /// Get position of node in topological order (O(1) with index lookup)
     /// Returns size_t.max if node not found or cache invalid
     size_t getPosition(string nodeId) const @system nothrow
     {
         if (!_valid)
             return size_t.max;
         
-        if (auto pos = nodeId in _positionMap)
-            return *pos;
+        // Look up node to get index, then use index for position lookup
+        if (auto nodePtr = nodeId in _graph.nodes)
+            return getPositionByIndex((*nodePtr)._nodeIndex);
         return size_t.max;
     }
     
@@ -131,18 +144,24 @@ struct IncrementalTopoOrder
         if (!_valid)
             return;
         
+        // Look up node to get index
         auto key = id.toString();
-        auto pos = getPosition(key);
+        auto nodePtr = key in _graph.nodes;
+        if (nodePtr is null)
+            return;
+        
+        auto nodeIndex = (*nodePtr)._nodeIndex;
+        auto pos = getPositionByIndex(nodeIndex);
         if (pos == size_t.max)
             return;
         
         // Remove from cached order and update position map
         _cachedOrder = _cachedOrder[0..pos] ~ _cachedOrder[pos+1..$];
-        _positionMap.remove(key);
+        _positionMap.remove(nodeIndex);
         
         // Update positions of nodes after removed node
         foreach (i; pos .. _cachedOrder.length)
-            _positionMap[_cachedOrder[i].id.toString()] = i;
+            _positionMap[_cachedOrder[i]._nodeIndex] = i;
         
         _version++;
     }
@@ -151,8 +170,8 @@ struct IncrementalTopoOrder
     private BuildResult!(BuildNode[]) recompute() @system
     {
         BuildNode[] sorted;
-        bool[string] visited;
-        bool[string] visiting;
+        bool[uint] visited;   // Index-based for O(1) lookup
+        bool[uint] visiting;
         BuildError cycleError = null;
         
         void visit(BuildNode node)
@@ -160,11 +179,10 @@ struct IncrementalTopoOrder
             if (cycleError !is null)
                 return;
             
-            auto nodeKey = node.id.toString();
-            if (nodeKey in visited)
+            if (node._nodeIndex in visited)
                 return;
             
-            if (nodeKey in visiting)
+            if (node._nodeIndex in visiting)
             {
                 cycleError = Errors.graph("Circular dependency detected: " ~ node.id.toString(), Graph.Cycle)
                     .withContext("incremental topological sort", "cycle detected")
@@ -174,32 +192,45 @@ struct IncrementalTopoOrder
                 return;
             }
             
-            visiting[nodeKey] = true;
+            visiting[node._nodeIndex] = true;
             
-            foreach (depId; node.dependencyIds)
+            // Fast path: indexed access
+            if (node.dependencyIndices.length == node.dependencyIds.length && _graph._nodeArray.length > 0)
             {
-                auto depKey = depId.toString();
-                if (depKey in _graph.nodes)
-                    visit(_graph.nodes[depKey]);
+                foreach (idx; node.dependencyIndices)
+                {
+                    if (idx < _graph._nodeArray.length && _graph._nodeArray[idx] !is null)
+                        visit(_graph._nodeArray[idx]);
+                }
+            }
+            else
+            {
+                foreach (depId; node.dependencyIds)
+                {
+                    auto depKey = depId.toString();
+                    if (depKey in _graph.nodes)
+                        visit(_graph.nodes[depKey]);
+                }
             }
             
-            visiting.remove(nodeKey);
-            visited[nodeKey] = true;
+            visiting.remove(node._nodeIndex);
+            visited[node._nodeIndex] = true;
             sorted ~= node;
         }
         
-        foreach (node; _graph.nodes.values)
+        foreach (node; _graph._nodeArray)
         {
+            if (node is null) continue;
             visit(node);
             if (cycleError !is null)
                 return BuildResult!(BuildNode[]).err(cycleError);
         }
         
-        // Cache results
+        // Cache results with index-based position map
         _cachedOrder = sorted;
         _positionMap.clear();
         foreach (i, node; sorted)
-            _positionMap[node.id.toString()] = i;
+            _positionMap[node._nodeIndex] = i;
         
         _valid = true;
         _version++;
@@ -214,15 +245,15 @@ struct IncrementalTopoOrder
         // Extract affected region (nodes that may need reordering)
         auto affected = _cachedOrder[fromPos .. toPos + 1].dup;
         
-        // Build subgraph of affected nodes and do local topological sort
-        bool[string] affectedSet;
+        // Build subgraph of affected nodes using index for O(1) lookup
+        bool[uint] affectedSet;
         foreach (node; affected)
-            affectedSet[node.id.toString()] = true;
+            affectedSet[node._nodeIndex] = true;
         
         // Local DFS on affected subgraph
         BuildNode[] localSorted;
-        bool[string] localVisited;
-        bool[string] localVisiting;
+        bool[uint] localVisited;
+        bool[uint] localVisiting;
         bool hasCycle = false;
         
         void localVisit(BuildNode node)
@@ -230,30 +261,41 @@ struct IncrementalTopoOrder
             if (hasCycle)
                 return;
             
-            auto key = node.id.toString();
-            if (key !in affectedSet)
+            if (node._nodeIndex !in affectedSet)
                 return; // Not in affected region
             
-            if (key in localVisited)
+            if (node._nodeIndex in localVisited)
                 return;
             
-            if (key in localVisiting)
+            if (node._nodeIndex in localVisiting)
             {
                 hasCycle = true;
                 return;
             }
             
-            localVisiting[key] = true;
+            localVisiting[node._nodeIndex] = true;
             
-            foreach (depId; node.dependencyIds)
+            // Fast path: indexed access
+            if (node.dependencyIndices.length == node.dependencyIds.length && _graph._nodeArray.length > 0)
             {
-                auto depKey = depId.toString();
-                if (depKey in _graph.nodes && depKey in affectedSet)
-                    localVisit(_graph.nodes[depKey]);
+                foreach (idx; node.dependencyIndices)
+                {
+                    if (idx in affectedSet && idx < _graph._nodeArray.length && _graph._nodeArray[idx] !is null)
+                        localVisit(_graph._nodeArray[idx]);
+                }
+            }
+            else
+            {
+                foreach (depId; node.dependencyIds)
+                {
+                    auto depKey = depId.toString();
+                    if (depKey in _graph.nodes && node._nodeIndex in affectedSet)
+                        localVisit(_graph.nodes[depKey]);
+                }
             }
             
-            localVisiting.remove(key);
-            localVisited[key] = true;
+            localVisiting.remove(node._nodeIndex);
+            localVisited[node._nodeIndex] = true;
             localSorted ~= node;
         }
         
@@ -274,9 +316,9 @@ struct IncrementalTopoOrder
         // Replace affected region with locally sorted order
         _cachedOrder = _cachedOrder[0..fromPos] ~ localSorted ~ _cachedOrder[toPos+1..$];
         
-        // Update position map for reordered nodes
+        // Update position map for reordered nodes (index-based)
         foreach (i; fromPos .. fromPos + localSorted.length)
-            _positionMap[_cachedOrder[i].id.toString()] = i;
+            _positionMap[_cachedOrder[i]._nodeIndex] = i;
         
         _version++;
         return Ok!BuildError();
@@ -298,31 +340,41 @@ struct IncrementalTopoOrder
             return [];
         
         // All nodes after changed node in topological order may be affected
-        // (they could depend on it directly or transitively)
         BuildNode[] affected;
-        bool[string] seen;
+        bool[uint] seen;  // Index-based for O(1) lookup
         
         void collectDependents(BuildNode node)
         {
-            auto key = node.id.toString();
-            if (key in seen)
+            if (node._nodeIndex in seen)
                 return;
-            seen[key] = true;
+            seen[node._nodeIndex] = true;
             affected ~= node;
             
-            foreach (depId; node.dependentIds)
+            // Fast path: indexed access
+            if (node.dependentIndices.length == node.dependentIds.length && _graph._nodeArray.length > 0)
             {
-                auto depKey = depId.toString();
-                if (depKey in _graph.nodes)
-                    collectDependents(_graph.nodes[depKey]);
+                foreach (idx; node.dependentIndices)
+                {
+                    if (idx < _graph._nodeArray.length && _graph._nodeArray[idx] !is null)
+                        collectDependents(_graph._nodeArray[idx]);
+                }
+            }
+            else
+            {
+                foreach (depId; node.dependentIds)
+                {
+                    auto depKey = depId.toString();
+                    if (depKey in _graph.nodes)
+                        collectDependents(_graph.nodes[depKey]);
+                }
             }
         }
         
         if (auto nodePtr = changedNode.toString() in _graph.nodes)
             collectDependents(*nodePtr);
         
-        // Sort affected by topological order (leaves first for rebuild)
-        affected.sort!((a, b) => getPosition(a.id.toString()) < getPosition(b.id.toString()));
+        // Sort affected by topological order using index-based positions (no string hashing)
+        affected.sort!((a, b) => getPositionByIndex(a._nodeIndex) < getPositionByIndex(b._nodeIndex));
         
         return affected;
     }
@@ -340,24 +392,36 @@ struct IncrementalTopoOrder
             return false;
         
         auto bNode = _graph.nodes[bKey];
-        bool[string] visited;
+        bool[uint] visited;  // Index-based for O(1) lookup
         
         bool checkDep(BuildNode node)
         {
-            auto key = node.id.toString();
-            if (key in visited)
+            if (node._nodeIndex in visited)
                 return false;
-            visited[key] = true;
+            visited[node._nodeIndex] = true;
             
             if (node.id == a)
                 return true;
             
-            foreach (depId; node.dependencyIds)
+            // Fast path: indexed access
+            if (node.dependencyIndices.length == node.dependencyIds.length && _graph._nodeArray.length > 0)
             {
-                auto depKey = depId.toString();
-                if (depKey in _graph.nodes)
-                    if (checkDep(_graph.nodes[depKey]))
-                        return true;
+                foreach (idx; node.dependencyIndices)
+                {
+                    if (idx < _graph._nodeArray.length && _graph._nodeArray[idx] !is null)
+                        if (checkDep(_graph._nodeArray[idx]))
+                            return true;
+                }
+            }
+            else
+            {
+                foreach (depId; node.dependencyIds)
+                {
+                    auto depKey = depId.toString();
+                    if (depKey in _graph.nodes)
+                        if (checkDep(_graph.nodes[depKey]))
+                            return true;
+                }
             }
             return false;
         }

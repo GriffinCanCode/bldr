@@ -50,9 +50,9 @@ final class ProfileGuidedScheduler
     private BuildGraph graph;
     private Mutex mutex;
     
-    // Cached profile data
-    private ActionProfile[string] profiles;
-    private size_t[string] criticalPathCosts;
+    // Cached profile data - keyed by node index for O(1) lookup (no hash overhead)
+    private ActionProfile[uint] profiles;
+    private size_t[uint] criticalPathCosts;
     private bool profilesComputed;
 
     this(CostEstimator estimator, BuildGraph graph) @trusted
@@ -74,10 +74,11 @@ final class ProfileGuidedScheduler
             // 1. Compute critical path costs using economic estimates
             criticalPathCosts = computeCriticalPathCosts();
             
-            // 2. Build profile for each node
-            foreach (key, node; graph.nodes)
+            // 2. Build profile for each node using indexed access
+            foreach (node; graph._nodeArray)
             {
-                profiles[key] = buildProfile(node, key);
+                if (node is null) continue;
+                profiles[node._nodeIndex] = buildProfile(node);
             }
             
             profilesComputed = true;
@@ -85,14 +86,27 @@ final class ProfileGuidedScheduler
         }
     }
     
-    /// Get profile for an action
+    /// Get profile for an action by node index (O(1), no hash overhead)
+    /// Returns null if not found
+    const(ActionProfile)* getProfileByIndex(uint nodeIndex) @trusted
+    {
+        synchronized (mutex)
+        {
+            if (auto p = nodeIndex in profiles)
+                return p;
+            return null;
+        }
+    }
+    
+    /// Get profile for an action by target ID
     /// Returns null if not found
     const(ActionProfile)* getProfile(string targetId) @trusted
     {
         synchronized (mutex)
         {
-            if (auto p = targetId in profiles)
-                return p;
+            // Look up node to get index
+            if (auto nodePtr = targetId in graph.nodes)
+                return getProfileByIndex((*nodePtr)._nodeIndex);
             return null;
         }
     }
@@ -106,14 +120,17 @@ final class ProfileGuidedScheduler
     {
         synchronized (mutex)
         {
-            auto key = targetId.toString();
             size_t cost = 0, depth = 0, dependents = 0;
             
-            if (auto profile = key in profiles)
+            // Use index-based lookup (no string hashing)
+            if (auto nodePtr = targetId.toString() in graph.nodes)
             {
-                cost = profile.criticalPathCost;
-                depth = profile.depth;
-                dependents = profile.dependentCount;
+                if (auto profile = (*nodePtr)._nodeIndex in profiles)
+                {
+                    cost = profile.criticalPathCost;
+                    depth = profile.depth;
+                    dependents = profile.dependentCount;
+                }
             }
             
             return new Concurrency.PriorityTask!ActionId(
@@ -167,44 +184,52 @@ final class ProfileGuidedScheduler
 private:
     /// Compute critical path costs for all nodes
     /// Critical path = longest path from node to any leaf (weighted by estimated cost)
-    size_t[string] computeCriticalPathCosts() @trusted
+    size_t[uint] computeCriticalPathCosts() @trusted
     {
-        size_t[string] costs;
-        bool[string] visited;
+        size_t[uint] costs;
+        bool[uint] visited;  // Index-based for O(1) lookup
         
         // Recursive DFS to compute critical path
         size_t visit(BuildNode node) @trusted
         {
-            auto key = node.id.toString();
-            if (key in visited)
-                return costs.get(key, 0);
+            if (node._nodeIndex in visited)
+                return costs.get(node._nodeIndex, 0);
             
-            visited[key] = true;
+            visited[node._nodeIndex] = true;
             
             // Get estimated cost for this node
             size_t nodeCost = estimateNodeCostMs(node);
             
-            // Find max cost among dependents (downstream nodes that depend on us)
+            // Find max cost among dependents using indexed access
             size_t maxDownstreamCost = 0;
-            foreach (dependentId; node.dependentIds)
+            if (node.dependentIndices.length == node.dependentIds.length && graph._nodeArray.length > 0)
             {
-                auto depKey = dependentId.toString();
-                if (depKey in graph.nodes)
+                foreach (idx; node.dependentIndices)
                 {
-                    auto dependentCost = visit(graph.nodes[depKey]);
-                    maxDownstreamCost = max(maxDownstreamCost, dependentCost);
+                    if (idx < graph._nodeArray.length && graph._nodeArray[idx] !is null)
+                        maxDownstreamCost = max(maxDownstreamCost, visit(graph._nodeArray[idx]));
+                }
+            }
+            else
+            {
+                foreach (dependentId; node.dependentIds)
+                {
+                    auto depKey = dependentId.toString();
+                    if (depKey in graph.nodes)
+                        maxDownstreamCost = max(maxDownstreamCost, visit(graph.nodes[depKey]));
                 }
             }
             
             // Critical path cost = own cost + max downstream path
             auto totalCost = nodeCost + maxDownstreamCost;
-            costs[key] = totalCost;
+            costs[node._nodeIndex] = totalCost;
             return totalCost;
         }
         
-        // Visit all nodes (handles disconnected components)
-        foreach (node; graph.nodes.values)
-            visit(node);
+        // Visit all nodes using indexed array
+        foreach (node; graph._nodeArray)
+            if (node !is null)
+                visit(node);
         
         return costs;
     }
@@ -225,13 +250,13 @@ private:
         return result.unwrap().duration.total!"msecs";
     }
     
-    /// Build profile for a node
-    ActionProfile buildProfile(BuildNode node, string key) @trusted
+    /// Build profile for a node (using index-based lookups)
+    ActionProfile buildProfile(BuildNode node) @trusted
     {
         ActionProfile profile;
         
-        // Get critical path cost
-        profile.criticalPathCost = criticalPathCosts.get(key, 0);
+        // Get critical path cost using index
+        profile.criticalPathCost = criticalPathCosts.get(node._nodeIndex, 0);
         
         // Count dependents
         profile.dependentCount = node.dependentIds.length;
@@ -250,12 +275,15 @@ private:
         return profile;
     }
     
-    /// Get scheduling score for an action
+    /// Get scheduling score for an action (index-based lookup)
     size_t getSchedulingScore(ActionId actionId, TargetId targetId) @trusted
     {
-        auto key = targetId.toString();
-        if (auto profile = key in profiles)
-            return profile.schedulingScore();
+        // Use index-based lookup
+        if (auto nodePtr = targetId.toString() in graph.nodes)
+        {
+            if (auto profile = (*nodePtr)._nodeIndex in profiles)
+                return profile.schedulingScore();
+        }
         return 0;
     }
     
