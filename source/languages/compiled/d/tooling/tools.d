@@ -7,7 +7,7 @@ import std.path;
 import std.string;
 import std.algorithm;
 import std.array;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// D formatter (dfmt) integration
 final class DFormatter
@@ -158,7 +158,7 @@ final class DScanner
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to write ctags file: " ~ e.msg);
+                structuredLog.warning("failed_to_write_ctags_file_").field("detail", "Failed to write ctags file: " ~ e.msg).emit();
             }
         }
         
@@ -181,7 +181,7 @@ final class DScanner
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to write etags file: " ~ e.msg);
+                structuredLog.warning("failed_to_write_etags_file_").field("detail", "Failed to write etags file: " ~ e.msg).emit();
             }
         }
         

@@ -19,7 +19,7 @@ import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.process.checker : isCommandAvailable;
 import engine.caching.actions.action;
 
@@ -35,7 +35,7 @@ class TypeScriptHandler : BaseLanguageHandler
         
         LanguageBuildResult result;
         
-        Logger.debugLog("Building TypeScript target: " ~ target.name);
+        structuredLog.debug_("building_typescript_target_").field("detail", "Building TypeScript target: " ~ target.name).emit();
         
         // Validate sources
         if (target.sources.empty)
@@ -68,7 +68,7 @@ class TypeScriptHandler : BaseLanguageHandler
         bool hasTSX = target.sources.any!(s => s.endsWith(".tsx"));
         if (hasTSX && tsConfig.jsx == TSXMode.React)
         {
-            Logger.debugLog("Detected TSX sources");
+            structuredLog.debug_("detected_tsx_sources").emit();
         }
         
         final switch (target.type)
@@ -159,7 +159,7 @@ class TypeScriptHandler : BaseLanguageHandler
         // Libraries should generate declarations
         if (!tsConfig.declaration)
         {
-            Logger.warning("Library target should generate declarations, enabling");
+            structuredLog.warning("library_target_should_generate_declarati").emit();
             tsConfig.declaration = true;
         }
         
@@ -204,7 +204,7 @@ class TypeScriptHandler : BaseLanguageHandler
                 cmd = ["npm", "test"];
         }
         
-        Logger.debugLog("Running tests: " ~ cmd.join(" "));
+        structuredLog.debug_("running_tests_").field("detail", "Running tests: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         
@@ -268,7 +268,7 @@ class TypeScriptHandler : BaseLanguageHandler
             return result;
         }
         
-        Logger.debugLog("Using TypeScript compiler: " ~ bundler.name() ~ " (" ~ bundler.getVersion() ~ ")");
+        structuredLog.debug_("using_typescript_compiler_").field("detail", "Using TypeScript compiler: " ~ bundler.name() ~ " (" ~ bundler.getVersion() ~ ")").emit();
         
         // Compile
         auto compileResult = bundler.compile(target.sources, tsConfig, target, config);
@@ -285,7 +285,7 @@ class TypeScriptHandler : BaseLanguageHandler
         if (compileResult.hadTypeErrors)
         {
             foreach (err; compileResult.typeErrors)
-                Logger.warning("  " ~ err);
+                structuredLog.warning("__").field("detail", "  " ~ err).emit();
         }
         
         result.success = true;
@@ -312,10 +312,10 @@ class TypeScriptHandler : BaseLanguageHandler
         
         if (checkResult.hasWarnings)
         {
-            Logger.warning("Type check warnings:");
+            structuredLog.warning("type_check_warnings").emit();
             foreach (warn; checkResult.warnings)
             {
-                Logger.warning("  " ~ warn);
+                structuredLog.warning("__").field("detail", "  " ~ warn).emit();
             }
         }
         
@@ -347,7 +347,7 @@ class TypeScriptHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to parse TypeScript config, using defaults: " ~ e.msg);
+                structuredLog.warning("failed_to_parse_typescript_config_using_").field("detail", "Failed to parse TypeScript config, using defaults: " ~ e.msg).emit();
             }
         }
         
@@ -440,7 +440,7 @@ class TypeScriptHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to analyze imports in " ~ source);
+                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source).emit();
             }
         }
         

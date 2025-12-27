@@ -7,6 +7,7 @@ import std.array;
 import std.regex;
 import std.conv;
 import languages.jvm.java.core.config;
+import infrastructure.utils.logging : structuredLog;
 
 /// Java/JVM version and capability detection
 class JavaInfo
@@ -130,7 +131,7 @@ class JavaInfo
         catch (Exception e)
         {
             import infrastructure.utils.logging.logger : Logger;
-            Logger.debugLog("Failed to get Java info: " ~ e.msg);
+            structuredLog.debug_("failed_to_get_java_info_").field("detail", "Failed to get Java info: " ~ e.msg).emit();
         }
         
         return "Unknown";
@@ -229,7 +230,7 @@ class JavaInfo
         catch (Exception e)
         {
             import infrastructure.utils.logging.logger : Logger;
-            Logger.debugLog("Failed to get Java info: " ~ e.msg);
+            structuredLog.debug_("failed_to_get_java_info_").field("detail", "Failed to get Java info: " ~ e.msg).emit();
         }
         
         return "";
@@ -251,7 +252,7 @@ class JavaInfo
         catch (Exception e)
         {
             import infrastructure.utils.logging.logger : Logger;
-            Logger.debugLog("Failed to get Java info: " ~ e.msg);
+            structuredLog.debug_("failed_to_get_java_info_").field("detail", "Failed to get Java info: " ~ e.msg).emit();
         }
         
         return "";
@@ -326,7 +327,7 @@ class JavaInfo
         catch (Exception e)
         {
             import infrastructure.utils.logging.logger : Logger;
-            Logger.debugLog("Failed to get Java info: " ~ e.msg);
+            structuredLog.debug_("failed_to_get_java_info_").field("detail", "Failed to get Java info: " ~ e.msg).emit();
         }
         
         return "Unknown";

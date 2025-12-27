@@ -11,7 +11,7 @@ import engine.workers.protocol;
 import engine.workers.pool;
 import engine.workers.pool.memory : MemoryPressure, WorkerMemory;
 import engine.workers.pool.recycler : WarmthLevel;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Worker Health Monitor
 /// 
@@ -125,7 +125,9 @@ final class WorkerHealthMonitor
         atomicStore(running, true);
         monitorThread = new Thread(&monitorLoop);
         monitorThread.start();
-        Logger.info("Worker health monitor started (interval: " ~ config.checkInterval.total!"seconds".to!string ~ "s)");
+        structuredLog.info("worker_health_monitor_started")
+            .field("interval_s", config.checkInterval.total!"seconds")
+            .emit();
     }
     
     /// Stop health monitoring
@@ -137,7 +139,7 @@ final class WorkerHealthMonitor
             monitorThread.join();
             monitorThread = null;
         }
-        Logger.info("Worker health monitor stopped");
+        structuredLog.info("worker_health_monitor_stopped").emit();
     }
     
     /// Get health status summary (includes memory and warmth stats)
@@ -337,14 +339,19 @@ final class WorkerHealthMonitor
             if (config.preferWarmRestart && result.warmth >= WarmthLevel.Warm &&
                 result.memoryPressure != MemoryPressure.Critical)
             {
-                Logger.warning("Worker " ~ idStr ~ " has high memory but is " ~ 
-                              result.warmth.to!string ~ ", deferring restart");
+                structuredLog.warning("worker_memory_high_deferred")
+                    .field("worker", idStr)
+                    .field("warmth", result.warmth.to!string)
+                    .field("error", result.lastError)
+                    .emit();
                 sendAlert(workerId, result.status, AlertSeverity.Warning,
                          "Memory high on " ~ result.warmth.to!string ~ " worker: " ~ result.lastError);
                 return;
             }
             
-            Logger.warning("Worker " ~ idStr ~ " OOM risk, triggering immediate restart");
+            structuredLog.warning("worker_oom_restart")
+                .field("worker", idStr)
+                .emit();
             atomicOp!"+="(_totalFailures, 1);
             sendAlert(workerId, result.status, AlertSeverity.Critical,
                      "OOM restart triggered: " ~ result.lastError);
@@ -378,7 +385,10 @@ final class WorkerHealthMonitor
         // Auto-restart if configured and threshold exceeded
         if (config.autoRestart && result.consecutiveFailures >= config.maxConsecutiveFailures)
         {
-            Logger.warning("Worker " ~ idStr ~ " exceeded failure threshold, triggering restart");
+            structuredLog.warning("worker_failure_threshold_exceeded")
+                .field("worker", idStr)
+                .field("failures", result.consecutiveFailures)
+                .emit();
             restartWorker(workerId);
         }
     }
@@ -398,7 +408,7 @@ final class WorkerHealthMonitor
         alert.timestamp = MonoTime.currTime;
         
         try { alertHandler(alert); }
-        catch (Exception e) { Logger.error("Alert handler failed: " ~ e.msg); }
+        catch (Exception e) { structuredLog.error("alert_handler_failed").field("error", e.msg).emit(); }
     }
     
     /// Restart a worker
@@ -409,7 +419,9 @@ final class WorkerHealthMonitor
         
         if (result.isOk)
         {
-            Logger.info("Successfully restarted worker: " ~ workerId.toString());
+            structuredLog.info("worker_restarted")
+                .field("worker", workerId.toString())
+                .emit();
             atomicOp!"+="(_totalRestarts, 1);
             
             // Update last result
@@ -438,8 +450,10 @@ final class WorkerHealthMonitor
         }
         else
         {
-            Logger.error("Failed to restart worker: " ~ workerId.toString() ~ 
-                        " - " ~ result.unwrapErr().message());
+            structuredLog.error("worker_restart_failed")
+                .field("worker", workerId.toString())
+                .field("error", result.unwrapErr().message())
+                .emit();
         }
     }
 }

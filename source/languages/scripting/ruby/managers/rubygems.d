@@ -9,7 +9,7 @@ import std.array;
 import std.string;
 import languages.scripting.ruby.core.config;
 import languages.scripting.ruby.managers.base;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// RubyGems direct package manager
 class RubyGemsManager : PackageManager
@@ -37,7 +37,7 @@ class RubyGemsManager : PackageManager
         // Add common flags
         cmd ~= ["--no-document"]; // Skip ri/rdoc generation for speed
         
-        Logger.info("Installing gems with RubyGems: " ~ gems.join(", "));
+        structuredLog.info("installing_gems_with_rubygems_").field("detail", "Installing gems with RubyGems: " ~ gems.join(", ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, projectRoot);
         
@@ -84,7 +84,7 @@ class RubyGemsManager : PackageManager
         else
             cmd ~= "--system"; // Update RubyGems itself
         
-        Logger.info("Updating gems with RubyGems");
+        structuredLog.info("updating_gems_with_rubygems").emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, projectRoot);
         
@@ -159,7 +159,7 @@ class RubyGemsManager : PackageManager
         
         string[] cmd = ["gem", "build", gemspecFile];
         
-        Logger.info("Building gem from " ~ gemspecFile);
+        structuredLog.info("building_gem_from_").field("detail", "Building gem from " ~ gemspecFile).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, dirName(gemspecFile));
         
@@ -185,7 +185,7 @@ class RubyGemsManager : PackageManager
         
         string[] cmd = ["gem", "install", "--local", gemFile];
         
-        Logger.info("Installing local gem: " ~ gemFile);
+        structuredLog.info("installing_local_gem_").field("detail", "Installing local gem: " ~ gemFile).emit();
         
         auto res = execute(cmd);
         
@@ -224,7 +224,7 @@ class RubyGemsManager : PackageManager
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse Gemfile: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_gemfile_").field("detail", "Failed to parse Gemfile: " ~ e.msg).emit();
         }
         
         return gems;

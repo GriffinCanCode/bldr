@@ -10,7 +10,7 @@ import infrastructure.analysis.detection.detector;
 import infrastructure.analysis.detection.templates;
 import infrastructure.analysis.detection.enhanced;
 import infrastructure.analysis.detection.generator;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import frontend.cli.control.terminal;
 import frontend.cli.display.format;
 

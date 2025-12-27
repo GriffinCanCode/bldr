@@ -10,7 +10,7 @@ import std.regex;
 import std.conv;
 import languages.dotnet.fsharp.tooling.analyzers.base;
 import languages.dotnet.fsharp.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Compiler-based analyzer (uses fsc warnings)
 class CompilerAnalyzer : FSharpAnalyzer_

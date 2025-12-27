@@ -21,7 +21,7 @@ import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionId, ActionType;
 
 /// Java build handler - comprehensive and modular with action-level caching
@@ -42,7 +42,7 @@ class JavaHandler : BaseLanguageHandler
         // Validate Java installation
         if (!JavaToolDetection.isJavacAvailable())
         {
-            Logger.error("Java compiler (javac) not found. Please install JDK.");
+            structuredLog.error("java_compiler_javac_not_found_please_ins").emit();
             return;
         }
         
@@ -50,8 +50,8 @@ class JavaHandler : BaseLanguageHandler
         auto javaVersion = JavaInfo.getVersion();
         if (!JavaInfo.meetsMinimumVersion(javaVersion, javaConfig.sourceVersion))
         {
-            Logger.warning("Java version " ~ javaVersion.toString() ~ 
-                          " may not support source version " ~ javaConfig.sourceVersion.toString());
+            structuredLog.warning("java_version_").field("detail", "Java version " ~ javaVersion.toString() ~ 
+                          " may not support source version " ~ javaConfig.sourceVersion.toString()).emit();
         }
     }
     
@@ -109,7 +109,7 @@ class JavaHandler : BaseLanguageHandler
             bool useWrapper = BuildToolFactory.shouldUseWrapper(JavaBuildTool.Maven, config.root);
             if (!MavenOps.installDependencies(config.root, useWrapper))
             {
-                Logger.warning("Maven dependency installation had issues, continuing anyway");
+                structuredLog.warning("maven_dependency_installation_had_issues").emit();
             }
         }
         else if (javaConfig.gradle.autoInstall && JavaToolDetection.hasBuildGradle(config.root))
@@ -117,27 +117,27 @@ class JavaHandler : BaseLanguageHandler
             bool useWrapper = BuildToolFactory.shouldUseWrapper(JavaBuildTool.Gradle, config.root);
             if (!GradleOps.installDependencies(config.root, useWrapper))
             {
-                Logger.warning("Gradle dependency resolution had issues, continuing anyway");
+                structuredLog.warning("gradle_dependency_resolution_had_issues_").emit();
             }
         }
         
         // Auto-format if configured
         if (javaConfig.formatter.autoFormat && javaConfig.formatter.formatter != languages.jvm.java.core.config.JavaFormatterType.None)
         {
-            Logger.info("Auto-formatting code");
+            structuredLog.info("autoformatting_code").emit();
             auto formatter = JavaFormatterFactory.create(javaConfig.formatter.formatter, config.root);
             auto formatResult = formatter.format(target.sources, javaConfig.formatter, config.root, javaConfig.formatter.checkOnly);
             
             if (!formatResult.success)
             {
-                Logger.warning("Formatting failed, continuing anyway");
+                structuredLog.warning("formatting_failed_continuing_anyway").emit();
             }
         }
         
         // Run static analysis if configured
         if (javaConfig.analysis.enabled && javaConfig.analysis.analyzer != JavaAnalyzer.None)
         {
-            Logger.info("Running static analysis");
+            structuredLog.info("running_static_analysis").emit();
             auto analyzer = AnalyzerFactory.create(javaConfig.analysis.analyzer, config.root);
             auto analysisResult = analyzer.analyze(target.sources, javaConfig.analysis, config.root);
             
@@ -149,10 +149,10 @@ class JavaHandler : BaseLanguageHandler
             
             if (analysisResult.hasWarnings())
             {
-                Logger.warning("Static analysis warnings:");
+                structuredLog.warning("static_analysis_warnings").emit();
                 foreach (warning; analysisResult.warnings)
                 {
-                    Logger.warning("  " ~ warning);
+                    structuredLog.warning("__").field("detail", "  " ~ warning).emit();
                 }
                 
                 if (javaConfig.analysis.failOnWarnings)
@@ -214,7 +214,7 @@ class JavaHandler : BaseLanguageHandler
     {
         LanguageBuildResult result;
         
-        Logger.info("Running Java tests");
+        structuredLog.info("running_java_tests").emit();
         
         // Use build tool for testing if available
         if (javaConfig.buildTool == JavaBuildTool.Maven && JavaToolDetection.hasPomXml(config.root))
@@ -323,21 +323,21 @@ class JavaHandler : BaseLanguageHandler
     {
         LanguageBuildResult result;
         
-        Logger.info("Running JUnit tests directly");
+        structuredLog.info("running_junit_tests_directly").emit();
         
         // Import JUnit test utilities
         import languages.jvm.java.tooling.testers.junit;
         
         // Detect JUnit version
         auto junitVersion = detectJUnitVersion(config.root);
-        Logger.info("Detected " ~ (junitVersion == JUnitVersion.JUnit5 ? "JUnit 5" : "JUnit 4"));
+        structuredLog.info("detected_").field("detail", "Detected " ~ (junitVersion == JUnitVersion.JUnit5 ? "JUnit 5" : "JUnit 4")).emit();
         
         // Try to build classpath
         string classpath = buildClasspath(config.root, javaConfig);
         
         if (classpath.empty)
         {
-            Logger.warning("Could not build classpath, tests may fail");
+            structuredLog.warning("could_not_build_classpath_tests_may_fail").emit();
             classpath = buildPath(config.root, "target", "test-classes") ~ ":" ~ 
                        buildPath(config.root, "target", "classes");
         }
@@ -365,7 +365,7 @@ class JavaHandler : BaseLanguageHandler
         
         if (testClasses.empty)
         {
-            Logger.warning("No test classes found, marking as success");
+            structuredLog.warning("no_test_classes_found_marking_as_success").emit();
             result.success = true;
             result.outputHash = FastHash.hashStrings(target.sources);
             return result;
@@ -377,19 +377,19 @@ class JavaHandler : BaseLanguageHandler
         if (!testResult.success)
         {
             result.error = testResult.error;
-            Logger.error("Tests failed");
-            Logger.error("  Error: " ~ testResult.error);
+            structuredLog.error("tests_failed").emit();
+            structuredLog.error("__error_").field("detail", "  Error: " ~ testResult.error).emit();
             
             if (testResult.failed > 0)
             {
-                Logger.error(testResult.failed.to!string ~ " test(s) failed, " ~ 
-                           testResult.passed.to!string ~ " passed");
+                structuredLog.error("log_event").field("message", testResult.failed.to!string ~ " test(s) failed, " ~ 
+                           testResult.passed.to!string ~ " passed").emit();
             }
             
             return result;
         }
         
-        Logger.info("All tests passed: " ~ testResult.passed.to!string ~ " tests");
+        structuredLog.info("all_tests_passed_").field("detail", "All tests passed: " ~ testResult.passed.to!string ~ " tests").emit();
         
         result.success = true;
         result.outputHash = FastHash.hashStrings(target.sources);
@@ -453,7 +453,7 @@ class JavaHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to analyze imports in " ~ source);
+                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source).emit();
             }
         }
         

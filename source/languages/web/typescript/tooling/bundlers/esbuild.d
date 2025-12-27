@@ -12,7 +12,7 @@ import std.array;
 import std.conv;
 import std.string;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// esbuild bundler - TypeScript optimized
 class TSESBuildBundler : TSBundler
@@ -47,7 +47,7 @@ class TSESBuildBundler : TSBundler
                 }
                 else
                 {
-                    Logger.warning("Type checking failed, but continuing with esbuild compilation");
+                    structuredLog.warning("type_checking_failed_but_continuing_with").emit();
                     result.hadTypeErrors = true;
                     result.typeErrors = checkResult.errors;
                 }
@@ -180,14 +180,14 @@ class TSESBuildBundler : TSBundler
         // Resolve extensions
         cmd ~= "--resolve-extensions=.ts,.tsx,.js,.jsx,.json";
         
-        Logger.debugLog("Bundling with esbuild: " ~ cmd.join(" "));
+        structuredLog.debug_("bundling_with_esbuild_").field("detail", "Bundling with esbuild: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, workspace.root);
         
         if (res.status != 0)
         {
-            Logger.error("esbuild bundling failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("esbuild_bundling_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -230,14 +230,14 @@ class TSESBuildBundler : TSBundler
             cmd ~= "--loader:.ts=ts";
             cmd ~= "--loader:.tsx=tsx";
             
-            Logger.debugLog("Compiling with esbuild: " ~ cmd.join(" "));
+            structuredLog.debug_("compiling_with_esbuild_").field("detail", "Compiling with esbuild: " ~ cmd.join(" ")).emit();
             
             auto res = execute(cmd, null, Config.none, size_t.max, workspaceRoot);
             
             if (res.status != 0)
             {
-                Logger.error("esbuild compilation failed for " ~ source);
-                Logger.error("  Output: " ~ res.output);
+                structuredLog.error("esbuild_compilation_failed_for_").field("detail", "esbuild compilation failed for " ~ source).emit();
+                structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
                 return [];
             }
             
@@ -253,7 +253,7 @@ class TSESBuildBundler : TSBundler
     {
         if (!TypeChecker.isTSCAvailable())
         {
-            Logger.warning("tsc not available, cannot generate declaration files");
+            structuredLog.warning("tsc_not_available_cannot_generate_declar").emit();
             return [];
         }
         
@@ -269,13 +269,13 @@ class TSESBuildBundler : TSBundler
         
         cmd ~= sources;
         
-        Logger.debugLog("Generating declarations with tsc: " ~ cmd.join(" "));
+        structuredLog.debug_("generating_declarations_with_tsc_").field("detail", "Generating declarations with tsc: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, workspaceRoot);
         
         if (res.status != 0)
         {
-            Logger.warning("Failed to generate declaration files: " ~ res.output);
+            structuredLog.warning("failed_to_generate_declaration_files_").field("detail", "Failed to generate declaration files: " ~ res.output).emit();
             return [];
         }
         

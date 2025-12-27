@@ -12,7 +12,7 @@ import languages.scripting.elixir.config;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Escript builder - standalone executables
 class EscriptBuilder : MixProjectBuilder
@@ -26,7 +26,7 @@ class EscriptBuilder : MixProjectBuilder
     {
         ElixirBuildResult result;
         
-        Logger.debugLog("Building escript");
+        structuredLog.debug_("building_escript").emit();
         
         string workDir = workspace.root;
         if (!sources.empty)
@@ -39,7 +39,7 @@ class EscriptBuilder : MixProjectBuilder
             return result;
         
         // Build escript
-        Logger.info("Creating escript executable");
+        structuredLog.info("creating_escript_executable").emit();
         
         auto cmd = ["mix", "escript.build"];
         auto res = execute(cmd, null, Config.none, size_t.max, workDir);
@@ -59,7 +59,7 @@ class EscriptBuilder : MixProjectBuilder
         {
             // result.escriptPath = escriptPath; // Property doesn't exist in ElixirBuildResult
             result.outputs ~= escriptPath;
-            Logger.info("Escript created: " ~ escriptPath);
+            structuredLog.info("escript_created_").field("detail", "Escript created: " ~ escriptPath).emit();
         }
         
         return result;

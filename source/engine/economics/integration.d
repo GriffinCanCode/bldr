@@ -13,7 +13,7 @@ import engine.graph : BuildGraph;
 import engine.distributed.coordinator.profile : ProfileGuidedScheduler, createProfiledScheduler;
 import infrastructure.config.schema.schema : EconomicsConfig;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Economic optimizer integration with build system
 /// Wraps optimizer with configuration and provides simple API
@@ -63,14 +63,17 @@ final class EconomicsIntegration
         
         auto loadResult = tracker.load();
         if (loadResult.isErr)
-            Logger.warning("Could not load execution history: " ~ loadResult.unwrapErr().message());
+            structuredLog.warning("execution_history_load_failed")
+                .field("error", loadResult.unwrapErr().message())
+                .emit();
         
         this.estimator = new CostEstimator(history);
         this.optimizer = new CostOptimizer(estimator, pricingConfig);
         
-        Logger.info("Economic optimizer initialized");
-        Logger.info("  Provider: " ~ pricingConfig.provider.name);
-        Logger.info("  Tier: " ~ pricingConfig.profile.tier.to!string);
+        structuredLog.info("economic_optimizer_initialized")
+            .field("provider", pricingConfig.provider.name)
+            .field("tier", pricingConfig.profile.tier.to!string)
+            .emit();
     }
     
     /// Check if economics is enabled
@@ -123,7 +126,7 @@ final class EconomicsIntegration
             return null;
         
         auto scheduler = createProfiledScheduler(graph, history);
-        Logger.debugLog("Created profile-guided scheduler with economic data");
+        structuredLog.debug_("profile_scheduler_created").emit();
         return scheduler;
     }
     
@@ -157,11 +160,23 @@ final class EconomicsIntegration
     {
         if (!enabled) return Ok!BuildError();
         
-        Logger.info("\n" ~ tracker.getSummary().format());
+        auto summary = tracker.getSummary();
+        structuredLog.info("build_cost_summary")
+            .field("total_cost", summary.totalCost)
+            .field("total_time_s", summary.totalTime.total!"seconds")
+            .field("executions", summary.executionCount)
+            .field("cache_hits", summary.cacheHits)
+            .field("cache_hit_rate_pct", summary.cacheHitRate() * 100)
+            .emit();
         
-        // Display worker startup savings if any
         if (workerSavings.warmExecutions > 0)
-            Logger.info("\n" ~ workerSavings.format());
+            structuredLog.info("worker_startup_savings")
+                .field("jvm_saved_ms", workerSavings.jvmSavedMs)
+                .field("go_saved_ms", workerSavings.goSavedMs)
+                .field("python_saved_ms", workerSavings.pythonSavedMs)
+                .field("warm_executions", workerSavings.warmExecutions)
+                .field("cold_fallbacks", workerSavings.coldFallbacks)
+                .emit();
         
         return tracker.save();
     }

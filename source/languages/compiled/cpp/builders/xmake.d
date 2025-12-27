@@ -15,7 +15,7 @@ import languages.compiled.cpp.builders.base;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Xmake build system builder
 class XmakeBuilder : BaseCppBuilder
@@ -40,7 +40,7 @@ class XmakeBuilder : BaseCppBuilder
             return result;
         }
         
-        Logger.info("Building with Xmake");
+        structuredLog.info("building_with_xmake").emit();
         
         // Find xmake.lua
         string xmakeFile = findXmakeFile(workspace.root);
@@ -81,7 +81,7 @@ class XmakeBuilder : BaseCppBuilder
         
         result.success = true;
         
-        Logger.info("Xmake build completed successfully");
+        structuredLog.info("xmake_build_completed_successfully").emit();
         
         return result;
     }
@@ -133,7 +133,7 @@ class XmakeBuilder : BaseCppBuilder
     {
         CppCompileResult result;
         
-        Logger.debugLog("Configuring Xmake");
+        structuredLog.debug_("configuring_xmake").emit();
         
         string[] cmd = ["xmake", "config"];
         
@@ -171,7 +171,7 @@ class XmakeBuilder : BaseCppBuilder
                 cmd ~= ["--toolchain=" ~ toolchain];
         }
         
-        Logger.debugLog("Running: " ~ cmd.join(" "));
+        structuredLog.debug_("running_").field("detail", "Running: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, projectDir);
         
@@ -189,7 +189,7 @@ class XmakeBuilder : BaseCppBuilder
     {
         CppCompileResult result;
         
-        Logger.debugLog("Building with Xmake");
+        structuredLog.debug_("building_with_xmake").emit();
         
         string[] cmd = ["xmake", "build"];
         
@@ -241,7 +241,7 @@ class XmakeBuilder : BaseCppBuilder
         }
         catch (Exception e)
         {
-            Logger.warning("Error searching for xmake output: " ~ e.msg);
+            structuredLog.warning("error_searching_for_xmake_output_").field("detail", "Error searching for xmake output: " ~ e.msg).emit();
         }
         
         return "";

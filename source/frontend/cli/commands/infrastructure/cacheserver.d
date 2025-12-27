@@ -6,7 +6,7 @@ import std.getopt;
 import engine.caching.distributed.remote.server : CacheServer;
 import engine.caching.distributed.remote.tls : TlsConfig;
 import engine.caching.distributed.remote.cdn : CdnConfig;
-import infrastructure.utils.logging.logger : Logger;
+import infrastructure.utils.logging : Logger, structuredLog;
 
 /// Cache server command
 /// Starts a remote cache server for distributed builds
@@ -46,18 +46,18 @@ struct CacheServerCommand
         
         immutable actualWorkers = workers == 0 ? totalCPUs * 2 : workers;
         
-        Logger.info("Starting Builder cache server...");
-        Logger.info("Host: " ~ host);
-        Logger.info("Port: " ~ port.to!string);
-        Logger.info("Workers: " ~ actualWorkers.to!string);
-        Logger.info("Queue size: " ~ queueSize.to!string);
-        Logger.info("Storage: " ~ storageDir);
-        Logger.info("Max size: " ~ formatBytes(maxSize));
+        structuredLog.info("starting_builder_cache_server").emit();
+        structuredLog.info("host_").field("detail", "Host: " ~ host).emit();
+        structuredLog.info("port_").field("detail", "Port: " ~ port.to!string).emit();
+        structuredLog.info("workers_").field("detail", "Workers: " ~ actualWorkers.to!string).emit();
+        structuredLog.info("queue_size_").field("detail", "Queue size: " ~ queueSize.to!string).emit();
+        structuredLog.info("storage_").field("detail", "Storage: " ~ storageDir).emit();
+        structuredLog.info("max_size_").field("detail", "Max size: " ~ formatBytes(maxSize)).emit();
         
         if (authToken.length > 0)
-            Logger.info("Authentication: enabled");
+            structuredLog.info("authentication_enabled").emit();
         else
-            Logger.info("Authentication: disabled (WARNING: Insecure for production)");
+            structuredLog.info("authentication_disabled_warning_insecure").emit();
         
         try
         {
@@ -91,12 +91,12 @@ struct CacheServerCommand
                 Thread.sleep(100.msecs);
             }
             
-            Logger.info("Shutdown signal received, stopping server...");
+            structuredLog.info("shutdown_signal_received_stopping_server").emit();
             server.stop();
         }
         catch (Exception e)
         {
-            Logger.error("Failed to start cache server: " ~ e.msg);
+            structuredLog.error("failed_to_start_cache_server_").field("detail", "Failed to start cache server: " ~ e.msg).emit();
             import core.stdc.stdlib : exit;
             exit(1);
         }

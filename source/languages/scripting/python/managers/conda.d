@@ -9,7 +9,7 @@ import std.conv;
 import languages.scripting.python.managers.base;
 import languages.scripting.python.tooling.detection : ToolDetection;
 alias PyTools = ToolDetection;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Conda package manager
 class CondaManager : PackageManager
@@ -26,7 +26,7 @@ class CondaManager : PackageManager
             return result;
         }
         
-        Logger.info("Installing conda environment from " ~ file);
+        structuredLog.info("installing_conda_environment_from_").field("detail", "Installing conda environment from " ~ file).emit();
         
         StopWatch sw;
         sw.start();
@@ -43,7 +43,7 @@ class CondaManager : PackageManager
         }
         
         result.success = true;
-        Logger.info("Conda environment created in %.2fs".format(result.timeSeconds));
+        structuredLog.info("conda_environment_created_in_2fsformatre").emit();
         
         return result;
     }
@@ -56,7 +56,7 @@ class CondaManager : PackageManager
         
         string[] cmd = ["conda", "install", "-y"] ~ packages;
         
-        Logger.info("Installing packages with conda: " ~ packages.join(", "));
+        structuredLog.info("installing_packages_with_conda_").field("detail", "Installing packages with conda: " ~ packages.join(", ")).emit();
         
         StopWatch sw;
         sw.start();
@@ -74,7 +74,7 @@ class CondaManager : PackageManager
         
         result.success = true;
         result.installedPackages = packages;
-        Logger.info("Packages installed in %.2fs".format(result.timeSeconds));
+        structuredLog.info("packages_installed_in_2fsformatresulttim").emit();
         
         return result;
     }

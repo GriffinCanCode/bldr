@@ -11,7 +11,7 @@ import languages.scripting.elixir.tooling.builders.mix;
 import languages.scripting.elixir.config;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Phoenix builder - web applications with asset compilation
 class PhoenixBuilder : MixProjectBuilder
@@ -25,7 +25,7 @@ class PhoenixBuilder : MixProjectBuilder
     {
         ElixirBuildResult result;
         
-        Logger.debugLog("Building Phoenix application");
+        structuredLog.debug_("building_phoenix_application").emit();
         
         string workDir = workspace.root;
         if (!sources.empty)
@@ -40,7 +40,7 @@ class PhoenixBuilder : MixProjectBuilder
         // Compile assets if configured
         if (config.phoenix.enabled && config.phoenix.compileAssets)
         {
-            Logger.info("Compiling Phoenix assets");
+            structuredLog.info("compiling_phoenix_assets").emit();
             
             bool assetsCompiled = false;
             
@@ -69,7 +69,7 @@ class PhoenixBuilder : MixProjectBuilder
         // Digest assets for production
         if (config.phoenix.digestAssets && config.env == MixEnv.Prod)
         {
-            Logger.info("Digesting Phoenix assets");
+            structuredLog.info("digesting_phoenix_assets").emit();
             
             auto cmd = ["mix", "phx.digest"];
             auto res = execute(cmd, null, Config.none, size_t.max, workDir);
@@ -83,7 +83,7 @@ class PhoenixBuilder : MixProjectBuilder
         // Run migrations if configured
         if (config.phoenix.runMigrations && config.phoenix.ecto)
         {
-            Logger.info("Running Ecto migrations");
+            structuredLog.info("running_ecto_migrations").emit();
             
             auto cmd = ["mix", "ecto.migrate"];
             auto res = execute(cmd, null, Config.none, size_t.max, workDir);

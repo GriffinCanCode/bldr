@@ -4,7 +4,7 @@ import languages.scripting.perl.core.config;
 import infrastructure.config.schema.schema : LanguageBuildResult;
 import engine.caching.actions.action;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import std.range : empty;
 import std.array : join;
 
@@ -65,7 +65,7 @@ final class PerlQualityService : IPerlQualityService
             // Check cache
             if (cache.isCached(actionId, [source], metadata))
             {
-                Logger.debugLog("  [Cached] Syntax check: " ~ source);
+                structuredLog.debug_("__cached_syntax_check_").field("detail", "  [Cached] Syntax check: " ~ source).emit();
                 continue;
             }
             
@@ -125,7 +125,7 @@ final class PerlQualityService : IPerlQualityService
             return;
         }
         
-        Logger.info("Formatting Perl code with perltidy");
+        structuredLog.info("formatting_perl_code_with_perltidy").emit();
         
         foreach (source; sources)
         {
@@ -145,7 +145,7 @@ final class PerlQualityService : IPerlQualityService
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to format " ~ source ~ ": " ~ e.msg);
+                structuredLog.warning("failed_to_format_").field("detail", "Failed to format " ~ source ~ ": " ~ e.msg).emit();
             }
         }
     }
@@ -178,7 +178,7 @@ final class PerlQualityService : IPerlQualityService
             return result;
         }
         
-        Logger.info("Linting Perl code with Perl::Critic");
+        structuredLog.info("linting_perl_code_with_perlcritic").emit();
         
         // Build cache metadata
         string[string] metadata;
@@ -201,7 +201,7 @@ final class PerlQualityService : IPerlQualityService
         // Check cache
         if (cache.isCached(actionId, sources, metadata))
         {
-            Logger.info("  [Cached] Perl::Critic analysis");
+            structuredLog.info("__cached_perlcritic_analysis").emit();
             result.success = true;
             return result;
         }

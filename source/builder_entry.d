@@ -14,7 +14,7 @@ import infrastructure.telemetry;
 import infrastructure.config.parsing.parser;
 import infrastructure.config.schema.schema : EconomicsConfig;
 import infrastructure.analysis.inference.analyzer;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.simd;
 import infrastructure.errors;
 import frontend.cli;
@@ -150,13 +150,13 @@ int runBuilder(string[] args)
                         if (optimize.length > 0)
                             econConfig.optimize = optimize;
                         
-                        Logger.info("Cost optimization enabled");
+                        structuredLog.info("cost_optimization_enabled").emit();
                         if (budget != float.infinity)
-                            Logger.info("  Budget constraint: $" ~ budget.to!string);
+                            structuredLog.info("__budget_constraint_").field("detail", "  Budget constraint: $" ~ budget.to!string).emit();
                         if (timeLimit != float.infinity)
-                            Logger.info("  Time limit: " ~ timeLimit.to!string ~ "s");
+                            structuredLog.info("__time_limit_").field("detail", "  Time limit: " ~ timeLimit.to!string ~ "s").emit();
                         if (optimize.length > 0)
-                            Logger.info("  Optimization mode: " ~ optimize);
+                            structuredLog.info("__optimization_mode_").field("detail", "  Optimization mode: " ~ optimize).emit();
                     }
                     
                     buildCommand(target, showGraph, mode, remoteExecution, econConfig);
@@ -193,10 +193,10 @@ int runBuilder(string[] args)
             case "query":
                 if (args.length < 3)
                 {
-                    Logger.error("Query expression required");
-                    Logger.info("Usage: bldr query '<expression>' [--format=pretty|list|json|dot]");
-                    Logger.info("Example: bldr query 'deps(//...)'");
-                    Logger.info("         bldr query 'rdeps(//lib:utils)' --format=json");
+                    structuredLog.error("query_expression_required").emit();
+                    structuredLog.info("usage_bldr_query_expression_formatpretty").emit();
+                    structuredLog.info("example_bldr_query_deps").emit();
+                    structuredLog.info("_________bldr_query_rdepslibutils_format").emit();
                 }
                 else
                 {
@@ -247,13 +247,13 @@ int runBuilder(string[] args)
                 writeln("High-performance build system for mixed-language monorepos");
                 break;
             default:
-                Logger.error("Unknown command: " ~ command);
+                structuredLog.error("unknown_command_").field("detail", "Unknown command: " ~ command).emit();
                 HelpCommand.execute();
         }
     }
     catch (Exception e)
     {
-        Logger.error("Build failed: " ~ e.msg);
+        structuredLog.error("build_failed_").field("detail", "Build failed: " ~ e.msg).emit();
         return 1;
     }
     return 0;
@@ -269,26 +269,26 @@ void buildCommand(
 ) @system
 {
     
-    Logger.info("Starting build...");
+    structuredLog.info("starting_build").emit();
     
     if (remoteExecution)
     {
-        Logger.debugLog("Remote execution enabled");
+        structuredLog.debug_("remote_execution_enabled").emit();
     }
     
     // Parse configuration with error handling
     auto configResult = ConfigParser.parseWorkspace(".");
     if (configResult.isErr)
     {
-        Logger.error("Failed to parse workspace configuration");
+        structuredLog.error("failed_to_parse_workspace_configuration").emit();
         import infrastructure.errors.formatting.format : format;
-        Logger.error(format(configResult.unwrapErr()));
+        structuredLog.error("log_event").field("message", format(configResult.unwrapErr())).emit();
         import core.stdc.stdlib : exit;
         exit(1);
     }
     
     auto config = configResult.unwrap();
-    Logger.info("Found " ~ config.targets.length.to!string ~ " targets");
+    structuredLog.info("found_").field("detail", "Found " ~ config.targets.length.to!string ~ " targets").emit();
     
     // Configure economics if provided
     if (econConfig.enabled)
@@ -328,9 +328,9 @@ void buildCommand(
     auto graphResult = services.analyzer.analyze(target);
     if (graphResult.isErr)
     {
-        Logger.error("Failed to analyze dependencies");
+        structuredLog.error("failed_to_analyze_dependencies").emit();
         import infrastructure.errors.formatting.format : format;
-        Logger.error(format(graphResult.unwrapErr()));
+        structuredLog.error("log_event").field("message", format(graphResult.unwrapErr())).emit();
         import core.stdc.stdlib : exit;
         exit(1);
     }
@@ -338,7 +338,7 @@ void buildCommand(
     
     if (showGraph)
     {
-        Logger.info("\nDependency Graph:");
+        structuredLog.info("ndependency_graph").emit();
         graph.print();
     }
     
@@ -352,9 +352,9 @@ void buildCommand(
         auto planResult = services.economics.computePlan(graph, econConfig);
         if (planResult.isErr)
         {
-            Logger.warning("Failed to compute optimal plan: " ~ 
-                         planResult.unwrapErr().message());
-            Logger.debugLog("Falling back to default strategy");
+            structuredLog.warning("failed_to_compute_optimal_plan_").field("detail", "Failed to compute optimal plan: " ~ 
+                         planResult.unwrapErr().message()).emit();
+            structuredLog.debug_("falling_back_to_default_strategy").emit();
         }
         else
         {
@@ -368,33 +368,33 @@ void buildCommand(
             {
                 case ExecutionStrategy.Local:
                     maxParallelism = plan.strategy.cores;
-                    Logger.debugLog("Using local execution with " ~ maxParallelism.to!string ~ " cores");
+                    structuredLog.debug_("using_local_execution_with_").field("detail", "Using local execution with " ~ maxParallelism.to!string ~ " cores").emit();
                     break;
                     
                 case ExecutionStrategy.Cached:
                     // Cache-optimized: minimal parallel overhead
                     maxParallelism = 4;
-                    Logger.debugLog("Using cache-optimized execution");
+                    structuredLog.debug_("using_cacheoptimized_execution").emit();
                     break;
                     
                 case ExecutionStrategy.Distributed:
                     maxParallelism = plan.strategy.workers * plan.strategy.cores;
                     useWorkStealing = true;  // Better for distributed workloads
                     useRemoteExecution = true;
-                    Logger.debugLog("Using distributed execution: " ~ 
+                    structuredLog.debug_("using_distributed_execution_").field("detail", "Using distributed execution: " ~ 
                               plan.strategy.workers.to!string ~ " workers × " ~
                               plan.strategy.cores.to!string ~ " cores = " ~
-                              maxParallelism.to!string ~ " total cores");
+                              maxParallelism.to!string ~ " total cores").emit();
                     break;
                     
                 case ExecutionStrategy.Premium:
                     maxParallelism = plan.strategy.workers * plan.strategy.cores;
                     useWorkStealing = true;
                     useRemoteExecution = true;
-                    Logger.debugLog("Using premium execution: " ~ 
+                    structuredLog.debug_("using_premium_execution_").field("detail", "Using premium execution: " ~ 
                               plan.strategy.workers.to!string ~ " premium workers × " ~
                               plan.strategy.cores.to!string ~ " cores = " ~
-                              maxParallelism.to!string ~ " total cores");
+                              maxParallelism.to!string ~ " total cores").emit();
                     break;
             }
         }
@@ -417,19 +417,19 @@ void buildCommand(
         auto shutdownResult = services.economics.shutdown();
         if (shutdownResult.isErr)
         {
-            Logger.warning("Failed to save cost history: " ~
-                         shutdownResult.unwrapErr().message());
+            structuredLog.warning("failed_to_save_cost_history_").field("detail", "Failed to save cost history: " ~
+                         shutdownResult.unwrapErr().message()).emit();
         }
     }
     
     // Report final status
     if (success)
     {
-        Logger.success("Build completed successfully!");
+        structuredLog.info("build_completed_successfully").emit();
     }
     else
     {
-        Logger.error("Build failed!");
+        structuredLog.error("build_failed").emit();
         import core.stdc.stdlib : exit;
         exit(1);
     }
@@ -454,7 +454,7 @@ void buildCommand(
 /// - Hardcoded paths ensure no accidental deletion of user data
 void cleanCommand() @system
 {
-    Logger.info("Cleaning build cache...");
+    structuredLog.info("cleaning_build_cache").emit();
     
     import std.file : rmdirRecurse, exists;
     
@@ -464,7 +464,7 @@ void cleanCommand() @system
     if (exists("bin"))
         rmdirRecurse("bin");
     
-    Logger.success("Clean completed!");
+    structuredLog.info("clean_completed").emit();
 }
 
 /// Graph command handler - visualizes dependency graph (refactored with DI)
@@ -473,7 +473,7 @@ void graphCommand(in string target) @system
     import core.stdc.signal : signal, SIGSEGV, SIGABRT;
     import core.stdc.stdlib : exit;
     
-    Logger.info("Analyzing dependency graph...");
+    structuredLog.info("analyzing_dependency_graph").emit();
     
     try
     {
@@ -481,9 +481,9 @@ void graphCommand(in string target) @system
         auto configResult = ConfigParser.parseWorkspace(".");
         if (configResult.isErr)
         {
-            Logger.error("Failed to parse workspace configuration");
+            structuredLog.error("failed_to_parse_workspace_configuration").emit();
             import infrastructure.errors.formatting.format : format;
-            Logger.error(format(configResult.unwrapErr()));
+            structuredLog.error("log_event").field("message", format(configResult.unwrapErr())).emit();
             exit(1);
         }
         
@@ -492,7 +492,7 @@ void graphCommand(in string target) @system
         // Validate configuration has targets
         if (config.targets.length == 0)
         {
-            Logger.warning("No targets found in workspace configuration");
+            structuredLog.warning("no_targets_found_in_workspace_configurat").emit();
             return;
         }
         
@@ -505,7 +505,7 @@ void graphCommand(in string target) @system
         auto graphResult = services.analyzer.analyze(target);
         if (graphResult.isErr)
         {
-            Logger.error("Failed to analyze dependencies: " ~ format(graphResult.unwrapErr()));
+            structuredLog.error("failed_to_analyze_dependencies_").field("detail", "Failed to analyze dependencies: " ~ format(graphResult.unwrapErr())).emit();
             import core.stdc.stdlib : exit;
             exit(1);
         }
@@ -516,20 +516,20 @@ void graphCommand(in string target) @system
     }
     catch (Exception e)
     {
-        Logger.error("Fatal error during graph analysis: " ~ e.msg);
-        Logger.error("Stack trace:");
-        Logger.error(e.toString());
-        Logger.error("\nThis is a bug in Builder. Please report it at:");
-        Logger.error("https://github.com/GriffinCanCode/Builder/issues");
+        structuredLog.error("fatal_error_during_graph_analysis_").field("detail", "Fatal error during graph analysis: " ~ e.msg).emit();
+        structuredLog.error("stack_trace").emit();
+        structuredLog.error("log_event").field("message", e.toString()).emit();
+        structuredLog.error("nthis_is_a_bug_in_builder_please_report_").emit();
+        structuredLog.error("httpsgithubcomgriffincancodebuilderissue").emit();
         exit(1);
     }
     catch (Error e)
     {
-        Logger.error("Critical error (segfault/assertion failure): " ~ e.msg);
-        Logger.error("Stack trace:");
-        Logger.error(e.toString());
-        Logger.error("\nThis is a critical bug in Builder. Please report it at:");
-        Logger.error("https://github.com/GriffinCanCode/Builder/issues");
+        structuredLog.error("critical_error_segfaultassertion_failure").field("detail", "Critical error (segfault/assertion failure): " ~ e.msg).emit();
+        structuredLog.error("stack_trace").emit();
+        structuredLog.error("log_event").field("message", e.toString()).emit();
+        structuredLog.error("nthis_is_a_critical_bug_in_builder_pleas").emit();
+        structuredLog.error("httpsgithubcomgriffincancodebuilderissue").emit();
         exit(139); // SIGSEGV exit code
     }
 }
@@ -540,13 +540,13 @@ void resumeCommand(in string modeStr) @system
     import engine.runtime.recovery.checkpoint : CheckpointManager;
     import engine.runtime.recovery.resume : ResumePlanner, ResumeConfig;
     
-    Logger.info("Checking for build checkpoint...");
+    structuredLog.info("checking_for_build_checkpoint").emit();
     
     auto checkpointManager = new CheckpointManager(".", true);
     
     if (!checkpointManager.exists())
     {
-        Logger.error("No checkpoint found. Run 'bldr build' first.");
+        structuredLog.error("no_checkpoint_found_run_bldr_build_first").emit();
         import core.stdc.stdlib : exit;
         exit(1);
     }
@@ -554,22 +554,22 @@ void resumeCommand(in string modeStr) @system
     auto checkpointResult = checkpointManager.load();
     if (checkpointResult.isErr)
     {
-        Logger.error("Failed to load checkpoint: " ~ checkpointResult.unwrapErr());
+        structuredLog.error("failed_to_load_checkpoint_").field("detail", "Failed to load checkpoint: " ~ checkpointResult.unwrapErr()).emit();
         import core.stdc.stdlib : exit;
         exit(1);
     }
     
     auto checkpoint = checkpointResult.unwrap();
-    Logger.info("Found checkpoint from " ~ checkpoint.timestamp.toSimpleString());
-    Logger.info("Progress: " ~ checkpoint.completedTargets.to!string ~ "/" ~ 
+    structuredLog.info("found_checkpoint_from_").field("detail", "Found checkpoint from " ~ checkpoint.timestamp.toSimpleString()).emit();
+    structuredLog.info("progress_").field("detail", "Progress: " ~ checkpoint.completedTargets.to!string ~ "/" ~ 
                checkpoint.totalTargets.to!string ~ " targets (" ~ 
-               checkpoint.completion().to!string[0..min(5, checkpoint.completion().to!string.length)] ~ "%)");
+               checkpoint.completion().to!string[0..min(5, checkpoint.completion().to!string.length)] ~ "%)").emit();
     
     if (checkpoint.failedTargets > 0)
     {
-        Logger.info("Failed targets:");
+        structuredLog.info("failed_targets").emit();
         foreach (target; checkpoint.failedTargetIds)
-            Logger.error("  - " ~ target);
+            structuredLog.error("___").field("detail", "  - " ~ target).emit();
     }
     
     writeln();
@@ -578,9 +578,9 @@ void resumeCommand(in string modeStr) @system
     auto configResult = ConfigParser.parseWorkspace(".");
     if (configResult.isErr)
     {
-        Logger.error("Failed to parse workspace configuration");
+        structuredLog.error("failed_to_parse_workspace_configuration").emit();
         import infrastructure.errors.formatting.format : format;
-        Logger.error(format(configResult.unwrapErr()));
+        structuredLog.error("log_event").field("message", format(configResult.unwrapErr())).emit();
         import core.stdc.stdlib : exit;
         exit(1);
     }
@@ -601,7 +601,7 @@ void resumeCommand(in string modeStr) @system
         auto graphResult = services.analyzer.analyze("");
         if (graphResult.isErr)
         {
-            Logger.error("Failed to analyze dependencies: " ~ format(graphResult.unwrapErr()));
+            structuredLog.error("failed_to_analyze_dependencies_").field("detail", "Failed to analyze dependencies: " ~ format(graphResult.unwrapErr())).emit();
             import core.stdc.stdlib : exit;
             exit(1);
         }
@@ -610,12 +610,12 @@ void resumeCommand(in string modeStr) @system
     // Validate checkpoint
     if (!checkpoint.isValid(graph))
     {
-        Logger.error("Checkpoint invalid for current project state. Run 'bldr clean' and rebuild.");
+        structuredLog.error("checkpoint_invalid_for_current_project_s").emit();
         import core.stdc.stdlib : exit;
         exit(1);
     }
     
-    Logger.info("Resuming build...");
+    structuredLog.info("resuming_build").emit();
     
     // Execute build with modern service-based architecture
     auto engine = services.createEngine(graph);
@@ -628,7 +628,7 @@ void resumeCommand(in string modeStr) @system
     // Cleanup config cache
     ConfigParser.closeConfigIndex();
     
-    Logger.success("Build resumed and completed successfully!");
+    structuredLog.info("build_resumed_and_completed_successfully").emit();
 }
 
 /// Install VS Code extension command

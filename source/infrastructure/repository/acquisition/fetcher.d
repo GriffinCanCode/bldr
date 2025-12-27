@@ -7,7 +7,7 @@ import std.string : endsWith, startsWith, format;
 import std.datetime : Clock;
 import infrastructure.repository.core.types;
 import infrastructure.repository.acquisition.verifier;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Repository fetcher - downloads and extracts repositories
@@ -29,7 +29,7 @@ final class RepositoryFetcher
         if (validationResult.isErr)
             return Result!(string, RepositoryError).err(validationResult.unwrapErr());
         
-        Logger.info("Fetching repository: " ~ rule.name);
+        structuredLog.info("fetching_repository_").field("detail", "Fetching repository: " ~ rule.name).emit();
         
         final switch (rule.kind)
         {
@@ -51,7 +51,7 @@ final class RepositoryFetcher
         // If already cached, return it
         if (exists(targetDir))
         {
-            Logger.debugLog("Repository already cached: " ~ rule.name);
+            structuredLog.debug_("repository_already_cached_").field("detail", "Repository already cached: " ~ rule.name).emit();
             return Result!(string, RepositoryError).ok(targetDir);
         }
         
@@ -68,7 +68,7 @@ final class RepositoryFetcher
         if (verifyResult.isErr)
             return Result!(string, RepositoryError).err(verifyResult.unwrapErr());
         
-        Logger.success("Downloaded and verified: " ~ rule.name);
+        structuredLog.info("downloaded_and_verified_").field("detail", "Downloaded and verified: " ~ rule.name).emit();
         
         // Extract archive
         mkdirRecurse(targetDir);
@@ -76,7 +76,7 @@ final class RepositoryFetcher
         if (extractResult.isErr)
             return Result!(string, RepositoryError).err(extractResult.unwrapErr());
         
-        Logger.success("Extracted repository: " ~ rule.name);
+        structuredLog.info("extracted_repository_").field("detail", "Extracted repository: " ~ rule.name).emit();
         
         return Result!(string, RepositoryError).ok(targetDir);
     }
@@ -92,7 +92,7 @@ final class RepositoryFetcher
         {
             try
             {
-                Logger.info("Downloading " ~ url ~ " (attempt " ~ (attempt + 1).to!string ~ ")");
+                structuredLog.info("downloading_").field("detail", "Downloading " ~ url ~ " (attempt " ~ (attempt + 1).to!string ~ ")").emit();
                 
                 // Use std.net.curl for HTTP downloads
                 download(url, outputPath);
@@ -102,7 +102,7 @@ final class RepositoryFetcher
             }
             catch (CurlException e)
             {
-                Logger.warning("Download failed: " ~ e.msg);
+                structuredLog.warning("download_failed_").field("detail", "Download failed: " ~ e.msg).emit();
                 if (attempt < maxRetries - 1)
                 {
                     Thread.sleep(seconds(2 ^^ attempt)); // Exponential backoff
@@ -211,14 +211,14 @@ final class RepositoryFetcher
         // If already cached, return it
         if (exists(targetDir))
         {
-            Logger.debugLog("Repository already cached: " ~ rule.name);
+            structuredLog.debug_("repository_already_cached_").field("detail", "Repository already cached: " ~ rule.name).emit();
             return Result!(string, RepositoryError).ok(targetDir);
         }
         
         mkdirRecurse(dirName(targetDir));
         
         // Clone repository
-        Logger.info("Cloning Git repository: " ~ rule.url);
+        structuredLog.info("cloning_git_repository_").field("detail", "Cloning Git repository: " ~ rule.url).emit();
         
         string[] cloneCmd = ["git", "clone"];
         
@@ -241,7 +241,7 @@ final class RepositoryFetcher
                 new RepositoryError("Failed to clone Git repository: " ~ result.output));
         }
         
-        Logger.success("Cloned Git repository: " ~ rule.name);
+        structuredLog.info("cloned_git_repository_").field("detail", "Cloned Git repository: " ~ rule.name).emit();
         
         return Result!(string, RepositoryError).ok(targetDir);
     }
@@ -263,7 +263,7 @@ final class RepositoryFetcher
                 new RepositoryError("Local repository path is not a directory: " ~ rule.url));
         }
         
-        Logger.debugLog("Using local repository: " ~ rule.name ~ " at " ~ rule.url);
+        structuredLog.debug_("using_local_repository_").field("detail", "Using local repository: " ~ rule.name ~ " at " ~ rule.url).emit();
         
         return Result!(string, RepositoryError).ok(rule.url);
     }

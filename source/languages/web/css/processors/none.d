@@ -10,7 +10,7 @@ import languages.web.css.core.config;
 import languages.web.css.processors.base;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// No processing - pure CSS passthrough with optional minification
 class NoneProcessor : CSSProcessor

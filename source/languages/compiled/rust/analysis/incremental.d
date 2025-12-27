@@ -9,7 +9,7 @@ import std.string;
 import std.process;
 import std.json;
 import engine.compilation.incremental.analyzer;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Rust incremental dependency analyzer
@@ -70,7 +70,7 @@ final class RustDependencyAnalyzer : BaseDependencyAnalyzer
             {
                 if (isExternalDependency(dep))
                 {
-                    Logger.debugLog("  [External] " ~ dep);
+                    structuredLog.debug_("__external_").field("detail", "  [External] " ~ dep).emit();
                     continue;
                 }
                 
@@ -80,7 +80,7 @@ final class RustDependencyAnalyzer : BaseDependencyAnalyzer
                 if (!resolved.empty && exists(resolved))
                 {
                     resolvedDeps ~= buildNormalizedPath(resolved);
-                    Logger.debugLog("  [Resolved] " ~ dep ~ " -> " ~ resolved);
+                    structuredLog.debug_("__resolved_").field("detail", "  [Resolved] " ~ dep ~ " -> " ~ resolved).emit();
                 }
             }
             
@@ -140,12 +140,12 @@ final class RustDependencyAnalyzer : BaseDependencyAnalyzer
             {
                 cargoMetadata = parseJSON(result.output);
                 metadataLoaded = true;
-                Logger.debugLog("Loaded Cargo metadata");
+                structuredLog.debug_("loaded_cargo_metadata").emit();
             }
         }
         catch (Exception e)
         {
-            Logger.debugLog("Failed to load Cargo metadata: " ~ e.msg);
+            structuredLog.debug_("failed_to_load_cargo_metadata_").field("detail", "Failed to load Cargo metadata: " ~ e.msg).emit();
         }
     }
     
@@ -230,7 +230,7 @@ struct RustIncrementalHelper
             if (deps.canFind(normalizedChanged))
             {
                 affected ~= source;
-                Logger.debugLog("  " ~ source ~ " affected by " ~ changedFile);
+                structuredLog.debug_("__").field("detail", "  " ~ source ~ " affected by " ~ changedFile).emit();
             }
         }
         

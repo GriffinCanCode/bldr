@@ -12,7 +12,7 @@ import languages.jvm.kotlin.core.config;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache;
 
 /// Kotlin/JS builder for JavaScript output
@@ -29,7 +29,7 @@ class JSBuilder : KotlinBuilder
     {
         KotlinBuildResult result;
         
-        Logger.debugLog("Building Kotlin/JS");
+        structuredLog.debug_("building_kotlinjs").emit();
         
         // Determine output path
         string outputPath;
@@ -76,7 +76,7 @@ class JSBuilder : KotlinBuilder
         // Output
         cmd ~= ["-output", outputPath];
         
-        Logger.debugLog("Executing: " ~ cmd.join(" "));
+        structuredLog.debug_("executing_").field("detail", "Executing: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         

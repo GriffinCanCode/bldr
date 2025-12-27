@@ -7,7 +7,7 @@ import std.string;
 import core.time;
 import engine.runtime.watchmode.watch;
 import engine.runtime.shutdown.shutdown;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import frontend.cli.control.terminal;
 import frontend.cli.display.format;
 import infrastructure.errors;
@@ -49,7 +49,7 @@ struct WatchCommand
         // Validate debounce delay
         if (debounceMs < 10 || debounceMs > 10000)
         {
-            Logger.error("Debounce delay must be between 10ms and 10000ms");
+            structuredLog.error("debounce_delay_must_be_between_10ms_and_").emit();
             return;
         }
         
@@ -72,9 +72,9 @@ struct WatchCommand
         
         if (result.isErr)
         {
-            Logger.error("Watch mode failed to start");
+            structuredLog.error("watch_mode_failed_to_start").emit();
             import infrastructure.errors.formatting.format : format;
-            Logger.error(format(result.unwrapErr()));
+            structuredLog.error("log_event").field("message", format(result.unwrapErr())).emit();
             
             import core.stdc.stdlib : exit;
             exit(1);

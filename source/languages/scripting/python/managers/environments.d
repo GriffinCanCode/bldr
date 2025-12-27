@@ -10,7 +10,7 @@ import std.string;
 import languages.scripting.python.core.config;
 import languages.scripting.python.tooling.detection : ToolDetection;
 alias PyTools = ToolDetection;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Virtual environment manager - handles venv creation, activation, and management
 class VirtualEnv
@@ -71,7 +71,7 @@ class VirtualEnv
     /// Create virtual environment using venv module
     static bool createVenv(string path, string pythonCmd = "python3", bool systemSitePackages = false)
     {
-        Logger.info("Creating virtual environment at: " ~ path);
+        structuredLog.info("creating_virtual_environment_at_").field("detail", "Creating virtual environment at: " ~ path).emit();
         
         string[] cmd = [pythonCmd, "-m", "venv"];
         if (systemSitePackages)
@@ -82,12 +82,12 @@ class VirtualEnv
         
         if (res.status != 0)
         {
-            Logger.error("Failed to create venv");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("failed_to_create_venv").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
-        Logger.info("Virtual environment created successfully");
+        structuredLog.info("virtual_environment_created_successfully").emit();
         return true;
     }
     
@@ -115,11 +115,11 @@ class VirtualEnv
     {
         if (!PyTools.isCondaAvailable())
         {
-            Logger.error("conda not available");
+            structuredLog.error("conda_not_available").emit();
             return false;
         }
         
-        Logger.info("Creating conda environment: " ~ name);
+        structuredLog.info("creating_conda_environment_").field("detail", "Creating conda environment: " ~ name).emit();
         
         string[] cmd = ["conda", "create", "-n", name, "-y"];
         if (!pythonVersion.empty)
@@ -129,12 +129,12 @@ class VirtualEnv
         
         if (res.status != 0)
         {
-            Logger.error("Failed to create conda env");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("failed_to_create_conda_env").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
-        Logger.info("Conda environment created successfully");
+        structuredLog.info("conda_environment_created_successfully").emit();
         return true;
     }
     
@@ -178,7 +178,7 @@ class VirtualEnv
         // Check if venv already exists at configured path
         if (isVenv(venvPath))
         {
-            Logger.debugLog("Using existing virtual environment: " ~ venvPath);
+            structuredLog.debug_("using_existing_virtual_environment_").field("detail", "Using existing virtual environment: " ~ venvPath).emit();
             return venvPath;
         }
         
@@ -186,8 +186,8 @@ class VirtualEnv
         string existingVenv = findVenv(projectDir);
         if (!existingVenv.empty)
         {
-            Logger.info("Found existing virtual environment: " ~ existingVenv);
-            Logger.info("Using it instead of creating new one at: " ~ venvPath);
+            structuredLog.info("found_existing_virtual_environment_").field("detail", "Found existing virtual environment: " ~ existingVenv).emit();
+            structuredLog.info("using_it_instead_of_creating_new_one_at_").field("detail", "Using it instead of creating new one at: " ~ venvPath).emit();
             return existingVenv;
         }
         
@@ -227,7 +227,7 @@ class VirtualEnv
                     
                 case VirtualEnvConfig.Tool.Poetry:
                     // Poetry manages its own venvs
-                    Logger.debugLog("Poetry manages its own virtual environments");
+                    structuredLog.debug_("poetry_manages_its_own_virtual_environme").emit();
                     return "";
                     
                 case VirtualEnvConfig.Tool.None:
@@ -236,7 +236,7 @@ class VirtualEnv
         }
         else
         {
-            Logger.warning("Virtual environment not found and auto-create disabled: " ~ venvPath);
+            structuredLog.warning("virtual_environment_not_found_and_autocr").field("detail", "Virtual environment not found and auto-create disabled: " ~ venvPath).emit();
         }
         
         return "";
@@ -322,7 +322,7 @@ class VirtualEnv
             }
             catch (Exception e)
             {
-                Logger.debugLog("Failed to read pyproject.toml: " ~ e.msg);
+                structuredLog.debug_("failed_to_read_pyprojecttoml_").field("detail", "Failed to read pyproject.toml: " ~ e.msg).emit();
             }
         }
         
@@ -363,7 +363,7 @@ class VirtualEnv
     {
         if (!PyTools.isPoetryAvailable())
         {
-            Logger.error("poetry not available");
+            structuredLog.error("poetry_not_available").emit();
             return "";
         }
         
@@ -373,14 +373,14 @@ class VirtualEnv
             return existingVenv;
         
         // Create poetry venv
-        Logger.info("Creating poetry virtual environment");
+        structuredLog.info("creating_poetry_virtual_environment").emit();
         auto cmd = ["poetry", "install"];
         auto res = execute(cmd, null, Config.none, size_t.max, projectDir);
         
         if (res.status != 0)
         {
-            Logger.error("Failed to create poetry venv");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("failed_to_create_poetry_venv").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return "";
         }
         

@@ -14,7 +14,7 @@ import languages.jvm.scala.tooling.detection;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// GraalVM native-image builder for Scala
 class NativeImageBuilder : ScalaBuilder
@@ -31,7 +31,7 @@ class NativeImageBuilder : ScalaBuilder
     {
         ScalaBuildResult result;
         
-        Logger.debugLog("Building Scala native image: " ~ target.name);
+        structuredLog.debug_("building_scala_native_image_").field("detail", "Building Scala native image: " ~ target.name).emit();
         
         // Check if native-image is available
         if (!isNativeImageAvailable())
@@ -160,8 +160,8 @@ class NativeImageBuilder : ScalaBuilder
         string outputPath = buildPath(workspace.options.outputDir, imageName);
         cmd ~= ["-o", outputPath];
         
-        Logger.info("Building native image (this may take several minutes)...");
-        Logger.debugLog("Command: " ~ cmd.join(" "));
+        structuredLog.info("building_native_image_this_may_take_seve").emit();
+        structuredLog.debug_("command_").field("detail", "Command: " ~ cmd.join(" ")).emit();
         
         // Execute native-image (this can be slow)
         auto res = execute(cmd, null, Config.none, size_t.max, workspace.root);
@@ -172,7 +172,7 @@ class NativeImageBuilder : ScalaBuilder
             return "";
         }
         
-        Logger.info("Native image created successfully: " ~ outputPath);
+        structuredLog.info("native_image_created_successfully_").field("detail", "Native image created successfully: " ~ outputPath).emit();
         
         return outputPath;
     }

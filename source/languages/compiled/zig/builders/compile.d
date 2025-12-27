@@ -14,7 +14,7 @@ import languages.compiled.zig.tooling.tools;
 import languages.compiled.zig.builders.base;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action;
 
 /// Builder using direct zig compile commands with action-level caching
@@ -178,7 +178,7 @@ class CompileBuilder : ZigBuilder
         // Check if compilation is cached
         if (actionCache.isCached(actionId, sources, metadata) && exists(outputPath))
         {
-            Logger.debugLog("  [Cached] Zig compilation: " ~ outputPath);
+            structuredLog.debug_("__cached_zig_compilation_").field("detail", "  [Cached] Zig compilation: " ~ outputPath).emit();
             result.success = true;
             result.outputs = [outputPath];
             result.outputHash = FastHash.hashFile(outputPath);
@@ -291,7 +291,7 @@ class CompileBuilder : ZigBuilder
             version(OSX)
             {
                 // Skip -static on macOS as it's not supported with system libc
-                Logger.debugLog("Skipping -static flag on macOS (not supported with libc)");
+                structuredLog.debug_("skipping_static_flag_on_macos_not_suppor").emit();
             }
             else
             {
@@ -386,7 +386,7 @@ class CompileBuilder : ZigBuilder
         // Add target flags
         cmd ~= target.flags;
         
-        Logger.info("Compiling with zig: " ~ cmd.join(" "));
+        structuredLog.info("compiling_with_zig_").field("detail", "Compiling with zig: " ~ cmd.join(" ")).emit();
         
         // Prepare environment
         string[string] env;
@@ -526,7 +526,7 @@ class CompileBuilder : ZigBuilder
         // Check if compilation is cached
         if (actionCache.isCached(actionId, [source], metadata) && exists(objPath))
         {
-            Logger.debugLog("  [Cached] " ~ source);
+            structuredLog.debug_("__cached_").field("detail", "  [Cached] " ~ source).emit();
             result.success = true;
             result.outputs = [objPath];
             return result;
@@ -566,7 +566,7 @@ class CompileBuilder : ZigBuilder
         // Add C flags
         cmd ~= config.cflags.map!(f => "-cflags " ~ f).array;
         
-        Logger.debugLog("Compiling: " ~ source);
+        structuredLog.debug_("compiling_").field("detail", "Compiling: " ~ source).emit();
         
         // Prepare environment
         string[string] env;
@@ -652,7 +652,7 @@ class CompileBuilder : ZigBuilder
         // Check if linking is cached
         if (actionCache.isCached(actionId, objectFiles, metadata) && exists(outputPath))
         {
-            Logger.debugLog("  [Cached] Linking: " ~ outputPath);
+            structuredLog.debug_("__cached_linking_").field("detail", "  [Cached] Linking: " ~ outputPath).emit();
             result.success = true;
             return result;
         }
@@ -685,7 +685,7 @@ class CompileBuilder : ZigBuilder
         {
             version(OSX)
             {
-                Logger.debugLog("Skipping -static flag on macOS (not supported with libc)");
+                structuredLog.debug_("skipping_static_flag_on_macos_not_suppor").emit();
             }
             else
             {
@@ -711,7 +711,7 @@ class CompileBuilder : ZigBuilder
             cmd ~= "-l" ~ lib;
         }
         
-        Logger.debugLog("Linking: " ~ outputPath);
+        structuredLog.debug_("linking_").field("detail", "Linking: " ~ outputPath).emit();
         
         // Prepare environment
         string[string] env;
@@ -808,7 +808,7 @@ class CompileBuilder : ZigBuilder
             // Add source
             cmd ~= source;
             
-            Logger.info("Running tests: " ~ cmd.join(" "));
+            structuredLog.info("running_tests_").field("detail", "Running tests: " ~ cmd.join(" ")).emit();
             
             auto res = execute(cmd);
             
@@ -842,7 +842,7 @@ class CompileBuilder : ZigBuilder
         if (!compileResult.outputs.empty)
         {
             string exe = compileResult.outputs[0];
-            Logger.info("Running: " ~ exe);
+            structuredLog.info("running_").field("detail", "Running: " ~ exe).emit();
             
             auto res = execute([exe]);
             if (res.status != 0)

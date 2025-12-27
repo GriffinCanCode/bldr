@@ -5,7 +5,7 @@ import infrastructure.parsing.treesitter.config;
 import infrastructure.parsing.treesitter.registry;
 import infrastructure.parsing.treesitter.parser;
 import infrastructure.analysis.ast.parser;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Kotlin grammar loader for tree-sitter
 /// Dynamically loads grammar from system libraries if available
@@ -20,13 +20,13 @@ shared static this() @system {
         // Try to load grammar dynamically
         auto grammar = ts_load_kotlin();
         if (!grammar) {
-            Logger.debugLog("Kotlin grammar not available (will use file-level tracking)");
+            structuredLog.debug_("kotlin_grammar_not_available_will_use_fi").emit();
             return;
         }
         
         auto config = LanguageConfigs.get("kotlin");
         if (!config) {
-            Logger.warning("Kotlin config not found");
+            structuredLog.warning("kotlin_config_not_found").emit();
             return;
         }
         
@@ -42,9 +42,9 @@ shared static this() @system {
         ASTParserRegistry.instance().registerParser(parser);
         
         grammarLoaded = true;
-        Logger.info("✓ Kotlin tree-sitter grammar loaded");
+        structuredLog.info("_kotlin_treesitter_grammar_loaded").emit();
     } catch (Exception e) {
-        Logger.debugLog("Kotlin grammar not loaded: " ~ e.msg);
+        structuredLog.debug_("kotlin_grammar_not_loaded_").field("detail", "Kotlin grammar not loaded: " ~ e.msg).emit();
     }
 }
 

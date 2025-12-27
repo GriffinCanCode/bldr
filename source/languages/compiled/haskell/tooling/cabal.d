@@ -10,7 +10,7 @@ import std.string;
 import std.conv;
 import languages.compiled.haskell.core.config;
 import infrastructure.config.schema.schema;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionId, ActionType;
 import infrastructure.utils.files.hash : FastHash;
 
@@ -51,7 +51,7 @@ struct CabalWrapper
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to get Cabal version: " ~ e.msg);
+            structuredLog.warning("failed_to_get_cabal_version_").field("detail", "Failed to get Cabal version: " ~ e.msg).emit();
         }
         return "unknown";
     }
@@ -86,7 +86,7 @@ struct CabalWrapper
             cabalFile = cabalFiles[0].name;
         }
         
-        Logger.debugLog("Using Cabal file: " ~ cabalFile);
+        structuredLog.debug_("using_cabal_file_").field("detail", "Using Cabal file: " ~ cabalFile).emit();
         
         // Gather input files for action caching
         string[] inputFiles = target.sources.dup;
@@ -123,7 +123,7 @@ struct CabalWrapper
         // Check if build is cached
         if (actionCache !is null && actionCache.isCached(actionId, inputFiles, metadata) && exists(distDir))
         {
-            Logger.debugLog("  [Cached] Cabal build");
+            structuredLog.debug_("__cached_cabal_build").emit();
             result.success = true;
             result.outputs = findBuiltExecutables(distDir);
             if (!result.outputs.empty)
@@ -134,7 +134,7 @@ struct CabalWrapper
         // Update dependencies
         if (!updateDependencies(config.root))
         {
-            Logger.warning("Failed to update Cabal dependencies");
+            structuredLog.warning("failed_to_update_cabal_dependencies").emit();
         }
         
         // Build command based on mode
@@ -191,8 +191,8 @@ struct CabalWrapper
         }
         
         // Execute build
-        Logger.debugLog("Building with Cabal");
-        Logger.debugLog("  Command: " ~ args.join(" "));
+        structuredLog.debug_("building_with_cabal").emit();
+        structuredLog.debug_("__command_").field("detail", "  Command: " ~ args.join(" ")).emit();
         
         bool success = false;
         
@@ -219,7 +219,7 @@ struct CabalWrapper
                 
                 if (!execResult.output.empty)
                 {
-                    Logger.debugLog("Cabal output: " ~ execResult.output);
+                    structuredLog.debug_("cabal_output_").field("detail", "Cabal output: " ~ execResult.output).emit();
                 }
                 
                 // Update cache with success
@@ -237,8 +237,8 @@ struct CabalWrapper
             else
             {
                 result.error = execResult.output;
-                Logger.error("Cabal build failed:");
-                Logger.error(execResult.output);
+                structuredLog.error("cabal_build_failed").emit();
+                structuredLog.error("log_event").field("message", execResult.output).emit();
                 
                 // Update cache with failure
                 if (actionCache !is null)
@@ -256,7 +256,7 @@ struct CabalWrapper
         catch (Exception e)
         {
             result.error = "Cabal execution failed: " ~ e.msg;
-            Logger.error(result.error);
+            structuredLog.error("log_event").field("message", result.error).emit();
             
             // Update cache with failure
             if (actionCache !is null)
@@ -284,7 +284,7 @@ struct CabalWrapper
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to update Cabal dependencies: " ~ e.msg);
+            structuredLog.warning("failed_to_update_cabal_dependencies_").field("detail", "Failed to update Cabal dependencies: " ~ e.msg).emit();
             return false;
         }
     }
@@ -327,7 +327,7 @@ struct CabalWrapper
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to find executables: " ~ e.msg);
+            structuredLog.warning("failed_to_find_executables_").field("detail", "Failed to find executables: " ~ e.msg).emit();
         }
         
         return executables;

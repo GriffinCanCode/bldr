@@ -11,7 +11,7 @@ import std.algorithm;
 import std.array;
 import std.regex;
 import std.conv;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Phan static analyzer (advanced inference)
 class PhanAnalyzer : Analyzer
@@ -79,7 +79,7 @@ class PhanAnalyzer : Analyzer
             cmd ~= ["--file-list", fileListPath];
         }
         
-        Logger.info("Running Phan: " ~ cmd.join(" "));
+        structuredLog.info("running_phan_").field("detail", "Running Phan: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, projectRoot);
         result.output = res.output;
@@ -95,7 +95,7 @@ class PhanAnalyzer : Analyzer
             catch (Exception e)
             {
                 import infrastructure.utils.logging.logger : Logger;
-                Logger.debugLog("Failed to cleanup file list: " ~ e.msg);
+                structuredLog.debug_("failed_to_cleanup_file_list_").field("detail", "Failed to cleanup file list: " ~ e.msg).emit();
             }
         }
         
@@ -103,7 +103,7 @@ class PhanAnalyzer : Analyzer
         if (res.status == 0)
         {
             result.success = true;
-            Logger.info("Phan analysis passed with no issues");
+            structuredLog.info("phan_analysis_passed_with_no_issues").emit();
         }
         else
         {

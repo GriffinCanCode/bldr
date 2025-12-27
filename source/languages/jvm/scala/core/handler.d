@@ -22,7 +22,7 @@ import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Scala build handler with action-level caching
 class ScalaHandler : BaseLanguageHandler
@@ -47,7 +47,7 @@ class ScalaHandler : BaseLanguageHandler
         if (scalaConfig.buildTool == ScalaBuildTool.Auto)
         {
             scalaConfig.buildTool = ScalaToolDetection.detectBuildTool(config.root);
-            Logger.debugLog("Auto-detected build tool: " ~ scalaConfig.buildTool.to!string);
+            structuredLog.debug_("autodetected_build_tool_").field("detail", "Auto-detected build tool: " ~ scalaConfig.buildTool.to!string).emit();
         }
     }
     
@@ -108,7 +108,7 @@ class ScalaHandler : BaseLanguageHandler
         // Get appropriate builder with action cache
         auto builder = ScalaBuilderFactory.createAuto(scalaConfig, config.root, getCache());
         
-        Logger.debugLog("Using builder: " ~ builder.name());
+        structuredLog.debug_("using_builder_").field("detail", "Using builder: " ~ builder.name()).emit();
         
         // Build
         auto buildResult = builder.build(target.sources, scalaConfig, target, config);
@@ -134,7 +134,7 @@ class ScalaHandler : BaseLanguageHandler
         
         if (!scalaConfig.test.enabled)
         {
-            Logger.info("Tests disabled in configuration");
+            structuredLog.info("tests_disabled_in_configuration").emit();
             result.success = true;
             result.outputHash = FastHash.hashStrings(target.sources);
             return result;
@@ -147,7 +147,7 @@ class ScalaHandler : BaseLanguageHandler
             framework = ScalaToolDetection.detectTestFramework(config.root);
         }
         
-        Logger.info("Running tests with framework: " ~ framework.to!string);
+        structuredLog.info("running_tests_with_framework_").field("detail", "Running tests with framework: " ~ framework.to!string).emit();
         
         // Use build tool for tests
         bool testsPassed = false;
@@ -209,7 +209,7 @@ class ScalaHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to analyze imports in " ~ source);
+                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source).emit();
             }
         }
         
@@ -224,21 +224,21 @@ class ScalaHandler : BaseLanguageHandler
         
         if (!formatter.isAvailable())
         {
-            Logger.warning("Formatter not available: " ~ formatter.name());
+            structuredLog.warning("formatter_not_available_").field("detail", "Formatter not available: " ~ formatter.name()).emit();
             return;
         }
         
-        Logger.info("Formatting sources with " ~ formatter.name());
+        structuredLog.info("formatting_sources_with_").field("detail", "Formatting sources with " ~ formatter.name()).emit();
         
         auto result = formatter.format(sources, config.formatter, workingDir, false);
         
         if (!result.success)
         {
-            Logger.warning("Formatting had issues: " ~ result.error);
+            structuredLog.warning("formatting_had_issues_").field("detail", "Formatting had issues: " ~ result.error).emit();
         }
         else
         {
-            Logger.debugLog("Formatted " ~ result.filesFormatted.to!string ~ " files");
+            structuredLog.debug_("formatted_").field("detail", "Formatted " ~ result.filesFormatted.to!string ~ " files").emit();
         }
     }
     
@@ -248,19 +248,19 @@ class ScalaHandler : BaseLanguageHandler
         
         if (!checker.isAvailable())
         {
-            Logger.warning("Checker not available: " ~ checker.name());
+            structuredLog.warning("checker_not_available_").field("detail", "Checker not available: " ~ checker.name()).emit();
             return true;
         }
         
-        Logger.info("Checking sources with " ~ checker.name());
+        structuredLog.info("checking_sources_with_").field("detail", "Checking sources with " ~ checker.name()).emit();
         
         auto result = checker.check(sources, config.linter, workingDir);
         
         if (!result.success)
         {
-            Logger.warning("Linter found " ~ result.issuesFound.to!string ~ " issues");
+            structuredLog.warning("linter_found_").field("detail", "Linter found " ~ result.issuesFound.to!string ~ " issues").emit();
             foreach (violation; result.violations)
-                Logger.warning(violation);
+                structuredLog.warning("log_event").field("message", violation).emit();
             return false;
         }
         

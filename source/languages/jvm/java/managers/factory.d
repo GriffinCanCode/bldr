@@ -213,8 +213,8 @@ class BuildToolFactory
         }
         catch (Exception e)
         {
-            import infrastructure.utils.logging.logger : Logger;
-            Logger.debugLog("Failed to get module name: " ~ e.msg);
+            import infrastructure.utils.logging : structuredLog;
+            structuredLog.debug_("module_name_extraction_failed").field("error", e.msg).emit();
         }
         
         return "";

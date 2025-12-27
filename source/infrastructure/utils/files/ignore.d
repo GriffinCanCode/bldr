@@ -732,8 +732,11 @@ class UserIgnorePatterns
         {
             // Ignore file errors should be visible to users as they can cause
             // unexpected behavior (files not being ignored, performance issues, etc.)
-            import infrastructure.utils.logging.logger : Logger;
-            Logger.warning("Failed to read ignore file " ~ filePath ~ ": " ~ e.msg);
+            import infrastructure.utils.logging : structuredLog;
+            structuredLog.warning("ignore_file_read_failed")
+                .field("path", filePath)
+                .field("error", e.msg)
+                .emit();
         }
     }
     

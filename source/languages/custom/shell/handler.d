@@ -12,7 +12,7 @@ import languages.base.base;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Shell/genrule handler - executes arbitrary shell commands
 /// Useful for integrating languages not natively supported (Gleam, etc.) via CLI
@@ -25,7 +25,7 @@ class ShellHandler : BaseLanguageHandler
         
         LanguageBuildResult result;
         
-        Logger.debugLog("Building shell target: " ~ target.name);
+        structuredLog.debug_("building_shell_target_").field("detail", "Building shell target: " ~ target.name).emit();
         
         // Shell targets must have a command
         if (target.command.empty)
@@ -56,8 +56,8 @@ class ShellHandler : BaseLanguageHandler
         if (!target.outputPath.empty)
             env["OUTPUT"] = target.outputPath;
         
-        Logger.info("Executing: " ~ target.command);
-        Logger.debugLog("  workdir: " ~ workDir);
+        structuredLog.info("executing_").field("detail", "Executing: " ~ target.command).emit();
+        structuredLog.debug_("__workdir_").field("detail", "  workdir: " ~ workDir).emit();
         
         // Execute the command via shell
         auto res = executeShell(target.command, env, Config.none, size_t.max, workDir);
@@ -70,7 +70,7 @@ class ShellHandler : BaseLanguageHandler
         
         // Log output if any
         if (!res.output.strip.empty)
-            Logger.info(res.output.strip);
+            structuredLog.info("log_event").field("message", res.output.strip).emit();
         
         result.success = true;
         result.outputs = getOutputs(target, config);
@@ -119,7 +119,7 @@ class ShellHandler : BaseLanguageHandler
         {
             if (exists(output))
             {
-                Logger.info("Removing: " ~ output);
+                structuredLog.info("removing_").field("detail", "Removing: " ~ output).emit();
                 if (isDir(output))
                     rmdirRecurse(output);
                 else

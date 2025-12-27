@@ -10,7 +10,7 @@ import std.range : empty;
 import std.conv : to;
 import std.json;
 import infrastructure.plugins.protocol;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.process.checker;
 import infrastructure.errors;
 
@@ -53,7 +53,7 @@ class PluginScanner {
     
     /// Discover all installed plugins
     BuildResult!(PluginInfo[]) discover() @system {
-        Logger.debugLog("Scanning for plugins in " ~ searchPaths.length.to!string ~ " directories");
+        structuredLog.debug_("scanning_for_plugins_in_").field("detail", "Scanning for plugins in " ~ searchPaths.length.to!string ~ " directories").emit();
         
         PluginInfo[] plugins;
         
@@ -71,18 +71,18 @@ class PluginScanner {
                     auto infoResult = queryPluginInfo(entry.name);
                     if (infoResult.isOk) {
                         plugins ~= infoResult.unwrap();
-                        Logger.debugLog("Found plugin: " ~ infoResult.unwrap().name);
+                        structuredLog.debug_("found_plugin_").field("detail", "Found plugin: " ~ infoResult.unwrap().name).emit();
                     } else {
-                        Logger.warning("Failed to query plugin " ~ entry.name ~ ": " ~ 
-                            infoResult.unwrapErr().message);
+                        structuredLog.warning("failed_to_query_plugin_").field("detail", "Failed to query plugin " ~ entry.name ~ ": " ~ 
+                            infoResult.unwrapErr().message).emit();
                     }
                 }
             } catch (Exception e) {
-                Logger.warning("Failed to scan directory " ~ dir ~ ": " ~ e.msg);
+                structuredLog.warning("failed_to_scan_directory_").field("detail", "Failed to scan directory " ~ dir ~ ": " ~ e.msg).emit();
             }
         }
         
-        Logger.info("Discovered " ~ plugins.length.to!string ~ " plugins");
+        structuredLog.info("discovered_").field("detail", "Discovered " ~ plugins.length.to!string ~ " plugins").emit();
         return Ok!(PluginInfo[], BuildError)(plugins);
     }
     

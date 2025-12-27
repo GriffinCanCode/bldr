@@ -9,7 +9,7 @@ import std.array;
 import std.string;
 import std.conv;
 import languages.scripting.ruby.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Ruby version manager interface
 interface VersionManager
@@ -70,7 +70,7 @@ final class VersionManagerFactory
             auto rbenv = new RbenvManager(projectRoot);
             if (rbenv.isAvailable())
             {
-                Logger.debugLog("Detected rbenv from .ruby-version");
+                structuredLog.debug_("detected_rbenv_from_rubyversion").emit();
                 return rbenv;
             }
             
@@ -78,7 +78,7 @@ final class VersionManagerFactory
             auto chruby = new ChrubyManager(projectRoot);
             if (chruby.isAvailable())
             {
-                Logger.debugLog("Detected chruby from .ruby-version");
+                structuredLog.debug_("detected_chruby_from_rubyversion").emit();
                 return chruby;
             }
         }
@@ -91,7 +91,7 @@ final class VersionManagerFactory
             auto rvm = new RVMManager(projectRoot);
             if (rvm.isAvailable())
             {
-                Logger.debugLog("Detected RVM from .rvmrc");
+                structuredLog.debug_("detected_rvm_from_rvmrc").emit();
                 return rvm;
             }
         }
@@ -103,7 +103,7 @@ final class VersionManagerFactory
             auto asdf = new ASDFManager(projectRoot);
             if (asdf.isAvailable())
             {
-                Logger.debugLog("Detected asdf from .tool-versions");
+                structuredLog.debug_("detected_asdf_from_toolversions").emit();
                 return asdf;
             }
         }
@@ -134,7 +134,7 @@ final class VersionManagerFactory
         }
         
         // Fallback to system Ruby
-        Logger.debugLog("No Ruby version manager detected, using system Ruby");
+        structuredLog.debug_("no_ruby_version_manager_detected_using_s").emit();
         return new SystemRubyManager();
     }
 }
@@ -183,20 +183,20 @@ final class RbenvManager : VersionManager
     
     override bool installVersion(string version_)
     {
-        Logger.info("Installing Ruby " ~ version_ ~ " with rbenv");
+        structuredLog.info("installing_ruby_").field("detail", "Installing Ruby " ~ version_ ~ " with rbenv").emit();
         
         // Check if ruby-build is available
         auto buildCheck = execute(["rbenv", "install", "--list"]);
         if (buildCheck.status != 0)
         {
-            Logger.error("ruby-build not available. Install: https://github.com/rbenv/ruby-build");
+            structuredLog.error("rubybuild_not_available_install_httpsgit").emit();
             return false;
         }
         
         auto res = execute(["rbenv", "install", version_]);
         if (res.status != 0)
         {
-            Logger.error("Failed to install Ruby " ~ version_);
+            structuredLog.error("failed_to_install_ruby_").field("detail", "Failed to install Ruby " ~ version_).emit();
             return false;
         }
         
@@ -290,7 +290,7 @@ final class RVMManager : VersionManager
         // Validate version string to prevent injection
         if (!version_.empty && !SecurityValidator.isArgumentSafe(version_))
         {
-            Logger.error("Invalid Ruby version: " ~ version_);
+            structuredLog.error("invalid_ruby_version_").field("detail", "Invalid Ruby version: " ~ version_).emit();
             return "ruby";
         }
         
@@ -337,18 +337,18 @@ final class RVMManager : VersionManager
         // Validate version to prevent injection
         if (!SecurityValidator.isArgumentSafe(version_))
         {
-            Logger.error("Invalid Ruby version: " ~ version_);
+            structuredLog.error("invalid_ruby_version_").field("detail", "Invalid Ruby version: " ~ version_).emit();
             return false;
         }
         
-        Logger.info("Installing Ruby " ~ version_ ~ " with RVM");
+        structuredLog.info("installing_ruby_").field("detail", "Installing Ruby " ~ version_ ~ " with RVM").emit();
         
         auto script = "source ~/.rvm/scripts/rvm && rvm install '" ~ version_ ~ "'";
         auto res = execute(["bash", "-c", script]);
         
         if (res.status != 0)
         {
-            Logger.error("Failed to install Ruby " ~ version_);
+            structuredLog.error("failed_to_install_ruby_").field("detail", "Failed to install Ruby " ~ version_).emit();
             return false;
         }
         
@@ -395,7 +395,7 @@ final class RVMManager : VersionManager
         // Validate version
         if (!SecurityValidator.isArgumentSafe(version_))
         {
-            Logger.error("Invalid Ruby version: " ~ version_);
+            structuredLog.error("invalid_ruby_version_").field("detail", "Invalid Ruby version: " ~ version_).emit();
             return false;
         }
         
@@ -412,7 +412,7 @@ final class RVMManager : VersionManager
         // Validate gemset name
         if (!SecurityValidator.isArgumentSafe(name))
         {
-            Logger.error("Invalid gemset name: " ~ name);
+            structuredLog.error("invalid_gemset_name_").field("detail", "Invalid gemset name: " ~ name).emit();
             return false;
         }
         
@@ -429,7 +429,7 @@ final class RVMManager : VersionManager
         // Validate gemset name
         if (!SecurityValidator.isArgumentSafe(name))
         {
-            Logger.error("Invalid gemset name: " ~ name);
+            structuredLog.error("invalid_gemset_name_").field("detail", "Invalid gemset name: " ~ name).emit();
             return false;
         }
         
@@ -456,7 +456,7 @@ final class ChrubyManager : VersionManager
         // Validate version to prevent injection
         if (!version_.empty && !SecurityValidator.isArgumentSafe(version_))
         {
-            Logger.error("Invalid Ruby version: " ~ version_);
+            structuredLog.error("invalid_ruby_version_").field("detail", "Invalid Ruby version: " ~ version_).emit();
             return "ruby";
         }
         
@@ -503,8 +503,8 @@ final class ChrubyManager : VersionManager
     
     override bool installVersion(string version_)
     {
-        Logger.error("chruby doesn't support automatic installation. Use ruby-install:");
-        Logger.error("  ruby-install ruby " ~ version_);
+        structuredLog.error("chruby_doesnt_support_automatic_installa").emit();
+        structuredLog.error("__rubyinstall_ruby_").field("detail", "  ruby-install ruby " ~ version_).emit();
         return false;
     }
     
@@ -588,7 +588,7 @@ final class ASDFManager : VersionManager
     
     override bool installVersion(string version_)
     {
-        Logger.info("Installing Ruby " ~ version_ ~ " with asdf");
+        structuredLog.info("installing_ruby_").field("detail", "Installing Ruby " ~ version_ ~ " with asdf").emit();
         
         // Ensure ruby plugin is installed
         auto pluginRes = execute(["asdf", "plugin", "add", "ruby"]);
@@ -597,7 +597,7 @@ final class ASDFManager : VersionManager
         auto res = execute(["asdf", "install", "ruby", version_]);
         if (res.status != 0)
         {
-            Logger.error("Failed to install Ruby " ~ version_);
+            structuredLog.error("failed_to_install_ruby_").field("detail", "Failed to install Ruby " ~ version_).emit();
             return false;
         }
         
@@ -674,8 +674,8 @@ final class SystemRubyManager : VersionManager
     
     override bool installVersion(string version_)
     {
-        Logger.error("Cannot install Ruby versions without a version manager");
-        Logger.error("Consider installing rbenv, chruby, or RVM");
+        structuredLog.error("cannot_install_ruby_versions_without_a_v").emit();
+        structuredLog.error("consider_installing_rbenv_chruby_or_rvm").emit();
         return false;
     }
     
@@ -740,7 +740,7 @@ final class RubyVersionUtil
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse .ruby-version: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_rubyversion_").field("detail", "Failed to parse .ruby-version: " ~ e.msg).emit();
             return "";
         }
     }
@@ -755,7 +755,7 @@ final class RubyVersionUtil
         }
         catch (Exception e)
         {
-            Logger.error("Failed to write .ruby-version: " ~ e.msg);
+            structuredLog.error("failed_to_write_rubyversion_").field("detail", "Failed to write .ruby-version: " ~ e.msg).emit();
             return false;
         }
     }

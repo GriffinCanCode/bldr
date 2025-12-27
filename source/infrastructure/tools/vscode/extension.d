@@ -4,7 +4,7 @@ import std.process : execute;
 import std.file : exists, getcwd;
 import std.path : buildPath, absolutePath, dirName;
 import std.string : strip, split;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// VS Code Extension Manager
 /// Handles automatic installation of bldr's VS Code extension
@@ -16,19 +16,19 @@ struct VSCodeExtension
     /// Returns: true if installation succeeded, false otherwise
     static bool install()
     {
-        Logger.info("Installing bldr VS Code extension...");
+        structuredLog.info("installing_bldr_vs_code_extension").emit();
         
         auto vsixPath = findExtensionVSIX();
         if (vsixPath.length == 0)
         {
-            Logger.error("Could not find " ~ EXTENSION_NAME);
-            Logger.error("Expected locations:");
+            structuredLog.error("could_not_find_").field("detail", "Could not find " ~ EXTENSION_NAME).emit();
+            structuredLog.error("expected_locations").emit();
             foreach (path; getSearchPaths())
-                Logger.error("  - " ~ path);
+                structuredLog.error("___").field("detail", "  - " ~ path).emit();
             return false;
         }
         
-        Logger.info("Found extension at: " ~ vsixPath);
+        structuredLog.info("found_extension_at_").field("detail", "Found extension at: " ~ vsixPath).emit();
         
         if (!checkVSCodeAvailable())
             return false;
@@ -78,30 +78,30 @@ struct VSCodeExtension
         auto checkResult = execute(["code", "--version"]);
         if (checkResult.status != 0)
         {
-            Logger.error("VS Code CLI 'code' command not found");
-            Logger.error("Please install VS Code and ensure 'code' is in your PATH");
-            Logger.error("Visit: https://code.visualstudio.com/");
+            structuredLog.error("vs_code_cli_code_command_not_found").emit();
+            structuredLog.error("please_install_vs_code_and_ensure_code_i").emit();
+            structuredLog.error("visit_httpscodevisualstudiocom").emit();
             return false;
         }
         
-        Logger.info("Found VS Code version: " ~ checkResult.output.strip.split('\n')[0]);
+        structuredLog.info("found_vs_code_version_").field("detail", "Found VS Code version: " ~ checkResult.output.strip.split('\n')[0]).emit();
         return true;
     }
     
     private static bool installExtension(string vsixPath)
     {
-        Logger.info("Installing extension...");
+        structuredLog.info("installing_extension").emit();
         auto installResult = execute(["code", "--install-extension", vsixPath]);
         
         if (installResult.status != 0)
         {
-            Logger.error("Failed to install extension");
-            Logger.error(installResult.output);
+            structuredLog.error("failed_to_install_extension").emit();
+            structuredLog.error("log_event").field("message", installResult.output).emit();
             return false;
         }
         
-        Logger.success("Extension installed successfully!");
-        Logger.info("Reload VS Code window to activate: Cmd+Shift+P → 'Developer: Reload Window'");
+        structuredLog.info("extension_installed_successfully").emit();
+        structuredLog.info("reload_vs_code_window_to_activate_cmdshi").emit();
         return true;
     }
 }

@@ -36,9 +36,11 @@ class DependencyResolver
                 auto result = repoResolver.registerRule(repo);
                 if (result.isErr)
                 {
-                    import infrastructure.utils.logging.logger : Logger;
-                    Logger.warning("Failed to register repository " ~ repo.name ~ ": " ~ 
-                                 result.unwrapErr().message());
+                    import infrastructure.utils.logging : structuredLog;
+                    structuredLog.warning("repository_registration_failed")
+                        .field("repo", repo.name)
+                        .field("error", result.unwrapErr().message())
+                        .emit();
                 }
             }
         }

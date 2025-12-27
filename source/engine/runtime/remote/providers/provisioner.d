@@ -5,7 +5,7 @@ import engine.distributed.protocol.protocol : WorkerId;
 import engine.runtime.remote.providers.base : CloudProvider;
 import infrastructure.errors;
 import infrastructure.errors.formatting.format : formatError = format;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Worker provisioner - single responsibility: provision and deprovision workers
 /// 
@@ -35,7 +35,7 @@ final class WorkerProvisioner
     /// Returns: Worker ID of newly provisioned worker
     BuildResult!WorkerId provisionWorker() @trusted
     {
-        Logger.debugLog("Provisioning new worker via provider");
+        structuredLog.debug_("provisioning_new_worker_via_provider").emit();
         
         // Build tags for worker identification
         string[string] tags;
@@ -49,12 +49,12 @@ final class WorkerProvisioner
         {
             provisionedCount++;
             auto workerId = result.unwrap();
-            Logger.info("Provisioned worker: " ~ workerId.toString());
+            structuredLog.info("provisioned_worker_").field("detail", "Provisioned worker: " ~ workerId.toString()).emit();
         }
         else
         {
-            Logger.error("Failed to provision worker");
-            Logger.error(formatError(result.unwrapErr()));
+            structuredLog.error("failed_to_provision_worker").emit();
+            structuredLog.error("log_event").field("message", formatError(result.unwrapErr())).emit();
         }
         
         return result;
@@ -79,7 +79,7 @@ final class WorkerProvisioner
             else
             {
                 // Continue provisioning others even if one fails
-                Logger.warning("Batch provisioning: partial failure");
+                structuredLog.warning("batch_provisioning_partial_failure").emit();
             }
         }
         
@@ -99,19 +99,19 @@ final class WorkerProvisioner
     /// Responsibility: Gracefully terminate worker instance
     VoidBuildResult deprovisionWorker(WorkerId workerId) @trusted
     {
-        Logger.info("Deprovisioning worker: " ~ workerId.toString());
+        structuredLog.info("deprovisioning_worker_").field("detail", "Deprovisioning worker: " ~ workerId.toString()).emit();
         
         auto result = provider.terminateWorker(workerId);
         
         if (result.isOk)
         {
             provisionedCount--;
-            Logger.info("Deprovisioned worker: " ~ workerId.toString());
+            structuredLog.info("deprovisioned_worker_").field("detail", "Deprovisioned worker: " ~ workerId.toString()).emit();
         }
         else
         {
-            Logger.error("Failed to deprovision worker");
-            Logger.error(formatError(result.unwrapErr()));
+            structuredLog.error("failed_to_deprovision_worker").emit();
+            structuredLog.error("log_event").field("message", formatError(result.unwrapErr())).emit();
         }
         
         return result;

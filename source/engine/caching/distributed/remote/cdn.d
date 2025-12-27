@@ -13,7 +13,7 @@ import std.json : JSONValue, JSONType;
 import std.uuid : randomUUID;
 import infrastructure.errors;
 import infrastructure.errors.formatting.format : formatError = format;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// CDN configuration
 struct CdnConfig
@@ -238,12 +238,15 @@ final class CdnManager
         
         if (httpResult.isErr)
         {
-            Logger.error("CloudFront purge failed");
-            Logger.error(formatError(httpResult.unwrapErr()));
+            structuredLog.error("cloudfront_purge_failed")
+                .field("error", formatError(httpResult.unwrapErr()))
+                .emit();
             return VoidBuildResult.err(httpResult.unwrapErr());
         }
         
-        Logger.info("CloudFront purge request successful for path: " ~ path);
+        structuredLog.info("cloudfront_purge_success")
+            .field("path", path)
+            .emit();
         return Ok!BuildError();
     }
     
@@ -273,8 +276,9 @@ final class CdnManager
         
         if (httpResult.isErr)
         {
-            Logger.error("Cloudflare purge failed");
-            Logger.error(formatError(httpResult.unwrapErr()));
+            structuredLog.error("cloudflare_purge_failed")
+                .field("error", formatError(httpResult.unwrapErr()))
+                .emit();
             return VoidBuildResult.err(httpResult.unwrapErr());
         }
         
@@ -284,13 +288,17 @@ final class CdnManager
             auto response = parseJSON(cast(string)httpResult.unwrap());
             if ("success" in response && response["success"].type == JSONType.true_)
             {
-                Logger.info("Cloudflare purge request successful for path: " ~ path);
+                structuredLog.info("cloudflare_purge_success")
+                    .field("path", path)
+                    .emit();
                 return Ok!BuildError();
             }
             else
             {
                 auto errorMsg = "errors" in response ? response["errors"].toString() : "Unknown error";
-                Logger.error("Cloudflare purge failed: " ~ errorMsg);
+                structuredLog.error("cloudflare_purge_error")
+                    .field("error", errorMsg)
+                    .emit();
                 return VoidBuildResult.err(
                     Errors.generic("Cloudflare purge failed: " ~ errorMsg, ErrorCode.NetworkError).build());
             }
@@ -322,8 +330,9 @@ final class CdnManager
         
         if (httpResult.isErr)
         {
-            Logger.error("Fastly purge failed");
-            Logger.error(formatError(httpResult.unwrapErr()));
+            structuredLog.error("fastly_purge_failed")
+                .field("error", formatError(httpResult.unwrapErr()))
+                .emit();
             return VoidBuildResult.err(httpResult.unwrapErr());
         }
         
@@ -334,13 +343,17 @@ final class CdnManager
             auto response = parseJSON(cast(string)httpResult.unwrap());
             if ("status" in response && response["status"].str == "ok")
             {
-                Logger.info("Fastly purge request successful for path: " ~ path);
+                structuredLog.info("fastly_purge_success")
+                    .field("path", path)
+                    .emit();
                 return Ok!BuildError();
             }
             else
             {
                 auto errorMsg = response.toString();
-                Logger.error("Fastly purge failed: " ~ errorMsg);
+                structuredLog.error("fastly_purge_error")
+                    .field("error", errorMsg)
+                    .emit();
                 return VoidBuildResult.err(
                     Errors.generic("Fastly purge failed: " ~ errorMsg, ErrorCode.NetworkError).build());
             }

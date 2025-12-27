@@ -10,7 +10,7 @@ import std.string;
 import std.conv;
 import languages.scripting.ruby.core.config;
 import languages.scripting.ruby.managers.base;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Bundler package manager implementation
 class BundlerManager : PackageManager
@@ -41,7 +41,7 @@ class BundlerManager : PackageManager
         if (development)
             cmd ~= "--group=development";
         
-        Logger.info("Installing gems with Bundler: " ~ gems.join(", "));
+        structuredLog.info("installing_gems_with_bundler_").field("detail", "Installing gems with Bundler: " ~ gems.join(", ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, projectRoot);
         
@@ -71,7 +71,7 @@ class BundlerManager : PackageManager
         if (deployment)
             cmd ~= "--deployment";
         
-        Logger.info("Installing dependencies from Gemfile");
+        structuredLog.info("installing_dependencies_from_gemfile").emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, projectRoot);
         
@@ -95,7 +95,7 @@ class BundlerManager : PackageManager
         if (!gems.empty)
             cmd ~= gems;
         
-        Logger.info("Updating gems with Bundler");
+        structuredLog.info("updating_gems_with_bundler").emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, projectRoot);
         
@@ -172,7 +172,7 @@ class BundlerManager : PackageManager
         if (config.clean)
             cmd ~= "--clean";
         
-        Logger.info("Installing with Bundler: " ~ cmd.join(" "));
+        structuredLog.info("installing_with_bundler_").field("detail", "Installing with Bundler: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, projectRoot);
         

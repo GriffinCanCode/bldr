@@ -9,7 +9,7 @@ import std.string;
 import languages.scripting.python.core.config;
 import languages.scripting.python.tooling.results;
 import languages.scripting.python.tooling.detection;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Type checking utilities
 class PyCheckers
@@ -28,7 +28,7 @@ class PyCheckers
         
         string[] cmd = [pythonCmd, "-m", "mypy"] ~ extraArgs ~ sources;
         
-        Logger.debugLog("Running mypy: " ~ cmd.join(" "));
+        structuredLog.debug_("running_mypy_").field("detail", "Running mypy: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         result.output = res.output;
@@ -70,7 +70,7 @@ class PyCheckers
         
         string[] cmd = ["pyright"] ~ extraArgs ~ sources;
         
-        Logger.debugLog("Running pyright: " ~ cmd.join(" "));
+        structuredLog.debug_("running_pyright_").field("detail", "Running pyright: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         result.output = res.output;
@@ -138,19 +138,19 @@ class TypeChecker
         
         if (ToolDetection.isPyrightAvailable())
         {
-            Logger.debugLog("Using pyright for type checking");
+            structuredLog.debug_("using_pyright_for_type_checking").emit();
             return checkPyright(sources, config);
         }
         
         if (ToolDetection.isMypyAvailable(pythonCmd))
         {
-            Logger.debugLog("Using mypy for type checking");
+            structuredLog.debug_("using_mypy_for_type_checking").emit();
             return checkMypy(sources, config, pythonCmd);
         }
         
         if (ToolDetection.isPytypeAvailable(pythonCmd))
         {
-            Logger.debugLog("Using pytype for type checking");
+            structuredLog.debug_("using_pytype_for_type_checking").emit();
             return checkPytype(sources, config, pythonCmd);
         }
         
@@ -158,7 +158,7 @@ class TypeChecker
         TypeCheckResult result;
         result.success = true;
         result.warnings ~= "No type checker available, skipping type checking";
-        Logger.warning("No type checker available (install mypy, pyright, or pytype)");
+        structuredLog.warning("no_type_checker_available_install_mypy_p").emit();
         
         return result;
     }
@@ -196,7 +196,7 @@ class TypeChecker
         // Add sources
         cmd ~= sources;
         
-        Logger.info("Running mypy type checking");
+        structuredLog.info("running_mypy_type_checking").emit();
         
         auto res = execute(cmd);
         
@@ -227,15 +227,15 @@ class TypeChecker
         
         if (!result.success)
         {
-            Logger.warning("Mypy found type errors");
+            structuredLog.warning("mypy_found_type_errors").emit();
         }
         else if (result.hasWarnings)
         {
-            Logger.info("Mypy type checking passed with warnings");
+            structuredLog.info("mypy_type_checking_passed_with_warnings").emit();
         }
         else
         {
-            Logger.info("Mypy type checking passed");
+            structuredLog.info("mypy_type_checking_passed").emit();
         }
         
         return result;
@@ -251,7 +251,7 @@ class TypeChecker
         // Add sources
         cmd ~= sources;
         
-        Logger.info("Running pyright type checking");
+        structuredLog.info("running_pyright_type_checking").emit();
         
         auto res = execute(cmd);
         
@@ -282,15 +282,15 @@ class TypeChecker
         
         if (!result.success)
         {
-            Logger.warning("Pyright found type errors");
+            structuredLog.warning("pyright_found_type_errors").emit();
         }
         else if (result.hasWarnings)
         {
-            Logger.info("Pyright type checking passed with warnings");
+            structuredLog.info("pyright_type_checking_passed_with_warnin").emit();
         }
         else
         {
-            Logger.info("Pyright type checking passed");
+            structuredLog.info("pyright_type_checking_passed").emit();
         }
         
         return result;
@@ -306,7 +306,7 @@ class TypeChecker
         // Add sources
         cmd ~= sources;
         
-        Logger.info("Running pytype type checking");
+        structuredLog.info("running_pytype_type_checking").emit();
         
         auto res = execute(cmd);
         
@@ -333,11 +333,11 @@ class TypeChecker
         
         if (!result.success)
         {
-            Logger.warning("Pytype found type errors");
+            structuredLog.warning("pytype_found_type_errors").emit();
         }
         else
         {
-            Logger.info("Pytype type checking passed");
+            structuredLog.info("pytype_type_checking_passed").emit();
         }
         
         return result;
@@ -350,7 +350,7 @@ class TypeChecker
         
         string[] cmd = ["pyre", "check"];
         
-        Logger.info("Running pyre type checking");
+        structuredLog.info("running_pyre_type_checking").emit();
         
         auto res = execute(cmd);
         
@@ -372,11 +372,11 @@ class TypeChecker
         
         if (!result.success)
         {
-            Logger.warning("Pyre found type errors");
+            structuredLog.warning("pyre_found_type_errors").emit();
         }
         else
         {
-            Logger.info("Pyre type checking passed");
+            structuredLog.info("pyre_type_checking_passed").emit();
         }
         
         return result;

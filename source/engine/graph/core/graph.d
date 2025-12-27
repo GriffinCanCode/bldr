@@ -791,7 +791,7 @@ final class BuildGraph
     /// Note: Not const because it calls topologicalSort() which may modify depth caches.
     void print()
     {
-        import infrastructure.utils.logging.logger;
+        import infrastructure.utils.logging;
         import infrastructure.errors.formatting.format;
         
         writeln("\nBuild Graph:");
@@ -800,7 +800,7 @@ final class BuildGraph
         auto sortResult = topologicalSort();
         if (sortResult.isErr)
         {
-            Logger.error("Cannot print graph: " ~ format(sortResult.unwrapErr()));
+            structuredLog.error("cannot_print_graph_").field("detail", "Cannot print graph: " ~ format(sortResult.unwrapErr())).emit();
             return;
         }
         

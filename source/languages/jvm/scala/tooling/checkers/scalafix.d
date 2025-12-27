@@ -9,7 +9,7 @@ import std.array;
 import std.string;
 import languages.jvm.scala.tooling.checkers.base;
 import languages.jvm.scala.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Scalafix checker/linter implementation
 class ScalafixChecker : Checker
@@ -24,7 +24,7 @@ class ScalafixChecker : Checker
             return result;
         }
         
-        Logger.debugLog("Checking Scala sources with scalafix");
+        structuredLog.debug_("checking_scala_sources_with_scalafix").emit();
         
         // Build scalafix command
         string[] cmd = ["scalafix"];
@@ -49,7 +49,7 @@ class ScalafixChecker : Checker
         // Add sources
         cmd ~= sources;
         
-        Logger.debugLog("Scalafix command: " ~ cmd.join(" "));
+        structuredLog.debug_("scalafix_command_").field("detail", "Scalafix command: " ~ cmd.join(" ")).emit();
         
         // Execute scalafix
         auto res = execute(cmd, null, Config.none, size_t.max, workingDir);

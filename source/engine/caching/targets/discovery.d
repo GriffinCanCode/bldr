@@ -10,7 +10,7 @@ import std.json;
 import std.datetime;
 import engine.graph;
 import infrastructure.config.schema.schema : TargetId;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Discovery cache - caches discovery results for fast incremental builds
@@ -91,11 +91,11 @@ final class DiscoveryCache
             saveHistory();
             
             dirty = false;
-            Logger.debugLog("Discovery cache flushed");
+            structuredLog.debug_("discovery_cache_flushed").emit();
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to flush discovery cache: " ~ e.msg);
+            structuredLog.warning("discovery_cache_flush_failed").field("error", e.msg).emit();
         }
     }
     
@@ -147,11 +147,11 @@ final class DiscoveryCache
             auto json = parseJSON(jsonContent);
             deserializeFromJson(json);
             
-            Logger.debugLog("Loaded discovery cache: " ~ entries.length.to!string ~ " entries");
+            structuredLog.debug_("discovery_cache_loaded").field("entries", entries.length).emit();
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to load discovery cache: " ~ e.msg);
+            structuredLog.warning("discovery_cache_load_failed").field("error", e.msg).emit();
         }
     }
     
@@ -283,7 +283,7 @@ final class DiscoveryCache
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to save discovery history: " ~ e.msg);
+            structuredLog.warning("discovery_history_save_failed").field("error", e.msg).emit();
         }
     }
 }

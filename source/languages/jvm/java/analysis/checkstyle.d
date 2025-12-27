@@ -10,7 +10,7 @@ import std.string;
 import std.conv;
 import languages.jvm.java.analysis.base;
 import languages.jvm.java.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Checkstyle analyzer
 class CheckstyleAnalyzer : Analyzer
@@ -19,7 +19,7 @@ class CheckstyleAnalyzer : Analyzer
     {
         AnalysisResult result;
         
-        Logger.info("Running Checkstyle analysis");
+        structuredLog.info("running_checkstyle_analysis").emit();
         
         string[] cmd = ["checkstyle"];
         

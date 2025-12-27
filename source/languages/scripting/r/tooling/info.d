@@ -9,7 +9,7 @@ import std.regex;
 import std.conv;
 import std.typecons;
 import languages.scripting.r.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// R tool availability and version information
 struct RToolInfo
@@ -205,7 +205,7 @@ RPackageManager detectBestPackageManager(string rCmd = "Rscript")
     
     if (isRPackageInstalled("pak", rCmd))
     {
-        Logger.debugLog("Detected pak package manager");
+        structuredLog.debug_("detected_pak_package_manager").emit();
         return RPackageManager.Pak;
     }
     
@@ -213,12 +213,12 @@ RPackageManager detectBestPackageManager(string rCmd = "Rscript")
     import std.file : exists;
     if (exists("renv.lock") && isRPackageInstalled("renv", rCmd))
     {
-        Logger.debugLog("Detected renv project");
+        structuredLog.debug_("detected_renv_project").emit();
         return RPackageManager.Renv;
     }
     
     // Default to standard install.packages
-    Logger.debugLog("Using standard install.packages");
+    structuredLog.debug_("using_standard_installpackages").emit();
     return RPackageManager.InstallPackages;
 }
 
@@ -259,11 +259,11 @@ RLinter detectBestLinter(string rCmd = "Rscript")
 {
     if (isRPackageInstalled("lintr", rCmd))
     {
-        Logger.debugLog("Detected lintr");
+        structuredLog.debug_("detected_lintr").emit();
         return RLinter.Lintr;
     }
     
-    Logger.debugLog("No linter detected");
+    structuredLog.debug_("no_linter_detected").emit();
     return RLinter.None;
 }
 
@@ -304,17 +304,17 @@ RFormatter detectBestFormatter(string rCmd = "Rscript")
 {
     if (isRPackageInstalled("styler", rCmd))
     {
-        Logger.debugLog("Detected styler");
+        structuredLog.debug_("detected_styler").emit();
         return RFormatter.Styler;
     }
     
     if (isRPackageInstalled("formatR", rCmd))
     {
-        Logger.debugLog("Detected formatR");
+        structuredLog.debug_("detected_formatr").emit();
         return RFormatter.FormatR;
     }
     
-    Logger.debugLog("No formatter detected");
+    structuredLog.debug_("no_formatter_detected").emit();
     return RFormatter.None;
 }
 
@@ -365,29 +365,29 @@ RTestFramework detectBestTestFramework(string rCmd = "Rscript")
     // Check for testthat directory structure
     if (exists("tests/testthat") && isRPackageInstalled("testthat", rCmd))
     {
-        Logger.debugLog("Detected testthat framework");
+        structuredLog.debug_("detected_testthat_framework").emit();
         return RTestFramework.Testthat;
     }
     
     if (isRPackageInstalled("testthat", rCmd))
     {
-        Logger.debugLog("Detected testthat (installed)");
+        structuredLog.debug_("detected_testthat_installed").emit();
         return RTestFramework.Testthat;
     }
     
     if (isRPackageInstalled("tinytest", rCmd))
     {
-        Logger.debugLog("Detected tinytest");
+        structuredLog.debug_("detected_tinytest").emit();
         return RTestFramework.Tinytest;
     }
     
     if (isRPackageInstalled("RUnit", rCmd))
     {
-        Logger.debugLog("Detected RUnit");
+        structuredLog.debug_("detected_runit").emit();
         return RTestFramework.RUnit;
     }
     
-    Logger.debugLog("No test framework detected");
+    structuredLog.debug_("no_test_framework_detected").emit();
     return RTestFramework.None;
 }
 
@@ -432,23 +432,23 @@ RDocGenerator detectBestDocGenerator(string rCmd = "Rscript")
     
     if (hasRoxygen && hasPkgdown)
     {
-        Logger.debugLog("Detected roxygen2 and pkgdown");
+        structuredLog.debug_("detected_roxygen2_and_pkgdown").emit();
         return RDocGenerator.Both;
     }
     
     if (hasRoxygen)
     {
-        Logger.debugLog("Detected roxygen2");
+        structuredLog.debug_("detected_roxygen2").emit();
         return RDocGenerator.Roxygen2;
     }
     
     if (hasPkgdown)
     {
-        Logger.debugLog("Detected pkgdown");
+        structuredLog.debug_("detected_pkgdown").emit();
         return RDocGenerator.Pkgdown;
     }
     
-    Logger.debugLog("No doc generator detected");
+    structuredLog.debug_("no_doc_generator_detected").emit();
     return RDocGenerator.None;
 }
 
@@ -494,7 +494,7 @@ REnvManager detectBestEnvManager(string rCmd = "Rscript")
     {
         if (isRPackageInstalled("renv", rCmd))
         {
-            Logger.debugLog("Detected renv environment");
+            structuredLog.debug_("detected_renv_environment").emit();
             return REnvManager.Renv;
         }
     }
@@ -504,12 +504,12 @@ REnvManager detectBestEnvManager(string rCmd = "Rscript")
     {
         if (isRPackageInstalled("packrat", rCmd))
         {
-            Logger.debugLog("Detected packrat environment");
+            structuredLog.debug_("detected_packrat_environment").emit();
             return REnvManager.Packrat;
         }
     }
     
-    Logger.debugLog("No environment manager detected");
+    structuredLog.debug_("no_environment_manager_detected").emit();
     return REnvManager.None;
 }
 

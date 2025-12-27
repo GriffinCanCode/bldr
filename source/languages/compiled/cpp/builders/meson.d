@@ -15,7 +15,7 @@ import languages.compiled.cpp.builders.base;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Meson build system builder
 class MesonBuilder : BaseCppBuilder
@@ -40,7 +40,7 @@ class MesonBuilder : BaseCppBuilder
             return result;
         }
         
-        Logger.info("Building with Meson");
+        structuredLog.info("building_with_meson").emit();
         
         // Find meson.build
         string mesonFile = findMesonFile(workspace.root);
@@ -82,7 +82,7 @@ class MesonBuilder : BaseCppBuilder
         
         result.success = true;
         
-        Logger.info("Meson build completed successfully");
+        structuredLog.info("meson_build_completed_successfully").emit();
         
         return result;
     }
@@ -132,7 +132,7 @@ class MesonBuilder : BaseCppBuilder
     {
         CppCompileResult result;
         
-        Logger.debugLog("Setting up Meson build");
+        structuredLog.debug_("setting_up_meson_build").emit();
         
         string[] cmd = ["meson", "setup", buildDir];
         
@@ -170,7 +170,7 @@ class MesonBuilder : BaseCppBuilder
             }
         }
         
-        Logger.debugLog("Running: " ~ cmd.join(" "));
+        structuredLog.debug_("running_").field("detail", "Running: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, projectDir);
         
@@ -188,7 +188,7 @@ class MesonBuilder : BaseCppBuilder
     {
         CppCompileResult result;
         
-        Logger.debugLog("Compiling with Meson");
+        structuredLog.debug_("compiling_with_meson").emit();
         
         string[] cmd = ["meson", "compile", "-C", buildDir];
         

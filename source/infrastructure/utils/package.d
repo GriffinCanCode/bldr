@@ -78,7 +78,7 @@ public import infrastructure.utils.concurrency.priority;
 public import infrastructure.utils.concurrency.structured;
 public import infrastructure.utils.files.chunking;
 public import infrastructure.utils.files.cdc;
-public import infrastructure.utils.logging.logger;
+public import infrastructure.utils.logging;
 public import infrastructure.utils.files.metadata;
 public import infrastructure.utils.benchmarking.bench;
 public import infrastructure.utils.crypto.blake3;

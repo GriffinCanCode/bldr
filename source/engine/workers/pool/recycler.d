@@ -7,7 +7,7 @@ import std.algorithm : filter, map, maxElement, minElement;
 import std.array : array;
 import std.conv : to;
 import engine.workers.protocol.types : WorkerId, WorkerState;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Worker warmth level - indicates JVM/V8 optimization state
 /// Cold → Warm: ~2-3s for JVM, ~200ms for V8

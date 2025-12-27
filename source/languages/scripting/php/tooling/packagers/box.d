@@ -11,7 +11,7 @@ import std.algorithm;
 import std.array;
 import std.json;
 import std.conv;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Box PHAR packager (modern, recommended)
 class BoxPackager : Packager
@@ -39,7 +39,7 @@ class BoxPackager : Packager
         
         if (!exists(boxConfig))
         {
-            Logger.info("No box.json found, creating default configuration");
+            structuredLog.info("no_boxjson_found_creating_default_config").emit();
             createDefaultConfig(boxConfig, config, sources, projectRoot);
         }
         
@@ -54,7 +54,7 @@ class BoxPackager : Packager
         // Working directory
         cmd ~= ["--working-dir", projectRoot];
         
-        Logger.info("Running Box: " ~ cmd.join(" "));
+        structuredLog.info("running_box_").field("detail", "Running Box: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, projectRoot);
         result.output = res.output;
@@ -73,7 +73,7 @@ class BoxPackager : Packager
             {
                 result.artifacts ~= pharPath;
                 result.artifactSize = getSize(pharPath);
-                Logger.info("PHAR created: " ~ pharPath ~ " (" ~ (result.artifactSize / 1024).to!string ~ " KB)");
+                structuredLog.info("phar_created_").field("detail", "PHAR created: " ~ pharPath ~ " (" ~ (result.artifactSize / 1024).to!string ~ " KB)").emit();
             }
         }
         else
@@ -219,7 +219,7 @@ class BoxPackager : Packager
         
         // Write configuration
         std.file.write(configPath, boxConfig.toPrettyString());
-        Logger.info("Created box.json configuration: " ~ configPath);
+        structuredLog.info("created_boxjson_configuration_").field("detail", "Created box.json configuration: " ~ configPath).emit();
     }
 }
 

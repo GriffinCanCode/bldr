@@ -8,7 +8,7 @@ import std.stdio;
 import std.conv;
 import std.string;
 import std.algorithm : canFind;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// LSP message with content and metadata
 struct LSPMessage
@@ -155,7 +155,7 @@ final class StdioReader
             }
             catch (Exception e)
             {
-                Logger.error("StdioReader error: " ~ e.msg);
+                structuredLog.error("stdioreader_error_").field("detail", "StdioReader error: " ~ e.msg).emit();
             }
         }
         queue.close();
@@ -233,7 +233,7 @@ final class AsyncTransport
     {
         atomicStore(active, true);
         reader.start();
-        Logger.info("Async LSP transport started");
+        structuredLog.info("async_lsp_transport_started").emit();
     }
     
     /// Stop async transport
@@ -241,7 +241,7 @@ final class AsyncTransport
     {
         atomicStore(active, false);
         reader.stop();
-        Logger.info("Async LSP transport stopped");
+        structuredLog.info("async_lsp_transport_stopped").emit();
     }
     
     /// Receive next message (blocks until available)

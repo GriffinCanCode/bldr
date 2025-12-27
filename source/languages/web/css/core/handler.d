@@ -14,7 +14,7 @@ import languages.web.css.processors;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
 
 /// CSS/SCSS/PostCSS build handler with action-level caching
@@ -49,7 +49,7 @@ class CSSHandler : BaseLanguageHandler
         
         LanguageBuildResult result;
         
-        Logger.debugLog("Building CSS target: " ~ target.name);
+        structuredLog.debug_("building_css_target_").field("detail", "Building CSS target: " ~ target.name).emit();
         
         // Parse CSS configuration
         CSSConfig cssConfig = parseCSSConfig(target);
@@ -133,12 +133,12 @@ class CSSHandler : BaseLanguageHandler
             // Fallback to no processing for pure CSS
             if (cssConfig.processor != CSSProcessorType.None)
             {
-                Logger.warning("Processor '" ~ processor.name() ~ "' not available, using pure CSS");
+                structuredLog.warning("processor_").field("detail", "Processor '" ~ processor.name() ~ "' not available, using pure CSS").emit();
                 processor = CSSProcessorFactory.create(CSSProcessorType.None);
             }
         }
         
-        Logger.debugLog("Using CSS processor: " ~ processor.name());
+        structuredLog.debug_("using_css_processor_").field("detail", "Using CSS processor: " ~ processor.name()).emit();
         
         // Prepare inputs: sources + config files
         string[] inputFiles = target.sources.dup;
@@ -214,7 +214,7 @@ class CSSHandler : BaseLanguageHandler
             bool allOutputsExist = expectedOutputs.all!(o => exists(o));
             if (allOutputsExist)
             {
-                Logger.debugLog("  [Cached] CSS compilation: " ~ target.name);
+                structuredLog.debug_("__cached_css_compilation_").field("detail", "  [Cached] CSS compilation: " ~ target.name).emit();
                 result.success = true;
                 result.outputs = expectedOutputs;
                 result.outputHash = FastHash.hashStrings(expectedOutputs);
@@ -301,7 +301,7 @@ class CSSHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to parse CSS config, using defaults: " ~ e.msg);
+                structuredLog.warning("failed_to_parse_css_config_using_default").field("detail", "Failed to parse CSS config, using defaults: " ~ e.msg).emit();
             }
         }
         

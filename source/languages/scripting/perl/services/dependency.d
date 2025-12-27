@@ -3,7 +3,7 @@ module languages.scripting.perl.services.dependency;
 import languages.scripting.perl.core.config;
 import engine.caching.actions.action;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import std.range : empty;
 
 /// Dependency management service interface
@@ -32,7 +32,7 @@ final class PerlDependencyService : IPerlDependencyService
         if (pmCmd.empty)
             return false;
         
-        Logger.info("Installing dependencies with " ~ pmCmd);
+        structuredLog.info("installing_dependencies_with_").field("detail", "Installing dependencies with " ~ pmCmd).emit();
         
         // Install each module with caching
         foreach (mod; config.modules)
@@ -62,7 +62,7 @@ final class PerlDependencyService : IPerlDependencyService
         else if (isCommandAvailable("cpan"))
             return PerlPackageManager.CPAN;
         
-        Logger.error("No CPAN package manager found");
+        structuredLog.error("no_cpan_package_manager_found").emit();
         return PerlPackageManager.None;
     }
     
@@ -117,7 +117,7 @@ final class PerlDependencyService : IPerlDependencyService
         // Check cache
         if (cache.isCached(actionId, [], metadata))
         {
-            Logger.debugLog("  [Cached] Module: " ~ modSpec);
+            structuredLog.debug_("__cached_module_").field("detail", "  [Cached] Module: " ~ modSpec).emit();
             return true;
         }
         
@@ -131,7 +131,7 @@ final class PerlDependencyService : IPerlDependencyService
         
         cmd ~= modSpec;
         
-        Logger.debugLog("Installing: " ~ modSpec);
+        structuredLog.debug_("installing_").field("detail", "Installing: " ~ modSpec).emit();
         
         // Execute installation
         bool success = false;
@@ -142,13 +142,13 @@ final class PerlDependencyService : IPerlDependencyService
             
             if (!success)
             {
-                Logger.error("Failed to install " ~ modSpec);
-                Logger.error("  Output: " ~ res.output);
+                structuredLog.error("failed_to_install_").field("detail", "Failed to install " ~ modSpec).emit();
+                structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             }
         }
         catch (Exception e)
         {
-            Logger.error("Failed to install " ~ modSpec ~ ": " ~ e.msg);
+            structuredLog.error("failed_to_install_").field("detail", "Failed to install " ~ modSpec ~ ": " ~ e.msg).emit();
         }
         
         // Update cache

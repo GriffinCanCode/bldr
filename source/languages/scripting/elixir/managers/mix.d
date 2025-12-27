@@ -9,7 +9,7 @@ import std.array;
 import std.string;
 import std.regex;
 import std.conv;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Mix project information
 struct MixProjectInfo
@@ -97,7 +97,7 @@ class MixProjectParser
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse mix.exs: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_mixexs_").field("detail", "Failed to parse mix.exs: " ~ e.msg).emit();
         }
         
         return info;
@@ -139,7 +139,7 @@ class MixRunner
     {
         string[] cmd = [mixCmd, task] ~ args;
         
-        Logger.debugLog("Running: " ~ cmd.join(" "));
+        structuredLog.debug_("running_").field("detail", "Running: " ~ cmd.join(" ")).emit();
         
         return execute(cmd, env, Config.none, size_t.max, workDir);
     }

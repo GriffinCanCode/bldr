@@ -11,7 +11,7 @@ import std.array;
 import std.conv;
 import std.string;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// esbuild bundler - fastest option for most use cases
 class ESBuildBundler : Bundler
@@ -85,7 +85,7 @@ class ESBuildBundler : Bundler
             case OutputFormat.UMD:
                 // esbuild doesn't support UMD, fall back to IIFE
                 cmd ~= "--format=iife";
-                Logger.warning("esbuild doesn't support UMD, using IIFE instead");
+                structuredLog.warning("esbuild_doesnt_support_umd_using_iife_in").emit();
                 break;
         }
         
@@ -126,7 +126,7 @@ class ESBuildBundler : Bundler
         // Additional flags from target
         cmd ~= target.flags;
         
-        Logger.debugLog("Running esbuild: " ~ cmd.join(" "));
+        structuredLog.debug_("running_esbuild_").field("detail", "Running esbuild: " ~ cmd.join(" ")).emit();
         
         // Execute esbuild
         auto res = execute(cmd);
@@ -137,7 +137,7 @@ class ESBuildBundler : Bundler
             return result;
         }
         
-        Logger.debugLog("esbuild completed successfully");
+        structuredLog.debug_("esbuild_completed_successfully").emit();
         
         // Success
         result.success = true;

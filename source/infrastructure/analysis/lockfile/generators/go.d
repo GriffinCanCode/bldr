@@ -12,7 +12,7 @@ import infrastructure.analysis.lockfile.cache;
 import infrastructure.analysis.manifests.go : GoManifestParser;
 import infrastructure.analysis.manifests.types : Dependency, DependencyType;
 import infrastructure.utils.files.hash : FastHash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Go modules lockfile generator (go.sum)
@@ -40,7 +40,7 @@ final class GoLockfileGenerator : ILockfileGenerator
             auto cached = cache.get(manifestHash);
             if (cached.isOk)
             {
-                Logger.debugLog("Go sum cache hit");
+                structuredLog.debug_("go_sum_cache_hit").emit();
                 return cached;
             }
         }
@@ -74,7 +74,7 @@ final class GoLockfileGenerator : ILockfileGenerator
         if (cache !is null)
             cache.put(manifestHash, lockfile);
         
-        Logger.info("Generated go.sum with " ~ lockfile.count().to!string ~ " modules");
+        structuredLog.info("generated_gosum_with_").field("detail", "Generated go.sum with " ~ lockfile.count().to!string ~ " modules").emit();
         return Ok!(Lockfile, BuildError)(lockfile);
     }
     
@@ -102,7 +102,7 @@ final class GoLockfileGenerator : ILockfileGenerator
         {
             auto content = generateGoSum(lockfile);
             .write(outputPath, content);
-            Logger.info("Wrote go.sum: " ~ outputPath);
+            structuredLog.info("wrote_gosum_").field("detail", "Wrote go.sum: " ~ outputPath).emit();
             return Ok!(void, BuildError)();
         }
         catch (Exception e)

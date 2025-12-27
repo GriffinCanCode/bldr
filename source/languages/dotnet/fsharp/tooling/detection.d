@@ -7,7 +7,7 @@ import std.string;
 import std.algorithm;
 import std.array;
 import std.conv;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Tool information structure
 struct ToolInfo
@@ -246,7 +246,7 @@ struct FSharpDetection
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse .NET version: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_net_version_").field("detail", "Failed to parse .NET version: " ~ e.msg).emit();
             return false;
         }
     }

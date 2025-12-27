@@ -13,7 +13,7 @@ import languages.dotnet.fsharp.managers.dotnet;
 import infrastructure.analysis.targets.types;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Builder for native AOT executables
 class NativeBuilder : FSharpBuilder
@@ -83,8 +83,8 @@ class NativeBuilder : FSharpBuilder
             result.outputs = [outputPath];
             result.outputHash = FastHash.hashFile(outputPath);
             
-            Logger.info("Native AOT compilation successful");
-            Logger.debugLog("Output: " ~ outputPath);
+            structuredLog.info("native_aot_compilation_successful").emit();
+            structuredLog.debug_("output_").field("detail", "Output: " ~ outputPath).emit();
         }
         else
         {
@@ -119,7 +119,7 @@ class NativeBuilder : FSharpBuilder
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse .NET version: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_net_version_").field("detail", "Failed to parse .NET version: " ~ e.msg).emit();
         }
         
         return false;

@@ -56,7 +56,7 @@ final class GrpcCasTransport : StreamingArtifactTransport, BatchArtifactTranspor
             
             if (result.isErr)
                 return VoidBuildResult.err(
-                    Errors.network("gRPC connect failed: " ~ result.unwrapErr(), ErrorCode.NetworkError).build());
+                    new NetworkError("gRPC connect failed: " ~ result.unwrapErr(), ErrorCode.NetworkError));
             
             connected = true;
             return Ok!BuildError();
@@ -151,7 +151,7 @@ final class GrpcCasTransport : StreamingArtifactTransport, BatchArtifactTranspor
             auto streamResult = connection.createStream();
             if (streamResult.isErr)
                 return Err!(size_t, BuildError)(
-                    Errors.network("Failed to create stream: " ~ streamResult.unwrapErr(), ErrorCode.NetworkError).build());
+                    new NetworkError("Failed to create stream: " ~ streamResult.unwrapErr(), ErrorCode.NetworkError));
             
             auto streamId = streamResult.unwrap();
             auto target = config.parseTarget();
@@ -217,7 +217,7 @@ final class GrpcCasTransport : StreamingArtifactTransport, BatchArtifactTranspor
             auto streamResult = connection.createStream();
             if (streamResult.isErr)
                 return Err!(string, BuildError)(
-                    Errors.network("Failed to create stream: " ~ streamResult.unwrapErr(), ErrorCode.NetworkError).build());
+                    new NetworkError("Failed to create stream: " ~ streamResult.unwrapErr(), ErrorCode.NetworkError));
             
             auto streamId = streamResult.unwrap();
             auto target = config.parseTarget();
@@ -252,7 +252,7 @@ final class GrpcCasTransport : StreamingArtifactTransport, BatchArtifactTranspor
             auto responseResult = connection.receiveResponse(streamId);
             if (responseResult.isErr)
                 return Err!(string, BuildError)(
-                    Errors.network("Write response failed: " ~ responseResult.unwrapErr(), ErrorCode.NetworkError).build());
+                    new NetworkError("Write response failed: " ~ responseResult.unwrapErr(), ErrorCode.NetworkError));
             
             return Ok!(string, BuildError)(resourceName);
         }
@@ -277,7 +277,7 @@ final class GrpcCasTransport : StreamingArtifactTransport, BatchArtifactTranspor
             
             if (result.isErr)
                 return Err!(string[], BuildError)(
-                    Errors.network("FindMissingBlobs failed: " ~ result.unwrapErr(), ErrorCode.NetworkError).build());
+                    new NetworkError("FindMissingBlobs failed: " ~ result.unwrapErr(), ErrorCode.NetworkError));
             
             return Ok!(string[], BuildError)(decodeFindMissingResponse(result.unwrap()));
         }
@@ -293,7 +293,7 @@ final class GrpcCasTransport : StreamingArtifactTransport, BatchArtifactTranspor
             
             if (result.isErr)
                 return Err!(UploadResult[], BuildError)(
-                    Errors.network("BatchUpdateBlobs failed: " ~ result.unwrapErr(), ErrorCode.NetworkError).build());
+                    new NetworkError("BatchUpdateBlobs failed: " ~ result.unwrapErr(), ErrorCode.NetworkError));
             
             return Ok!(UploadResult[], BuildError)(decodeBatchUpdateResponse(result.unwrap(), blobs));
         }
@@ -309,7 +309,7 @@ final class GrpcCasTransport : StreamingArtifactTransport, BatchArtifactTranspor
             
             if (result.isErr)
                 return Err!(ubyte[][], BuildError)(
-                    Errors.network("BatchReadBlobs failed: " ~ result.unwrapErr(), ErrorCode.NetworkError).build());
+                    new NetworkError("BatchReadBlobs failed: " ~ result.unwrapErr(), ErrorCode.NetworkError));
             
             return Ok!(ubyte[][], BuildError)(decodeBatchReadResponse(result.unwrap()));
         }
@@ -959,7 +959,7 @@ struct GrpcCasFactory {
             config = GrpcConfig.secure(url[8 .. $]);
         } else {
             return Err!(GrpcCasTransport, BuildError)(
-                Errors.generic("Invalid gRPC URL: " ~ url, ErrorCode.InvalidConfig).build());
+                Errors.generic("Invalid gRPC URL: " ~ url, ErrorCode.InvalidConfiguration).build());
         }
         
         auto transport = new GrpcCasTransport(config, instanceName);

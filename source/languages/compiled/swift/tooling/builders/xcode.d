@@ -12,7 +12,7 @@ import languages.compiled.swift.tooling.builders.base;
 import languages.compiled.swift.managers.toolchain;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 version(OSX)
 {
@@ -63,7 +63,7 @@ version(OSX)
             // Build action
             cmd ~= ["build"];
             
-            Logger.debugLog("Running: " ~ cmd.join(" "));
+            structuredLog.debug_("running_").field("detail", "Running: " ~ cmd.join(" ")).emit();
             
             auto res = execute(cmd, config.env);
             

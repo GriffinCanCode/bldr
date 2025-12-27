@@ -7,7 +7,7 @@ import std.path;
 import std.algorithm;
 import std.array;
 import languages.scripting.elixir.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Format result
 struct FormatResult
@@ -51,7 +51,7 @@ class Formatter
             cmd ~= files;
         }
         
-        Logger.debugLog("Running formatter: " ~ cmd.join(" "));
+        structuredLog.debug_("running_formatter_").field("detail", "Running formatter: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         

@@ -59,5 +59,7 @@ public import engine.caching.distributed.remote.tls;
 public import engine.caching.distributed.remote.cdn;
 public import engine.caching.distributed.remote.artifact;
 public import engine.caching.distributed.remote.unified;
+public import engine.caching.distributed.remote.delta;
+public import engine.caching.distributed.remote.tracing;
 
 

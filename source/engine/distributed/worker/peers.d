@@ -9,7 +9,7 @@ import core.atomic;
 import engine.distributed.protocol.protocol;
 import engine.distributed.protocol.protocol : DistributedError;
 import infrastructure.errors : BuildError, Result, Ok, Err;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Peer worker information for work-stealing
 struct PeerInfo
@@ -54,7 +54,7 @@ final class PeerRegistry
             atomicStore(info.loadFactor, 0.0f);
             atomicStore(info.alive, true);
             peers[id] = info;
-            Logger.debugLog("Peer registered: " ~ id.toString() ~ " @ " ~ address);
+            structuredLog.debug_("peer_registered_").field("detail", "Peer registered: " ~ id.toString() ~ " @ " ~ address).emit();
         }
         return Ok!DistributedError();
     }
@@ -65,7 +65,7 @@ final class PeerRegistry
         synchronized (mutex)
         {
             peers.remove(id);
-            Logger.debugLog("Peer unregistered: " ~ id.toString());
+            structuredLog.debug_("peer_unregistered_").field("detail", "Peer unregistered: " ~ id.toString()).emit();
         }
     }
     
@@ -92,7 +92,7 @@ final class PeerRegistry
             if (auto peer = id in peers)
             {
                 atomicStore(peer.alive, false);
-                Logger.warning("Peer marked dead: " ~ id.toString());
+                structuredLog.warning("peer_marked_dead_").field("detail", "Peer marked dead: " ~ id.toString()).emit();
             }
         }
     }
@@ -150,7 +150,7 @@ final class PeerRegistry
         {
             immutable now = Clock.currTime;
             WorkerId[] toRemove = peers.byKeyValue.filter!(kv => now - kv.value.lastSeen > staleThreshold).map!(kv => kv.key).array;
-            foreach (id; toRemove) { peers.remove(id); Logger.info("Pruned stale peer: " ~ id.toString()); }
+            foreach (id; toRemove) { peers.remove(id); structuredLog.info("pruned_stale_peer_").field("detail", "Pruned stale peer: " ~ id.toString()).emit(); }
             return toRemove.length;
         }
     }

@@ -12,7 +12,7 @@ import infrastructure.analysis.caching.interface_;
 import infrastructure.analysis.tracking.interface_;
 import infrastructure.analysis.incremental.interface_;
 import infrastructure.config.schema.schema;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.concurrency.parallel;
 import infrastructure.errors;
@@ -60,7 +60,7 @@ final class IncrementalAnalyzer : IIncrementalAnalyzer
         auto changesResult = tracker.checkChanges(target.sources);
         if (changesResult.isErr)
         {
-            Logger.warning("Change tracking failed, incremental analysis disabled");
+            structuredLog.warning("change_tracking_failed_incremental_analy").emit();
             auto error = createAnalysisError(
                 target.name,
                 "Incremental analysis unavailable - change tracking failed",
@@ -87,9 +87,9 @@ final class IncrementalAnalyzer : IIncrementalAnalyzer
                 unchangedFiles ~= source;
         }
         
-        Logger.debugLog("Incremental analysis: " ~ 
+        structuredLog.debug_("incremental_analysis_").field("detail", "Incremental analysis: " ~ 
                        changedFiles.length.to!string ~ " changed, " ~
-                       unchangedFiles.length.to!string ~ " unchanged");
+                       unchangedFiles.length.to!string ~ " unchanged").emit();
         
         // Reuse cached analysis for unchanged files
         FileAnalysis[] analyses;
@@ -101,7 +101,7 @@ final class IncrementalAnalyzer : IIncrementalAnalyzer
             
             if (cachedResult.isErr)
             {
-                Logger.warning("Cache lookup failed for " ~ source);
+                structuredLog.warning("cache_lookup_failed_for_").field("detail", "Cache lookup failed for " ~ source).emit();
                 changedFiles ~= source;  // Fallback: reanalyze
                 continue;
             }
@@ -111,7 +111,7 @@ final class IncrementalAnalyzer : IIncrementalAnalyzer
             {
                 analyses ~= *cached;
                 filesCachedHit++;
-                Logger.debugLog("  Cache hit: " ~ source);
+                structuredLog.debug_("__cache_hit_").field("detail", "  Cache hit: " ~ source).emit();
             }
             else
             {
@@ -153,7 +153,7 @@ final class IncrementalAnalyzer : IIncrementalAnalyzer
     /// Initialize tracking for all sources in workspace
     VoidBuildResult initialize(WorkspaceConfig config) @system
     {
-        Logger.info("Initializing incremental analysis tracking...");
+        structuredLog.info("initializing_incremental_analysis_tracki").emit();
         
         string[] allSources;
         foreach (ref target; config.targets)
@@ -165,16 +165,16 @@ final class IncrementalAnalyzer : IIncrementalAnalyzer
             }
         }
         
-        Logger.debugLog("Tracking " ~ allSources.length.to!string ~ " source files");
+        structuredLog.debug_("tracking_").field("detail", "Tracking " ~ allSources.length.to!string ~ " source files").emit();
         
         auto result = tracker.trackBatch(allSources);
         if (result.isErr)
         {
-            Logger.error("Failed to initialize file tracking");
+            structuredLog.error("failed_to_initialize_file_tracking").emit();
             return result;
         }
         
-        Logger.success("Incremental analysis initialized");
+        structuredLog.info("incremental_analysis_initialized").emit();
         return Ok!BuildError();
     }
     
@@ -261,9 +261,9 @@ final class IncrementalAnalyzer : IIncrementalAnalyzer
         
         if (reduction > 0)
         {
-            Logger.success("Incremental analysis: " ~
+            structuredLog.info("incremental_analysis_").field("detail", "Incremental analysis: " ~
                           saved.to!string ~ "/" ~ totalFiles.to!string ~
-                          " files cached (" ~ reduction.to!string[0..4] ~ "% reduction)");
+                          " files cached (" ~ reduction.to!string[0..4] ~ "% reduction)").emit();
         }
     }
 }

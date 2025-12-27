@@ -9,8 +9,9 @@ import engine.distributed.protocol.protocol;
 import engine.distributed.protocol.protocol : NetworkError, DistributedError;
 import engine.distributed.protocol.transport;
 import engine.distributed.worker.peers;
+import engine.distributed.worker.adaptive;
 import infrastructure.errors : BuildError, Result, Ok, Err;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Work-stealing strategy
 enum StealStrategy
@@ -31,6 +32,8 @@ struct StealConfig
     size_t maxRetries = 3;                  // Max steal attempts
     size_t minLocalQueue = 2;               // Min local work before stealing
     float stealThreshold = 0.5;             // Load threshold to trigger steal
+    bool enableAdaptive = false;            // Enable adaptive threshold tuning
+    AdaptiveConfig adaptiveConfig;          // Adaptive tuning configuration
 }
 
 /// Work-stealing metrics
@@ -62,12 +65,24 @@ final class StealEngine
     private StealConfig config;
     private StealMetrics metrics;
     private WorkerId selfId;
+    private AdaptiveThresholds adaptive;
     
     this(WorkerId selfId, PeerRegistry peers, StealConfig config = StealConfig.init) @safe
     {
         this.selfId = selfId;
         this.peers = peers;
         this.config = config;
+        
+        if (config.enableAdaptive)
+        {
+            ThresholdState initial = {
+                minLocalQueue: config.minLocalQueue,
+                stealThreshold: config.stealThreshold,
+                stealTimeout: config.stealTimeout,
+                retryBackoff: config.retryBackoff
+            };
+            this.adaptive = new AdaptiveThresholds(config.adaptiveConfig, initial);
+        }
     }
     
     /// Attempt to steal work from a peer (returns ActionRequest if successful, null otherwise)
@@ -75,36 +90,52 @@ final class StealEngine
     {
         atomicOp!"+="(metrics.attempts, 1);
         auto victimResult = selectVictim();
-        if (victimResult.isErr) { atomicOp!"+="(metrics.failures, 1); return null; }
+        if (victimResult.isErr) { atomicOp!"+="(metrics.failures, 1); recordAdaptive(false, 0, false, false); return null; }
         
         auto victimId = victimResult.unwrap();
-        foreach (attempt; 0 .. config.maxRetries)
+        immutable effectiveRetries = config.maxRetries;
+        immutable effectiveBackoff = getEffectiveBackoff();
+        immutable effectiveTimeout = getEffectiveTimeout();
+        
+        foreach (attempt; 0 .. effectiveRetries)
         {
-            auto result = trySteal(victimId, transport);
+            immutable startTime = MonoTime.currTime;
+            auto result = tryStealWithTimeout(victimId, transport, effectiveTimeout);
+            immutable latencyUs = (MonoTime.currTime - startTime).total!"usecs";
+            
             if (result.isOk)
             {
                 if (auto action = result.unwrap())
                 {
                     atomicOp!"+="(metrics.successes, 1);
-                    Logger.debugLog("Stole work from " ~ victimId.toString());
+                    recordAdaptive(true, latencyUs, false, false);
+                    structuredLog.debug_("stole_work_from_").field("detail", "Stole work from " ~ victimId.toString()).emit();
                     return action;
                 }
             }
-            else if (cast(NetworkError)result.unwrapErr() !is null)
-            { atomicOp!"+="(metrics.networkErrors, 1); peers.markDead(victimId); break; }
+            else
+            {
+                auto err = result.unwrapErr();
+                immutable isNetworkErr = cast(NetworkError)err !is null;
+                immutable isTimeout = err.msg.length > 0 && err.msg[0..min(7, err.msg.length)] == "Steal t";
+                
+                if (isNetworkErr) { atomicOp!"+="(metrics.networkErrors, 1); recordAdaptive(false, latencyUs, true, false); peers.markDead(victimId); break; }
+                if (isTimeout) { atomicOp!"+="(metrics.timeouts, 1); recordAdaptive(false, latencyUs, false, true); }
+            }
             
-            if (attempt < config.maxRetries - 1) Thread.sleep(config.retryBackoff * (1 << attempt));
+            if (attempt < effectiveRetries - 1) Thread.sleep(effectiveBackoff * (1 << attempt));
         }
         atomicOp!"+="(metrics.failures, 1);
+        recordAdaptive(false, 0, false, false);
         return null;
     }
     
     /// Handle steal request from another worker (returns StealResponse with action if available)
     StealResponse handleStealRequest(StealRequest req, ActionRequest delegate() @system tryStealLocal) @system
     {
-        Logger.debugLog("Processing steal request from " ~ req.thief.toString());
+        structuredLog.debug_("processing_steal_request_from_").field("detail", "Processing steal request from " ~ req.thief.toString()).emit();
         auto action = tryStealLocal();
-        Logger.debugLog(action !is null ? "Giving work to " ~ req.thief.toString() : "No work to give to " ~ req.thief.toString());
+        structuredLog.debug_("log_event").field("message", action !is null ? "Giving work to " ~ req.thief.toString() : "No work to give to " ~ req.thief.toString()).emit();
         return StealResponse(selfId, req.thief, action !is null, action);
     }
     
@@ -122,6 +153,36 @@ final class StealEngine
         atomicStore(metrics.failures, cast(size_t)0);
         atomicStore(metrics.timeouts, cast(size_t)0);
         atomicStore(metrics.networkErrors, cast(size_t)0);
+    }
+    
+    /// Get adaptive threshold state (null if not enabled)
+    ThresholdState getAdaptiveState() @trusted
+    {
+        return adaptive !is null ? adaptive.getState() : ThresholdState.init;
+    }
+    
+    /// Get adaptive statistics (null if not enabled)
+    AdaptiveStats getAdaptiveStats() @trusted
+    {
+        return adaptive !is null ? adaptive.getStats() : AdaptiveStats.init;
+    }
+    
+    /// Check if adaptive tuning is enabled
+    bool isAdaptiveEnabled() @trusted const nothrow @nogc
+    {
+        return adaptive !is null;
+    }
+    
+    /// Get effective minLocalQueue (respects adaptive adjustments)
+    size_t getEffectiveMinLocalQueue() @trusted
+    {
+        return adaptive !is null ? adaptive.getState().minLocalQueue : config.minLocalQueue;
+    }
+    
+    /// Get effective stealThreshold (respects adaptive adjustments)
+    float getEffectiveStealThreshold() @trusted
+    {
+        return adaptive !is null ? adaptive.getState().stealThreshold : config.stealThreshold;
     }
     
     private:
@@ -190,9 +251,35 @@ final class StealEngine
         return metrics.successRate() < 0.3 ? selectMostLoaded() : peers.selectVictim(); // If success rate is low, try most loaded (more aggressive), otherwise use power-of-two (balanced)
     }
     
-    /// Try to steal from specific victim
-    Result!(ActionRequest, DistributedError) trySteal(WorkerId victimId, Transport transport) @trusted
+    /// Get effective timeout (respects adaptive adjustments)
+    Duration getEffectiveTimeout() @trusted
     {
+        return adaptive !is null ? adaptive.getState().stealTimeout : config.stealTimeout;
+    }
+    
+    /// Get effective backoff (respects adaptive adjustments)
+    Duration getEffectiveBackoff() @trusted
+    {
+        return adaptive !is null ? adaptive.getState().retryBackoff : config.retryBackoff;
+    }
+    
+    /// Record attempt to adaptive system
+    void recordAdaptive(bool success, long latencyUs, bool networkErr, bool timeout) @trusted
+    {
+        if (adaptive !is null) adaptive.recordAttempt(success, latencyUs, networkErr, timeout);
+    }
+    
+    /// Try steal with specific timeout
+    Result!(ActionRequest, DistributedError) tryStealWithTimeout(WorkerId victimId, Transport transport, Duration timeout) @trusted
+    {
+        return trySteal(victimId, transport, timeout);
+    }
+    
+    /// Try to steal from specific victim
+    Result!(ActionRequest, DistributedError) trySteal(WorkerId victimId, Transport transport, Duration timeout = Duration.init) @trusted
+    {
+        immutable effectiveTimeout = timeout == Duration.init ? config.stealTimeout : timeout;
+        
         // Get victim address
         auto peerResult = peers.getPeer(victimId);
         if (peerResult.isErr)
@@ -214,28 +301,19 @@ final class StealEngine
             auto sendResult = transport.sendStealRequest(victimId, req);
             if (sendResult.isErr)
             {
-                atomicOp!"+="(metrics.networkErrors, 1);
                 peers.markDead(victimId);
                 return Err!(ActionRequest, DistributedError)(
                     new DistributedError("Failed to send steal request"));
             }
             
             // Wait for response with timeout
-            auto receiveResult = transport.receiveStealResponse(config.stealTimeout);
+            auto receiveResult = transport.receiveStealResponse(effectiveTimeout);
             if (receiveResult.isErr)
             {
                 immutable elapsed = MonoTime.currTime - startTime;
-                if (elapsed >= config.stealTimeout)
-                {
-                    atomicOp!"+="(metrics.timeouts, 1);
-                    return Err!(ActionRequest, DistributedError)(
-                        new DistributedError("Steal timeout"));
-                }
-                else
-                {
-                    atomicOp!"+="(metrics.networkErrors, 1);
-                    return Err!(ActionRequest, DistributedError)(receiveResult.unwrapErr());
-                }
+                if (elapsed >= effectiveTimeout)
+                    return Err!(ActionRequest, DistributedError)(new DistributedError("Steal timeout"));
+                return Err!(ActionRequest, DistributedError)(receiveResult.unwrapErr());
             }
             
             auto envelope = receiveResult.unwrap();
@@ -244,19 +322,14 @@ final class StealEngine
             // Check if victim had work to give
             if (response.hasWork && response.action !is null)
             {
-                Logger.debugLog("Successfully stole work from " ~ victimId.toString());
+                structuredLog.debug_("successfully_stole_work_from_").field("detail", "Successfully stole work from " ~ victimId.toString()).emit();
                 return Ok!(ActionRequest, DistributedError)(response.action);
             }
-            else
-            {
-                // Victim had no work
-                return Ok!(ActionRequest, DistributedError)(null);
-            }
+            return Ok!(ActionRequest, DistributedError)(null);  // Victim had no work
         }
         catch (Exception e)
         {
-            atomicOp!"+="(metrics.networkErrors, 1);
-            Logger.error("Steal attempt failed: " ~ e.msg);
+            structuredLog.error("steal_attempt_failed_").field("detail", "Steal attempt failed: " ~ e.msg).emit();
             peers.markDead(victimId);
             return Err!(ActionRequest, DistributedError)(
                 new DistributedError("Steal exception: " ~ e.msg));

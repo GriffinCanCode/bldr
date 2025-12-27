@@ -15,7 +15,7 @@ import languages.compiled.cpp.builders.base;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Ninja-based builder
 class NinjaBuilder : BaseCppBuilder
@@ -40,7 +40,7 @@ class NinjaBuilder : BaseCppBuilder
             return result;
         }
         
-        Logger.debugLog("Building with Ninja");
+        structuredLog.debug_("building_with_ninja").emit();
         
         // Find build.ninja
         string ninjaFile = findNinjaFile(sources);
@@ -137,8 +137,8 @@ class NinjaBuilder : BaseCppBuilder
             cmd ~= ["-v"];
         }
         
-        Logger.info("Building with Ninja...");
-        Logger.debugLog("Command: " ~ cmd.join(" "));
+        structuredLog.info("building_with_ninja").emit();
+        structuredLog.debug_("command_").field("detail", "Command: " ~ cmd.join(" ")).emit();
         
         // Execute in project directory
         auto res = execute(cmd, null, Config.none, size_t.max, projectDir);

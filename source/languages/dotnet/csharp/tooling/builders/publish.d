@@ -12,7 +12,7 @@ import languages.dotnet.csharp.core.config;
 import infrastructure.analysis.targets.spec;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Publish builder for single-file, R2R, and trimmed builds
 class PublishBuilder : CSharpBuilder
@@ -29,7 +29,7 @@ class PublishBuilder : CSharpBuilder
     {
         BuildResult result;
         
-        Logger.info("Building with publish builder");
+        structuredLog.info("building_with_publish_builder").emit();
         
         // Use dotnet publish
         if (!DotNetOps.publish(workspaceConfig.root, config))

@@ -10,7 +10,7 @@ import std.string;
 import std.conv;
 import languages.jvm.java.analysis.base;
 import languages.jvm.java.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// PMD static analyzer
 class PMDAnalyzer : Analyzer
@@ -19,7 +19,7 @@ class PMDAnalyzer : Analyzer
     {
         AnalysisResult result;
         
-        Logger.info("Running PMD analysis");
+        structuredLog.info("running_pmd_analysis").emit();
         
         string[] cmd = ["pmd"];
         

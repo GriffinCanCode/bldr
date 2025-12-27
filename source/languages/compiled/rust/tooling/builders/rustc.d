@@ -12,7 +12,7 @@ import languages.compiled.rust.core.config;
 import languages.compiled.rust.managers.toolchain;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action;
 
 /// Direct rustc builder - compiles without cargo with action-level caching
@@ -47,7 +47,7 @@ class RustcBuilder : RustBuilder
             return result;
         }
         
-        Logger.debugLog("Building Rust with rustc: " ~ sources.join(", "));
+        structuredLog.debug_("building_rust_with_rustc_").field("detail", "Building Rust with rustc: " ~ sources.join(", ")).emit();
         
         // Build command based on mode
         final switch (config.mode)
@@ -181,7 +181,7 @@ class RustcBuilder : RustBuilder
         // Check if compilation is cached
         if (actionCache.isCached(actionId, [entryPoint], metadata) && exists(outputPath))
         {
-            Logger.debugLog("  [Cached] Rustc compilation: " ~ outputPath);
+            structuredLog.debug_("__cached_rustc_compilation_").field("detail", "  [Cached] Rustc compilation: " ~ outputPath).emit();
             result.success = true;
             result.outputs = [outputPath];
             result.outputHash = FastHash.hashFile(outputPath);
@@ -230,7 +230,7 @@ class RustcBuilder : RustBuilder
         // Add rustc flags
         cmd ~= config.rustcFlags;
         
-        Logger.debugLog("Rustc command: " ~ cmd.join(" "));
+        structuredLog.debug_("rustc_command_").field("detail", "Rustc command: " ~ cmd.join(" ")).emit();
         
         // Set environment variables
         string[string] env = null;
@@ -314,7 +314,7 @@ class RustcBuilder : RustBuilder
         // Check if module compilation is cached
         if (actionCache.isCached(actionId, [source], metadata) && exists(rlibPath))
         {
-            Logger.debugLog("  [Cached] " ~ source);
+            structuredLog.debug_("__cached_").field("detail", "  [Cached] " ~ source).emit();
             result.success = true;
             result.outputs = [rlibPath];
             return result;
@@ -337,7 +337,7 @@ class RustcBuilder : RustBuilder
         
         cmd ~= config.rustcFlags;
         
-        Logger.debugLog("Compiling module: " ~ source);
+        structuredLog.debug_("compiling_module_").field("detail", "Compiling module: " ~ source).emit();
         
         // Set environment variables
         string[string] env = null;
@@ -410,7 +410,7 @@ class RustcBuilder : RustBuilder
         // Check if linking is cached
         if (actionCache.isCached(actionId, modules, metadata) && exists(outputPath))
         {
-            Logger.debugLog("  [Cached] Linking: " ~ outputPath);
+            structuredLog.debug_("__cached_linking_").field("detail", "  [Cached] Linking: " ~ outputPath).emit();
             result.success = true;
             return result;
         }
@@ -439,7 +439,7 @@ class RustcBuilder : RustBuilder
         
         cmd ~= config.rustcFlags;
         
-        Logger.debugLog("Linking: " ~ outputPath);
+        structuredLog.debug_("linking_").field("detail", "Linking: " ~ outputPath).emit();
         
         // Set environment variables
         string[string] env = null;
@@ -518,7 +518,7 @@ class RustcBuilder : RustBuilder
         
         cmd ~= config.rustcFlags;
         
-        Logger.debugLog("Rustc check: " ~ cmd.join(" "));
+        structuredLog.debug_("rustc_check_").field("detail", "Rustc check: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         
@@ -564,7 +564,7 @@ class RustcBuilder : RustBuilder
         
         cmd ~= config.rustcFlags;
         
-        Logger.debugLog("Rustc test compile: " ~ cmd.join(" "));
+        structuredLog.debug_("rustc_test_compile_").field("detail", "Rustc test compile: " ~ cmd.join(" ")).emit();
         
         auto compileRes = execute(cmd);
         
@@ -575,7 +575,7 @@ class RustcBuilder : RustBuilder
         }
         
         // Run test binary
-        Logger.debugLog("Running tests: " ~ testBinary);
+        structuredLog.debug_("running_tests_").field("detail", "Running tests: " ~ testBinary).emit();
         
         string[] testCmd = [testBinary] ~ config.testFlags;
         auto testRes = execute(testCmd);

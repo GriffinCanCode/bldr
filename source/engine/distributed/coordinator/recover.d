@@ -14,7 +14,7 @@ import engine.distributed.coordinator.scheduler;
 import engine.distributed.coordinator.health;
 import infrastructure.errors;
 import infrastructure.errors.formatting.format : formatError = format;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Work reassignment strategy
 enum ReassignStrategy
@@ -65,18 +65,18 @@ final class CoordinatorRecovery
     Result!DistributedError handleWorkerFailure(WorkerId worker, string reason) @trusted
     {
         atomicOp!"+="(totalFailures, 1);
-        Logger.warning("Handling worker failure: " ~ worker.toString() ~ " (" ~ reason ~ ")");
+        structuredLog.warning("handling_worker_failure_").field("detail", "Handling worker failure: " ~ worker.toString() ~ " (" ~ reason ~ ")").emit();
         
         synchronized (mutex)
         {
             auto inProgressActions = registry.inProgressActions(worker);
             if (inProgressActions.length == 0)
             {
-                Logger.info("No work to reassign from " ~ worker.toString());
+                structuredLog.info("no_work_to_reassign_from_").field("detail", "No work to reassign from " ~ worker.toString()).emit();
                 return Ok!DistributedError();
             }
             
-            Logger.info("Reassigning " ~ inProgressActions.length.to!string ~ " actions from " ~ worker.toString());
+            structuredLog.info("reassigning_").field("detail", "Reassigning " ~ inProgressActions.length.to!string ~ " actions from " ~ worker.toString()).emit();
             foreach (action; inProgressActions) reassignmentQueue.insertBack(action);
             
             scheduler.onWorkerFailure(worker);
@@ -100,7 +100,7 @@ final class CoordinatorRecovery
                 {
                     reassignmentQueue.insertFront(action);
                     atomicOp!"+="(failedReassignments, 1);
-                    Logger.warning("No workers available for reassignment");
+                    structuredLog.warning("no_workers_available_for_reassignment").emit();
                     return Result!DistributedError.err(new DistributedError("No available workers for reassignment"));
                 }
                 
@@ -108,13 +108,13 @@ final class CoordinatorRecovery
                 if (assignResult.isErr)
                 {
                     atomicOp!"+="(failedReassignments, 1);
-                    Logger.error("Failed to reassign action");
-                    Logger.error(formatError(assignResult.unwrapErr()));
+                    structuredLog.error("failed_to_reassign_action").emit();
+                    structuredLog.error("log_event").field("message", formatError(assignResult.unwrapErr())).emit();
                     return assignResult;
                 }
                 
                 atomicOp!"+="(successfulReassignments, 1);
-                Logger.info("Reassigned action " ~ action.toString() ~ " to worker " ~ workerResult.unwrap().toString());
+                structuredLog.info("reassigned_action_").field("detail", "Reassigned action " ~ action.toString() ~ " to worker " ~ workerResult.unwrap().toString()).emit();
             }
             return Ok!DistributedError();
         }
@@ -139,7 +139,7 @@ final class CoordinatorRecovery
         {
             blacklist.remove(worker);
             atomicOp!"-="(blacklistedWorkers, 1);
-            Logger.info("Worker removed from blacklist: " ~ worker.toString());
+            structuredLog.info("worker_removed_from_blacklist_").field("detail", "Worker removed from blacklist: " ~ worker.toString()).emit();
         }
     }
     
@@ -194,13 +194,13 @@ final class CoordinatorRecovery
             immutable backoffSeconds = 1 << min(entry.failureCount, 8);
             immutable duration = min(seconds(backoffSeconds), maxBlacklistDuration);
             entry.nextRetryTime = Clock.currTime + duration;
-            Logger.warning("Worker blacklist extended: " ~ worker.toString() ~ " (failures: " ~ entry.failureCount.to!string ~ ", next retry: " ~ backoffSeconds.to!string ~ "s)");
+            structuredLog.warning("worker_blacklist_extended_").field("detail", "Worker blacklist extended: " ~ worker.toString() ~ " (failures: " ~ entry.failureCount.to!string ~ ", next retry: " ~ backoffSeconds.to!string ~ "s)").emit();
         }
         else
         {
             blacklist[worker] = WorkerBlacklist(worker, reason, Clock.currTime, Clock.currTime + 5.seconds, 1);
             atomicOp!"+="(blacklistedWorkers, 1);
-            Logger.info("Worker blacklisted: " ~ worker.toString() ~ " (reason: " ~ reason ~ ")");
+            structuredLog.info("worker_blacklisted_").field("detail", "Worker blacklisted: " ~ worker.toString() ~ " (reason: " ~ reason ~ ")").emit();
         }
     }
     
@@ -323,7 +323,7 @@ final class ReassignmentManager
     void processBatch() @trusted
     {
         if (batchQueue.length == 0) return;
-        Logger.info("Processing reassignment batch: " ~ batchQueue.length.to!string ~ " actions");
+        structuredLog.info("processing_reassignment_batch_").field("detail", "Processing reassignment batch: " ~ batchQueue.length.to!string ~ " actions").emit();
         ActionId[][Priority] byPriority;
         foreach (action; batchQueue) {} // Would get priority from scheduler: byPriority[priority] ~= action;
         batchQueue.length = 0;

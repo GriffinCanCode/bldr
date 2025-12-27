@@ -14,7 +14,7 @@ import infrastructure.telemetry;
 import infrastructure.telemetry.distributed.tracing;
 import infrastructure.telemetry.distributed.otlp : OtlpHttpExporter, OtlpConfig;
 import infrastructure.utils.logging.structured;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.simd.capabilities;
 import infrastructure.config.schema.schema;
 import infrastructure.config.parsing.parser;
@@ -67,59 +67,59 @@ final class BuildServices : IServiceContainer
     /// Create services with production configuration
     this(WorkspaceConfig config, BuildOptions options)
     {
-        Logger.debugLog("BuildServices: Starting constructor");
+        structuredLog.debug_("buildservices_starting_constructor").emit();
         this._config = config;
         this._renderMode = RenderMode.Auto;
         
         // Initialize SIMD capabilities early (detect hardware once)
-        Logger.debugLog("BuildServices: Initializing SIMD");
+        structuredLog.debug_("buildservices_initializing_simd").emit();
         this._initializeSIMD();
         
         // Initialize observability (tracing and structured logging)
-        Logger.debugLog("BuildServices: Initializing observability");
+        structuredLog.debug_("buildservices_initializing_observability").emit();
         this._initializeObservability();
         
         // Initialize shutdown coordinator (non-singleton, DI-based)
-        Logger.debugLog("BuildServices: Creating ShutdownCoordinator");
+        structuredLog.debug_("buildservices_creating_shutdowncoordinat").emit();
         this._shutdownCoordinator = new ShutdownCoordinator();
         
         // Initialize event system (must be before cache service)
-        Logger.debugLog("BuildServices: Creating EventPublisher");
+        structuredLog.debug_("buildservices_creating_eventpublisher").emit();
         this._publisher = new SimpleEventPublisher();
         
         // Initialize handler registry (handlers loaded lazily on-demand)
-        Logger.debugLog("BuildServices: Creating HandlerRegistry");
+        structuredLog.debug_("buildservices_creating_handlerregistry").emit();
         this._registry = new HandlerRegistry();
         
         // Initialize cache (using coordinator for unified caching)
         import engine.runtime.services.caching : CacheService;
-        Logger.debugLog("BuildServices: Creating CacheService");
+        structuredLog.debug_("buildservices_creating_cacheservice").emit();
         auto cacheService = new CacheService(options.cacheDir, this._publisher);
         this._cache = cacheService.getInternalCache();
         this._shutdownCoordinator.registerCache(this._cache);
         
         // Initialize incremental analyzer with dependency injection
-        Logger.debugLog("BuildServices: Creating IncrementalAnalyzer with DI");
+        structuredLog.debug_("buildservices_creating_incrementalanalyz").emit();
         this._initializeIncrementalAnalyzer(config, options.cacheDir);
         
         // Initialize analyzer with injected incremental analyzer
-        Logger.debugLog("BuildServices: Creating DependencyAnalyzer");
+        structuredLog.debug_("buildservices_creating_dependencyanalyze").emit();
         this._analyzer = new DependencyAnalyzer(config, this._incrementalAnalyzer, options.cacheDir);
         
         // Initialize economics (if enabled)
-        Logger.debugLog("BuildServices: Initializing economics");
+        structuredLog.debug_("buildservices_initializing_economics").emit();
         this._economics = new EconomicsIntegration(options.economics, options.cacheDir);
         
         // Initialize remote execution service (if enabled)
-        Logger.debugLog("BuildServices: Initializing remote execution");
+        structuredLog.debug_("buildservices_initializing_remote_execut").emit();
         this._initializeRemoteExecution(config, options);
         
         // Initialize persistent worker service for JVM/TypeScript compilation speedup
-        Logger.debugLog("BuildServices: Initializing persistent workers");
+        structuredLog.debug_("buildservices_initializing_persistent_wo").emit();
         this._initializePersistentWorkers(options);
         
         // Initialize telemetry
-        Logger.debugLog("BuildServices: Initializing telemetry");
+        structuredLog.debug_("buildservices_initializing_telemetry").emit();
         auto telemetryConfig = TelemetryConfig.fromEnvironment();
         this._telemetryEnabled = telemetryConfig.enabled;
         if (this._telemetryEnabled)
@@ -130,13 +130,8 @@ final class BuildServices : IServiceContainer
         }
         
         // Log initialization (after _structuredLogger is initialized)
-        Logger.debugLog("BuildServices: Finalizing constructor");
         if (this._structuredLogger !is null)
-            this._structuredLogger.info("Build services initialized", [
-                "cache_dir": options.cacheDir,
-                "telemetry_enabled": this._telemetryEnabled.to!string
-            ]);
-        Logger.debugLog("BuildServices: Constructor complete");
+            this._structuredLogger.info("build_services_initialized").emit();
     }
     
     /// Initialize SIMD capabilities (hardware detection and dispatch)
@@ -203,7 +198,7 @@ final class BuildServices : IServiceContainer
         catch (Exception e)
         {
             // Fallback to null on initialization failure
-            Logger.warning("Failed to initialize incremental analyzer: " ~ e.msg);
+            structuredLog.warning("failed_to_initialize_incremental_analyze").field("detail", "Failed to initialize incremental analyzer: " ~ e.msg).emit();
             this._incrementalAnalyzer = null;
         }
     }
@@ -279,13 +274,13 @@ final class BuildServices : IServiceContainer
             }
             
             this._tracer = new Tracer(exporter, tracerCfg);
-            this._structuredLogger.debug_("Distributed tracing enabled", [
-                "exporter": exporterType,
-                "output": exporterInfo,
-                "service": tracerCfg.serviceName,
-                "sampling": tracerCfg.samplingRatio.to!string,
-                "simd.level": this._simdCapabilities !is null ? this._simdCapabilities.implName : "unknown"
-            ]);
+            this._structuredLogger.debug_("Distributed tracing enabled")
+                .field("exporter", exporterType)
+                .field("output", exporterInfo)
+                .field("service", tracerCfg.serviceName)
+                .field("sampling", tracerCfg.samplingRatio.to!string)
+                .field("simd.level", this._simdCapabilities !is null ? this._simdCapabilities.implName : "unknown")
+                .emit();
         }
         else
         {
@@ -393,8 +388,8 @@ final class BuildServices : IServiceContainer
         auto estimator = new CostEstimator(history);
         auto service = new SpeculationService(estimator, graph);
         
-        Logger.debugLog("Created speculation service for graph with " ~ 
-                       graph.nodes.length.to!string ~ " nodes");
+        structuredLog.debug_("created_speculation_service_for_graph_wi").field("detail", "Created speculation service for graph with " ~ 
+                       graph.nodes.length.to!string ~ " nodes").emit();
         return service;
     }
     
@@ -479,8 +474,8 @@ final class BuildServices : IServiceContainer
             
             if (appendResult.isErr)
             {
-                import infrastructure.utils.logging.logger;
-                Logger.warning("Failed to persist telemetry: " ~ appendResult.unwrapErr().toString());
+                import infrastructure.utils.logging;
+                structuredLog.warning("failed_to_persist_telemetry_").field("detail", "Failed to persist telemetry: " ~ appendResult.unwrapErr().toString()).emit();
             }
         }
     }
@@ -498,12 +493,12 @@ final class BuildServices : IServiceContainer
     /// Explicitly flushes all caches and persists state before termination
     void shutdown() @trusted
     {
-        Logger.debugLog("Shutting down services...");
+        structuredLog.debug_("shutting_down_services").emit();
         
         // Stop persistent worker service (saves metrics)
         if (_persistentWorkers !is null)
         {
-            Logger.debugLog("Shutting down persistent workers...");
+            structuredLog.debug_("shutting_down_persistent_workers").emit();
             shutdownWorkerService();  // Stops the global service
             _persistentWorkers = null;
         }
@@ -520,7 +515,7 @@ final class BuildServices : IServiceContainer
             auto econResult = _economics.shutdown();
             if (econResult.isErr)
             {
-                Logger.warning("Economics shutdown failed: " ~ econResult.unwrapErr().message());
+                structuredLog.warning("economics_shutdown_failed_").field("detail", "Economics shutdown failed: " ~ econResult.unwrapErr().message()).emit();
             }
         }
         
@@ -540,7 +535,7 @@ final class BuildServices : IServiceContainer
         if (_simdCapabilities !is null)
             _simdCapabilities.shutdown();
         
-        Logger.debugLog("Services shutdown complete");
+        structuredLog.debug_("services_shutdown_complete").emit();
     }
     
     /// Initialize remote execution service (if enabled)
@@ -552,7 +547,7 @@ final class BuildServices : IServiceContainer
         immutable distConfig = options.distributed;
         if (!distConfig.remoteExecution)
         {
-            Logger.debugLog("Remote execution disabled");
+            structuredLog.debug_("remote_execution_disabled").emit();
             return;
         }
         
@@ -596,22 +591,22 @@ final class BuildServices : IServiceContainer
             auto startResult = _remoteService.start();
             if (startResult.isErr)
             {
-                Logger.warning("Failed to start remote execution service: " ~
-                             startResult.unwrapErr().message());
+                structuredLog.warning("failed_to_start_remote_execution_service").field("detail", "Failed to start remote execution service: " ~
+                             startResult.unwrapErr().message()).emit();
                 _remoteService = null;
             }
             else
             {
-                Logger.debugLog("Remote execution service started");
-                Logger.debugLog("  Coordinator: " ~ distConfig.coordinatorUrl);
-                Logger.debugLog("  Workers: " ~ distConfig.minWorkers.to!string ~
+                structuredLog.debug_("remote_execution_service_started").emit();
+                structuredLog.debug_("__coordinator_").field("detail", "  Coordinator: " ~ distConfig.coordinatorUrl).emit();
+                structuredLog.debug_("__workers_").field("detail", "  Workers: " ~ distConfig.minWorkers.to!string ~
                           "-" ~ distConfig.maxWorkers.to!string ~
-                          " (autoscale: " ~ distConfig.enableAutoScale.to!string ~ ")");
+                          " (autoscale: " ~ distConfig.enableAutoScale.to!string ~ ")").emit();
             }
         }
         catch (Exception e)
         {
-            Logger.error("Failed to initialize remote execution: " ~ e.msg);
+            structuredLog.error("failed_to_initialize_remote_execution_").field("detail", "Failed to initialize remote execution: " ~ e.msg).emit();
             _remoteService = null;
         }
     }
@@ -639,7 +634,7 @@ final class BuildServices : IServiceContainer
         auto workersDisabled = environment.get("BUILDER_WORKERS_DISABLED", "0");
         if (workersDisabled == "1" || workersDisabled == "true")
         {
-            Logger.debugLog("Persistent workers disabled via environment");
+            structuredLog.debug_("persistent_workers_disabled_via_environm").emit();
             return;
         }
         
@@ -662,11 +657,11 @@ final class BuildServices : IServiceContainer
             initWorkerService(config);
             _persistentWorkers = getWorkerService();
             
-            Logger.debugLog("Persistent workers initialized (JVM/TS/Rust/Go/Python 3-50x speedup)");
+            structuredLog.debug_("persistent_workers_initialized_jvmtsrust").emit();
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to initialize persistent workers: " ~ e.msg);
+            structuredLog.warning("failed_to_initialize_persistent_workers_").field("detail", "Failed to initialize persistent workers: " ~ e.msg).emit();
             _persistentWorkers = null;
         }
     }

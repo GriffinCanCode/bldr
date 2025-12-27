@@ -24,7 +24,7 @@ import engine.distributed.worker.peers : PeerRegistry;
 import engine.economics.estimator : ExecutionHistory;
 import infrastructure.errors;
 import infrastructure.errors.formatting.format : formatError = format;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Coordinator configuration
 struct CoordinatorConfig
@@ -91,7 +91,7 @@ final class Coordinator
                 : new ExecutionHistory();
             this.profileScheduler = createProfiledScheduler(graph, history);
             scheduler.enableProfileGuidedScheduling(profileScheduler);
-            Logger.info("Profile-guided scheduling enabled for critical-path optimization");
+            structuredLog.info("profile_guided_scheduling_enabled").emit();
         }
         
         this.healthMonitor = new HealthMonitor(registry, scheduler, 
@@ -138,7 +138,10 @@ final class Coordinator
                 healthTask = taskScope.launchPeriodic("health-check", config.heartbeatInterval, 
                     () @trusted => healthCheckBody());
                 
-                Logger.info("Coordinator started on " ~ config.host ~ ":" ~ config.port.to!string);
+                structuredLog.info("coordinator_started")
+                    .field("host", config.host)
+                    .field("port", config.port)
+                    .emit();
                 return Ok!DistributedError();
             }
             catch (Exception e)
@@ -171,10 +174,13 @@ final class Coordinator
         if (peerRegistry !is null)
         {
             auto stats = peerRegistry.getStats();
-            Logger.info("Peer registry stats: " ~ stats.totalPeers.to!string ~ " total, " ~ stats.alivePeers.to!string ~ " alive");
+            structuredLog.info("peer_registry_stats")
+                .field("total_peers", stats.totalPeers)
+                .field("alive_peers", stats.alivePeers)
+                .emit();
         }
         
-        Logger.info("Coordinator stopped");
+        structuredLog.info("coordinator_stopped").emit();
     }
     
     /// Select best worker considering affinity, load, and work-stealing
@@ -203,7 +209,7 @@ final class Coordinator
             {
                 if (atomicLoad(p.loadFactor) < 0.5 && registry.getWorker(p.id).isOk)
                 {
-                    Logger.debugLog("Redirecting work to less loaded peer");
+                    structuredLog.debug_("redirecting_to_less_loaded_peer").emit();
                     return Ok!(WorkerId, DistributedError)(p.id);
                 }
             }
@@ -234,9 +240,14 @@ final class Coordinator
         if (result.isOk)
         {
             peerRegistry.updateMetrics(announce.worker, announce.queueDepth, announce.loadFactor);
-            Logger.debugLog("Peer announce received: " ~ announce.worker.toString());
+            structuredLog.debug_("peer_announce_received")
+                .field("worker", announce.worker.toString())
+                .emit();
         }
-        else Logger.warning("Failed to register peer: " ~ result.unwrapErr().message());
+        else 
+            structuredLog.warning("peer_register_failed")
+                .field("error", result.unwrapErr().message())
+                .emit();
     }
     
     /// Get peer list for discovery
@@ -269,15 +280,19 @@ final class Coordinator
             auto sendResult = sendActionToWorker(workerId, request);
             if (sendResult.isErr)
             {
-                Logger.warning("Failed to send action to worker " ~ workerId.toString() ~ ": " ~ sendResult.unwrapErr().message());
+                structuredLog.warning("action_send_failed")
+                    .field("worker", workerId.toString())
+                    .field("error", sendResult.unwrapErr().message())
+                    .emit();
                 scheduler.onFailure(request.id, sendResult.unwrapErr().message());
                 registry.markFailed(workerId, request.id);
                 
                 auto rescheduleResult = scheduler.schedule(request);
                 if (rescheduleResult.isErr)
                 {
-                    Logger.error("Failed to reschedule action");
-                    Logger.error(formatError(rescheduleResult.unwrapErr()));
+                    structuredLog.error("action_reschedule_failed")
+                        .field("error", formatError(rescheduleResult.unwrapErr()))
+                        .emit();
                 }
             }
         }
@@ -320,7 +335,10 @@ final class Coordinator
             {
                 import std.socket : Socket;
                 import std.bitmanip : write;
-                Logger.debugLog("Queued action " ~ request.id.toString() ~ " for worker " ~ workerId.toString());
+                structuredLog.debug_("action_queued")
+                    .field("action", request.id.toString())
+                    .field("worker", workerId.toString())
+                    .emit();
             }
             catch (Exception e)
             {
@@ -350,7 +368,7 @@ final class Coordinator
             (new Thread(() => messageHandler.handleClient(client))).start();
         }
         catch (SocketAcceptException) {} // Timeout, continue
-        catch (Exception e) { if (atomicLoad(running)) Logger.error("Accept failed: " ~ e.msg); }
+        catch (Exception e) { if (atomicLoad(running)) structuredLog.error("accept_failed").field("error", e.msg).emit(); }
     }
     
     /// Health check body (called periodically by TaskScope.launchPeriodic)
@@ -370,8 +388,9 @@ final class Coordinator
             auto recoveryResult = recovery.handleWorkerFailure(worker, "Heartbeat timeout");
             if (recoveryResult.isErr) 
             {
-                Logger.error("Recovery failed");
-                Logger.error(formatError(recoveryResult.unwrapErr()));
+                structuredLog.error("recovery_failed")
+                    .field("error", formatError(recoveryResult.unwrapErr()))
+                    .emit();
             }
             else assignActions();
         }

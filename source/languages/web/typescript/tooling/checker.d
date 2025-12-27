@@ -9,7 +9,7 @@ import std.json;
 import std.string;
 import std.conv;
 import languages.web.typescript.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Type checking result
 struct TypeCheckResult
@@ -63,7 +63,7 @@ class TypeChecker
             cmd ~= sources;
         }
         
-        Logger.debugLog("Type checking: " ~ cmd.join(" "));
+        structuredLog.debug_("type_checking_").field("detail", "Type checking: " ~ cmd.join(" ")).emit();
         
         // Execute tsc
         auto res = execute(cmd, null, Config.none, size_t.max, workspaceRoot);
@@ -71,14 +71,14 @@ class TypeChecker
         if (res.status == 0)
         {
             result.success = true;
-            Logger.debugLog("Type checking passed");
+            structuredLog.debug_("type_checking_passed").emit();
         }
         else
         {
             result.success = false;
             // Parse TypeScript error output
             parseTypeScriptOutput(res.output, result);
-            Logger.debugLog("Type checking failed with " ~ result.errors.length.to!string ~ " errors");
+            structuredLog.debug_("type_checking_failed_with_").field("detail", "Type checking failed with " ~ result.errors.length.to!string ~ " errors").emit();
         }
         
         return result;
@@ -139,7 +139,7 @@ class TypeChecker
         
         if (!exists(tsconfigPath))
         {
-            Logger.warning("tsconfig.json not found: " ~ tsconfigPath);
+            structuredLog.warning("tsconfigjson_not_found_").field("detail", "tsconfig.json not found: " ~ tsconfigPath).emit();
             return config;
         }
         
@@ -208,7 +208,7 @@ class TypeChecker
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse tsconfig.json: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_tsconfigjson_").field("detail", "Failed to parse tsconfig.json: " ~ e.msg).emit();
         }
         
         return config;

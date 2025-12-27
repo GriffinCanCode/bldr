@@ -11,7 +11,7 @@ import languages.scripting.r.core.config;
 import languages.scripting.r.tooling.builders.base;
 import languages.scripting.r.tooling.checkers;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Script builder - creates executable wrappers for R scripts
 class RScriptBuilder : RBuilder
@@ -54,7 +54,7 @@ class RScriptBuilder : RBuilder
                 return result;
             }
             
-            Logger.info("Created R script wrapper: " ~ outputPath);
+            structuredLog.info("created_r_script_wrapper_").field("detail", "Created R script wrapper: " ~ outputPath).emit();
         }
         
         result.success = true;
@@ -85,14 +85,14 @@ class RScriptBuilder : RBuilder
     {
         if (target.sources.empty)
         {
-            Logger.error("No source files specified for R script");
+            structuredLog.error("no_source_files_specified_for_r_script").emit();
             return false;
         }
         
         // Check if main file exists
         if (!exists(target.sources[0]))
         {
-            Logger.error("Main R script not found: " ~ target.sources[0]);
+            structuredLog.error("main_r_script_not_found_").field("detail", "Main R script not found: " ~ target.sources[0]).emit();
             return false;
         }
         
@@ -135,7 +135,7 @@ class RScriptBuilder : RBuilder
         }
         catch (Exception e)
         {
-            Logger.error("Failed to create script wrapper: " ~ e.msg);
+            structuredLog.error("failed_to_create_script_wrapper_").field("detail", "Failed to create script wrapper: " ~ e.msg).emit();
             return false;
         }
     }

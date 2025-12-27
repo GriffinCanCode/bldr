@@ -9,7 +9,7 @@ import std.string;
 import std.algorithm;
 import std.array;
 import std.conv;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Native PHP PHAR packager
 class NativePharPackager : Packager
@@ -32,7 +32,7 @@ class NativePharPackager : Packager
         // Execute script
         string[] cmd = ["php", scriptPath];
         
-        Logger.info("Creating PHAR with native PHP Phar class");
+        structuredLog.info("creating_phar_with_native_php_phar_class").emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, projectRoot);
         result.output = res.output;
@@ -45,7 +45,7 @@ class NativePharPackager : Packager
         catch (Exception e)
         {
             import infrastructure.utils.logging.logger : Logger;
-            Logger.debugLog("Failed to cleanup script file: " ~ e.msg);
+            structuredLog.debug_("failed_to_cleanup_script_file_").field("detail", "Failed to cleanup script file: " ~ e.msg).emit();
         }
         
         if (res.status == 0)
@@ -61,8 +61,8 @@ class NativePharPackager : Packager
             {
                 result.artifacts ~= pharPath;
                 result.artifactSize = getSize(pharPath);
-                Logger.info("PHAR created: " ~ pharPath ~ 
-                          " (" ~ (result.artifactSize / 1024).to!string ~ " KB)");
+                structuredLog.info("phar_created_").field("detail", "PHAR created: " ~ pharPath ~ 
+                          " (" ~ (result.artifactSize / 1024).to!string ~ " KB)").emit();
             }
         }
         else

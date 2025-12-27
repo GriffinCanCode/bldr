@@ -10,7 +10,7 @@ import core.atomic;
 import engine.distributed.protocol.protocol;
 import engine.distributed.protocol.messages;
 import engine.distributed.storage.artifacts;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 import infrastructure.errors.formatting.format : formatError = format;
 import infrastructure.utils.crypto.blake3 : Blake3;
@@ -33,7 +33,7 @@ struct WorkerExecutor
         import engine.distributed.worker.sandbox;
         
         immutable startTime = MonoTime.currTime;
-        Logger.debugLog("Executing action: " ~ request.id.toString());
+        structuredLog.debug_("executing_action_").field("detail", "Executing action: " ~ request.id.toString()).emit();
         
         try
         {
@@ -44,21 +44,21 @@ struct WorkerExecutor
                 auto fetchResult = artifactStore.fetch(inputSpec);
                 if (fetchResult.isErr)
                 {
-                    Logger.error("Failed to fetch input artifact " ~ inputSpec.id.toString());
-                    Logger.error(formatError(fetchResult.unwrapErr()));
+                    structuredLog.error("failed_to_fetch_input_artifact_").field("detail", "Failed to fetch input artifact " ~ inputSpec.id.toString()).emit();
+                    structuredLog.error("log_event").field("message", formatError(fetchResult.unwrapErr())).emit();
                     reportFailure(request.id, "Input artifact fetch failed: " ~ inputSpec.path, startTime, sendResultCallback);
                     return;
                 }
                 inputs ~= fetchResult.unwrap();
-                Logger.debugLog("Fetched input artifact: " ~ inputSpec.id.toString() ~ " (" ~ inputs[$-1].data.length.to!string ~ " bytes)");
+                structuredLog.debug_("fetched_input_artifact_").field("detail", "Fetched input artifact: " ~ inputSpec.id.toString() ~ " (" ~ inputs[$-1].data.length.to!string ~ " bytes)").emit();
             }
             
             // 2. Prepare sandbox
             auto envResult = createSandbox(enableSandboxing).prepare(request, inputs);
             if (envResult.isErr)
             {
-                Logger.error("Sandbox preparation failed");
-                Logger.error(formatError(envResult.unwrapErr()));
+                structuredLog.error("sandbox_preparation_failed").emit();
+                structuredLog.error("log_event").field("message", formatError(envResult.unwrapErr())).emit();
                 reportFailure(request.id, "Sandbox preparation failed", startTime, sendResultCallback);
                 return;
             }
@@ -70,8 +70,8 @@ struct WorkerExecutor
             auto execResult = sandboxEnv.execute(request.command, request.env, request.timeout);
             if (execResult.isErr)
             {
-                Logger.error("Execution failed");
-                Logger.error(formatError(execResult.unwrapErr()));
+                structuredLog.error("execution_failed").emit();
+                structuredLog.error("log_event").field("message", formatError(execResult.unwrapErr())).emit();
                 reportFailure(request.id, "Execution failed", startTime, sendResultCallback);
                 return;
             }
@@ -85,8 +85,8 @@ struct WorkerExecutor
             {
                 foreach (violation; monitor.violations())
                 {
-                    Logger.warning("Resource violation: " ~ violation.message);
-                    Logger.debugLog("  Type: " ~ violation.type.to!string ~ ", Actual: " ~ violation.actual.to!string ~ ", Limit: " ~ violation.limit.to!string);
+                    structuredLog.warning("resource_violation_").field("detail", "Resource violation: " ~ violation.message).emit();
+                    structuredLog.debug_("__type_").field("detail", "  Type: " ~ violation.type.to!string ~ ", Actual: " ~ violation.actual.to!string ~ ", Limit: " ~ violation.limit.to!string).emit();
                 }
                 reportFailure(request.id, "Resource limit violations", startTime, sendResultCallback);
                 return;
@@ -101,11 +101,11 @@ struct WorkerExecutor
                 {
                     if (!outputSpec.optional)
                     {
-                        Logger.error("Required output not found: " ~ outputPath);
+                        structuredLog.error("required_output_not_found_").field("detail", "Required output not found: " ~ outputPath).emit();
                         reportFailure(request.id, "Missing required output: " ~ outputSpec.path, startTime, sendResultCallback);
                         return;
                     }
-                    Logger.debugLog("Optional output not found: " ~ outputPath);
+                    structuredLog.debug_("optional_output_not_found_").field("detail", "Optional output not found: " ~ outputPath).emit();
                     continue;
                 }
                 
@@ -113,7 +113,7 @@ struct WorkerExecutor
                 try { outputData = cast(ubyte[])read(outputPath); }
                 catch (Exception e)
                 {
-                    Logger.error("Failed to read output file " ~ outputPath ~ ": " ~ e.msg);
+                    structuredLog.error("failed_to_read_output_file_").field("detail", "Failed to read output file " ~ outputPath ~ ": " ~ e.msg).emit();
                     reportFailure(request.id, "Failed to read output: " ~ outputSpec.path, startTime, sendResultCallback);
                     return;
                 }
@@ -126,14 +126,14 @@ struct WorkerExecutor
                 auto uploadResult = artifactStore.upload(artifactId, outputData);
                 if (uploadResult.isErr)
                 {
-                    Logger.error("Failed to upload output artifact " ~ artifactId.toString());
-                    Logger.error(formatError(uploadResult.unwrapErr()));
+                    structuredLog.error("failed_to_upload_output_artifact_").field("detail", "Failed to upload output artifact " ~ artifactId.toString()).emit();
+                    structuredLog.error("log_event").field("message", formatError(uploadResult.unwrapErr())).emit();
                     reportFailure(request.id, "Output artifact upload failed: " ~ outputSpec.path, startTime, sendResultCallback);
                     return;
                 }
                 
                 outputIds ~= artifactId;
-                Logger.debugLog("Uploaded output artifact: " ~ artifactId.toString() ~ " (" ~ outputData.length.to!string ~ " bytes)");
+                structuredLog.debug_("uploaded_output_artifact_").field("detail", "Uploaded output artifact: " ~ artifactId.toString() ~ " (" ~ outputData.length.to!string ~ " bytes)").emit();
             }
             
             // 5. Report success
@@ -141,12 +141,12 @@ struct WorkerExecutor
                 duration, outputIds, output.stdout, output.stderr, output.exitCode, sandboxEnv.resourceUsage());
             sendResultCallback(result);
             
-            if (result.status == ResultStatus.Success) Logger.debugLog("Action succeeded: " ~ request.id.toString());
-            else Logger.warning("Action failed with exit code " ~ output.exitCode.to!string);
+            if (result.status == ResultStatus.Success) structuredLog.debug_("action_succeeded_").field("detail", "Action succeeded: " ~ request.id.toString()).emit();
+            else structuredLog.warning("action_failed_with_exit_code_").field("detail", "Action failed with exit code " ~ output.exitCode.to!string).emit();
         }
         catch (Exception e)
         {
-            Logger.error("Action execution exception: " ~ e.msg);
+            structuredLog.error("action_execution_exception_").field("detail", "Action execution exception: " ~ e.msg).emit();
             reportFailure(request.id, e.msg, startTime, sendResultCallback);
         }
     }

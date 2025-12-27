@@ -9,7 +9,7 @@ import std.array;
 import std.string;
 import languages.scripting.ruby.core.config;
 import languages.scripting.ruby.tooling.formatters.base;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// StandardRB formatter (opinionated, zero-config)
 class StandardFormatter : Formatter
@@ -41,7 +41,7 @@ class StandardFormatter : Formatter
         if (!sources.empty)
             cmd ~= sources;
         
-        Logger.info("Running StandardRB" ~ (autoCorrect ? " with auto-fix" : ""));
+        structuredLog.info("running_standardrb").field("detail", "Running StandardRB" ~ (autoCorrect ? " with auto-fix" : "")).emit();
         
         auto res = execute(cmd);
         
@@ -83,13 +83,13 @@ class StandardFormatter : Formatter
     /// Initialize StandardRB configuration
     static bool initialize(string projectRoot)
     {
-        Logger.info("StandardRB uses zero configuration by default");
-        Logger.info("To customize, create .standard.yml");
+        structuredLog.info("standardrb_uses_zero_configuration_by_de").emit();
+        structuredLog.info("to_customize_create_standardyml").emit();
         
         auto configFile = buildPath(projectRoot, ".standard.yml");
         if (exists(configFile))
         {
-            Logger.info(".standard.yml already exists");
+            structuredLog.info("standardyml_already_exists").emit();
             return true;
         }
         
@@ -110,12 +110,12 @@ ignore:
         try
         {
             std.file.write(configFile, content);
-            Logger.info("Created .standard.yml");
+            structuredLog.info("created_standardyml").emit();
             return true;
         }
         catch (Exception e)
         {
-            Logger.error("Failed to create .standard.yml: " ~ e.msg);
+            structuredLog.error("failed_to_create_standardyml_").field("detail", "Failed to create .standard.yml: " ~ e.msg).emit();
             return false;
         }
     }
@@ -182,7 +182,7 @@ ignore:
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse StandardRB JSON output: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_standardrb_json_output_").field("detail", "Failed to parse StandardRB JSON output: " ~ e.msg).emit();
             
             // Fallback: parse as plain text
             foreach (line; output.lineSplitter)

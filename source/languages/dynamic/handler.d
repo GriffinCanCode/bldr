@@ -14,7 +14,7 @@ import languages.dynamic.spec : DynamicLanguageSpec = LanguageSpec;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.security : execute;
 import infrastructure.errors;
 import engine.caching.actions.action;
@@ -110,7 +110,7 @@ class SpecBasedHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to analyze imports in " ~ source);
+                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source).emit();
             }
         }
         
@@ -158,7 +158,7 @@ class SpecBasedHandler : BaseLanguageHandler
         vars["workspace"] = config.root;
         
         auto cmd = spec.expandTemplate(spec.build.compileCmd, vars);
-        Logger.info("Building: " ~ cmd);
+        structuredLog.info("building_").field("detail", "Building: " ~ cmd).emit();
         
         auto res = executeWithEnv(cmd, spec.build.env, config.root);
         
@@ -219,7 +219,7 @@ class SpecBasedHandler : BaseLanguageHandler
         vars["flags"] = target.flags.join(" ");
         
         auto cmd = spec.expandTemplate(spec.build.testCmd, vars);
-        Logger.info("Testing: " ~ cmd);
+        structuredLog.info("testing_").field("detail", "Testing: " ~ cmd).emit();
         
         auto res = executeWithEnv(cmd, spec.build.env, config.root);
         
@@ -249,14 +249,14 @@ class SpecBasedHandler : BaseLanguageHandler
             auto manifestPath = buildPath(config.root, spec.deps.manifest);
             if (!exists(manifestPath))
             {
-                Logger.debugLog("No manifest found at " ~ manifestPath);
+                structuredLog.debug_("no_manifest_found_at_").field("detail", "No manifest found at " ~ manifestPath).emit();
                 return true; // Not an error if optional
             }
             vars["manifest"] = manifestPath;
         }
         
         auto cmd = spec.expandTemplate(spec.deps.installCmd, vars);
-        Logger.info("Installing dependencies: " ~ cmd);
+        structuredLog.info("installing_dependencies_").field("detail", "Installing dependencies: " ~ cmd).emit();
         
         auto res = executeWithEnv(cmd, spec.build.env, config.root);
         return res.status == 0;
@@ -269,11 +269,11 @@ class SpecBasedHandler : BaseLanguageHandler
         vars["workspace"] = config.root;
         
         auto cmd = spec.expandTemplate(spec.build.formatCmd, vars);
-        Logger.debugLog("Formatting: " ~ cmd);
+        structuredLog.debug_("formatting_").field("detail", "Formatting: " ~ cmd).emit();
         
         auto res = executeWithEnv(cmd, spec.build.env, config.root);
         if (res.status != 0)
-            Logger.warning("Formatting had issues: " ~ res.output);
+            structuredLog.warning("formatting_had_issues_").field("detail", "Formatting had issues: " ~ res.output).emit();
     }
     
     private void runLinter(in Target target, in WorkspaceConfig config) @system
@@ -283,11 +283,11 @@ class SpecBasedHandler : BaseLanguageHandler
         vars["workspace"] = config.root;
         
         auto cmd = spec.expandTemplate(spec.build.lintCmd, vars);
-        Logger.debugLog("Linting: " ~ cmd);
+        structuredLog.debug_("linting_").field("detail", "Linting: " ~ cmd).emit();
         
         auto res = executeWithEnv(cmd, spec.build.env, config.root);
         if (res.status != 0)
-            Logger.warning("Linting found issues: " ~ res.output);
+            structuredLog.warning("linting_found_issues_").field("detail", "Linting found issues: " ~ res.output).emit();
     }
     
     /// Execute command with environment variables

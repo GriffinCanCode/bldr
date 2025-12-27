@@ -3,7 +3,7 @@ module engine.runtime.remote.providers.azure;
 import engine.runtime.remote.providers.base;
 import engine.distributed.protocol.protocol : WorkerId;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import std.process : execute;
 import std.format : format;
 import std.datetime : Clock;
@@ -113,7 +113,7 @@ final class AzureVmProvider : CloudProvider
         auto hash = hasher.finish();
         ulong id = *cast(ulong*)&hash[0];
         
-        Logger.info("Created Azure VM: " ~ vmName ~ " (ID: " ~ vmId ~ ")");
+        structuredLog.info("created_azure_vm_").field("detail", "Created Azure VM: " ~ vmName ~ " (ID: " ~ vmId ~ ")").emit();
         return Ok!(WorkerId, BuildError)(WorkerId(id));
     }
     
@@ -143,7 +143,7 @@ final class AzureVmProvider : CloudProvider
             return VoidBuildResult.err(
                 Errors.system(format("Failed to delete Azure VM %s: %s", workerId.toString(), result.output), ErrorCode.NetworkError));
         
-        Logger.info("Deleted Azure VM: " ~ workerId.toString());
+        structuredLog.info("deleted_azure_vm_").field("detail", "Deleted Azure VM: " ~ workerId.toString()).emit();
         return Ok!BuildError();
     }
     

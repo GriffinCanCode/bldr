@@ -11,7 +11,7 @@ import std.json;
 import std.conv;
 import languages.scripting.r.core.config;
 import languages.scripting.r.tooling.info;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Result of package installation
 struct PackageInstallResult
@@ -42,7 +42,7 @@ PackageInstallResult installPackages(
         manager = detectBestPackageManager(rCmd);
     }
     
-    Logger.info("Installing " ~ packages.length.to!string ~ " R package(s) using " ~ manager.to!string);
+    structuredLog.info("installing_").field("detail", "Installing " ~ packages.length.to!string ~ " R package(s) using " ~ manager.to!string).emit();
     
     final switch (manager)
     {
@@ -117,7 +117,7 @@ private PackageInstallResult installWithInstallPackages(
         string[] pkgNames = cranPackages.map!(p => `"` ~ p.name ~ `"`).array;
         string installCode = `install.packages(c(` ~ pkgNames.join(",") ~ `), repos=` ~ reposStr ~ `, dependencies=TRUE, quiet=FALSE)`;
         
-        Logger.debugLog("Installing CRAN packages: " ~ installCode);
+        structuredLog.debug_("installing_cran_packages_").field("detail", "Installing CRAN packages: " ~ installCode).emit();
         
         auto env = prepareEnvironment(config);
         auto res = execute([rCmd, "-e", installCode], env, Config.none, size_t.max, workDir);
@@ -151,7 +151,7 @@ private PackageInstallResult installWithInstallPackages(
         string[] pkgNames = biocPackages.map!(p => `"` ~ p.name ~ `"`).array;
         string installCode = `BiocManager::install(c(` ~ pkgNames.join(",") ~ `))`;
         
-        Logger.debugLog("Installing Bioconductor packages: " ~ installCode);
+        structuredLog.debug_("installing_bioconductor_packages_").field("detail", "Installing Bioconductor packages: " ~ installCode).emit();
         
         res = execute([rCmd, "-e", installCode], env, Config.none, size_t.max, workDir);
         
@@ -194,7 +194,7 @@ private PackageInstallResult installWithInstallPackages(
                 installCmd = `remotes::install_gitlab("` ~ pkg.customUrl ~ `")`;
             }
             
-            Logger.debugLog("Installing from Git: " ~ installCmd);
+            structuredLog.debug_("installing_from_git_").field("detail", "Installing from Git: " ~ installCmd).emit();
             
             res = execute([rCmd, "-e", installCmd], env, Config.none, size_t.max, workDir);
             
@@ -232,7 +232,7 @@ private PackageInstallResult installWithPak(
     // Ensure pak is installed
     if (!isRPackageInstalled("pak", rCmd))
     {
-        Logger.info("Installing pak package manager...");
+        structuredLog.info("installing_pak_package_manager").emit();
         string installPak = `install.packages("pak", repos="` ~ config.cranMirror ~ `")`;
         auto env = prepareEnvironment(config);
         auto res = execute([rCmd, "-e", installPak], env, Config.none, size_t.max, workDir);
@@ -274,7 +274,7 @@ private PackageInstallResult installWithPak(
     
     string installCode = `pak::pkg_install(c(` ~ pkgSpecs.join(",") ~ `), upgrade=FALSE)`;
     
-    Logger.info("Installing packages with pak: " ~ installCode);
+    structuredLog.info("installing_packages_with_pak_").field("detail", "Installing packages with pak: " ~ installCode).emit();
     
     auto env = prepareEnvironment(config);
     auto res = execute([rCmd, "-e", installCode], env, Config.none, size_t.max, workDir);
@@ -307,7 +307,7 @@ private PackageInstallResult installWithRenv(
     if (exists(renvLock))
     {
         // Restore from lockfile
-        Logger.info("Restoring packages from renv.lock");
+        structuredLog.info("restoring_packages_from_renvlock").emit();
         string restoreCode = `renv::restore()`;
         
         auto env = prepareEnvironment(config);
@@ -324,7 +324,7 @@ private PackageInstallResult installWithRenv(
         // Initialize renv if needed
         if (!exists(buildPath(workDir, "renv")))
         {
-            Logger.info("Initializing renv environment");
+            structuredLog.info("initializing_renv_environment").emit();
             string initCode = `renv::init(bare=TRUE)`;
             
             auto env = prepareEnvironment(config);
@@ -341,7 +341,7 @@ private PackageInstallResult installWithRenv(
         string[] pkgNames = packages.map!(p => `"` ~ p.name ~ `"`).array;
         string installCode = `renv::install(c(` ~ pkgNames.join(",") ~ `))`;
         
-        Logger.info("Installing packages with renv");
+        structuredLog.info("installing_packages_with_renv").emit();
         
         auto env = prepareEnvironment(config);
         auto res = execute([rCmd, "-e", installCode], env, Config.none, size_t.max, workDir);
@@ -379,7 +379,7 @@ private PackageInstallResult installWithPackrat(
     if (exists(packratLock))
     {
         // Restore from lockfile
-        Logger.info("Restoring packages from packrat.lock");
+        structuredLog.info("restoring_packages_from_packratlock").emit();
         string restoreCode = `packrat::restore()`;
         
         auto env = prepareEnvironment(config);
@@ -396,7 +396,7 @@ private PackageInstallResult installWithPackrat(
         // Initialize packrat if needed
         if (!exists(buildPath(workDir, "packrat")))
         {
-            Logger.info("Initializing packrat environment");
+            structuredLog.info("initializing_packrat_environment").emit();
             string initCode = `packrat::init()`;
             
             auto env = prepareEnvironment(config);
@@ -428,7 +428,7 @@ private PackageInstallResult installWithRemotes(
     // Ensure remotes is installed
     if (!isRPackageInstalled("remotes", rCmd))
     {
-        Logger.info("Installing remotes package...");
+        structuredLog.info("installing_remotes_package").emit();
         string installRemotes = `install.packages("remotes", repos="` ~ config.cranMirror ~ `")`;
         auto env = prepareEnvironment(config);
         auto res = execute([rCmd, "-e", installRemotes], env, Config.none, size_t.max, workDir);
@@ -465,7 +465,7 @@ private PackageInstallResult installWithRemotes(
                 break;
         }
         
-        Logger.debugLog("Installing with remotes: " ~ installCmd);
+        structuredLog.debug_("installing_with_remotes_").field("detail", "Installing with remotes: " ~ installCmd).emit();
         
         auto res = execute([rCmd, "-e", installCmd], env, Config.none, size_t.max, workDir);
         
@@ -503,7 +503,7 @@ PackageInstallResult installFromDESCRIPTION(
         return PackageInstallResult(false, "DESCRIPTION file not found: " ~ descPath, [], []);
     }
     
-    Logger.info("Installing dependencies from DESCRIPTION");
+    structuredLog.info("installing_dependencies_from_description").emit();
     
     // Auto-detect if needed
     if (manager == RPackageManager.Auto)
@@ -516,7 +516,7 @@ PackageInstallResult installFromDESCRIPTION(
     {
         string installCode = `devtools::install_deps("` ~ dirName(descPath) ~ `", dependencies=TRUE)`;
         
-        Logger.debugLog("Installing with devtools: " ~ installCode);
+        structuredLog.debug_("installing_with_devtools_").field("detail", "Installing with devtools: " ~ installCode).emit();
         
         auto env = prepareEnvironment(config);
         auto res = execute([rCmd, "-e", installCode], env, Config.none, size_t.max, workDir);
@@ -573,7 +573,7 @@ PackageInstallResult updatePackage(
     const ref RConfig config
 )
 {
-    Logger.info("Updating package: " ~ packageName);
+    structuredLog.info("updating_package_").field("detail", "Updating package: " ~ packageName).emit();
     
     if (manager == RPackageManager.Auto)
     {
@@ -625,7 +625,7 @@ PackageInstallResult updatePackage(
 /// Remove package
 bool removePackage(string packageName, string rCmd, string workDir)
 {
-    Logger.info("Removing package: " ~ packageName);
+    structuredLog.info("removing_package_").field("detail", "Removing package: " ~ packageName).emit();
     
     string removeCode = `remove.packages("` ~ packageName ~ `")`;
     auto res = execute([rCmd, "-e", removeCode], null, Config.none, size_t.max, workDir);

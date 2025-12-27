@@ -14,7 +14,7 @@ import languages.jvm.java.core.config;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache;
 
 /// Fat JAR (uber-jar) builder - includes all dependencies
@@ -44,7 +44,7 @@ class FatJARBuilder : JARBuilder
     {
         JavaBuildResult result;
         
-        Logger.debugLog("Building Fat JAR: " ~ target.name);
+        structuredLog.debug_("building_fat_jar_").field("detail", "Building Fat JAR: " ~ target.name).emit();
         
         // Determine output path
         string outputPath = getOutputPath(target, workspace, config);
@@ -110,7 +110,7 @@ class FatJARBuilder : JARBuilder
         ref JavaBuildResult result
     )
     {
-        Logger.info("Merging dependencies into Fat JAR");
+        structuredLog.info("merging_dependencies_into_fat_jar").emit();
         
         foreach (dep; target.deps)
         {
@@ -122,7 +122,7 @@ class FatJARBuilder : JARBuilder
                 {
                     if (!extractJar(depJar, tempDir))
                     {
-                        Logger.warning("Failed to extract dependency: " ~ depJar);
+                        structuredLog.warning("failed_to_extract_dependency_").field("detail", "Failed to extract dependency: " ~ depJar).emit();
                     }
                 }
             }
@@ -135,7 +135,7 @@ class FatJARBuilder : JARBuilder
             {
                 if (!extractJar(cpEntry, tempDir))
                 {
-                    Logger.warning("Failed to extract classpath entry: " ~ cpEntry);
+                    structuredLog.warning("failed_to_extract_classpath_entry_").field("detail", "Failed to extract classpath entry: " ~ cpEntry).emit();
                 }
             }
         }
@@ -153,7 +153,7 @@ class FatJARBuilder : JARBuilder
         }
         catch (Exception e)
         {
-            Logger.warning("JAR extraction failed: " ~ e.msg);
+            structuredLog.warning("jar_extraction_failed_").field("detail", "JAR extraction failed: " ~ e.msg).emit();
             return false;
         }
     }

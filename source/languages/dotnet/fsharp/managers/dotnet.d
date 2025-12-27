@@ -7,7 +7,7 @@ import std.string;
 import std.array;
 import std.algorithm;
 import std.json;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// .NET CLI operations for F# projects
 struct DotnetOps
@@ -32,8 +32,8 @@ struct DotnetOps
         
         if (res.status != 0)
         {
-            Logger.error("dotnet build failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("dotnet_build_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -52,8 +52,8 @@ struct DotnetOps
         
         if (res.status != 0)
         {
-            Logger.error("dotnet restore failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("dotnet_restore_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -72,8 +72,8 @@ struct DotnetOps
         
         if (res.status != 0)
         {
-            Logger.error("dotnet clean failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("dotnet_clean_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -95,8 +95,8 @@ struct DotnetOps
         
         if (res.status != 0)
         {
-            Logger.error("dotnet test failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("dotnet_test_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -126,8 +126,8 @@ struct DotnetOps
         
         if (res.status != 0)
         {
-            Logger.error("dotnet publish failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("dotnet_publish_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -149,8 +149,8 @@ struct DotnetOps
         
         if (res.status != 0)
         {
-            Logger.error("dotnet pack failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("dotnet_pack_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         

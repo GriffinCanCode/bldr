@@ -8,7 +8,7 @@ import std.algorithm;
 import std.file;
 import std.conv;
 import languages.compiled.protobuf.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.files.hash;
 import engine.caching.actions.action : ActionCache, ActionId, ActionType;
 
@@ -118,7 +118,7 @@ class ProtocWrapper
                 
                 if (actionCache.isCached(actionId, [protoFile], metadata) && allOutputsExist)
                 {
-                    Logger.debugLog("  [Cached] " ~ protoFile);
+                    structuredLog.debug_("__cached_").field("detail", "  [Cached] " ~ protoFile).emit();
                     result.outputs ~= expectedOutputs;
                     continue;
                 }
@@ -230,7 +230,7 @@ class ProtocWrapper
         // Add single proto file
         cmd ~= protoFile;
         
-        Logger.debugLog("Compiling: " ~ protoFile);
+        structuredLog.debug_("compiling_").field("detail", "Compiling: " ~ protoFile).emit();
         
         try
         {
@@ -376,7 +376,7 @@ class ProtocWrapper
         }
         catch (Exception e)
         {
-            Logger.warning("Error collecting generated files: " ~ e.msg);
+            structuredLog.warning("error_collecting_generated_files_").field("detail", "Error collecting generated files: " ~ e.msg).emit();
         }
         
         return files;

@@ -8,7 +8,7 @@ import std.algorithm;
 import std.array;
 import std.conv;
 import std.json;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import frontend.cli.display.format;
 import frontend.cli.control.terminal;
 
@@ -36,7 +36,7 @@ struct ExplainCommand
             case "search":
                 if (args.length < 3)
                 {
-                    Logger.error("Usage: bldr explain search <query>");
+                    structuredLog.error("usage_bldr_explain_search_query").emit();
                     return;
                 }
                 performSearch(args[2 .. $].join(" "));
@@ -45,7 +45,7 @@ struct ExplainCommand
             case "example":
                 if (args.length < 3)
                 {
-                    Logger.error("Usage: bldr explain example <topic>");
+                    structuredLog.error("usage_bldr_explain_example_topic").emit();
                     return;
                 }
                 showExamples(args[2]);
@@ -54,7 +54,7 @@ struct ExplainCommand
             case "workflow":
                 if (args.length < 3)
                 {
-                    Logger.error("Usage: bldr explain workflow <workflow-name>");
+                    structuredLog.error("usage_bldr_explain_workflow_workflowname").emit();
                     return;
                 }
                 showWorkflow(args[2]);
@@ -105,7 +105,7 @@ struct ExplainCommand
         
         if (!exists(indexPath))
         {
-            Logger.error("AI documentation index not found at: " ~ indexPath);
+            structuredLog.error("ai_documentation_index_not_found_at_").field("detail", "AI documentation index not found at: " ~ indexPath).emit();
             return;
         }
         
@@ -139,7 +139,7 @@ struct ExplainCommand
         }
         catch (Exception e)
         {
-            Logger.error("Failed to read index: " ~ e.msg);
+            structuredLog.error("failed_to_read_index_").field("detail", "Failed to read index: " ~ e.msg).emit();
         }
     }
 
@@ -172,7 +172,7 @@ struct ExplainCommand
             }
             else 
             {
-                Logger.error("Topic found in index but file missing: " ~ matchTopic);
+                structuredLog.error("topic_found_in_index_but_file_missing_").field("detail", "Topic found in index but file missing: " ~ matchTopic).emit();
             }
         }
         else if (matches.length > 1)
@@ -189,7 +189,7 @@ struct ExplainCommand
         }
         else
         {
-            Logger.error("Topic not found: " ~ query);
+            structuredLog.error("topic_not_found_").field("detail", "Topic not found: " ~ query).emit();
             writeln("\nAvailable topics:");
             writeln("  bldr explain list");
         }
@@ -203,7 +203,7 @@ struct ExplainCommand
         writeln();
         if (matches.length == 0)
         {
-            Logger.info("No topics found matching: " ~ query);
+            structuredLog.info("no_topics_found_matching_").field("detail", "No topics found matching: " ~ query).emit();
             writeln("\nTry: bldr explain list");
         }
         else
@@ -289,7 +289,7 @@ struct ExplainCommand
         }
         catch (Exception e)
         {
-            Logger.error("Search failed: " ~ e.msg);
+            structuredLog.error("search_failed_").field("detail", "Search failed: " ~ e.msg).emit();
         }
         
         return matches;
@@ -333,7 +333,7 @@ struct ExplainCommand
         }
         catch (Exception e)
         {
-            Logger.error("Failed to read topic: " ~ e.msg);
+            structuredLog.error("failed_to_read_topic_").field("detail", "Failed to read topic: " ~ e.msg).emit();
         }
     }
     
@@ -351,7 +351,7 @@ struct ExplainCommand
         
         if (topicPath.length == 0 || !exists(topicPath))
         {
-            Logger.error("Topic not found: " ~ topic);
+            structuredLog.error("topic_not_found_").field("detail", "Topic not found: " ~ topic).emit();
             return;
         }
         
@@ -364,14 +364,14 @@ struct ExplainCommand
         }
         catch (Exception e)
         {
-            Logger.error("Failed to read examples: " ~ e.msg);
+            structuredLog.error("failed_to_read_examples_").field("detail", "Failed to read examples: " ~ e.msg).emit();
         }
     }
     
     /// Show workflow documentation
     private static void showWorkflow(string workflow) @system
     {
-        Logger.info("Workflows not yet implemented. Coming soon!");
+        structuredLog.info("workflows_not_yet_implemented_coming_soo").emit();
         writeln("\nCurrently available: bldr explain <topic>");
     }
     
@@ -483,7 +483,7 @@ struct ExplainCommand
         }
         else
         {
-            Logger.info("No examples available for this topic.");
+            structuredLog.info("no_examples_available_for_this_topic").emit();
         }
     }
     

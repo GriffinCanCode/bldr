@@ -13,7 +13,7 @@ import core.sync.mutex : Mutex;
 import engine.workers.protocol;
 import engine.workers.pool;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Base Persistent Worker Factory
 /// 
@@ -223,18 +223,18 @@ abstract class BasePersistentWorkerFactory : IWorkerFactory
             .add("worker_type", workerType())
             .add("event", event);
         
-        Logger.info("Worker " ~ event, enriched);
+        structuredLog.info("worker_").field("detail", "Worker " ~ event, enriched).emit();
     }
     
     /// Log worker error with context
     protected void logWorkerError(WorkerId id, WorkerError err) @trusted
     {
-        Logger.errorKV("Worker error",
-            "worker_id", id.toString(),
-            "worker_type", workerType(),
-            "error_code", err.workerCode.to!string,
-            "message", err.msg
-        );
+        structuredLog.error("worker_error")
+            .field("worker_id", id.toString())
+            .field("worker_type", workerType())
+            .field("error_code", err.workerCode.to!string)
+            .field("message", err.msg)
+            .emit();
         
         if (onWorkerError !is null)
             onWorkerError(id, err.msg);

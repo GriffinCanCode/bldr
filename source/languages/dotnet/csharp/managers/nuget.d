@@ -8,7 +8,7 @@ import std.algorithm;
 import std.array;
 import std.string;
 import languages.dotnet.csharp.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.security.validation;
 
 /// NuGet package management operations
@@ -17,7 +17,7 @@ struct NuGetOps
     /// Restore NuGet packages
     static bool restore(string projectRoot, NuGetConfig config)
     {
-        Logger.info("Restoring NuGet packages");
+        structuredLog.info("restoring_nuget_packages").emit();
         
         string[] cmd = ["dotnet", "restore"];
         
@@ -52,19 +52,19 @@ struct NuGetOps
         
         if (result.status != 0)
         {
-            Logger.error("NuGet restore failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("nuget_restore_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
-        Logger.info("NuGet restore succeeded");
+        structuredLog.info("nuget_restore_succeeded").emit();
         return true;
     }
     
     /// Install a NuGet package
     static bool install(string projectRoot, string packageName, string packageVersion = "")
     {
-        Logger.info("Installing NuGet package: " ~ packageName);
+        structuredLog.info("installing_nuget_package_").field("detail", "Installing NuGet package: " ~ packageName).emit();
         
         string[] cmd = ["dotnet", "add", "package", packageName];
         
@@ -76,19 +76,19 @@ struct NuGetOps
         
         if (result.status != 0)
         {
-            Logger.error("Package install failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("package_install_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
-        Logger.info("Package installed successfully");
+        structuredLog.info("package_installed_successfully").emit();
         return true;
     }
     
     /// Remove a NuGet package
     static bool remove(string projectRoot, string packageName)
     {
-        Logger.info("Removing NuGet package: " ~ packageName);
+        structuredLog.info("removing_nuget_package_").field("detail", "Removing NuGet package: " ~ packageName).emit();
         
         string[] cmd = ["dotnet", "remove", "package", packageName];
         
@@ -97,12 +97,12 @@ struct NuGetOps
         
         if (result.status != 0)
         {
-            Logger.error("Package removal failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("package_removal_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
-        Logger.info("Package removed successfully");
+        structuredLog.info("package_removed_successfully").emit();
         return true;
     }
     
@@ -118,7 +118,7 @@ struct NuGetOps
         
         if (result.status != 0)
         {
-            Logger.warning("Failed to list packages: " ~ result.output);
+            structuredLog.warning("failed_to_list_packages_").field("detail", "Failed to list packages: " ~ result.output).emit();
             return packages;
         }
         
@@ -142,7 +142,7 @@ struct NuGetOps
     /// Update packages
     static bool update(string projectRoot)
     {
-        Logger.info("Updating NuGet packages");
+        structuredLog.info("updating_nuget_packages").emit();
         
         // List packages first
         auto packages = listPackages(projectRoot);
@@ -159,7 +159,7 @@ struct NuGetOps
             }
         }
         
-        Logger.info("Package update completed");
+        structuredLog.info("package_update_completed").emit();
         return true;
     }
     
@@ -175,7 +175,7 @@ struct NuGetOps
         
         if (result.status != 0)
         {
-            Logger.warning("Failed to check outdated packages: " ~ result.output);
+            structuredLog.warning("failed_to_check_outdated_packages_").field("detail", "Failed to check outdated packages: " ~ result.output).emit();
             return outdated;
         }
         

@@ -8,7 +8,7 @@ import std.string : leftJustify, rightJustify, strip;
 import std.conv : to;
 import std.process : execute, executeShell;
 import infrastructure.plugins;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors.formatting.format : formatError = format;
 import frontend.cli.control.terminal;
 import frontend.cli.display.format;
@@ -50,24 +50,24 @@ struct PluginCommand {
                 break;
             case "info":
                 if (args.length < 3) {
-                    Logger.error("Plugin name required");
-                    Logger.info("Usage: bldr plugin info <name>");
+                    structuredLog.error("plugin_name_required").emit();
+                    structuredLog.info("usage_bldr_plugin_info_name").emit();
                 } else {
                     showPluginInfo(args[2]);
                 }
                 break;
             case "install":
                 if (args.length < 3) {
-                    Logger.error("Plugin name required");
-                    Logger.info("Usage: bldr plugin install <name>");
+                    structuredLog.error("plugin_name_required").emit();
+                    structuredLog.info("usage_bldr_plugin_install_name").emit();
                 } else {
                     installPlugin(args[2]);
                 }
                 break;
             case "uninstall":
                 if (args.length < 3) {
-                    Logger.error("Plugin name required");
-                    Logger.info("Usage: bldr plugin uninstall <name>");
+                    structuredLog.error("plugin_name_required").emit();
+                    structuredLog.info("usage_bldr_plugin_uninstall_name").emit();
                 } else {
                     uninstallPlugin(args[2]);
                 }
@@ -77,8 +77,8 @@ struct PluginCommand {
                 break;
             case "validate":
                 if (args.length < 3) {
-                    Logger.error("Plugin name required");
-                    Logger.info("Usage: bldr plugin validate <name>");
+                    structuredLog.error("plugin_name_required").emit();
+                    structuredLog.info("usage_bldr_plugin_validate_name").emit();
                 } else {
                     validatePlugin(args[2]);
                 }
@@ -88,8 +88,8 @@ struct PluginCommand {
                 break;
             case "create":
                 if (args.length < 3) {
-                    Logger.error("Plugin name required");
-                    Logger.info("Usage: bldr plugin create <name> [--language=d|python|go|rust]");
+                    structuredLog.error("plugin_name_required").emit();
+                    structuredLog.info("usage_bldr_plugin_create_name_languagedp").emit();
                 } else {
                     string language = "d";
                     if (args.length >= 4 && args[3].startsWith("--language=")) {
@@ -99,7 +99,7 @@ struct PluginCommand {
                 }
                 break;
             default:
-                Logger.error("Unknown subcommand: " ~ subcommand);
+                structuredLog.error("unknown_subcommand_").field("detail", "Unknown subcommand: " ~ subcommand).emit();
                 showHelp();
         }
         
@@ -149,8 +149,8 @@ struct PluginCommand {
         
         auto refreshResult = registry.refresh();
         if (refreshResult.isErr) {
-            Logger.error("Failed to refresh plugin registry: " ~ 
-                refreshResult.unwrapErr().message);
+            structuredLog.error("failed_to_refresh_plugin_registry_").field("detail", "Failed to refresh plugin registry: " ~ 
+                refreshResult.unwrapErr().message).emit();
             return;
         }
         
@@ -202,8 +202,8 @@ struct PluginCommand {
     private static void showPluginInfo(string name) @system {
         auto getResult = registry.get(name);
         if (getResult.isErr) {
-            Logger.error("Failed to get plugin");
-            Logger.error(formatError(getResult.unwrapErr()));
+            structuredLog.error("failed_to_get_plugin").emit();
+            structuredLog.error("log_event").field("message", formatError(getResult.unwrapErr())).emit();
             return;
         }
         
@@ -250,7 +250,7 @@ struct PluginCommand {
             refreshPlugins();
         } else {
             terminal.writeln();
-            Logger.error("Installation failed");
+            structuredLog.error("installation_failed").emit();
             if (result.output.length > 0) {
                 terminal.writeln(result.output);
             }
@@ -279,7 +279,7 @@ struct PluginCommand {
             refreshPlugins();
         } else {
             terminal.writeln();
-            Logger.error("Uninstallation failed");
+            structuredLog.error("uninstallation_failed").emit();
             if (result.output.length > 0) {
                 terminal.writeln(result.output);
             }
@@ -326,7 +326,7 @@ struct PluginCommand {
         
         if (findResult.isErr) {
             terminal.writeln(formatter.red("✗") ~ " Plugin not found");
-            Logger.error(formatError(findResult.unwrapErr()));
+            structuredLog.error("log_event").field("message", formatError(findResult.unwrapErr())).emit();
             return;
         }
         
@@ -342,7 +342,7 @@ struct PluginCommand {
         
         if (infoResult.isErr) {
             terminal.writeln(formatter.red("✗") ~ " Failed to query plugin");
-            Logger.error(formatError(infoResult.unwrapErr()));
+            structuredLog.error("log_event").field("message", formatError(infoResult.unwrapErr())).emit();
             return;
         }
         
@@ -359,7 +359,7 @@ struct PluginCommand {
         
         if (validateResult.isErr) {
             terminal.writeln(formatter.red("✗") ~ " Validation failed");
-            Logger.error(formatError(validateResult.unwrapErr()));
+            structuredLog.error("log_event").field("message", formatError(validateResult.unwrapErr())).emit();
             return;
         }
         
@@ -375,8 +375,8 @@ struct PluginCommand {
         auto refreshResult = registry.refresh();
         
         if (refreshResult.isErr) {
-            Logger.error("Failed to refresh");
-            Logger.error(formatError(refreshResult.unwrapErr()));
+            structuredLog.error("failed_to_refresh").emit();
+            structuredLog.error("log_event").field("message", formatError(refreshResult.unwrapErr())).emit();
             return;
         }
         
@@ -408,16 +408,16 @@ struct PluginCommand {
                 lang = TemplateLanguage.Rust;
                 break;
             default:
-                Logger.error("Unknown language: " ~ language);
-                Logger.info("Supported languages: d, python, go, rust");
+                structuredLog.error("unknown_language_").field("detail", "Unknown language: " ~ language).emit();
+                structuredLog.info("supported_languages_d_python_go_rust").emit();
                 return;
         }
         
         auto result = TemplateGenerator.create(name, lang);
         
         if (result.isErr) {
-            Logger.error("Failed to create template");
-            Logger.error(formatError(result.unwrapErr()));
+            structuredLog.error("failed_to_create_template").emit();
+            structuredLog.error("log_event").field("message", formatError(result.unwrapErr())).emit();
             return;
         }
         

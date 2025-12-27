@@ -468,7 +468,7 @@ private:
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to create BPF map directory: " ~ e.msg);
+            structuredLog.warning("failed_to_create_bpf_map_directory_").field("detail", "Failed to create BPF map directory: " ~ e.msg).emit();
             return false;
         }
         
@@ -483,30 +483,30 @@ private:
         // 4. Attach to cgroup or network namespace
         // 5. Read counters from BPF maps
         
-        Logger.info("Attempting to load BPF program for network monitoring...");
+        structuredLog.info("attempting_to_load_bpf_program_for_netwo").emit();
         
         // Check kernel BPF support
         if (!checkBpfSupport())
         {
-            Logger.info("BPF not supported, falling back to /proc/net/dev");
+            structuredLog.info("bpf_not_supported_falling_back_to_procne").emit();
             return true;  // Fall back to /proc method
         }
         
         // Try to compile BPF program
         if (!compileBpfProgram(bpfSource))
         {
-            Logger.info("BPF compilation failed, falling back to /proc/net/dev");
+            structuredLog.info("bpf_compilation_failed_falling_back_to_p").emit();
             return true;  // Fall back to /proc method
         }
         
         // Try to attach BPF program
         if (!attachBpfProgram())
         {
-            Logger.warning("BPF attachment failed, falling back to /proc/net/dev");
+            structuredLog.warning("bpf_attachment_failed_falling_back_to_pr").emit();
             return true;  // Fall back to /proc method
         }
         
-        Logger.info("BPF network monitoring successfully initialized");
+        structuredLog.info("bpf_network_monitoring_successfully_init").emit();
         return true;
     }
     
@@ -518,7 +518,7 @@ private:
         // Check for BPF filesystem mount
         if (!exists("/sys/fs/bpf"))
         {
-            Logger.debugLog("BPF filesystem not mounted at /sys/fs/bpf");
+            structuredLog.debug_("bpf_filesystem_not_mounted_at_sysfsbpf").emit();
             return false;
         }
         
@@ -529,7 +529,7 @@ private:
             auto configResult = checkKernelConfig("CONFIG_BPF");
             if (!configResult)
             {
-                Logger.debugLog("Kernel BPF support not enabled");
+                structuredLog.debug_("kernel_bpf_support_not_enabled").emit();
                 return false;
             }
         }
@@ -537,7 +537,7 @@ private:
         // Try to execute a minimal BPF syscall to test support
         if (!testBpfSyscall())
         {
-            Logger.debugLog("BPF syscall test failed");
+            structuredLog.debug_("bpf_syscall_test_failed").emit();
             return false;
         }
         
@@ -632,7 +632,7 @@ private:
             auto checkTool = execute(["which", "bpftool"]);
             if (checkTool.status != 0)
             {
-                Logger.debugLog("bpftool not found in PATH");
+                structuredLog.debug_("bpftool_not_found_in_path").emit();
                 return false;
             }
             
@@ -640,7 +640,7 @@ private:
             immutable cgroupPath = getCurrentCgroupPath();
             if (cgroupPath.length == 0)
             {
-                Logger.debugLog("Could not determine current cgroup");
+                structuredLog.debug_("could_not_determine_current_cgroup").emit();
                 return false;
             }
             
@@ -648,7 +648,7 @@ private:
             immutable objPath = buildPath(tempDir(), "netmon.bpf.o");
             if (!exists(objPath))
             {
-                Logger.debugLog("BPF object file not found: " ~ objPath);
+                structuredLog.debug_("bpf_object_file_not_found_").field("detail", "BPF object file not found: " ~ objPath).emit();
                 return false;
             }
             
@@ -661,7 +661,7 @@ private:
             
             if (attachEgress.status != 0)
             {
-                Logger.debugLog("Failed to attach egress filter: " ~ attachEgress.output);
+                structuredLog.debug_("failed_to_attach_egress_filter_").field("detail", "Failed to attach egress filter: " ~ attachEgress.output).emit();
                 return false;
             }
             
@@ -674,16 +674,16 @@ private:
             
             if (attachIngress.status != 0)
             {
-                Logger.debugLog("Failed to attach ingress filter: " ~ attachIngress.output);
+                structuredLog.debug_("failed_to_attach_ingress_filter_").field("detail", "Failed to attach ingress filter: " ~ attachIngress.output).emit();
                 return false;
             }
             
-            Logger.info("BPF programs attached to cgroup: " ~ cgroupPath);
+            structuredLog.info("bpf_programs_attached_to_cgroup_").field("detail", "BPF programs attached to cgroup: " ~ cgroupPath).emit();
             return true;
         }
         catch (Exception e)
         {
-            Logger.debugLog("BPF attachment exception: " ~ e.msg);
+            structuredLog.debug_("bpf_attachment_exception_").field("detail", "BPF attachment exception: " ~ e.msg).emit();
             return false;
         }
     }
@@ -808,13 +808,13 @@ char _license[] SEC("license") = "GPL";
         try
         {
             write(srcPath, source);
-            Logger.debugLog("BPF source written to: " ~ srcPath);
+            structuredLog.debug_("bpf_source_written_to_").field("detail", "BPF source written to: " ~ srcPath).emit();
             
             // Check if clang is available
             auto checkClang = execute(["which", "clang"]);
             if (checkClang.status != 0)
             {
-                Logger.debugLog("clang not found in PATH");
+                structuredLog.debug_("clang_not_found_in_path").emit();
                 return false;
             }
             
@@ -833,17 +833,17 @@ char _license[] SEC("license") = "GPL";
             
             if (compileResult.status != 0)
             {
-                Logger.debugLog("BPF compilation failed: " ~ compileResult.output);
+                structuredLog.debug_("bpf_compilation_failed_").field("detail", "BPF compilation failed: " ~ compileResult.output).emit();
                 return false;
             }
             
-            Logger.info("BPF program compiled successfully");
+            structuredLog.info("bpf_program_compiled_successfully").emit();
             
             // Check if bpftool is available
             auto checkBpftool = execute(["which", "bpftool"]);
             if (checkBpftool.status != 0)
             {
-                Logger.debugLog("bpftool not found in PATH");
+                structuredLog.debug_("bpftool_not_found_in_path").emit();
                 return false;
             }
             
@@ -858,7 +858,7 @@ char _license[] SEC("license") = "GPL";
             
             if (loadEgress.status != 0)
             {
-                Logger.debugLog("Failed to load egress program: " ~ loadEgress.output);
+                structuredLog.debug_("failed_to_load_egress_program_").field("detail", "Failed to load egress program: " ~ loadEgress.output).emit();
                 return false;
             }
             
@@ -873,7 +873,7 @@ char _license[] SEC("license") = "GPL";
             
             if (loadIngress.status != 0)
             {
-                Logger.debugLog("Failed to load ingress program: " ~ loadIngress.output);
+                structuredLog.debug_("failed_to_load_ingress_program_").field("detail", "Failed to load ingress program: " ~ loadIngress.output).emit();
                 
                 // Cleanup egress program
                 try {
@@ -883,14 +883,14 @@ char _license[] SEC("license") = "GPL";
                 return false;
             }
             
-            Logger.info("BPF programs loaded successfully");
+            structuredLog.info("bpf_programs_loaded_successfully").emit();
             bpfFd = 1;  // Mark as loaded (actual FD management would be more sophisticated)
             
             return true;
         }
         catch (Exception e)
         {
-            Logger.debugLog("BPF compilation exception: " ~ e.msg);
+            structuredLog.debug_("bpf_compilation_exception_").field("detail", "BPF compilation exception: " ~ e.msg).emit();
             return false;
         }
     }

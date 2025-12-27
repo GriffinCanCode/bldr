@@ -9,7 +9,7 @@ import std.array;
 import std.regex;
 import std.string;
 import languages.scripting.lua.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// LuaRocks result structure
 struct RockResult
@@ -78,7 +78,7 @@ class LuaRocksManager
         // Add rockspec file
         cmd ~= rockspecFile;
         
-        Logger.debugLog("Installing LuaRocks dependencies: " ~ cmd.join(" "));
+        structuredLog.debug_("installing_luarocks_dependencies_").field("detail", "Installing LuaRocks dependencies: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         
@@ -129,7 +129,7 @@ class LuaRocksManager
         // Add rock name
         cmd ~= rockName;
         
-        Logger.debugLog("Installing rock: " ~ cmd.join(" "));
+        structuredLog.debug_("installing_rock_").field("detail", "Installing rock: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         
@@ -176,7 +176,7 @@ class LuaRocksManager
             cmd ~= rockspecFile;
         }
         
-        Logger.debugLog("Building rock: " ~ cmd.join(" "));
+        structuredLog.debug_("building_rock_").field("detail", "Building rock: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         
@@ -204,7 +204,7 @@ class LuaRocksManager
         
         string[] cmd = ["luarocks", "pack", rockspecFile];
         
-        Logger.debugLog("Packing rock: " ~ cmd.join(" "));
+        structuredLog.debug_("packing_rock_").field("detail", "Packing rock: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         
@@ -299,7 +299,7 @@ class LuaRocksManager
             cmd ~= config.tree;
         }
         
-        Logger.debugLog("Removing rock: " ~ cmd.join(" "));
+        structuredLog.debug_("removing_rock_").field("detail", "Removing rock: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         
@@ -367,7 +367,7 @@ class LuaRocksManager
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse rockspec dependencies: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_rockspec_dependencies_").field("detail", "Failed to parse rockspec dependencies: " ~ e.msg).emit();
         }
         
         return deps;
@@ -399,7 +399,7 @@ string getLuaRocksVersion()
     catch (Exception e)
     {
         import infrastructure.utils.logging.logger : Logger;
-        Logger.debugLog("Failed to get LuaRocks version: " ~ e.msg);
+        structuredLog.debug_("failed_to_get_luarocks_version_").field("detail", "Failed to get LuaRocks version: " ~ e.msg).emit();
     }
     
     return "unknown";

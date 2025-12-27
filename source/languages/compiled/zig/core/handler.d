@@ -18,7 +18,7 @@ import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Advanced Zig build handler with build.zig and cross-compilation support
 class ZigHandler : BaseLanguageHandler
@@ -31,7 +31,7 @@ class ZigHandler : BaseLanguageHandler
         
         LanguageBuildResult result;
         
-        Logger.debugLog("Building Zig target: " ~ target.name);
+        structuredLog.debug_("building_zig_target_").field("detail", "Building Zig target: " ~ target.name).emit();
         
         // Parse Zig configuration
         ZigConfig zigConfig = parseZigConfig(target);
@@ -45,10 +45,10 @@ class ZigHandler : BaseLanguageHandler
             auto fmtResult = formatCode(target.sources, zigConfig);
             if (fmtResult.hasIssues())
             {
-                Logger.info("Formatting issues found:");
+                structuredLog.info("formatting_issues_found").emit();
                 foreach (warning; fmtResult.warnings)
                 {
-                    Logger.warning("  " ~ warning);
+                    structuredLog.warning("__").field("detail", "  " ~ warning).emit();
                 }
             }
         }
@@ -59,10 +59,10 @@ class ZigHandler : BaseLanguageHandler
             auto checkResult = ZigTools.astCheck(target.sources.dup);
             if (!checkResult.success)
             {
-                Logger.warning("AST check found issues:");
+                structuredLog.warning("ast_check_found_issues").emit();
                 foreach (error; checkResult.errors)
                 {
-                    Logger.warning("  " ~ error);
+                    structuredLog.warning("__").field("detail", "  " ~ error).emit();
                 }
             }
         }
@@ -140,7 +140,7 @@ class ZigHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to analyze imports in " ~ source);
+                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source).emit();
             }
         }
         
@@ -258,7 +258,7 @@ class ZigHandler : BaseLanguageHandler
             return result;
         }
         
-        Logger.debugLog("Using Zig builder: " ~ builder.name() ~ " (" ~ builder.getVersion() ~ ")");
+        structuredLog.debug_("using_zig_builder_").field("detail", "Using Zig builder: " ~ builder.name() ~ " (" ~ builder.getVersion() ~ ")").emit();
         
         // Compile
         auto compileResult = builder.build(target.sources, zigConfig, target, config);
@@ -272,14 +272,14 @@ class ZigHandler : BaseLanguageHandler
         // Report warnings
         if (compileResult.hadWarnings && !compileResult.warnings.empty)
         {
-            Logger.warning("Compilation warnings:");
+            structuredLog.warning("compilation_warnings").emit();
             foreach (warn; compileResult.warnings[0 .. min(5, $)])
             {
-                Logger.warning("  " ~ warn);
+                structuredLog.warning("__").field("detail", "  " ~ warn).emit();
             }
             if (compileResult.warnings.length > 5)
             {
-                Logger.warning("  ... and " ~ (compileResult.warnings.length - 5).to!string ~ " more warnings");
+                structuredLog.warning("___and_").field("detail", "  ... and " ~ (compileResult.warnings.length - 5).to!string ~ " more warnings").emit();
             }
         }
         
@@ -310,7 +310,7 @@ class ZigHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to parse Zig config, using defaults: " ~ e.msg);
+                structuredLog.warning("failed_to_parse_zig_config_using_default").field("detail", "Failed to parse Zig config, using defaults: " ~ e.msg).emit();
             }
         }
         
@@ -337,7 +337,7 @@ class ZigHandler : BaseLanguageHandler
         if (!target.root.empty)
         {
             sourceDir = target.root.isAbsolute ? target.root : buildPath(workspace.root, target.root);
-            Logger.debugLog("Using target root for build.zig search: " ~ sourceDir);
+            structuredLog.debug_("using_target_root_for_buildzig_search_").field("detail", "Using target root for build.zig search: " ~ sourceDir).emit();
         }
         else if (!target.sources.empty)
         {
@@ -354,7 +354,7 @@ class ZigHandler : BaseLanguageHandler
             auto buildZigPath = BuildZigParser.findBuildZig(sourceDir);
             if (!buildZigPath.empty)
             {
-                Logger.debugLog("Detected build.zig at: " ~ buildZigPath);
+                structuredLog.debug_("detected_buildzig_at_").field("detail", "Detected build.zig at: " ~ buildZigPath).emit();
                 config.buildZig.path = buildZigPath.idup;
                 config.builder = ZigBuilderType.BuildZig;
                 
@@ -362,8 +362,8 @@ class ZigHandler : BaseLanguageHandler
                 auto project = BuildZigParser.parseBuildZig(buildZigPath);
                 if (!project.name.empty)
                 {
-                    Logger.debugLog("Project: " ~ project.name ~ 
-                                 (project.version_.empty ? "" : " v" ~ project.version_));
+                    structuredLog.debug_("project_").field("detail", "Project: " ~ project.name ~ 
+                                 (project.version_.empty ? "" : " v" ~ project.version_)).emit();
                 }
             }
             else

@@ -12,7 +12,7 @@ import std.array;
 import std.conv;
 import std.string;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Rollup bundler for TypeScript - optimized for library bundles with tree-shaking
 /// Best for: Library development, tree-shaking optimization, minimal bundle sizes
@@ -42,7 +42,7 @@ class TSRollupBundler : TSBundler
             {
                 result.hadTypeErrors = true;
                 result.typeErrors = checkResult.errors;
-                Logger.warning("Type check failed, but continuing with rollup build");
+                structuredLog.warning("type_check_failed_but_continuing_with_ro").emit();
             }
         }
         
@@ -50,7 +50,7 @@ class TSRollupBundler : TSBundler
         string rollupConfig = detectRollupConfig(sources);
         if (!rollupConfig.empty)
         {
-            Logger.debugLog("Detected rollup config: " ~ rollupConfig);
+            structuredLog.debug_("detected_rollup_config_").field("detail", "Detected rollup config: " ~ rollupConfig).emit();
             return bundleWithConfigFile(rollupConfig, workspace, result);
         }
         
@@ -64,7 +64,7 @@ class TSRollupBundler : TSBundler
         ref TSCompileResult result
     )
     {
-        Logger.debugLog("Using rollup config: " ~ configFile);
+        structuredLog.debug_("using_rollup_config_").field("detail", "Using rollup config: " ~ configFile).emit();
         
         string[] cmd = ["rollup", "-c", configFile];
         auto res = execute(cmd);
@@ -133,7 +133,7 @@ class TSRollupBundler : TSBundler
                 remove(tempConfig);
         }
         
-        Logger.debugLog("Generated rollup config: " ~ tempConfig);
+        structuredLog.debug_("generated_rollup_config_").field("detail", "Generated rollup config: " ~ tempConfig).emit();
         
         // Run rollup
         string[] cmd = ["rollup", "-c", tempConfig];
@@ -145,7 +145,7 @@ class TSRollupBundler : TSBundler
             return result;
         }
         
-        Logger.debugLog("rollup completed successfully");
+        structuredLog.debug_("rollup_completed_successfully").emit();
         
         result.success = true;
         result.outputs = [outputFile];

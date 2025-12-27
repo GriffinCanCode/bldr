@@ -14,7 +14,7 @@ import infrastructure.config.schema.schema;
 import infrastructure.config.caching.parse;
 import infrastructure.config.caching.sqlite;
 import infrastructure.analysis.detection.inference;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.files.hash;
 import infrastructure.errors;
 import infrastructure.errors.helpers;
@@ -66,7 +66,7 @@ class ConfigParser
             auto cachedConfig = tryLoadFromCache(workspacePath, buildFiles, cacheDir);
             if (cachedConfig !is null)
             {
-                Logger.success("Loaded configuration from cache (<1ms)");
+                structuredLog.info("loaded_configuration_from_cache_1ms").emit();
                 return Ok!(WorkspaceConfig, BuildError)(*cachedConfig);
             }
         }
@@ -74,10 +74,10 @@ class ConfigParser
         // Zero-config mode: infer targets if no Builderfiles found
         if (buildFiles.empty)
         {
-            Logger.info("═══════════════════════════════════════════");
-            Logger.info("  MODE: Zero-Config (No Builderfile found)");
-            Logger.info("═══════════════════════════════════════════");
-            Logger.info("Attempting automatic target inference...");
+            structuredLog.info("log_event").emit();
+            structuredLog.info("__mode_zeroconfig_no_builderfile_found").emit();
+            structuredLog.info("log_event").emit();
+            structuredLog.info("attempting_automatic_target_inference").emit();
             
             try
             {
@@ -96,8 +96,8 @@ class ConfigParser
                     return Err!(WorkspaceConfig, BuildError)(error);
                 }
                 
-                Logger.success("Zero-config mode: inferred " ~ 
-                    config.targets.length.to!string ~ " target(s)");
+                structuredLog.info("zeroconfig_mode_inferred_").field("detail", "Zero-config mode: inferred " ~ 
+                    config.targets.length.to!string ~ " target(s)").emit();
             }
             catch (Exception e)
             {
@@ -114,9 +114,9 @@ class ConfigParser
         }
         else
         {
-            Logger.info("═══════════════════════════════════════════");
-            Logger.info("  MODE: Builderfile (" ~ buildFiles.length.to!string ~ " file(s) found)");
-            Logger.info("═══════════════════════════════════════════");
+            structuredLog.info("log_event").emit();
+            structuredLog.info("__mode_builderfile_").field("detail", "  MODE: Builderfile (" ~ buildFiles.length.to!string ~ " file(s) found)").emit();
+            structuredLog.info("log_event").emit();
             
             // Create parse cache
             auto cache = new ParseCache(true, buildPath(root, ".builder-cache/parse"));
@@ -131,15 +131,15 @@ class ConfigParser
             // Log results
             if (aggregated.hasErrors)
             {
-                Logger.warning(
+                structuredLog.warning("log_event").field("message", 
                     "Failed to parse " ~ aggregated.errors.length.to!string ~
                     " Builderfile file(s)"
-                );
+                ).emit();
                 
                 import infrastructure.errors.formatting.format : format;
                 foreach (error; aggregated.errors)
                 {
-                    Logger.error(format(error));
+                    structuredLog.error("log_event").field("message", format(error)).emit();
                 }
             }
             
@@ -151,14 +151,14 @@ class ConfigParser
                     config.repositories ~= result.repositories;
                 }
                 
-                Logger.success(
+                structuredLog.info("log_event").field("message", 
                     "Successfully parsed " ~ config.targets.length.to!string ~
                     " target(s) from " ~ buildFiles.length.to!string ~ " Builderfile file(s)"
-                );
+                ).emit();
                 
                 if (config.repositories.length > 0)
                 {
-                    Logger.info("Found " ~ config.repositories.length.to!string ~ " repository rule(s)");
+                    structuredLog.info("found_").field("detail", "Found " ~ config.repositories.length.to!string ~ " repository rule(s)").emit();
                 }
             }
             
@@ -181,9 +181,9 @@ class ConfigParser
             if (wsResult.isErr)
             {
                 auto error = wsResult.unwrapErr();
-                Logger.error("Failed to parse Builderspace file");
+                structuredLog.error("failed_to_parse_builderspace_file").emit();
                 import infrastructure.errors.formatting.format : format;
-                Logger.error(format(error));
+                structuredLog.error("log_event").field("message", format(error)).emit();
                 
                 if (policy == AggregationPolicy.FailFast)
                     return Err!(WorkspaceConfig, BuildError)(error);
@@ -218,7 +218,7 @@ class ConfigParser
             immutable currentHash = computeConfigHash(buildFiles);
             if (entry.contentHash != currentHash)
             {
-                Logger.debugLog("Config cache invalidated: content hash mismatch");
+                structuredLog.debug_("config_cache_invalidated_content_hash_mi").emit();
                 configIndex.deleteConfig(workspacePath);
                 return null;
             }
@@ -232,7 +232,7 @@ class ConfigParser
         }
         catch (Exception e)
         {
-            Logger.debugLog("Config cache lookup failed: " ~ e.msg);
+            structuredLog.debug_("config_cache_lookup_failed_").field("detail", "Config cache lookup failed: " ~ e.msg).emit();
             return null;
         }
     }
@@ -277,11 +277,11 @@ class ConfigParser
             if (targetEntries.length > 0)
                 configIndex.putTargetsBatch(targetEntries);
             
-            Logger.debugLog("Saved " ~ config.targets.length.to!string ~ " targets to config cache");
+            structuredLog.debug_("saved_").field("detail", "Saved " ~ config.targets.length.to!string ~ " targets to config cache").emit();
         }
         catch (Exception e)
         {
-            Logger.debugLog("Config cache save failed: " ~ e.msg);
+            structuredLog.debug_("config_cache_save_failed_").field("detail", "Config cache save failed: " ~ e.msg).emit();
         }
     }
     

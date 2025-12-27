@@ -10,7 +10,7 @@ import std.conv : to;
 import core.sync.mutex : Mutex;
 import engine.caching.storage.source_repository : SourceRepository;
 import engine.caching.storage.source_ref : SourceRef, SourceRefSet;
-import infrastructure.utils.logging.logger : Logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Workspace materialization utilities
@@ -45,7 +45,7 @@ final class WorkspaceMaterializer
         
         synchronized (materializerMutex)
         {
-            Logger.info("Materializing " ~ refSet.length.to!string ~ " source file(s)...");
+            structuredLog.info("materializing_sources").field("count", refSet.length).emit();
             
             foreach (ref source; refSet.sources)
             {
@@ -96,7 +96,7 @@ final class WorkspaceMaterializer
                 result.filesProcessed++;
                 
                 if (config.verbose)
-                    Logger.debugLog("Materialized: " ~ source.toString());
+                    structuredLog.debug_("materialized").field("source", source.toString()).emit();
             }
             
             result.duration = timer.peek();
@@ -104,17 +104,17 @@ final class WorkspaceMaterializer
             
             if (result.success)
             {
-                Logger.success(
-                    "Materialized " ~ result.filesProcessed.to!string ~ 
-                    " file(s) (" ~ formatBytes(result.bytesWritten) ~ ") in " ~ 
-                    formatDuration(result.duration)
-                );
+                structuredLog.info("materialization_complete")
+                    .field("files", result.filesProcessed)
+                    .field("bytes", result.bytesWritten)
+                    .field("duration_ms", result.duration.total!"msecs")
+                    .emit();
             }
             else
             {
-                Logger.error(
-                    "Materialization completed with " ~ result.errors.length.to!string ~ " error(s)"
-                );
+                structuredLog.error("materialization_errors")
+                    .field("error_count", result.errors.length)
+                    .emit();
             }
             
             return Ok!(MaterializationResult, BuildError)(result);
@@ -146,14 +146,14 @@ final class WorkspaceMaterializer
             
             if (changedRefs.empty)
             {
-                Logger.info("No source changes detected");
+                structuredLog.info("no_source_changes").emit();
                 MaterializationResult result;
                 result.success = true;
                 result.filesProcessed = 0;
                 return Ok!(MaterializationResult, BuildError)(result);
             }
             
-            Logger.info("Updating " ~ changedRefs.length.to!string ~ " changed source(s)...");
+            structuredLog.info("updating_sources").field("count", changedRefs.length).emit();
             return materialize(changedRefs, workspaceRoot);
         }
     }
@@ -218,11 +218,11 @@ final class WorkspaceMaterializer
                 
                 if (dryRun)
                 {
-                    Logger.info("Would remove " ~ result.filesToRemove.length.to!string ~ " file(s)");
+                    structuredLog.info("cleanup_dry_run").field("would_remove", result.filesToRemove.length).emit();
                 }
                 else
                 {
-                    Logger.success("Removed " ~ result.filesRemoved.to!string ~ " file(s)");
+                    structuredLog.info("cleanup_complete").field("removed", result.filesRemoved).emit();
                 }
             }
             catch (Exception e)

@@ -14,7 +14,7 @@ import languages.jvm.scala.tooling.detection;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Assembly (fat JAR) builder - packages all dependencies
 class AssemblyBuilder : ScalaBuilder
@@ -31,7 +31,7 @@ class AssemblyBuilder : ScalaBuilder
     {
         ScalaBuildResult result;
         
-        Logger.debugLog("Building Scala assembly JAR: " ~ target.name);
+        structuredLog.debug_("building_scala_assembly_jar_").field("detail", "Building Scala assembly JAR: " ~ target.name).emit();
         
         // Detect build tool
         ScalaBuildTool buildTool = config.buildTool;
@@ -51,7 +51,7 @@ class AssemblyBuilder : ScalaBuilder
         }
         
         // Fallback: Build normal JAR and manually merge dependencies
-        Logger.warning("sbt-assembly not available, building basic JAR");
+        structuredLog.warning("sbtassembly_not_available_building_basic").emit();
         auto jarBuilder = new JARBuilder();
         return jarBuilder.build(sources, config, target, workspace);
     }
@@ -89,8 +89,8 @@ class AssemblyBuilder : ScalaBuilder
         // Run assembly task
         cmd ~= "assembly";
         
-        Logger.info("Running sbt assembly...");
-        Logger.debugLog("Command: " ~ cmd.join(" "));
+        structuredLog.info("running_sbt_assembly").emit();
+        structuredLog.debug_("command_").field("detail", "Command: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, workspace.root);
         
@@ -138,8 +138,8 @@ class AssemblyBuilder : ScalaBuilder
         // Add Mill-specific assembly task
         cmd ~= "assembly";
         
-        Logger.info("Running Mill assembly...");
-        Logger.debugLog("Command: " ~ cmd.join(" "));
+        structuredLog.info("running_mill_assembly").emit();
+        structuredLog.debug_("command_").field("detail", "Command: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, workspace.root);
         
@@ -202,7 +202,7 @@ class AssemblyBuilder : ScalaBuilder
         }
         catch (Exception e)
         {
-            Logger.warning("Error searching for assembly JAR: " ~ e.msg);
+            structuredLog.warning("error_searching_for_assembly_jar_").field("detail", "Error searching for assembly JAR: " ~ e.msg).emit();
         }
         
         return "";

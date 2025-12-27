@@ -23,7 +23,7 @@ import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// C# build handler with action-level caching
 class CSharpHandler : BaseLanguageHandler
@@ -44,18 +44,18 @@ class CSharpHandler : BaseLanguageHandler
         // Validate .NET installation
         if (!DotNetToolDetection.isDotNetAvailable() && config.buildTool != CSharpBuildTool.CSC)
         {
-            Logger.warning("dotnet CLI not found. Please install .NET SDK.");
+            structuredLog.warning("dotnet_cli_not_found_please_install_net_").emit();
         }
         
         // Check .NET version
         auto dotnetVersion = DotNetInfo.getVersion();
         if (dotnetVersion.empty)
         {
-            Logger.warning("Could not determine .NET version");
+            structuredLog.warning("could_not_determine_net_version").emit();
         }
         else
         {
-            Logger.info("Using .NET " ~ dotnetVersion);
+            structuredLog.info("using_net_").field("detail", "Using .NET " ~ dotnetVersion).emit();
         }
     }
     
@@ -116,14 +116,14 @@ class CSharpHandler : BaseLanguageHandler
         {
             if (!NuGetOps.restore(config.root, csConfig.nuget))
             {
-                Logger.warning("NuGet restore had issues, continuing anyway");
+                structuredLog.warning("nuget_restore_had_issues_continuing_anyw").emit();
             }
         }
         
         // Auto-format if configured
         if (csConfig.formatter.autoFormat && csConfig.formatter.formatter != CSharpFormatter.None)
         {
-            Logger.info("Auto-formatting code");
+            structuredLog.info("autoformatting_code").emit();
             auto formatter = CSharpFormatterFactory.create(csConfig.formatter.formatter, config.root);
             auto formatResult = formatter.format(target.sources.dup, csConfig.formatter, config.root, csConfig.formatter.checkOnly);
             
@@ -134,14 +134,14 @@ class CSharpHandler : BaseLanguageHandler
                     result.error = "Formatting verification failed: " ~ formatResult.error;
                     return result;
                 }
-                Logger.warning("Formatting failed, continuing anyway");
+                structuredLog.warning("formatting_failed_continuing_anyway").emit();
             }
         }
         
         // Run static analysis if configured
         if (csConfig.analysis.enabled && csConfig.analysis.analyzer != CSharpAnalyzer.None)
         {
-            Logger.info("Running static analysis");
+            structuredLog.info("running_static_analysis").emit();
             auto analyzer = CSharpAnalyzerFactory.create(csConfig.analysis.analyzer, config.root);
             auto analysisResult = analyzer.analyze(target.sources.dup, csConfig.analysis, config.root);
             
@@ -153,10 +153,10 @@ class CSharpHandler : BaseLanguageHandler
             
             if (analysisResult.hasWarnings())
             {
-                Logger.warning("Static analysis warnings:");
+                structuredLog.warning("static_analysis_warnings").emit();
                 foreach (warning; analysisResult.warnings)
                 {
-                    Logger.warning("  " ~ warning);
+                    structuredLog.warning("__").field("detail", "  " ~ warning).emit();
                 }
                 
                 if (csConfig.analysis.failOnWarnings)
@@ -202,7 +202,7 @@ class CSharpHandler : BaseLanguageHandler
         // Libraries use standard build mode
         if (csConfig.mode == CSharpBuildMode.NativeAOT || csConfig.mode == CSharpBuildMode.SingleFile)
         {
-            Logger.warning("Converting incompatible build mode to Standard for library");
+            structuredLog.warning("converting_incompatible_build_mode_to_st").emit();
             csConfig.mode = CSharpBuildMode.Standard;
         }
         
@@ -217,7 +217,7 @@ class CSharpHandler : BaseLanguageHandler
     {
         LanguageBuildResult result;
         
-        Logger.info("Running C# tests");
+        structuredLog.info("running_c_tests").emit();
         
         // Use build tool for testing if available
         if (csConfig.buildTool == CSharpBuildTool.DotNet && DotNetToolDetection.hasProjectFile(config.root))
@@ -325,7 +325,7 @@ class CSharpHandler : BaseLanguageHandler
     {
         LanguageBuildResult result;
         
-        Logger.info("Running tests directly");
+        structuredLog.info("running_tests_directly").emit();
         
         // Auto-detect test framework if not specified
         CSharpTestFramework framework = csConfig.test.framework;
@@ -338,7 +338,7 @@ class CSharpHandler : BaseLanguageHandler
                 framework = detectTestFramework(projectFiles[0]);
                 if (framework == CSharpTestFramework.None)
                 {
-                    Logger.warning("Could not detect test framework, trying xUnit");
+                    structuredLog.warning("could_not_detect_test_framework_trying_x").emit();
                     framework = CSharpTestFramework.XUnit;
                 }
             }
@@ -354,7 +354,7 @@ class CSharpHandler : BaseLanguageHandler
         if (!testRunner.isAvailable())
         {
             result.error = testRunner.name() ~ " test runner not available";
-            Logger.warning(result.error ~ ", falling back to 'dotnet test'");
+            structuredLog.warning("log_event").field("message", result.error ~ ", falling back to 'dotnet test'").emit();
             
             // Try dotnet test as fallback
             if (DotNetOps.test(config.root, csConfig.test))
@@ -366,7 +366,7 @@ class CSharpHandler : BaseLanguageHandler
             return result;
         }
         
-        Logger.info("Using " ~ testRunner.name() ~ " test runner");
+        structuredLog.info("using_").field("detail", "Using " ~ testRunner.name() ~ " test runner").emit();
         
         // Convert TestConfig to the format expected by test runners
         import languages.dotnet.csharp.config.test : TestConfig;
@@ -386,21 +386,21 @@ class CSharpHandler : BaseLanguageHandler
         if (!testResult.success)
         {
             result.error = testResult.error;
-            Logger.error("Tests failed");
-            Logger.error("  Error: " ~ testResult.error);
+            structuredLog.error("tests_failed").emit();
+            structuredLog.error("__error_").field("detail", "  Error: " ~ testResult.error).emit();
             return result;
         }
         
         // Log test summary
         if (testResult.failed > 0)
         {
-            Logger.warning("Some tests failed: " ~ testResult.failed.to!string ~ " / " ~ 
-                          (testResult.passed + testResult.failed).to!string);
+            structuredLog.warning("some_tests_failed_").field("detail", "Some tests failed: " ~ testResult.failed.to!string ~ " / " ~ 
+                          (testResult.passed + testResult.failed).to!string).emit();
             result.error = "Test failures detected";
             return result;
         }
         
-        Logger.info("All tests passed: " ~ testResult.passed.to!string ~ " tests");
+        structuredLog.info("all_tests_passed_").field("detail", "All tests passed: " ~ testResult.passed.to!string ~ " tests").emit();
         
         result.success = true;
         result.outputHash = FastHash.hashStrings(target.sources.dup);
@@ -443,7 +443,7 @@ class CSharpHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to analyze imports in " ~ source);
+                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source).emit();
             }
         }
         

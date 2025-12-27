@@ -7,7 +7,7 @@ import std.string : startsWith, endsWith, replace, indexOf, toUpper, strip;
 import std.path : baseName, dirName;
 import std.range : empty;
 import infrastructure.utils.security.validation;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.runtime.hermetic;
 import infrastructure.errors;
 
@@ -358,17 +358,17 @@ struct SecureExecutor
             
             // Redact command arguments
             auto redactedCmd = cmd.map!(arg => AuditRedactor.redactArg(arg)).array;
-            Logger.debugLog("[AUDIT] Executing: " ~ redactedCmd.join(" "));
+            structuredLog.debug_("audit_executing_").field("detail", "[AUDIT] Executing: " ~ redactedCmd.join(" ")).emit();
             
             // Redact working directory
             if (!workDir.empty)
-                Logger.debugLog("[AUDIT]   WorkDir: " ~ AuditRedactor.redactPath(workDir));
+                structuredLog.debug_("audit___workdir_").field("detail", "[AUDIT]   WorkDir: " ~ AuditRedactor.redactPath(workDir)).emit();
             
             // Redact environment variable keys/values
             if (environment.length > 0)
             {
                 auto envKeys = environment.keys.array;
-                Logger.debugLog("[AUDIT]   EnvVars: " ~ AuditRedactor.redactEnvKeys(envKeys));
+                structuredLog.debug_("audit___envvars_").field("detail", "[AUDIT]   EnvVars: " ~ AuditRedactor.redactEnvKeys(envKeys)).emit();
             }
         }
         
@@ -613,9 +613,9 @@ auto execute(
     // Security audit log (enabled via environment variable BUILDER_AUDIT_EXEC=1)
     version(BUILDER_AUDIT)
     {
-        Logger.debugLog("[SECURITY AUDIT] execute: " ~ args.join(" "));
+        structuredLog.debug_("security_audit_execute_").field("detail", "[SECURITY AUDIT] execute: " ~ args.join(" ")).emit();
         if (workDir !is null && workDir.length > 0)
-            Logger.debugLog("[SECURITY AUDIT]   workDir: " ~ workDir);
+            structuredLog.debug_("security_audit___workdir_").field("detail", "[SECURITY AUDIT]   workDir: " ~ workDir).emit();
     }
     
     // All validation passed - execute command safely

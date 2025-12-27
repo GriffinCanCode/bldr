@@ -13,7 +13,7 @@ import languages.scripting.elixir.managers.mix;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
 
 /// Mix project builder - standard OTP applications and libraries with action-level caching
@@ -35,7 +35,7 @@ class MixProjectBuilder : ElixirBuilder
     {
         ElixirBuildResult result;
         
-        Logger.debugLog("Building Mix project");
+        structuredLog.debug_("building_mix_project").emit();
         
         string workDir = workspace.root;
         if (!sources.empty)
@@ -100,11 +100,11 @@ class MixProjectBuilder : ElixirBuilder
             if (!actionCache || !actionCache.isCached(modActionId, [modFile], modMetadata))
             {
                 anyModuleChanged = true;
-                Logger.debugLog("  [Changed] Module: " ~ modFile.baseName);
+                structuredLog.debug_("__changed_module_").field("detail", "  [Changed] Module: " ~ modFile.baseName).emit();
             }
             else
             {
-                Logger.debugLog("  [Cached] Module: " ~ modFile.baseName);
+                structuredLog.debug_("__cached_module_").field("detail", "  [Cached] Module: " ~ modFile.baseName).emit();
             }
         }
         
@@ -130,7 +130,7 @@ class MixProjectBuilder : ElixirBuilder
         // Check if compilation is cached
         if (actionCache && actionCache.isCached(actionId, inputFiles, metadata) && exists(outputDir))
         {
-            Logger.info("  [Cached] Mix compilation: " ~ workDir);
+            structuredLog.info("__cached_mix_compilation_").field("detail", "  [Cached] Mix compilation: " ~ workDir).emit();
             result.success = true;
             result.outputs ~= outputDir;
             // result.outputHash = FastHash.hashStrings(sources);
@@ -156,7 +156,7 @@ class MixProjectBuilder : ElixirBuilder
             cmd ~= config.build.compilerOpts.join(" ");
         }
         
-        Logger.info("Compiling Mix project: " ~ cmd.join(" "));
+        structuredLog.info("compiling_mix_project_").field("detail", "Compiling Mix project: " ~ cmd.join(" ")).emit();
         
         // Execute compilation
         auto res = execute(cmd, env, Config.none, size_t.max, workDir);
@@ -225,7 +225,7 @@ class MixProjectBuilder : ElixirBuilder
         // Compile protocols if requested
         if (config.build.compileProtocols)
         {
-            Logger.info("Consolidating protocols");
+            structuredLog.info("consolidating_protocols").emit();
             auto protCmd = ["mix", "compile.protocols"];
             auto protRes = execute(protCmd, env, Config.none, size_t.max, workDir);
             

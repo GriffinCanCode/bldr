@@ -7,7 +7,7 @@ import std.array;
 import std.algorithm;
 import std.conv;
 import std.string;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Tree-sitter dependency checker
 /// Verifies that tree-sitter is properly installed and linked
@@ -84,24 +84,24 @@ struct TreeSitterDeps {
     
     /// Print installation instructions
     static void printInstallInstructions() @system {
-        Logger.info("Tree-sitter not found. To install:");
-        Logger.info("");
+        structuredLog.info("treesitter_not_found_to_install").emit();
+        structuredLog.info("log_event").emit();
         version(OSX) {
-            Logger.info("  macOS:");
-            Logger.info("    brew install tree-sitter");
+            structuredLog.info("__macos").emit();
+            structuredLog.info("____brew_install_treesitter").emit();
         } else version(linux) {
-            Logger.info("  Ubuntu/Debian:");
-            Logger.info("    sudo apt-get install libtree-sitter-dev");
-            Logger.info("");
-            Logger.info("  Fedora/RHEL:");
-            Logger.info("    sudo yum install tree-sitter");
+            structuredLog.info("__ubuntudebian").emit();
+            structuredLog.info("____sudo_aptget_install_libtreesitterdev").emit();
+            structuredLog.info("log_event").emit();
+            structuredLog.info("__fedorarhel").emit();
+            structuredLog.info("____sudo_yum_install_treesitter").emit();
         }
-        Logger.info("");
-        Logger.info("  From source:");
-        Logger.info("    git clone https://github.com/tree-sitter/tree-sitter");
-        Logger.info("    cd tree-sitter && make && sudo make install");
-        Logger.info("");
-        Logger.info("Or run: source/infrastructure/parsing/treesitter/setup.sh");
+        structuredLog.info("log_event").emit();
+        structuredLog.info("__from_source").emit();
+        structuredLog.info("____git_clone_httpsgithubcomtreesittertr").emit();
+        structuredLog.info("____cd_treesitter__make__sudo_make_insta").emit();
+        structuredLog.info("log_event").emit();
+        structuredLog.info("or_run_sourceinfrastructureparsingtreesi").emit();
     }
     
     private static bool checkPkgConfig() @system {
@@ -147,11 +147,11 @@ struct TreeSitterDeps {
 /// Verify tree-sitter installation and log diagnostics
 void verifyTreeSitterInstallation() @system {
     if (TreeSitterDeps.isInstalled()) {
-        Logger.info("Tree-sitter library found");
-        Logger.debugLog(TreeSitterDeps.getInstallInfo());
+        structuredLog.info("treesitter_library_found").emit();
+        structuredLog.debug_("log_event").field("message", TreeSitterDeps.getInstallInfo()).emit();
     } else {
-        Logger.warning("Tree-sitter library not found - falling back to file-level tracking");
-        Logger.debugLog(TreeSitterDeps.getInstallInfo());
+        structuredLog.warning("treesitter_library_not_found__falling_ba").emit();
+        structuredLog.debug_("log_event").field("message", TreeSitterDeps.getInstallInfo()).emit();
         TreeSitterDeps.printInstallInstructions();
     }
 }

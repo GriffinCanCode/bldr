@@ -9,7 +9,7 @@ import std.conv;
 import languages.scripting.python.managers.base;
 import languages.scripting.python.tooling.detection : ToolDetection;
 alias PyTools = ToolDetection;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Poetry package manager
 class PoetryManager : PackageManager
@@ -30,7 +30,7 @@ class PoetryManager : PackageManager
         if (packages.empty)
         {
             // Install from pyproject.toml
-            Logger.info("Installing dependencies with poetry");
+            structuredLog.info("installing_dependencies_with_poetry").emit();
             
             StopWatch sw;
             sw.start();
@@ -51,7 +51,7 @@ class PoetryManager : PackageManager
         else
         {
             // Add and install specific packages
-            Logger.info("Installing packages with poetry: " ~ packages.join(", "));
+            structuredLog.info("installing_packages_with_poetry_").field("detail", "Installing packages with poetry: " ~ packages.join(", ")).emit();
             
             StopWatch sw;
             sw.start();
@@ -75,7 +75,7 @@ class PoetryManager : PackageManager
             result.success = true;
         }
         
-        Logger.info("Poetry installation completed in %.2fs".format(result.timeSeconds));
+        structuredLog.info("poetry_installation_completed_in_2fsform").emit();
         return result;
     }
     

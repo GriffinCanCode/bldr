@@ -12,7 +12,7 @@ import std.conv;
 import std.json;
 import std.string;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Vite bundler - modern dev server with lightning-fast HMR and optimized production builds
 /// Ideal for: React/Vue/Svelte apps, modern ESM projects, library development
@@ -44,7 +44,7 @@ class ViteBundler : Bundler
         string autoConfig = detectViteConfig(sources);
         if (!autoConfig.empty)
         {
-            Logger.debugLog("Detected Vite config: " ~ autoConfig);
+            structuredLog.debug_("detected_vite_config_").field("detail", "Detected Vite config: " ~ autoConfig).emit();
             return bundleWithConfigFile(autoConfig, workspace, result);
         }
         
@@ -58,7 +58,7 @@ class ViteBundler : Bundler
         BundleResult result
     )
     {
-        Logger.debugLog("Using Vite config: " ~ configFile);
+        structuredLog.debug_("using_vite_config_").field("detail", "Using Vite config: " ~ configFile).emit();
         
         string[] cmd = ["npx", "vite", "build", "--config", configFile];
         
@@ -153,7 +153,7 @@ class ViteBundler : Bundler
                 remove(tempConfig);
         }
         
-        Logger.debugLog("Generated Vite config: " ~ tempConfig);
+        structuredLog.debug_("generated_vite_config_").field("detail", "Generated Vite config: " ~ tempConfig).emit();
         
         // Run Vite build
         string[] cmd = ["npx", "vite", "build", "--config", tempConfig];
@@ -166,7 +166,7 @@ class ViteBundler : Bundler
             return result;
         }
         
-        Logger.debugLog("Vite build completed successfully");
+        structuredLog.debug_("vite_build_completed_successfully").emit();
         
         result.success = true;
         

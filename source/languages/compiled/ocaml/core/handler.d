@@ -15,7 +15,7 @@ import languages.compiled.ocaml.core.config;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
 
 /// OCaml build handler with support for dune, ocamlopt, and ocamlc with action-level caching
@@ -31,7 +31,7 @@ class OCamlHandler : BaseLanguageHandler
         
         LanguageBuildResult result;
         
-        Logger.debugLog("Building OCaml target: " ~ target.name);
+        structuredLog.debug_("building_ocaml_target_").field("detail", "Building OCaml target: " ~ target.name).emit();
         
         // Parse OCaml configuration
         OCamlConfig ocamlConfig = parseOCamlConfig(target, config);
@@ -63,7 +63,7 @@ class OCamlHandler : BaseLanguageHandler
         // Run formatter if requested
         if (ocamlConfig.runFormat && isOcamlFormatAvailable())
         {
-            Logger.debugLog("Running ocamlformat...");
+            structuredLog.debug_("running_ocamlformat").emit();
             formatCode(mlFiles);
         }
         
@@ -151,7 +151,7 @@ class OCamlHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to analyze imports in " ~ source ~ ": " ~ e.msg);
+                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source ~ ": " ~ e.msg).emit();
             }
         }
         
@@ -172,7 +172,7 @@ class OCamlHandler : BaseLanguageHandler
             return result;
         }
         
-        Logger.debugLog("Building with dune");
+        structuredLog.debug_("building_with_dune").emit();
         
         // Collect all ML sources for cache tracking
         string[] allSources;
@@ -205,7 +205,7 @@ class OCamlHandler : BaseLanguageHandler
         // Check if build is cached
         if (actionCache.isCached(actionId, allSources, metadata) && exists(expectedOutput))
         {
-            Logger.debugLog("  [Cached] dune build: " ~ target.name);
+            structuredLog.debug_("__cached_dune_build_").field("detail", "  [Cached] dune build: " ~ target.name).emit();
             result.success = true;
             result.outputs = [expectedOutput];
             return result;
@@ -255,7 +255,7 @@ class OCamlHandler : BaseLanguageHandler
             // Parse output for warnings
             if (!duneResult.output.empty)
             {
-                Logger.info(duneResult.output);
+                structuredLog.info("log_event").field("message", duneResult.output).emit();
             }
             
             result.success = true;
@@ -306,7 +306,7 @@ class OCamlHandler : BaseLanguageHandler
             return result;
         }
         
-        Logger.debugLog("Building with ocamlopt (native compiler)");
+        structuredLog.debug_("building_with_ocamlopt_native_compiler").emit();
         
         // Build metadata for cache validation
         string[string] metadata;
@@ -343,7 +343,7 @@ class OCamlHandler : BaseLanguageHandler
         // Check if compilation is cached
         if (actionCache.isCached(actionId, mlFiles, metadata) && exists(outputPath))
         {
-            Logger.debugLog("  [Cached] ocamlopt compilation: " ~ outputPath);
+            structuredLog.debug_("__cached_ocamlopt_compilation_").field("detail", "  [Cached] ocamlopt compilation: " ~ outputPath).emit();
             result.success = true;
             result.outputs = [outputPath];
             return result;
@@ -455,7 +455,7 @@ class OCamlHandler : BaseLanguageHandler
             // Check for warnings
             if (!compileResult.output.empty)
             {
-                Logger.warning("Compilation output:\n" ~ compileResult.output);
+                structuredLog.warning("compilation_outputn").field("detail", "Compilation output:\n" ~ compileResult.output).emit();
             }
             
             result.success = true;
@@ -504,7 +504,7 @@ class OCamlHandler : BaseLanguageHandler
             return result;
         }
         
-        Logger.debugLog("Building with ocamlc (bytecode compiler)");
+        structuredLog.debug_("building_with_ocamlc_bytecode_compiler").emit();
         
         // Build metadata for cache validation
         string[string] metadata;
@@ -544,7 +544,7 @@ class OCamlHandler : BaseLanguageHandler
         // Check if compilation is cached
         if (actionCache.isCached(actionId, mlFiles, metadata) && exists(outputPath))
         {
-            Logger.debugLog("  [Cached] ocamlc compilation: " ~ outputPath);
+            structuredLog.debug_("__cached_ocamlc_compilation_").field("detail", "  [Cached] ocamlc compilation: " ~ outputPath).emit();
             result.success = true;
             result.outputs = [outputPath];
             return result;
@@ -650,7 +650,7 @@ class OCamlHandler : BaseLanguageHandler
             // Check for warnings
             if (!compileResult.output.empty)
             {
-                Logger.warning("Compilation output:\n" ~ compileResult.output);
+                structuredLog.warning("compilation_outputn").field("detail", "Compilation output:\n" ~ compileResult.output).emit();
             }
             
             result.success = true;
@@ -698,7 +698,7 @@ class OCamlHandler : BaseLanguageHandler
             return result;
         }
         
-        Logger.debugLog("Building with ocamlbuild");
+        structuredLog.debug_("building_with_ocamlbuild").emit();
         
         // Determine entry point
         string entryFile = ocamlConfig.entry;
@@ -745,7 +745,7 @@ class OCamlHandler : BaseLanguageHandler
             
             if (!buildResult.output.empty)
             {
-                Logger.info(buildResult.output);
+                structuredLog.info("log_event").field("message", buildResult.output).emit();
             }
             
             result.success = true;
@@ -780,7 +780,7 @@ class OCamlHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to parse OCaml config, using defaults: " ~ e.msg);
+                structuredLog.warning("failed_to_parse_ocaml_config_using_defau").field("detail", "Failed to parse OCaml config, using defaults: " ~ e.msg).emit();
             }
         }
         
@@ -834,32 +834,32 @@ class OCamlHandler : BaseLanguageHandler
         // Check for dune first (most modern)
         if (isDuneAvailable() && (exists("dune-project") || exists("dune")))
         {
-            Logger.debugLog("Detected dune project");
+            structuredLog.debug_("detected_dune_project").emit();
             return OCamlCompiler.Dune;
         }
         
         // Check for ocamlbuild
         if (isOcamlBuildAvailable() && exists("_tags"))
         {
-            Logger.debugLog("Detected ocamlbuild project");
+            structuredLog.debug_("detected_ocamlbuild_project").emit();
             return OCamlCompiler.OCamlBuild;
         }
         
         // Prefer native compiler if available
         if (isOcamlOptAvailable())
         {
-            Logger.debugLog("Using ocamlopt (native compiler)");
+            structuredLog.debug_("using_ocamlopt_native_compiler").emit();
             return OCamlCompiler.OCamlOpt;
         }
         
         // Fallback to bytecode compiler
         if (isOcamlCAvailable())
         {
-            Logger.debugLog("Using ocamlc (bytecode compiler)");
+            structuredLog.debug_("using_ocamlc_bytecode_compiler").emit();
             return OCamlCompiler.OCamlC;
         }
         
-        Logger.warning("No OCaml compiler found");
+        structuredLog.warning("no_ocaml_compiler_found").emit();
         return OCamlCompiler.OCamlOpt; // Return something, error will be raised later
     }
     
@@ -952,12 +952,12 @@ class OCamlHandler : BaseLanguageHandler
                 auto result = execute(["ocamlformat", "--inplace", file]);
                 if (result.status != 0)
                 {
-                    Logger.warning("Failed to format " ~ file);
+                    structuredLog.warning("failed_to_format_").field("detail", "Failed to format " ~ file).emit();
                 }
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to format " ~ file ~ ": " ~ e.msg);
+                structuredLog.warning("failed_to_format_").field("detail", "Failed to format " ~ file ~ ": " ~ e.msg).emit();
             }
         }
     }

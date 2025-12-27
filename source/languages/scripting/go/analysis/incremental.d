@@ -8,7 +8,7 @@ import std.regex;
 import std.string;
 import std.process;
 import engine.compilation.incremental.analyzer;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Go module incremental dependency analyzer
@@ -54,7 +54,7 @@ final class GoDependencyAnalyzer : BaseDependencyAnalyzer
             {
                 if (isExternalDependency(importPath))
                 {
-                    Logger.debugLog("  [External] " ~ importPath);
+                    structuredLog.debug_("__external_").field("detail", "  [External] " ~ importPath).emit();
                     continue;
                 }
                 
@@ -66,7 +66,7 @@ final class GoDependencyAnalyzer : BaseDependencyAnalyzer
                     if (exists(file))
                     {
                         resolvedDeps ~= buildNormalizedPath(file);
-                        Logger.debugLog("  [Resolved] " ~ importPath ~ " -> " ~ file);
+                        structuredLog.debug_("__resolved_").field("detail", "  [Resolved] " ~ importPath ~ " -> " ~ file).emit();
                     }
                 }
             }
@@ -124,7 +124,7 @@ final class GoDependencyAnalyzer : BaseDependencyAnalyzer
         }
         catch (Exception e)
         {
-            Logger.debugLog("Failed to detect Go module path: " ~ e.msg);
+            structuredLog.debug_("failed_to_detect_go_module_path_").field("detail", "Failed to detect Go module path: " ~ e.msg).emit();
         }
         
         return "";
@@ -218,7 +218,7 @@ struct GoIncrementalHelper
             if (deps.canFind(normalizedChanged))
             {
                 affected ~= source;
-                Logger.debugLog("  " ~ source ~ " affected by " ~ changedFile);
+                structuredLog.debug_("__").field("detail", "  " ~ source ~ " affected by " ~ changedFile).emit();
             }
         }
         

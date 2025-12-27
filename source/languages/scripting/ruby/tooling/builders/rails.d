@@ -14,7 +14,7 @@ import languages.base.base;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Rails builder for Ruby on Rails applications
 class RailsBuilder : Builder
@@ -56,7 +56,7 @@ class RailsBuilder : Builder
         // Run database migrations if configured
         if (config.rails.runMigrations)
         {
-            Logger.info("Running database migrations");
+            structuredLog.info("running_database_migrations").emit();
             if (!runMigrations(workspace.root, env, config.rails.commandPrefix))
             {
                 result.toolWarnings ~= "Database migrations failed";
@@ -66,7 +66,7 @@ class RailsBuilder : Builder
         // Seed database if configured
         if (config.rails.seedDatabase)
         {
-            Logger.info("Seeding database");
+            structuredLog.info("seeding_database").emit();
             if (!seedDatabase(workspace.root, env, config.rails.commandPrefix))
             {
                 result.toolWarnings ~= "Database seeding failed";
@@ -76,7 +76,7 @@ class RailsBuilder : Builder
         // Precompile assets if configured
         if (config.rails.precompileAssets)
         {
-            Logger.info("Precompiling assets");
+            structuredLog.info("precompiling_assets").emit();
             if (!precompileAssets(workspace.root, env, config.rails.commandPrefix))
             {
                 result.error = "Asset precompilation failed";
@@ -85,7 +85,7 @@ class RailsBuilder : Builder
         }
         
         // Validate Rails application
-        Logger.info("Validating Rails application");
+        structuredLog.info("validating_rails_application").emit();
         if (!validateRailsApp(workspace.root, env, config.rails.commandPrefix))
         {
             result.error = "Rails application validation failed";
@@ -133,8 +133,8 @@ class RailsBuilder : Builder
         
         if (res.status != 0)
         {
-            Logger.error("Migration failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("migration_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -149,8 +149,8 @@ class RailsBuilder : Builder
         
         if (res.status != 0)
         {
-            Logger.error("Database seeding failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("database_seeding_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -165,12 +165,12 @@ class RailsBuilder : Builder
         
         if (res.status != 0)
         {
-            Logger.error("Asset precompilation failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("asset_precompilation_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
-        Logger.info("Assets precompiled successfully");
+        structuredLog.info("assets_precompiled_successfully").emit();
         return true;
     }
     
@@ -183,8 +183,8 @@ class RailsBuilder : Builder
         
         if (res.status != 0)
         {
-            Logger.error("Rails validation failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("rails_validation_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         

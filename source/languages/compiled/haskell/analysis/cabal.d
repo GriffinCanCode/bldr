@@ -7,7 +7,7 @@ import std.algorithm;
 import std.array;
 import std.conv;
 import std.regex;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Cabal package metadata
 struct CabalMetadata
@@ -34,7 +34,7 @@ struct CabalMetadata
     {
         if (!exists(path))
         {
-            Logger.warning("Cabal file not found: " ~ path);
+            structuredLog.warning("cabal_file_not_found_").field("detail", "Cabal file not found: " ~ path).emit();
             return CabalMetadata();
         }
         
@@ -45,7 +45,7 @@ struct CabalMetadata
         }
         catch (Exception e)
         {
-            Logger.error("Failed to parse cabal file: " ~ e.msg);
+            structuredLog.error("failed_to_parse_cabal_file_").field("detail", "Failed to parse cabal file: " ~ e.msg).emit();
             return CabalMetadata();
         }
     }

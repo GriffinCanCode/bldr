@@ -6,7 +6,7 @@ import std.path;
 import std.string;
 import std.array;
 import std.algorithm;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// FAKE (F# Make) build system operations
 struct FAKEOps
@@ -16,7 +16,7 @@ struct FAKEOps
     {
         if (!exists(scriptFile))
         {
-            Logger.error("FAKE script not found: " ~ scriptFile);
+            structuredLog.error("fake_script_not_found_").field("detail", "FAKE script not found: " ~ scriptFile).emit();
             return false;
         }
         
@@ -34,8 +34,8 @@ struct FAKEOps
         
         if (res.status != 0)
         {
-            Logger.error("FAKE build failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("fake_build_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -49,8 +49,8 @@ struct FAKEOps
         
         if (res.status != 0)
         {
-            Logger.error("FAKE init failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("fake_init_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -99,8 +99,8 @@ struct FAKEOps
         
         if (res.status != 0)
         {
-            Logger.error("FAKE tool restore failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("fake_tool_restore_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -138,7 +138,7 @@ struct FAKEOps
         
         if (res.status != 0)
         {
-            Logger.warning("Failed to install FAKE: " ~ res.output);
+            structuredLog.warning("failed_to_install_fake_").field("detail", "Failed to install FAKE: " ~ res.output).emit();
             return false;
         }
         

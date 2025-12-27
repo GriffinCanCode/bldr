@@ -8,7 +8,7 @@ import std.array;
 import std.string;
 import std.regex;
 import std.conv;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.security : execute;
 import languages.scripting.ruby.core.config;
 
@@ -58,7 +58,7 @@ class CucumberRunner
     {
         CucumberResult result;
         
-        Logger.info("Running Cucumber tests");
+        structuredLog.info("running_cucumber_tests").emit();
         
         // Build command - use bundler if Gemfile exists and available
         immutable useBundler = exists(buildPath(workingDir, "Gemfile"));
@@ -89,7 +89,7 @@ class CucumberRunner
         cmd ~= config.cucumberArgs;
         
         // Execute Cucumber
-        Logger.debugLog("Executing: " ~ cmd.join(" "));
+        structuredLog.debug_("executing_").field("detail", "Executing: " ~ cmd.join(" ")).emit();
         
         auto execResult = execute(cmd, null, Config.none, size_t.max, workingDir);
         result.output = execResult.output;
@@ -102,7 +102,7 @@ class CucumberRunner
         auto jsonReportPath = buildPath(workingDir, "cucumber-report.json");
         if (exists(jsonReportPath)) {
             try { parseCucumberJsonReport(jsonReportPath, result); }
-            catch (Exception e) { Logger.debugLog("Failed to parse Cucumber JSON report: " ~ e.msg); }
+            catch (Exception e) { structuredLog.debug_("failed_to_parse_cucumber_json_report_").field("detail", "Failed to parse Cucumber JSON report: " ~ e.msg).emit(); }
         }
         
         if (!result.success && result.error.empty)
@@ -111,12 +111,12 @@ class CucumberRunner
         
         // Log summary
         import std.format : format;
-        Logger.info(format!"Cucumber results: %d/%d scenarios passed, %d/%d steps passed"(
-            result.scenariosPassed, result.scenarios, result.stepsPassed, result.steps));
+        structuredLog.info("log_event").field("message", format!"Cucumber results: %d/%d scenarios passed, %d/%d steps passed"(
+            result.scenariosPassed, result.scenarios, result.stepsPassed, result.steps)).emit();
         
-        if (result.stepsFailed > 0) Logger.warning(format!"%d step(s) failed"(result.stepsFailed));
-        if (result.stepsPending > 0) Logger.info(format!"%d step(s) pending"(result.stepsPending));
-        if (result.stepsSkipped > 0) Logger.info(format!"%d step(s) skipped"(result.stepsSkipped));
+        if (result.stepsFailed > 0) structuredLog.warning("log_event").field("message", format!"%d step(s) failed"(result.stepsFailed)).emit();
+        if (result.stepsPending > 0) structuredLog.info("log_event").field("message", format!"%d step(s) pending"(result.stepsPending)).emit();
+        if (result.stepsSkipped > 0) structuredLog.info("log_event").field("message", format!"%d step(s) skipped"(result.stepsSkipped)).emit();
         
         return result;
     }
@@ -149,7 +149,7 @@ class CucumberRunner
                 if (!pendingM.empty) result.stepsPending = pendingM[1].to!size_t;
             }
         } catch (Exception e) {
-            Logger.debugLog("Failed to parse Cucumber output: " ~ e.msg);
+            structuredLog.debug_("failed_to_parse_cucumber_output_").field("detail", "Failed to parse Cucumber output: " ~ e.msg).emit();
         }
     }
     

@@ -11,7 +11,7 @@ import std.algorithm;
 import std.array;
 import std.regex;
 import std.conv;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Psalm static analyzer (security-focused)
 class PsalmAnalyzer : Analyzer
@@ -46,7 +46,7 @@ class PsalmAnalyzer : Analyzer
         else
         {
             // Initialize Psalm if no config exists
-            Logger.info("No Psalm configuration found, initializing...");
+            structuredLog.info("no_psalm_configuration_found_initializin").emit();
             auto initCmd = [psalmCmd, "--init"];
             auto initRes = execute(initCmd, null, Config.none, size_t.max, projectRoot);
             
@@ -76,7 +76,7 @@ class PsalmAnalyzer : Analyzer
         else if (!sources.empty)
             cmd ~= sources;
         
-        Logger.info("Running Psalm: " ~ cmd.join(" "));
+        structuredLog.info("running_psalm_").field("detail", "Running Psalm: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, projectRoot);
         result.output = res.output;
@@ -89,7 +89,7 @@ class PsalmAnalyzer : Analyzer
         if (res.status == 0)
         {
             result.success = true;
-            Logger.info("Psalm analysis passed with no issues");
+            structuredLog.info("psalm_analysis_passed_with_no_issues").emit();
         }
         else
         {

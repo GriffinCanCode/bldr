@@ -12,7 +12,7 @@ import infrastructure.analysis.detection.detector;
 import infrastructure.analysis.detection.templates;
 import infrastructure.config.schema.schema;
 import languages.registry : getLanguageLabel;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 static import std.file;
 

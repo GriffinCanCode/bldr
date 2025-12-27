@@ -22,7 +22,7 @@ import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action;
 
 /// R language handler with action-level caching for linting, formatting, package building, and tests
@@ -49,7 +49,7 @@ class RHandler : BaseLanguageHandler
             if (config.mode == RBuildMode.Script)
             {
                 config.mode = RBuildMode.Package;
-                Logger.debugLog("Detected R package structure");
+                structuredLog.debug_("detected_r_package_structure").emit();
             }
         }
         
@@ -60,7 +60,7 @@ class RHandler : BaseLanguageHandler
             if (config.mode == RBuildMode.Script)
             {
                 config.mode = RBuildMode.Shiny;
-                Logger.debugLog("Detected Shiny app");
+                structuredLog.debug_("detected_shiny_app").emit();
             }
         }
         
@@ -70,7 +70,7 @@ class RHandler : BaseLanguageHandler
             if (config.mode == RBuildMode.Script)
             {
                 config.mode = RBuildMode.RMarkdown;
-                Logger.debugLog("Detected RMarkdown document");
+                structuredLog.debug_("detected_rmarkdown_document").emit();
             }
         }
         
@@ -81,24 +81,24 @@ class RHandler : BaseLanguageHandler
             {
                 config.env.manager = REnvManager.Renv;
                 config.env.enabled = true;
-                Logger.debugLog("Detected renv environment");
+                structuredLog.debug_("detected_renv_environment").emit();
             }
             else if (usesPackrat(sourceDir))
             {
                 config.env.manager = REnvManager.Packrat;
                 config.env.enabled = true;
-                Logger.debugLog("Detected packrat environment");
+                structuredLog.debug_("detected_packrat_environment").emit();
             }
         }
         
         // Validate R installation
         if (!validateRInstallation(config))
         {
-            Logger.warning("R/Rscript not available. Install from: https://www.r-project.org/");
+            structuredLog.warning("rrscript_not_available_install_from_http").emit();
             return;
         }
         
-        Logger.debugLog("Using R: " ~ getRVersion(config.rCommand));
+        structuredLog.debug_("using_r_").field("detail", "Using R: " ~ getRVersion(config.rCommand)).emit();
         
         // Setup environment if configured
         if (config.env.enabled)
@@ -106,7 +106,7 @@ class RHandler : BaseLanguageHandler
             auto envResult = setupEnvironment(config, workspace.root);
             if (!envResult.success)
             {
-                Logger.warning("Environment setup failed: " ~ envResult.error);
+                structuredLog.warning("environment_setup_failed_").field("detail", "Environment setup failed: " ~ envResult.error).emit();
                 return;
             }
         }
@@ -116,7 +116,7 @@ class RHandler : BaseLanguageHandler
         {
             if (!installProjectDependencies(config, target, workspace))
             {
-                Logger.warning("Failed to install dependencies");
+                structuredLog.warning("failed_to_install_dependencies").emit();
                 return;
             }
         }
@@ -129,7 +129,7 @@ class RHandler : BaseLanguageHandler
             {
                 if (config.lint.failOnWarnings || lintResult.errorCount > 0)
                 {
-                    Logger.warning("Linting failed with " ~ lintResult.errorCount.to!string ~ " error(s)");
+                    structuredLog.warning("linting_failed_with_").field("detail", "Linting failed with " ~ lintResult.errorCount.to!string ~ " error(s)").emit();
                 }
             }
         }
@@ -140,7 +140,7 @@ class RHandler : BaseLanguageHandler
             auto formatResult = formatFilesWithCache(target, config, workspace.root);
             if (!formatResult.success)
             {
-                Logger.warning("Formatting failed: " ~ formatResult.error);
+                structuredLog.warning("formatting_failed_").field("detail", "Formatting failed: " ~ formatResult.error).emit();
             }
         }
     }
@@ -270,14 +270,14 @@ class RHandler : BaseLanguageHandler
         
         if (!rInfo.available || !rscriptInfo.available)
         {
-            Logger.error("R not found. Please install R from https://www.r-project.org/");
+            structuredLog.error("r_not_found_please_install_r_from_httpsw").emit();
             return false;
         }
         
         // Check version requirement
         if (!config.rVersion.empty && !rInfo.meetsVersion(config.rVersion))
         {
-            Logger.error("R version " ~ rInfo.version_ ~ " does not meet requirement: " ~ config.rVersion);
+            structuredLog.error("r_version_").field("detail", "R version " ~ rInfo.version_ ~ " does not meet requirement: " ~ config.rVersion).emit();
             return false;
         }
         
@@ -293,13 +293,13 @@ class RHandler : BaseLanguageHandler
         if (status.hasLockfile && !status.exists)
         {
             // Restore from lockfile
-            Logger.info("Restoring R environment from lockfile");
+            structuredLog.info("restoring_r_environment_from_lockfile").emit();
             return restoreEnvironment(config.env.manager, workDir, config.rExecutable, config);
         }
         else if (!status.exists && config.env.autoCreate)
         {
             // Initialize new environment
-            Logger.info("Creating new R environment");
+            structuredLog.info("creating_new_r_environment").emit();
             return initializeEnvironment(config.env.manager, workDir, config.rExecutable, config);
         }
         
@@ -318,11 +318,11 @@ class RHandler : BaseLanguageHandler
         
         if (deps.empty)
         {
-            Logger.debugLog("No dependencies detected");
+            structuredLog.debug_("no_dependencies_detected").emit();
             return true;
         }
         
-        Logger.info("Installing " ~ deps.length.to!string ~ " dependencies");
+        structuredLog.info("installing_").field("detail", "Installing " ~ deps.length.to!string ~ " dependencies").emit();
         
         auto result = installPackages(
             deps,
@@ -334,7 +334,7 @@ class RHandler : BaseLanguageHandler
         
         if (!result.success)
         {
-            Logger.error("Dependency installation failed: " ~ result.error);
+            structuredLog.error("dependency_installation_failed_").field("detail", "Dependency installation failed: " ~ result.error).emit();
             return false;
         }
         
@@ -376,7 +376,7 @@ class RHandler : BaseLanguageHandler
             testCode = "covr::package_coverage(path='" ~ dirName(workDir) ~ "', type='tests')";
         }
         
-        Logger.info("Running testthat tests");
+        structuredLog.info("running_testthat_tests").emit();
         
         auto env = prepareEnvironment(rConfig);
         auto res = execute([rConfig.rExecutable, "-e", testCode], env, Config.none, size_t.max, workDir);
@@ -404,7 +404,7 @@ class RHandler : BaseLanguageHandler
         
         string testCode = "tinytest::test_all('" ~ workDir ~ "')";
         
-        Logger.info("Running tinytest tests");
+        structuredLog.info("running_tinytest_tests").emit();
         
         auto env = prepareEnvironment(rConfig);
         auto res = execute([rConfig.rExecutable, "-e", testCode], env, Config.none, size_t.max, workDir);
@@ -432,7 +432,7 @@ class RHandler : BaseLanguageHandler
         
         string testCode = "RUnit::runTestSuite(RUnit::defineTestSuite('tests', dirs='" ~ workDir ~ "'))";
         
-        Logger.info("Running RUnit tests");
+        structuredLog.info("running_runit_tests").emit();
         
         auto env = prepareEnvironment(rConfig);
         auto res = execute([rConfig.rExecutable, "-e", testCode], env, Config.none, size_t.max, workDir);
@@ -460,7 +460,7 @@ class RHandler : BaseLanguageHandler
         
         foreach (source; target.sources)
         {
-            Logger.info("Running R test: " ~ source);
+            structuredLog.info("running_r_test_").field("detail", "Running R test: " ~ source).emit();
             
             auto env = prepareEnvironment(rConfig);
             auto res = execute([rConfig.rExecutable, source], env, Config.none, size_t.max, workDir);
@@ -530,7 +530,7 @@ class RHandler : BaseLanguageHandler
             // Check if linting is cached
             if (getCache().isCached(actionId, [source], metadata))
             {
-                Logger.debugLog("  [Cached] Linting: " ~ source);
+                structuredLog.debug_("__cached_linting_").field("detail", "  [Cached] Linting: " ~ source).emit();
                 continue;
             }
             
@@ -582,7 +582,7 @@ class RHandler : BaseLanguageHandler
             // Check if formatting is cached
             if (getCache().isCached(actionId, [source], metadata))
             {
-                Logger.debugLog("  [Cached] Formatting: " ~ source);
+                structuredLog.debug_("__cached_formatting_").field("detail", "  [Cached] Formatting: " ~ source).emit();
                 continue;
             }
             
@@ -630,7 +630,7 @@ class RHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to analyze imports in " ~ source ~ ": " ~ e.msg);
+                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source ~ ": " ~ e.msg).emit();
             }
         }
         

@@ -7,7 +7,7 @@ import std.json;
 import std.string;
 import std.algorithm;
 import std.array;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// DUB package manifest information

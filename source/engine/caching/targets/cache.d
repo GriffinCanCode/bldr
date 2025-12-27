@@ -128,8 +128,8 @@ final class BuildCache
         
         try
         {
-            import infrastructure.utils.logging.logger;
-            Logger.debugLog("Warning: Cache destroyed without explicit close() - flushing as fallback");
+            import infrastructure.utils.logging;
+            structuredLog.debug_("cache_fallback_flush").emit();
             flush(false);
         }
         catch (Exception e) {}

@@ -11,7 +11,7 @@ import std.string;
 import std.algorithm;
 import std.array;
 import languages.jvm.kotlin.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Analysis result
 struct AnalysisResult
@@ -44,7 +44,7 @@ class DetektAnalyzer : StaticAnalyzer
     {
         AnalysisResult result;
         
-        Logger.info("Running detekt analysis");
+        structuredLog.info("running_detekt_analysis").emit();
         
         auto cmd = ["detekt"];
         
@@ -136,7 +136,7 @@ class CompilerAnalyzer : StaticAnalyzer
     {
         AnalysisResult result;
         
-        Logger.info("Running Kotlin compiler analysis");
+        structuredLog.info("running_kotlin_compiler_analysis").emit();
         
         // Use kotlinc with -Werror to treat warnings as errors
         auto cmd = ["kotlinc"];

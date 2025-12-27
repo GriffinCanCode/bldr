@@ -8,7 +8,7 @@ import std.algorithm : max, min;
 import std.conv : to;
 import std.process : ProcessPipes, tryWait;
 import engine.workers.protocol.types : WorkerId;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Memory pressure level
 enum MemoryPressure : ubyte
@@ -96,7 +96,7 @@ final class WorkerMemoryMonitor
         atomicStore(running, true);
         pollThread = new Thread(&pollLoop);
         pollThread.start();
-        Logger.info("Worker memory monitor started");
+        structuredLog.info("worker_memory_monitor_started").emit();
     }
     
     /// Stop monitoring
@@ -108,7 +108,7 @@ final class WorkerMemoryMonitor
             pollThread.join();
             pollThread = null;
         }
-        Logger.info("Worker memory monitor stopped");
+        structuredLog.info("worker_memory_monitor_stopped").emit();
     }
     
     /// Register worker for monitoring
@@ -140,8 +140,10 @@ final class WorkerMemoryMonitor
                 if (m.isCritical())
                 {
                     atomicOp!"+="(_oomDetections, 1);
-                    Logger.warning("OOM risk detected: " ~ id.toString() ~
-                                 " (heap: " ~ (heapUsed / 1024 / 1024).to!string ~ "MB)");
+                    structuredLog.warning("oom_risk_detected")
+                        .field("worker", id.toString())
+                        .field("heap_mb", heapUsed / 1024 / 1024)
+                        .emit();
                 }
             }
         }

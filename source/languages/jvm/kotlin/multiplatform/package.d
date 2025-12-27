@@ -10,7 +10,7 @@ import std.string;
 import std.algorithm;
 import std.array;
 import languages.jvm.kotlin.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Multiplatform project structure helper
 class MultiplatformHelper
@@ -122,7 +122,7 @@ class MultiplatformHelper
     {
         // This would require parsing Kotlin source files to find expect/actual pairs
         // For now, return true (validation happens during compilation)
-        Logger.debugLog("Expect/actual validation delegated to compiler");
+        structuredLog.debug_("expectactual_validation_delegated_to_com").emit();
         return true;
     }
 }

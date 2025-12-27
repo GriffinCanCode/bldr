@@ -9,7 +9,7 @@ import std.regex;
 import languages.jvm.scala.core.config;
 import languages.jvm.scala.tooling.detection;
 import languages.jvm.scala.managers.sbt;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Scala dependency information
 struct ScalaDependency
@@ -76,7 +76,7 @@ class DependencyAnalyzer
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to analyze sbt dependencies: " ~ e.msg);
+            structuredLog.warning("failed_to_analyze_sbt_dependencies_").field("detail", "Failed to analyze sbt dependencies: " ~ e.msg).emit();
         }
         
         return deps;
@@ -111,7 +111,7 @@ class DependencyAnalyzer
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to analyze Mill dependencies: " ~ e.msg);
+            structuredLog.warning("failed_to_analyze_mill_dependencies_").field("detail", "Failed to analyze Mill dependencies: " ~ e.msg).emit();
         }
         
         return deps;
@@ -139,7 +139,7 @@ class DependencyAnalyzer
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to extract imports from " ~ sourceFile);
+            structuredLog.warning("failed_to_extract_imports_from_").field("detail", "Failed to extract imports from " ~ sourceFile).emit();
         }
         
         return imports;

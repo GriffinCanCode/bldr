@@ -7,7 +7,7 @@ import infrastructure.parsing.treesitter.bindings;
 import infrastructure.parsing.treesitter.config;
 import infrastructure.parsing.treesitter.parser;
 import infrastructure.analysis.ast.parser;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Registry for tree-sitter language grammars
@@ -47,7 +47,7 @@ final class TreeSitterRegistry {
         // Lazy load - only load grammar when first parser is created
         grammars[languageId] = entry;
         
-        Logger.debugLog("Registered tree-sitter grammar: " ~ languageId);
+        structuredLog.debug_("registered_treesitter_grammar_").field("detail", "Registered tree-sitter grammar: " ~ languageId).emit();
     }
     
     /// Create a parser for a language
@@ -102,10 +102,10 @@ void registerTreeSitterParsers() @system {
     // Check tree-sitter installation
     import infrastructure.parsing.treesitter.deps;
     if (!TreeSitterDeps.isInstalled()) {
-        Logger.warning("Tree-sitter library not found - falling back to file-level tracking");
-        Logger.debugLog("Run: source/infrastructure/parsing/treesitter/setup.sh to install");
+        structuredLog.warning("treesitter_library_not_found__falling_ba").emit();
+        structuredLog.debug_("run_sourceinfrastructureparsingtreesitte").emit();
     } else {
-        Logger.debugLog("Tree-sitter library found");
+        structuredLog.debug_("treesitter_library_found").emit();
     }
     
     // Initialize language configs
@@ -116,17 +116,17 @@ void registerTreeSitterParsers() @system {
     
     // Log available configs (even if grammars aren't loaded yet)
     auto available = LanguageConfigs.available();
-    Logger.info("Tree-sitter configs available for " ~ 
-               available.length.to!string ~ " languages");
+    structuredLog.info("treesitter_configs_available_for_").field("detail", "Tree-sitter configs available for " ~ 
+               available.length.to!string ~ " languages").emit();
     
     // Check which grammars are actually loaded
     auto supportedLangs = tsRegistry.supportedLanguages();
     if (supportedLangs.length > 0) {
-        Logger.info("Tree-sitter grammars loaded for: " ~ 
-                   supportedLangs.join(", "));
+        structuredLog.info("treesitter_grammars_loaded_for_").field("detail", "Tree-sitter grammars loaded for: " ~ 
+                   supportedLangs.join(", ")).emit();
     } else {
-        Logger.info("No tree-sitter grammars loaded (using stub implementation)");
-        Logger.info("To enable AST parsing, see: source/infrastructure/parsing/treesitter/README.md");
+        structuredLog.info("no_treesitter_grammars_loaded_using_stub").emit();
+        structuredLog.info("to_enable_ast_parsing_see_sourceinfrastr").emit();
     }
 }
 

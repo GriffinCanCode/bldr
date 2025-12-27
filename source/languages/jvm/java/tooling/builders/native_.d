@@ -15,7 +15,7 @@ import languages.jvm.java.tooling.detection;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache;
 
 /// GraalVM Native Image builder
@@ -62,7 +62,7 @@ class NativeImageBuilder : JARBuilder
             return result;
         }
         
-        Logger.debugLog("Building Native Image: " ~ target.name);
+        structuredLog.debug_("building_native_image_").field("detail", "Building Native Image: " ~ target.name).emit();
         
         // First, build a regular JAR
         string outputPath = getOutputPath(target, workspace, config);
@@ -110,7 +110,7 @@ class NativeImageBuilder : JARBuilder
         ref JavaBuildResult result
     )
     {
-        Logger.info("Building GraalVM native image");
+        structuredLog.info("building_graalvm_native_image").emit();
         
         string[] cmd = ["native-image"];
         
@@ -178,8 +178,8 @@ class NativeImageBuilder : JARBuilder
         if (config.warnings)
             cmd ~= "--verbose";
         
-        Logger.debugLog("Native image command: " ~ cmd.join(" "));
-        Logger.info("Building native image (this may take several minutes)...");
+        structuredLog.debug_("native_image_command_").field("detail", "Native image command: " ~ cmd.join(" ")).emit();
+        structuredLog.info("building_native_image_this_may_take_seve").emit();
         
         auto nativeRes = execute(cmd);
         
@@ -192,7 +192,7 @@ class NativeImageBuilder : JARBuilder
         if (!nativeRes.output.empty)
             result.warnings ~= nativeRes.output.splitLines;
         
-        Logger.info("Native image built successfully");
+        structuredLog.info("native_image_built_successfully").emit();
         
         return true;
     }

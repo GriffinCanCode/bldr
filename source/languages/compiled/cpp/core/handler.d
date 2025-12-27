@@ -19,7 +19,7 @@ import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
 
 /// Generate PCH header file from suggested headers
@@ -44,7 +44,7 @@ private string generatePchHeader(string[] headers, string outputDir)
     }
     
     std.file.write(pchPath, content);
-    Logger.debugLog("Generated PCH header: " ~ pchPath);
+    structuredLog.debug_("generated_pch_header_").field("detail", "Generated PCH header: " ~ pchPath).emit();
     
     return pchPath;
 }
@@ -61,7 +61,7 @@ class CppHandler : BaseLanguageHandler
         
         LanguageBuildResult result;
         
-        Logger.debugLog("Building C++ target: " ~ target.name);
+        structuredLog.debug_("building_c_target_").field("detail", "Building C++ target: " ~ target.name).emit();
         
         // Parse C++ configuration
         CppConfig cppConfig = parseCppConfig(target);
@@ -75,14 +75,14 @@ class CppHandler : BaseLanguageHandler
             auto analysisResult = runStaticAnalysis(target, cppConfig);
             if (analysisResult.hadIssues)
             {
-                Logger.warning("Static analysis found issues:");
+                structuredLog.warning("static_analysis_found_issues").emit();
                 foreach (issue; analysisResult.issues[0 .. min(10, $)])
                 {
-                    Logger.warning("  " ~ issue);
+                    structuredLog.warning("__").field("detail", "  " ~ issue).emit();
                 }
                 if (analysisResult.issues.length > 10)
                 {
-                    Logger.warning("  ... and " ~ (analysisResult.issues.length - 10).to!string ~ " more issues");
+                    structuredLog.warning("___and_").field("detail", "  ... and " ~ (analysisResult.issues.length - 10).to!string ~ " more issues").emit();
                 }
             }
         }
@@ -117,10 +117,10 @@ class CppHandler : BaseLanguageHandler
             auto sanitizerResult = runWithSanitizers(result.outputs[0], cppConfig);
             if (sanitizerResult.hadIssues)
             {
-                Logger.warning("Sanitizer detected issues:");
+                structuredLog.warning("sanitizer_detected_issues").emit();
                 foreach (issue; sanitizerResult.issues)
                 {
-                    Logger.warning("  " ~ issue);
+                    structuredLog.warning("__").field("detail", "  " ~ issue).emit();
                 }
             }
         }
@@ -205,7 +205,7 @@ class CppHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to analyze imports in " ~ source);
+                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source).emit();
             }
         }
         
@@ -249,7 +249,7 @@ class CppHandler : BaseLanguageHandler
         
         if (isHeaderOnly || cppConfig.outputType == OutputType.HeaderOnly)
         {
-            Logger.info("Header-only library detected");
+            structuredLog.info("headeronly_library_detected").emit();
             result.success = true;
             result.outputs = target.sources.dup;
             result.outputHash = FastHash.hashStrings(target.sources.dup);
@@ -296,7 +296,7 @@ class CppHandler : BaseLanguageHandler
         {
             string testExe = buildResult.outputs[0];
             
-            Logger.info("Running tests: " ~ testExe);
+            structuredLog.info("running_tests_").field("detail", "Running tests: " ~ testExe).emit();
             
             auto res = execute([testExe]);
             
@@ -306,7 +306,7 @@ class CppHandler : BaseLanguageHandler
                 return result;
             }
             
-            Logger.info("Tests passed");
+            structuredLog.info("tests_passed").emit();
         }
         
         result.success = true;
@@ -344,7 +344,7 @@ class CppHandler : BaseLanguageHandler
             return result;
         }
         
-        Logger.debugLog("Using C++ builder: " ~ builder.name() ~ " (" ~ builder.getVersion() ~ ")");
+        structuredLog.debug_("using_c_builder_").field("detail", "Using C++ builder: " ~ builder.name() ~ " (" ~ builder.getVersion() ~ ")").emit();
         
         // Optimize with precompiled headers if beneficial
         if (cppConfig.pch.strategy == PchStrategy.Auto && target.sources.length > 5)
@@ -355,7 +355,7 @@ class CppHandler : BaseLanguageHandler
                 double benefit = PchOptimizer.estimatePchBenefit(target.sources.dup, pchHeaders);
                 if (benefit > 30.0)
                 {
-                    Logger.info("PCH would benefit ~" ~ benefit.to!string[0 .. min(5, $)] ~ "% of includes");
+                    structuredLog.info("log_event").field("message", "PCH would benefit ~" ~ benefit.to!string[0 .. min(5, $)] ~ "% of includes").emit();
                     
                     // Enable PCH by creating configuration
                     CppConfig pchConfig = cppConfig;
@@ -363,7 +363,7 @@ class CppHandler : BaseLanguageHandler
                     pchConfig.pch.header = generatePchHeader(pchHeaders, config.options.outputDir);
                     pchConfig.pch.output = buildPath(config.options.outputDir, "pch.h.gch");
                     
-                    Logger.info("Using PCH with " ~ pchHeaders.length.to!string ~ " headers");
+                    structuredLog.info("using_pch_with_").field("detail", "Using PCH with " ~ pchHeaders.length.to!string ~ " headers").emit();
                     
                     // Rebuild with PCH-enabled config
                     auto pchBuilder = CppBuilderFactory.create(pchConfig, actionCache);
@@ -383,14 +383,14 @@ class CppHandler : BaseLanguageHandler
         // Report warnings
         if (compileResult.hadWarnings && !compileResult.warnings.empty)
         {
-            Logger.warning("Compilation warnings:");
+            structuredLog.warning("compilation_warnings").emit();
             foreach (warn; compileResult.warnings[0 .. min(5, $)])
             {
-                Logger.warning("  " ~ warn);
+                structuredLog.warning("__").field("detail", "  " ~ warn).emit();
             }
             if (compileResult.warnings.length > 5)
             {
-                Logger.warning("  ... and " ~ (compileResult.warnings.length - 5).to!string ~ " more warnings");
+                structuredLog.warning("___and_").field("detail", "  ... and " ~ (compileResult.warnings.length - 5).to!string ~ " more warnings").emit();
             }
         }
         
@@ -419,7 +419,7 @@ class CppHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to parse C++ config, using defaults: " ~ e.msg);
+                structuredLog.warning("failed_to_parse_c_config_using_defaults_").field("detail", "Failed to parse C++ config, using defaults: " ~ e.msg).emit();
             }
         }
         
@@ -450,7 +450,7 @@ class CppHandler : BaseLanguageHandler
             
             if (config.buildSystem != BuildSystem.None)
             {
-                Logger.info("Detected build system: " ~ config.buildSystem.to!string);
+                structuredLog.info("detected_build_system_").field("detail", "Detected build system: " ~ config.buildSystem.to!string).emit();
             }
         }
         
@@ -532,7 +532,7 @@ class CppHandler : BaseLanguageHandler
                 return CppCheck.analyze(target.sources.dup, config);
             case StaticAnalyzer.PVSStudio:
             case StaticAnalyzer.Coverity:
-                Logger.warning("Analyzer not yet implemented: " ~ config.analyzer.to!string);
+                structuredLog.warning("analyzer_not_yet_implemented_").field("detail", "Analyzer not yet implemented: " ~ config.analyzer.to!string).emit();
                 return AnalysisResult();
         }
     }
@@ -545,7 +545,7 @@ class CppHandler : BaseLanguageHandler
         }
         else
         {
-            Logger.warning("clang-format not available, skipping formatting");
+            structuredLog.warning("clangformat_not_available_skipping_forma").emit();
         }
     }
     
@@ -565,7 +565,7 @@ class CHandler : CppHandler
 {
     protected override LanguageBuildResult buildImplWithContext(in BuildContext context)
     {
-        Logger.debugLog("Building C target: " ~ context.target.name);
+        structuredLog.debug_("building_c_target_").field("detail", "Building C target: " ~ context.target.name).emit();
         return super.buildImplWithContext(context);
     }
     
@@ -590,7 +590,7 @@ class CHandler : CppHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to analyze imports in " ~ source);
+                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source).emit();
             }
         }
         

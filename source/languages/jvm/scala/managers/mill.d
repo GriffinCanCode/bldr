@@ -7,7 +7,7 @@ import std.algorithm;
 import std.array;
 import std.process;
 import std.regex;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import languages.jvm.scala.core.config;
 
 /// Mill build operations
@@ -22,7 +22,7 @@ class MillOps
     /// Compile project
     static bool compile(string projectDir, string moduleName = "")
     {
-        Logger.info("Compiling Mill project");
+        structuredLog.info("compiling_mill_project").emit();
         
         string[] args;
         if (moduleName.empty)
@@ -34,8 +34,8 @@ class MillOps
         
         if (result.status != 0)
         {
-            Logger.error("Mill compilation failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("mill_compilation_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
@@ -45,7 +45,7 @@ class MillOps
     /// Run tests
     static bool test(string projectDir, string moduleName = "")
     {
-        Logger.info("Running Mill tests");
+        structuredLog.info("running_mill_tests").emit();
         
         string[] args;
         if (moduleName.empty)
@@ -57,8 +57,8 @@ class MillOps
         
         if (result.status != 0)
         {
-            Logger.error("Mill tests failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("mill_tests_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
@@ -68,7 +68,7 @@ class MillOps
     /// Clean build
     static bool clean(string projectDir)
     {
-        Logger.info("Cleaning Mill project");
+        structuredLog.info("cleaning_mill_project").emit();
         
         auto result = executeMill(["clean"], projectDir);
         return result.status == 0;
@@ -77,7 +77,7 @@ class MillOps
     /// Create assembly (fat JAR)
     static bool assembly(string projectDir, string moduleName = "")
     {
-        Logger.info("Creating assembly JAR");
+        structuredLog.info("creating_assembly_jar").emit();
         
         string[] args;
         if (moduleName.empty)
@@ -89,8 +89,8 @@ class MillOps
         
         if (result.status != 0)
         {
-            Logger.error("Mill assembly failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("mill_assembly_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         

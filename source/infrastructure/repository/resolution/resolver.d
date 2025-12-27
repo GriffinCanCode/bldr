@@ -6,7 +6,7 @@ import std.path : buildPath, absolutePath;
 import infrastructure.repository.core.types;
 import infrastructure.repository.storage.cache;
 import infrastructure.repository.acquisition.fetcher;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Repository resolver - resolves @repo// references to actual paths
@@ -34,11 +34,11 @@ final class RepositoryResolver
         
         if (rule.name in rules)
         {
-            Logger.warning("Overwriting existing repository rule: " ~ rule.name);
+            structuredLog.warning("overwriting_existing_repository_rule_").field("detail", "Overwriting existing repository rule: " ~ rule.name).emit();
         }
         
         rules[rule.name] = rule;
-        Logger.debugLog("Registered repository: " ~ rule.name);
+        structuredLog.debug_("registered_repository_").field("detail", "Registered repository: " ~ rule.name).emit();
         
         return Ok!RepositoryError();
     }
@@ -86,12 +86,12 @@ final class RepositoryResolver
             auto resolved_ = ResolvedRepository(repoName, cached.localPath, *rule);
             resolved[repoName] = resolved_;
             
-            Logger.debugLog("Resolved " ~ repoName ~ " from cache");
+            structuredLog.debug_("resolved_").field("detail", "Resolved " ~ repoName ~ " from cache").emit();
             return Result!(ResolvedRepository, RepositoryError).ok(resolved_);
         }
         
         // Fetch repository
-        Logger.info("Resolving repository: " ~ repoName);
+        structuredLog.info("resolving_repository_").field("detail", "Resolving repository: " ~ repoName).emit();
         auto fetchResult = fetcher.fetch(*rule);
         if (fetchResult.isErr)
             return Result!(ResolvedRepository, RepositoryError).err(fetchResult.unwrapErr());
@@ -103,14 +103,14 @@ final class RepositoryResolver
         auto putResult = cache.put(repoName, localPath, cacheKey);
         if (putResult.isErr)
         {
-            Logger.warning("Failed to cache repository: " ~ putResult.unwrapErr().message());
+            structuredLog.warning("failed_to_cache_repository_").field("detail", "Failed to cache repository: " ~ putResult.unwrapErr().message()).emit();
         }
         
         // Store resolved repository
         auto resolved_ = ResolvedRepository(repoName, localPath, *rule);
         resolved[repoName] = resolved_;
         
-        Logger.success("Resolved repository: " ~ repoName ~ " -> " ~ localPath);
+        structuredLog.info("resolved_repository_").field("detail", "Resolved repository: " ~ repoName ~ " -> " ~ localPath).emit();
         
         return Result!(ResolvedRepository, RepositoryError).ok(resolved_);
     }

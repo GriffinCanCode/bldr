@@ -8,7 +8,7 @@ import std.array;
 import std.string;
 import std.regex;
 import languages.scripting.elixir.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Dependency information
 struct DependencyInfo
@@ -132,7 +132,7 @@ final class DependencyAnalyzer
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to analyze dependencies: " ~ e.msg);
+            structuredLog.warning("failed_to_analyze_dependencies_").field("detail", "Failed to analyze dependencies: " ~ e.msg).emit();
             return [];
         }
     }

@@ -161,9 +161,9 @@ void initializeASTParsers() @system
         import infrastructure.parsing.treesitter : registerTreeSitterParsers;
         registerTreeSitterParsers();
     } catch (Exception e) {
-        import infrastructure.utils.logging.logger;
-        Logger.warning("Tree-sitter parsers not fully available: " ~ e.msg);
-        Logger.info("Falling back to file-level incremental compilation");
+        import infrastructure.utils.logging;
+        structuredLog.warning("treesitter_parsers_not_fully_available_").field("detail", "Tree-sitter parsers not fully available: " ~ e.msg).emit();
+        structuredLog.info("falling_back_to_filelevel_incremental_co").emit();
         // Not fatal - AST-level optimization is optional
         // File-level incremental compilation still works
     }

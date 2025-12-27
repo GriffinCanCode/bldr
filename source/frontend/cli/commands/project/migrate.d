@@ -8,7 +8,7 @@ import std.array;
 import std.string;
 import std.conv;
 import infrastructure.migration;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import frontend.cli.control.terminal;
 import frontend.cli.display.format;
 import infrastructure.errors.formatting.format : format;
@@ -62,8 +62,8 @@ struct MigrateCommand
                 case "info":
                     if (args.length < 3)
                     {
-                        Logger.error("Build system name required");
-                        Logger.info("Usage: bldr migrate info <system>");
+                        structuredLog.error("build_system_name_required").emit();
+                        structuredLog.info("usage_bldr_migrate_info_system").emit();
                         return 1;
                     }
                     showSystemInfo(args[2]);
@@ -81,25 +81,25 @@ struct MigrateCommand
             auto filteredArgs = args.filter!(a => a != "--no-wizard" && a != "--batch").array;
             if (filteredArgs.length < 2)
             {
-                Logger.error("Input file required for non-interactive mode");
-                Logger.info("Usage: bldr migrate --no-wizard --auto <file>");
+                structuredLog.error("input_file_required_for_noninteractive_m").emit();
+                structuredLog.info("usage_bldr_migrate_nowizard_auto_file").emit();
                 return 1;
             }
             return performMigration(filteredArgs[1 .. $]);
         }
         
         // Default: run the interactive wizard
-        Logger.debugLog("Running migration wizard (use --help for other options)");
+        structuredLog.debug_("running_migration_wizard_use_help_for_ot").emit();
         int result = MigrationWizard.execute(args);
         
         // If wizard fails with exit 1 and produced no output, show help hint
         if (result != 0)
         {
-            Logger.info("");
-            Logger.info("For non-interactive migration, try:");
-            Logger.info("  bldr migrate --auto <build-file>  # Auto-detect and migrate");
-            Logger.info("  bldr migrate list                 # Show supported systems");
-            Logger.info("  bldr migrate --help               # Show full help");
+            structuredLog.info("log_event").emit();
+            structuredLog.info("for_noninteractive_migration_try").emit();
+            structuredLog.info("__bldr_migrate_auto_buildfile___autodete").emit();
+            structuredLog.info("__bldr_migrate_list__________________sho").emit();
+            structuredLog.info("__bldr_migrate_help________________show_").emit();
         }
         
         return result;
@@ -158,15 +158,15 @@ struct MigrateCommand
         // Validate inputs
         if (inputFile.empty)
         {
-            Logger.error("Input file required");
-            Logger.info("Usage: bldr migrate --from=<system> --input=<file> [--output=<file>]");
-            Logger.info("   or: bldr migrate --auto <file>");
+            structuredLog.error("input_file_required").emit();
+            structuredLog.info("usage_bldr_migrate_fromsystem_inputfile_").emit();
+            structuredLog.info("___or_bldr_migrate_auto_file").emit();
             return 1;
         }
         
         if (!exists(inputFile))
         {
-            Logger.error("Input file does not exist: " ~ inputFile);
+            structuredLog.error("input_file_does_not_exist_").field("detail", "Input file does not exist: " ~ inputFile).emit();
             return 1;
         }
         
@@ -175,18 +175,18 @@ struct MigrateCommand
         
         if (autoDetect || fromSystem.empty)
         {
-            Logger.info("Auto-detecting build system...");
+            structuredLog.info("autodetecting_build_system").emit();
             migrator = MigratorFactory.autoDetect(inputFile);
             
             if (migrator is null)
             {
-                Logger.error("Could not auto-detect build system from file: " ~ inputFile);
-                Logger.info("Specify explicitly with --from=<system>");
-                Logger.info("Available systems: " ~ MigratorFactory.availableSystems().join(", "));
+                structuredLog.error("could_not_autodetect_build_system_from_f").field("detail", "Could not auto-detect build system from file: " ~ inputFile).emit();
+                structuredLog.info("specify_explicitly_with_fromsystem").emit();
+                structuredLog.info("available_systems_").field("detail", "Available systems: " ~ MigratorFactory.availableSystems().join(", ")).emit();
                 return 1;
             }
             
-            Logger.success("Detected: " ~ migrator.systemName());
+            structuredLog.info("detected_").field("detail", "Detected: " ~ migrator.systemName()).emit();
         }
         else
         {
@@ -194,42 +194,42 @@ struct MigrateCommand
             
             if (migrator is null)
             {
-                Logger.error("Unknown build system: " ~ fromSystem);
-                Logger.info("Available systems: " ~ MigratorFactory.availableSystems().join(", "));
-                Logger.info("Use 'bldr migrate list' to see all supported systems");
+                structuredLog.error("unknown_build_system_").field("detail", "Unknown build system: " ~ fromSystem).emit();
+                structuredLog.info("available_systems_").field("detail", "Available systems: " ~ MigratorFactory.availableSystems().join(", ")).emit();
+                structuredLog.info("use_bldr_migrate_list_to_see_all_support").emit();
                 return 1;
             }
         }
         
         // Perform migration
-        Logger.info("Migrating from " ~ migrator.systemName() ~ "...");
-        Logger.info("Input: " ~ inputFile);
+        structuredLog.info("migrating_from_").field("detail", "Migrating from " ~ migrator.systemName() ~ "...").emit();
+        structuredLog.info("input_").field("detail", "Input: " ~ inputFile).emit();
         
         auto result = migrator.migrate(inputFile);
         
         if (result.isErr)
         {
             auto error = result.unwrapErr();
-            Logger.error("Migration failed:");
-            Logger.error(format(error));
+            structuredLog.error("migration_failed").emit();
+            structuredLog.error("log_event").field("message", format(error)).emit();
             return 1;
         }
         
         auto migration = result.unwrap();
         
         // Show statistics
-        Logger.info("");
-        Logger.success("Migration completed!");
-        Logger.info("Targets converted: " ~ migration.targets.length.to!string);
+        structuredLog.info("log_event").emit();
+        structuredLog.info("migration_completed").emit();
+        structuredLog.info("targets_converted_").field("detail", "Targets converted: " ~ migration.targets.length.to!string).emit();
         
         if (migration.hasWarnings())
         {
-            Logger.warning("Warnings: " ~ migration.warnings.length.to!string);
+            structuredLog.warning("warnings_").field("detail", "Warnings: " ~ migration.warnings.length.to!string).emit();
         }
         
         if (migration.hasErrors())
         {
-            Logger.error("Errors: " ~ migration.errors().length.to!string);
+            structuredLog.error("errors_").field("detail", "Errors: " ~ migration.errors().length.to!string).emit();
         }
         
         // Emit Builderfile
@@ -238,11 +238,11 @@ struct MigrateCommand
         
         if (dryRun)
         {
-            Logger.info("\nDry run - Builderfile content:\n");
+            structuredLog.info("ndry_run__builderfile_contentn").emit();
             writeln("─────────────────────────────────────────");
             writeln(builderfileContent);
             writeln("─────────────────────────────────────────");
-            Logger.info("\nNo files were written (dry run mode)");
+            structuredLog.info("nno_files_were_written_dry_run_mode").emit();
         }
         else
         {
@@ -250,16 +250,16 @@ struct MigrateCommand
             try
             {
                 std.file.write(outputFile, builderfileContent);
-                Logger.success("Generated: " ~ outputFile);
-                Logger.info("");
-                Logger.info("Next steps:");
-                Logger.info("  1. Review the generated Builderfile");
-                Logger.info("  2. Adjust any commented warnings");
-                Logger.info("  3. Test with: bldr build");
+                structuredLog.info("generated_").field("detail", "Generated: " ~ outputFile).emit();
+                structuredLog.info("log_event").emit();
+                structuredLog.info("next_steps").emit();
+                structuredLog.info("__1_review_the_generated_builderfile").emit();
+                structuredLog.info("__2_adjust_any_commented_warnings").emit();
+                structuredLog.info("__3_test_with_bldr_build").emit();
             }
             catch (Exception e)
             {
-                Logger.error("Failed to write output file: " ~ e.msg);
+                structuredLog.error("failed_to_write_output_file_").field("detail", "Failed to write output file: " ~ e.msg).emit();
                 return 1;
             }
         }
@@ -267,8 +267,8 @@ struct MigrateCommand
         // Show warnings
         if (migration.warnings.length > 0)
         {
-            Logger.info("");
-            Logger.warning("Migration warnings:");
+            structuredLog.info("log_event").emit();
+            structuredLog.warning("migration_warnings").emit();
             
             foreach (warning; migration.warnings)
             {
@@ -286,13 +286,13 @@ struct MigrateCommand
                         break;
                 }
                 
-                Logger.info("  [" ~ prefix ~ "] " ~ warning.message);
+                structuredLog.info("__").field("detail", "  [" ~ prefix ~ "] " ~ warning.message).emit();
                 if (warning.context.length > 0)
-                    Logger.info("         Context: " ~ warning.context);
+                    structuredLog.info("_________context_").field("detail", "         Context: " ~ warning.context).emit();
                 
                 foreach (suggestion; warning.suggestions)
                 {
-                    Logger.info("         → " ~ suggestion);
+                    structuredLog.info("__________").field("detail", "         → " ~ suggestion).emit();
                 }
             }
         }
@@ -302,55 +302,55 @@ struct MigrateCommand
     
     private static void showHelp() @system
     {
-        Logger.info("");
-        Logger.info("═══════════════════════════════════════════════════════════");
-        Logger.info("  Builder Migration Tool");
-        Logger.info("═══════════════════════════════════════════════════════════");
-        Logger.info("");
-        Logger.info("Convert build files from other build systems to Builderfile format.");
-        Logger.info("");
-        Logger.info("USAGE:");
-        Logger.info("  bldr migrate                 Interactive wizard (default)");
-        Logger.info("  bldr migrate --no-wizard     Non-interactive mode");
-        Logger.info("  bldr migrate --auto <file>   Auto-detect and migrate (non-interactive)");
-        Logger.info("  bldr migrate list            List supported build systems");
-        Logger.info("  bldr migrate info <system>   Show build system details");
-        Logger.info("");
-        Logger.info("OPTIONS:");
-        Logger.info("  --no-wizard         Skip wizard, use non-interactive mode");
-        Logger.info("  --from=<system>     Source build system (bazel, cmake, maven, etc.)");
-        Logger.info("  --input=<file>      Input build file to migrate");
-        Logger.info("  --output=<file>     Output Builderfile (default: Builderfile)");
-        Logger.info("  --auto, -a          Auto-detect build system from file");
-        Logger.info("  --dry-run, -n       Preview migration without writing files");
-        Logger.info("  --help, -h          Show this help message");
-        Logger.info("");
-        Logger.info("SUBCOMMANDS:");
-        Logger.info("  list                List all supported build systems");
-        Logger.info("  info <system>       Show details about a specific build system");
-        Logger.info("");
-        Logger.info("EXAMPLES:");
-        Logger.info("  # Interactive wizard (recommended)");
-        Logger.info("  bldr migrate");
-        Logger.info("");
-        Logger.info("  # Auto-detect and migrate (non-interactive)");
-        Logger.info("  bldr migrate --auto BUILD");
-        Logger.info("");
-        Logger.info("  # Explicit non-interactive migration");
-        Logger.info("  bldr migrate --no-wizard --from=cmake CMakeLists.txt");
-        Logger.info("");
-        Logger.info("  # Dry run to preview");
-        Logger.info("  bldr migrate --auto pom.xml --dry-run");
-        Logger.info("");
+        structuredLog.info("log_event").emit();
+        structuredLog.info("log_event").emit();
+        structuredLog.info("__builder_migration_tool").emit();
+        structuredLog.info("log_event").emit();
+        structuredLog.info("log_event").emit();
+        structuredLog.info("convert_build_files_from_other_build_sys").emit();
+        structuredLog.info("log_event").emit();
+        structuredLog.info("usage").emit();
+        structuredLog.info("__bldr_migrate_________________interacti").emit();
+        structuredLog.info("__bldr_migrate_nowizard_____noninteracti").emit();
+        structuredLog.info("__bldr_migrate_auto_file___autodetect_an").emit();
+        structuredLog.info("__bldr_migrate_list____________list_supp").emit();
+        structuredLog.info("__bldr_migrate_info_system___show_build_").emit();
+        structuredLog.info("log_event").emit();
+        structuredLog.info("options").emit();
+        structuredLog.info("__nowizard_________skip_wizard_use_nonin").emit();
+        structuredLog.info("__fromsystem_____source_build_system_baz").emit();
+        structuredLog.info("__inputfile______input_build_file_to_mig").emit();
+        structuredLog.info("__outputfile_____output_builderfile_defa").emit();
+        structuredLog.info("__auto_a__________autodetect_build_syste").emit();
+        structuredLog.info("__dryrun_n_______preview_migration_witho").emit();
+        structuredLog.info("__help_h__________show_this_help_message").emit();
+        structuredLog.info("log_event").emit();
+        structuredLog.info("subcommands").emit();
+        structuredLog.info("__list________________list_all_supported").emit();
+        structuredLog.info("__info_system_______show_details_about_a").emit();
+        structuredLog.info("log_event").emit();
+        structuredLog.info("examples").emit();
+        structuredLog.info("___interactive_wizard_recommended").emit();
+        structuredLog.info("__bldr_migrate").emit();
+        structuredLog.info("log_event").emit();
+        structuredLog.info("___autodetect_and_migrate_noninteractive").emit();
+        structuredLog.info("__bldr_migrate_auto_build").emit();
+        structuredLog.info("log_event").emit();
+        structuredLog.info("___explicit_noninteractive_migration").emit();
+        structuredLog.info("__bldr_migrate_nowizard_fromcmake_cmakel").emit();
+        structuredLog.info("log_event").emit();
+        structuredLog.info("___dry_run_to_preview").emit();
+        structuredLog.info("__bldr_migrate_auto_pomxml_dryrun").emit();
+        structuredLog.info("log_event").emit();
     }
     
     private static void listSystems() @system
     {
-        Logger.info("");
-        Logger.info("═══════════════════════════════════════════════════════════");
-        Logger.info("  Supported Build Systems");
-        Logger.info("═══════════════════════════════════════════════════════════");
-        Logger.info("");
+        structuredLog.info("log_event").emit();
+        structuredLog.info("log_event").emit();
+        structuredLog.info("__supported_build_systems").emit();
+        structuredLog.info("log_event").emit();
+        structuredLog.info("log_event").emit();
         
         auto systems = MigratorFactory.availableSystems().sort().array;
         
@@ -359,14 +359,14 @@ struct MigrateCommand
             auto migrator = MigratorFactory.create(systemName);
             if (migrator !is null)
             {
-                Logger.info("  " ~ systemName.leftJustify(15) ~ " - " ~ migrator.description());
-                Logger.info("    Files: " ~ migrator.defaultFileNames().join(", "));
-                Logger.info("");
+                structuredLog.info("__").field("detail", "  " ~ systemName.leftJustify(15) ~ " - " ~ migrator.description()).emit();
+                structuredLog.info("____files_").field("detail", "    Files: " ~ migrator.defaultFileNames().join(", ")).emit();
+                structuredLog.info("log_event").emit();
             }
         }
         
-        Logger.info("Use 'bldr migrate info <system>' for detailed information");
-        Logger.info("");
+        structuredLog.info("use_bldr_migrate_info_system_for_detaile").emit();
+        structuredLog.info("log_event").emit();
     }
     
     private static void showSystemInfo(string systemName) @system
@@ -375,39 +375,39 @@ struct MigrateCommand
         
         if (migrator is null)
         {
-            Logger.error("Unknown build system: " ~ systemName);
-            Logger.info("Use 'bldr migrate list' to see available systems");
+            structuredLog.error("unknown_build_system_").field("detail", "Unknown build system: " ~ systemName).emit();
+            structuredLog.info("use_bldr_migrate_list_to_see_available_s").emit();
             return;
         }
         
-        Logger.info("");
-        Logger.info("═══════════════════════════════════════════════════════════");
-        Logger.info("  " ~ systemName.toUpper() ~ " Migration");
-        Logger.info("═══════════════════════════════════════════════════════════");
-        Logger.info("");
-        Logger.info("Description: " ~ migrator.description());
-        Logger.info("");
-        Logger.info("Default files: " ~ migrator.defaultFileNames().join(", "));
-        Logger.info("");
+        structuredLog.info("log_event").emit();
+        structuredLog.info("log_event").emit();
+        structuredLog.info("__").field("detail", "  " ~ systemName.toUpper() ~ " Migration").emit();
+        structuredLog.info("log_event").emit();
+        structuredLog.info("log_event").emit();
+        structuredLog.info("description_").field("detail", "Description: " ~ migrator.description()).emit();
+        structuredLog.info("log_event").emit();
+        structuredLog.info("default_files_").field("detail", "Default files: " ~ migrator.defaultFileNames().join(", ")).emit();
+        structuredLog.info("log_event").emit();
         
-        Logger.info("Supported Features:");
+        structuredLog.info("supported_features").emit();
         foreach (feature; migrator.supportedFeatures())
         {
-            Logger.info("  ✓ " ~ feature);
+            structuredLog.info("___").field("detail", "  ✓ " ~ feature).emit();
         }
-        Logger.info("");
+        structuredLog.info("log_event").emit();
         
-        Logger.info("Limitations:");
+        structuredLog.info("limitations").emit();
         foreach (limitation; migrator.limitations())
         {
-            Logger.info("  ⚠ " ~ limitation);
+            structuredLog.info("___").field("detail", "  ⚠ " ~ limitation).emit();
         }
-        Logger.info("");
+        structuredLog.info("log_event").emit();
         
-        Logger.info("Example:");
-        Logger.info("  bldr migrate --from=" ~ systemName ~ " --input=" ~ 
-                   migrator.defaultFileNames()[0]);
-        Logger.info("");
+        structuredLog.info("example").emit();
+        structuredLog.info("__bldr_migrate_from").field("detail", "  bldr migrate --from=" ~ systemName ~ " --input=" ~ 
+                   migrator.defaultFileNames()[0]).emit();
+        structuredLog.info("log_event").emit();
     }
 }
 

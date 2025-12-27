@@ -80,7 +80,7 @@ module engine.runtime.remote;
 /// // Start service
 /// auto result = service.start();
 /// if (result.isErr) {
-///     Logger.error("Failed to start: " ~ result.unwrapErr().message());
+///     structuredLog.error("failed_to_start_").field("detail", "Failed to start: " ~ result.unwrapErr().message()).emit();
 ///     return;
 /// }
 ///

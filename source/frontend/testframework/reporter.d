@@ -11,7 +11,7 @@ import std.datetime : Duration;
 import frontend.testframework.results;
 import frontend.cli.control.terminal;
 import frontend.cli.display.format : Formatter;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Test result reporting
 class TestReporter

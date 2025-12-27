@@ -8,7 +8,7 @@ import std.regex;
 import std.string;
 import engine.compilation.incremental.analyzer;
 import languages.compiled.d.analysis.modules;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// D module incremental dependency analyzer
@@ -70,7 +70,7 @@ final class DDependencyAnalyzer : BaseDependencyAnalyzer
                 // Skip external/standard library dependencies
                 if (isExternalDependency(importStmt))
                 {
-                    Logger.debugLog("  [External] " ~ importStmt);
+                    structuredLog.debug_("__external_").field("detail", "  [External] " ~ importStmt).emit();
                     continue;
                 }
                 
@@ -83,11 +83,11 @@ final class DDependencyAnalyzer : BaseDependencyAnalyzer
                 if (!resolved.empty && exists(resolved))
                 {
                     resolvedDeps ~= buildNormalizedPath(resolved);
-                    Logger.debugLog("  [Resolved] " ~ importStmt ~ " -> " ~ resolved);
+                    structuredLog.debug_("__resolved_").field("detail", "  [Resolved] " ~ importStmt ~ " -> " ~ resolved).emit();
                 }
                 else
                 {
-                    Logger.debugLog("  [Not Found] " ~ importStmt);
+                    structuredLog.debug_("__not_found_").field("detail", "  [Not Found] " ~ importStmt).emit();
                 }
             }
             
@@ -201,7 +201,7 @@ struct DIncrementalHelper
             if (deps.canFind(normalizedChanged))
             {
                 affected ~= source;
-                Logger.debugLog("  " ~ source ~ " affected by " ~ changedFile);
+                structuredLog.debug_("__").field("detail", "  " ~ source ~ " affected by " ~ changedFile).emit();
             }
         }
         

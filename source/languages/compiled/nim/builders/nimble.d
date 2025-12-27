@@ -14,7 +14,7 @@ import languages.compiled.nim.analysis.nimble;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache;
 
 /// Nimble builder - uses nimble build system for package-based projects
@@ -46,18 +46,18 @@ class NimbleBuilder : NimBuilder
             }
         }
         
-        Logger.debugLog("Using nimble file: " ~ nimbleFile);
+        structuredLog.debug_("using_nimble_file_").field("detail", "Using nimble file: " ~ nimbleFile).emit();
         
         // Parse nimble file
         auto nimbleData = NimbleParser.parseNimbleFile(nimbleFile);
         if (nimbleData.name.empty)
         {
-            Logger.warning("Failed to parse nimble file, proceeding with defaults");
+            structuredLog.warning("failed_to_parse_nimble_file_proceeding_w").emit();
         }
         else
         {
-            Logger.debugLog("Package: " ~ nimbleData.name ~ 
-                        (nimbleData.version_.empty ? "" : " v" ~ nimbleData.version_));
+            structuredLog.debug_("package_").field("detail", "Package: " ~ nimbleData.name ~ 
+                        (nimbleData.version_.empty ? "" : " v" ~ nimbleData.version_)).emit();
         }
         
         // Install dependencies if requested
@@ -76,7 +76,7 @@ class NimbleBuilder : NimBuilder
         
         if (config.verbose || config.listCmd)
         {
-            Logger.info("Nimble command: " ~ cmd.join(" "));
+            structuredLog.info("nimble_command_").field("detail", "Nimble command: " ~ cmd.join(" ")).emit();
         }
         
         // Set environment variables
@@ -149,7 +149,7 @@ class NimbleBuilder : NimBuilder
     
     private bool installDependencies(string nimbleFile, in NimConfig config)
     {
-        Logger.info("Installing nimble dependencies...");
+        structuredLog.info("installing_nimble_dependencies").emit();
         
         string[] cmd = ["nimble", "install", "-y"];
         
@@ -165,12 +165,12 @@ class NimbleBuilder : NimBuilder
         
         if (res.status != 0)
         {
-            Logger.error("Dependency installation failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("dependency_installation_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
-        Logger.info("Dependencies installed successfully");
+        structuredLog.info("dependencies_installed_successfully").emit();
         return true;
     }
     

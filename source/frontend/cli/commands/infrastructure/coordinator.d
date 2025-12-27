@@ -5,7 +5,7 @@ import std.conv : to;
 import std.string : strip;
 import engine.graph : BuildGraph;
 import engine.distributed.coordinator : Coordinator, CoordinatorConfig;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 import infrastructure.errors.formatting.format : formatError = format;
 
@@ -48,8 +48,8 @@ int coordinatorCommand(string[] args)
     auto startResult = coordinator.start();
     if (startResult.isErr)
     {
-        Logger.error("Failed to start coordinator");
-        Logger.error(formatError(startResult.unwrapErr()));
+        structuredLog.error("failed_to_start_coordinator").emit();
+        structuredLog.error("log_event").field("message", formatError(startResult.unwrapErr())).emit();
         return 1;
     }
     

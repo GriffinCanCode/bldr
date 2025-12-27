@@ -20,7 +20,7 @@ import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
 
 /// Advanced D build handler with dub, compiler detection, and tooling support with action-level caching
@@ -77,7 +77,7 @@ class DHandler : BaseLanguageHandler
         
         LanguageBuildResult result;
         
-        Logger.debugLog("Building D target: " ~ target.name);
+        structuredLog.debug_("building_d_target_").field("detail", "Building D target: " ~ target.name).emit();
         
         // Parse D configuration
         DConfig dConfig = parseDConfig(target);
@@ -86,7 +86,7 @@ class DHandler : BaseLanguageHandler
         if (dConfig.compiler == DCompiler.Auto)
         {
             dConfig.compiler = detectBestDCompiler();
-            Logger.debugLog("Auto-detected compiler: " ~ compilerToString(dConfig.compiler));
+            structuredLog.debug_("autodetected_compiler_").field("detail", "Auto-detected compiler: " ~ compilerToString(dConfig.compiler)).emit();
         }
         
         // Check compiler availability
@@ -108,10 +108,10 @@ class DHandler : BaseLanguageHandler
             auto lintResult = runLinter(target, dConfig);
             if (lintResult.hadLintIssues)
             {
-                Logger.warning("Linter found issues:");
+                structuredLog.warning("linter_found_issues").emit();
                 foreach (issue; lintResult.lintIssues)
                 {
-                    Logger.warning("  " ~ issue);
+                    structuredLog.warning("__").field("detail", "  " ~ issue).emit();
                 }
             }
         }
@@ -178,7 +178,7 @@ class DHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to analyze imports in " ~ source);
+                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source).emit();
             }
         }
         
@@ -285,7 +285,7 @@ class DHandler : BaseLanguageHandler
             return result;
         }
         
-        Logger.debugLog("Using D builder: " ~ builder.name() ~ " (" ~ builder.getVersion() ~ ")");
+        structuredLog.debug_("using_d_builder_").field("detail", "Using D builder: " ~ builder.name() ~ " (" ~ builder.getVersion() ~ ")").emit();
         
         // Compile
         auto compileResult = builder.build(target.sources, dConfig, target, config);
@@ -299,22 +299,22 @@ class DHandler : BaseLanguageHandler
         // Report warnings
         if (compileResult.hadWarnings)
         {
-            Logger.warning("Compilation warnings:");
+            structuredLog.warning("compilation_warnings").emit();
             foreach (warn; compileResult.warnings)
             {
-                Logger.warning("  " ~ warn);
+                structuredLog.warning("__").field("detail", "  " ~ warn).emit();
             }
         }
         
         // Report coverage if enabled
         if (dConfig.test.coverage && compileResult.coveragePercent > 0.0)
         {
-            Logger.info("Code coverage: " ~ to!string(compileResult.coveragePercent) ~ "%");
+            structuredLog.info("code_coverage_").field("detail", "Code coverage: " ~ to!string(compileResult.coveragePercent) ~ "%").emit();
             
             if (dConfig.test.minCoverage > 0.0 && compileResult.coveragePercent < dConfig.test.minCoverage)
             {
-                Logger.warning("Coverage below minimum threshold: " ~ 
-                             to!string(dConfig.test.minCoverage) ~ "%");
+                structuredLog.warning("coverage_below_minimum_threshold_").field("detail", "Coverage below minimum threshold: " ~ 
+                             to!string(dConfig.test.minCoverage) ~ "%").emit();
             }
         }
         
@@ -345,7 +345,7 @@ class DHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to parse D config, using defaults: " ~ e.msg);
+                structuredLog.warning("failed_to_parse_d_config_using_defaults_").field("detail", "Failed to parse D config, using defaults: " ~ e.msg).emit();
             }
         }
         
@@ -355,7 +355,7 @@ class DHandler : BaseLanguageHandler
             config.dub.packagePath = DubManifest.findManifest(target.sources.dup);
             if (!config.dub.packagePath.empty)
             {
-                Logger.debugLog("Found DUB package: " ~ config.dub.packagePath);
+                structuredLog.debug_("found_dub_package_").field("detail", "Found DUB package: " ~ config.dub.packagePath).emit();
                 
                 // If dub package exists, prefer dub mode
                 if (config.mode == DBuildMode.Compile)
@@ -441,25 +441,25 @@ class DHandler : BaseLanguageHandler
     {
         if (!DFormatter.isAvailable())
         {
-            Logger.warning("dfmt not available, skipping formatting");
+            structuredLog.warning("dfmt_not_available_skipping_formatting").emit();
             return;
         }
         
-        Logger.info("Running dfmt formatter...");
+        structuredLog.info("running_dfmt_formatter").emit();
         
         auto res = DFormatter.format(target.sources, config.tooling.fmtConfig, config.tooling.fmtCheckOnly);
         
         if (res.status != 0)
         {
-            Logger.warning("dfmt failed: " ~ res.output);
+            structuredLog.warning("dfmt_failed_").field("detail", "dfmt failed: " ~ res.output).emit();
         }
         else if (config.tooling.fmtCheckOnly)
         {
-            Logger.info("Format check completed");
+            structuredLog.info("format_check_completed").emit();
         }
         else
         {
-            Logger.info("Code formatted successfully");
+            structuredLog.info("code_formatted_successfully").emit();
         }
     }
     
@@ -470,11 +470,11 @@ class DHandler : BaseLanguageHandler
         
         if (!DScanner.isAvailable())
         {
-            Logger.warning("dscanner not available, skipping linting");
+            structuredLog.warning("dscanner_not_available_skipping_linting").emit();
             return result;
         }
         
-        Logger.info("Running dscanner linter...");
+        structuredLog.info("running_dscanner_linter").emit();
         
         auto res = DScanner.lint(
             target.sources,
@@ -499,7 +499,7 @@ class DHandler : BaseLanguageHandler
         }
         else
         {
-            Logger.info("No lint issues found");
+            structuredLog.info("no_lint_issues_found").emit();
         }
         
         return result;

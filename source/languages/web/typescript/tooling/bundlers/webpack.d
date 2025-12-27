@@ -13,7 +13,7 @@ import std.json;
 import std.conv;
 import std.string;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Webpack bundler for TypeScript - advanced features and plugin ecosystem
 /// Best for: Complex projects with advanced webpack features, legacy projects, custom loaders
@@ -43,7 +43,7 @@ class TSWebpackBundler : TSBundler
             {
                 result.hadTypeErrors = true;
                 result.typeErrors = checkResult.errors;
-                Logger.warning("Type check failed, but continuing with webpack build");
+                structuredLog.warning("type_check_failed_but_continuing_with_we").emit();
             }
         }
         
@@ -58,7 +58,7 @@ class TSWebpackBundler : TSBundler
         string webpackConfig = detectWebpackConfig(sources);
         if (!webpackConfig.empty)
         {
-            Logger.debugLog("Detected webpack config: " ~ webpackConfig);
+            structuredLog.debug_("detected_webpack_config_").field("detail", "Detected webpack config: " ~ webpackConfig).emit();
             return bundleWithConfigFile(webpackConfig, workspace, result);
         }
         
@@ -72,7 +72,7 @@ class TSWebpackBundler : TSBundler
         ref TSCompileResult result
     )
     {
-        Logger.debugLog("Using webpack config: " ~ configFile);
+        structuredLog.debug_("using_webpack_config_").field("detail", "Using webpack config: " ~ configFile).emit();
         
         string[] cmd = ["webpack", "--config", configFile];
         auto res = execute(cmd);
@@ -149,7 +149,7 @@ class TSWebpackBundler : TSBundler
                 remove(tempConfig);
         }
         
-        Logger.debugLog("Generated webpack config: " ~ tempConfig);
+        structuredLog.debug_("generated_webpack_config_").field("detail", "Generated webpack config: " ~ tempConfig).emit();
         
         // Run webpack
         string[] cmd = ["webpack", "--config", tempConfig];

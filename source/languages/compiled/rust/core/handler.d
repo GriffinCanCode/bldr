@@ -18,7 +18,7 @@ import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action;
 
 /// Advanced Rust build handler with cargo, rustup, and toolchain support with action-level caching
@@ -33,7 +33,7 @@ class RustHandler : BaseLanguageHandler
         
         LanguageBuildResult result;
         
-        Logger.debugLog("Building Rust target: " ~ target.name);
+        structuredLog.debug_("building_rust_target_").field("detail", "Building Rust target: " ~ target.name).emit();
         
         // Parse Rust configuration
         RustConfig rustConfig = parseRustConfig(target);
@@ -53,7 +53,7 @@ class RustHandler : BaseLanguageHandler
         {
             if (!ensureTarget(rustConfig.target, rustConfig.toolchain))
             {
-                Logger.warning("Target triple may not be installed: " ~ rustConfig.target);
+                structuredLog.warning("target_triple_may_not_be_installed_").field("detail", "Target triple may not be installed: " ~ rustConfig.target).emit();
             }
         }
         
@@ -63,10 +63,10 @@ class RustHandler : BaseLanguageHandler
             auto clippyResult = runClippy(target, rustConfig, config);
             if (clippyResult.hadClippyIssues)
             {
-                Logger.warning("Clippy found issues:");
+                structuredLog.warning("clippy_found_issues").emit();
                 foreach (issue; clippyResult.clippyIssues)
                 {
-                    Logger.warning("  " ~ issue);
+                    structuredLog.warning("__").field("detail", "  " ~ issue).emit();
                 }
             }
         }
@@ -138,7 +138,7 @@ class RustHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to analyze imports in " ~ source);
+                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source).emit();
             }
         }
         
@@ -229,7 +229,7 @@ class RustHandler : BaseLanguageHandler
             return result;
         }
         
-        Logger.debugLog("Using Rust builder: " ~ builder.name() ~ " (" ~ builder.getVersion() ~ ")");
+        structuredLog.debug_("using_rust_builder_").field("detail", "Using Rust builder: " ~ builder.name() ~ " (" ~ builder.getVersion() ~ ")").emit();
         
         // Compile
         auto compileResult = builder.build(target.sources, rustConfig, target, config);
@@ -243,10 +243,10 @@ class RustHandler : BaseLanguageHandler
         // Report warnings
         if (compileResult.hadWarnings)
         {
-            Logger.warning("Compilation warnings:");
+            structuredLog.warning("compilation_warnings").emit();
             foreach (warn; compileResult.warnings)
             {
-                Logger.warning("  " ~ warn);
+                structuredLog.warning("__").field("detail", "  " ~ warn).emit();
             }
         }
         
@@ -277,7 +277,7 @@ class RustHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to parse Rust config, using defaults: " ~ e.msg);
+                structuredLog.warning("failed_to_parse_rust_config_using_defaul").field("detail", "Failed to parse Rust config, using defaults: " ~ e.msg).emit();
             }
         }
         
@@ -287,7 +287,7 @@ class RustHandler : BaseLanguageHandler
             config.manifest = CargoParser.findManifest(target.sources.dup);
             if (!config.manifest.empty)
             {
-                Logger.debugLog("Found Cargo.toml: " ~ config.manifest);
+                structuredLog.debug_("found_cargotoml_").field("detail", "Found Cargo.toml: " ~ config.manifest).emit();
             }
         }
         
@@ -310,7 +310,7 @@ class RustHandler : BaseLanguageHandler
     {
         if (!Rustup.isAvailable())
         {
-            Logger.warning("rustup not available, cannot ensure toolchain");
+            structuredLog.warning("rustup_not_available_cannot_ensure_toolc").emit();
             return false;
         }
         
@@ -320,7 +320,7 @@ class RustHandler : BaseLanguageHandler
         {
             if (tc.name == toolchain && tc.isInstalled)
             {
-                Logger.debugLog("Toolchain already installed: " ~ toolchain);
+                structuredLog.debug_("toolchain_already_installed_").field("detail", "Toolchain already installed: " ~ toolchain).emit();
                 return true;
             }
         }
@@ -333,7 +333,7 @@ class RustHandler : BaseLanguageHandler
     {
         if (!Rustup.isAvailable())
         {
-            Logger.warning("rustup not available, cannot ensure target");
+            structuredLog.warning("rustup_not_available_cannot_ensure_targe").emit();
             return false;
         }
         
@@ -343,7 +343,7 @@ class RustHandler : BaseLanguageHandler
         {
             if (t.name == target && t.isInstalled)
             {
-                Logger.debugLog("Target already installed: " ~ target);
+                structuredLog.debug_("target_already_installed_").field("detail", "Target already installed: " ~ target).emit();
                 return true;
             }
         }
@@ -358,12 +358,12 @@ class RustHandler : BaseLanguageHandler
         
         if (!Clippy.isAvailable())
         {
-            Logger.warning("Clippy not available, skipping");
+            structuredLog.warning("clippy_not_available_skipping").emit();
             result.success = true;
             return result;
         }
         
-        Logger.info("Running clippy...");
+        structuredLog.info("running_clippy").emit();
         
         string manifestPath = config.manifest.empty
             ? CargoParser.findManifest(target.sources.dup)
@@ -371,7 +371,7 @@ class RustHandler : BaseLanguageHandler
         
         if (manifestPath.empty)
         {
-            Logger.warning("No Cargo.toml found, skipping clippy");
+            structuredLog.warning("no_cargotoml_found_skipping_clippy").emit();
             result.success = true;
             return result;
         }
@@ -402,11 +402,11 @@ class RustHandler : BaseLanguageHandler
     {
         if (!Rustfmt.isAvailable())
         {
-            Logger.warning("rustfmt not available, skipping");
+            structuredLog.warning("rustfmt_not_available_skipping").emit();
             return;
         }
         
-        Logger.info("Running rustfmt...");
+        structuredLog.info("running_rustfmt").emit();
         
         string manifestPath = config.manifest.empty
             ? CargoParser.findManifest(target.sources.dup)
@@ -414,7 +414,7 @@ class RustHandler : BaseLanguageHandler
         
         if (manifestPath.empty)
         {
-            Logger.warning("No Cargo.toml found, skipping rustfmt");
+            structuredLog.warning("no_cargotoml_found_skipping_rustfmt").emit();
             return;
         }
         
@@ -424,11 +424,11 @@ class RustHandler : BaseLanguageHandler
         
         if (res.status != 0)
         {
-            Logger.warning("rustfmt failed: " ~ res.output);
+            structuredLog.warning("rustfmt_failed_").field("detail", "rustfmt failed: " ~ res.output).emit();
         }
         else
         {
-            Logger.info("Code formatted successfully");
+            structuredLog.info("code_formatted_successfully").emit();
         }
     }
 }

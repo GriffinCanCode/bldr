@@ -13,7 +13,7 @@ import engine.workers.protocol;
 import engine.workers.pool;
 import engine.workers.base;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Rust Persistent Worker Factory
 /// 
@@ -202,7 +202,7 @@ final class RustWorkerFactory : BasePersistentWorkerFactory
             std.file.write(scriptPath, generateWorkerScript());
             // Make executable
             execute(["chmod", "+x", scriptPath]);
-            Logger.debugLog("Created Rust worker script: " ~ scriptPath);
+            structuredLog.debug_("created_rust_worker_script_").field("detail", "Created Rust worker script: " ~ scriptPath).emit();
         }
         
         return scriptPath;

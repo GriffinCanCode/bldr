@@ -10,7 +10,7 @@ import languages.dotnet.fsharp.tooling.packagers.base;
 import languages.dotnet.fsharp.config;
 import languages.dotnet.fsharp.managers.dotnet;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// NuGet packager implementation
 class NuGetPackager : FSharpPackager
@@ -68,7 +68,7 @@ class NuGetPackager : FSharpPackager
                 result.packageFile = nupkgFiles[0].name;
                 result.packageHash = FastHash.hashFile(result.packageFile);
                 
-                Logger.info("Package created: " ~ result.packageFile);
+                structuredLog.info("package_created_").field("detail", "Package created: " ~ result.packageFile).emit();
             }
             else
             {

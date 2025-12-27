@@ -12,7 +12,7 @@ import std.json;
 import std.conv;
 import std.string;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Webpack bundler - for complex projects with advanced features
 class WebpackBundler : Bundler
@@ -49,7 +49,7 @@ class WebpackBundler : Bundler
         BundleResult result
     )
     {
-        Logger.debugLog("Using webpack config: " ~ configFile);
+        structuredLog.debug_("using_webpack_config_").field("detail", "Using webpack config: " ~ configFile).emit();
         
         string[] cmd = ["webpack", "--config", configFile];
         auto res = execute(cmd);
@@ -111,7 +111,7 @@ class WebpackBundler : Bundler
                 remove(tempConfig);
         }
         
-        Logger.debugLog("Generated webpack config: " ~ tempConfig);
+        structuredLog.debug_("generated_webpack_config_").field("detail", "Generated webpack config: " ~ tempConfig).emit();
         
         // Run webpack
         string[] cmd = ["webpack", "--config", tempConfig];

@@ -7,7 +7,7 @@ import std.algorithm;
 import std.array;
 import std.string : toLower;
 import languages.dotnet.csharp.config.test;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Test execution result
 struct TestResult
@@ -45,7 +45,7 @@ CSharpTestFramework detectTestFramework(string projectPath)
         if (content.canFind("MSTest.TestFramework") || content.canFind("Microsoft.VisualStudio.TestTools")) 
             return CSharpTestFramework.MSTest;
     } catch (Exception e) {
-        Logger.debugLog("Failed to detect test framework: " ~ e.msg);
+        structuredLog.debug_("failed_to_detect_test_framework_").field("detail", "Failed to detect test framework: " ~ e.msg).emit();
     }
     
     return CSharpTestFramework.None;
@@ -64,7 +64,7 @@ string[] findTestAssemblies(string dir)
             .map!(e => e.name)
             .array;
     } catch (Exception e) {
-        Logger.debugLog("Failed to scan for test assemblies: " ~ e.msg);
+        structuredLog.debug_("failed_to_scan_for_test_assemblies_").field("detail", "Failed to scan for test assemblies: " ~ e.msg).emit();
         return [];
     }
 }

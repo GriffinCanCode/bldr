@@ -8,7 +8,7 @@ import std.math : exp, log, sqrt, isNaN;
 import std.typecons : Nullable, nullable, Tuple, tuple;
 import core.sync.mutex : Mutex;
 import infrastructure.config.schema.schema : TargetId;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Change probability for a single target
 struct ChangeProbability
@@ -198,8 +198,8 @@ final class ChangePredictor
             _coChangeMatrix.importMatrix(state.coChangeMatrix);
             _timePattern.importPattern(state.timePattern);
             
-            Logger.debugLog("Imported predictor state with " ~ 
-                           _targetStats.length.to!string ~ " targets");
+            structuredLog.debug_("imported_predictor_state_with_").field("detail", "Imported predictor state with " ~ 
+                           _targetStats.length.to!string ~ " targets").emit();
         }
     }
     

@@ -14,7 +14,7 @@ import languages.jvm.java.core.config;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache;
 
 /// Modular JAR builder (Java 9+ module system)
@@ -57,7 +57,7 @@ class ModularJARBuilder : JARBuilder
             return result;
         }
         
-        Logger.debugLog("Building Modular JAR: " ~ target.name);
+        structuredLog.debug_("building_modular_jar_").field("detail", "Building Modular JAR: " ~ target.name).emit();
         
         // Verify module-info.java exists
         bool hasModuleInfo = sources.any!(s => s.endsWith("module-info.java"));
@@ -80,7 +80,7 @@ class ModularJARBuilder : JARBuilder
         ref JavaBuildResult result
     )
     {
-        Logger.info("Compiling modular Java sources");
+        structuredLog.info("compiling_modular_java_sources").emit();
         
         import languages.jvm.java.tooling.detection;
         
@@ -147,7 +147,7 @@ class ModularJARBuilder : JARBuilder
         // Add sources
         cmd ~= sources;
         
-        Logger.debugLog("Compile command: " ~ cmd.join(" "));
+        structuredLog.debug_("compile_command_").field("detail", "Compile command: " ~ cmd.join(" ")).emit();
         
         auto compileRes = execute(cmd);
         
@@ -171,7 +171,7 @@ class ModularJARBuilder : JARBuilder
         ref JavaBuildResult result
     )
     {
-        Logger.info("Creating Modular JAR: " ~ outputPath);
+        structuredLog.info("creating_modular_jar_").field("detail", "Creating Modular JAR: " ~ outputPath).emit();
         
         import languages.jvm.java.tooling.detection;
         
@@ -188,7 +188,7 @@ class ModularJARBuilder : JARBuilder
             mainClass = detectMainClass(classDir);
             if (!mainClass.empty)
             {
-                Logger.debugLog("Auto-detected main class: " ~ mainClass);
+                structuredLog.debug_("autodetected_main_class_").field("detail", "Auto-detected main class: " ~ mainClass).emit();
             }
         }
         
@@ -210,7 +210,7 @@ class ModularJARBuilder : JARBuilder
         // Add classes
         cmd ~= ["-C", classDir, "."];
         
-        Logger.debugLog("JAR command: " ~ cmd.join(" "));
+        structuredLog.debug_("jar_command_").field("detail", "JAR command: " ~ cmd.join(" ")).emit();
         
         auto jarRes = execute(cmd);
         

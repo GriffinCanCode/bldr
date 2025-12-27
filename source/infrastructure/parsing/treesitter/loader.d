@@ -8,7 +8,7 @@ import std.json;
 import std.path;
 import engine.caching.incremental.ast_dependency;
 import infrastructure.parsing.treesitter.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// JSON-based language configuration loader
@@ -35,7 +35,7 @@ final class ConfigLoader {
         LanguageConfig[] configs;
         
         if (!exists(configDir) || !isDir(configDir)) {
-            Logger.warning("Config directory not found: " ~ configDir);
+            structuredLog.warning("config_directory_not_found_").field("detail", "Config directory not found: " ~ configDir).emit();
             return configs;
         }
         
@@ -49,14 +49,14 @@ final class ConfigLoader {
                     if (!config.languageId.empty)
                         configs ~= config;
                 } catch (Exception e) {
-                    Logger.warning("Failed to load config " ~ entry.name ~ ": " ~ e.msg);
+                    structuredLog.warning("failed_to_load_config_").field("detail", "Failed to load config " ~ entry.name ~ ": " ~ e.msg).emit();
                 }
             }
         } catch (Exception e) {
-            Logger.warning("Failed to scan config directory: " ~ e.msg);
+            structuredLog.warning("failed_to_scan_config_directory_").field("detail", "Failed to scan config directory: " ~ e.msg).emit();
         }
         
-        Logger.info("Loaded " ~ configs.length.to!string ~ " tree-sitter language configs");
+        structuredLog.info("loaded_").field("detail", "Loaded " ~ configs.length.to!string ~ " tree-sitter language configs").emit();
         return configs;
     }
     

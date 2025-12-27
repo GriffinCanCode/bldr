@@ -11,7 +11,7 @@ import std.algorithm;
 import std.array;
 import std.regex;
 import std.conv;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// PHP_CodeSniffer formatter
 class PHPCSFormatter : Formatter
@@ -58,7 +58,7 @@ class PHPCSFormatter : Formatter
             {
                 // Fall back to check-only
                 cmd = [phpcsCmd];
-                Logger.warning("phpcbf not found, running in check-only mode");
+                structuredLog.warning("phpcbf_not_found_running_in_checkonly_mo").emit();
             }
         }
         
@@ -93,7 +93,7 @@ class PHPCSFormatter : Formatter
             cmd ~= projectRoot;
         }
         
-        Logger.info("Running PHPCS: " ~ cmd.join(" "));
+        structuredLog.info("running_phpcs_").field("detail", "Running PHPCS: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, projectRoot);
         result.output = res.output;
@@ -107,7 +107,7 @@ class PHPCSFormatter : Formatter
         if (res.status == 0)
         {
             result.success = true;
-            Logger.info("PHPCS: No coding standard violations found");
+            structuredLog.info("phpcs_no_coding_standard_violations_foun").emit();
         }
         else if (res.status == 1 || res.status == 2)
         {

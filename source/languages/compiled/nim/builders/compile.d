@@ -14,7 +14,7 @@ import languages.compiled.nim.tooling.tools;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionId, ActionType;
 
 /// Direct Nim compiler builder - for direct nim c/cpp/js invocations with action-level caching
@@ -91,7 +91,7 @@ class CompileBuilder : NimBuilder
         // Check if compilation is cached
         if (actionCache !is null && actionCache.isCached(actionId, inputFiles, metadata) && exists(outputPath))
         {
-            Logger.debugLog("  [Cached] Nim compilation: " ~ outputPath);
+            structuredLog.debug_("__cached_nim_compilation_").field("detail", "  [Cached] Nim compilation: " ~ outputPath).emit();
             result.success = true;
             result.outputs = [outputPath];
             result.outputHash = FastHash.hashFile(outputPath);
@@ -105,7 +105,7 @@ class CompileBuilder : NimBuilder
         // Log the command
         if (config.verbose || config.listCmd)
         {
-            Logger.info("Nim compile command: " ~ cmd.join(" "));
+            structuredLog.info("nim_compile_command_").field("detail", "Nim compile command: " ~ cmd.join(" ")).emit();
         }
         
         // Set environment variables
@@ -116,7 +116,7 @@ class CompileBuilder : NimBuilder
         }
         
         // Execute compilation
-        Logger.debugLog("Compiling: " ~ entryPoint);
+        structuredLog.debug_("compiling_").field("detail", "Compiling: " ~ entryPoint).emit();
         auto res = execute(cmd, env);
         
         bool success = (res.status == 0);

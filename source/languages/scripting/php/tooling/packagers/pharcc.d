@@ -9,7 +9,7 @@ import std.string;
 import std.algorithm;
 import std.array;
 import std.conv;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.security.validation;
 
 /// Pharcc packager - compile PHP to standalone binary
@@ -64,7 +64,7 @@ class PharccPackager : Packager
                 cmd ~= ["--add", buildPath(projectRoot, dir)];
         }
         
-        Logger.info("Running pharcc: " ~ cmd.join(" "));
+        structuredLog.info("running_pharcc_").field("detail", "Running pharcc: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, projectRoot);
         result.output = res.output;
@@ -85,7 +85,7 @@ class PharccPackager : Packager
                     // Validate path before using it with external command
                     if (!SecurityValidator.isPathSafe(binaryPath))
                     {
-                        Logger.warning("Unsafe binary path detected, skipping chmod: " ~ binaryPath);
+                        structuredLog.warning("unsafe_binary_path_detected_skipping_chm").field("detail", "Unsafe binary path detected, skipping chmod: " ~ binaryPath).emit();
                     }
                     else
                     {
@@ -93,13 +93,13 @@ class PharccPackager : Packager
                         auto chmodResult = execute(["chmod", "+x", binaryPath]);
                         if (chmodResult.status != 0)
                         {
-                            Logger.warning("Failed to make binary executable: " ~ chmodResult.output);
+                            structuredLog.warning("failed_to_make_binary_executable_").field("detail", "Failed to make binary executable: " ~ chmodResult.output).emit();
                         }
                     }
                 }
                 
-                Logger.info("Standalone binary created: " ~ binaryPath ~ 
-                          " (" ~ (result.artifactSize / (1024 * 1024)).to!string ~ " MB)");
+                structuredLog.info("standalone_binary_created_").field("detail", "Standalone binary created: " ~ binaryPath ~ 
+                          " (" ~ (result.artifactSize / (1024 * 1024)).to!string ~ " MB)").emit();
             }
         }
         else

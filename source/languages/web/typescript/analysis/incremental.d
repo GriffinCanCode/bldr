@@ -8,7 +8,7 @@ import std.regex;
 import std.string;
 import std.json;
 import engine.compilation.incremental.analyzer;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// TypeScript incremental dependency analyzer
@@ -59,7 +59,7 @@ final class TypeScriptDependencyAnalyzer : BaseDependencyAnalyzer
             {
                 if (isExternalDependency(importPath))
                 {
-                    Logger.debugLog("  [External] " ~ importPath);
+                    structuredLog.debug_("__external_").field("detail", "  [External] " ~ importPath).emit();
                     continue;
                 }
                 
@@ -68,7 +68,7 @@ final class TypeScriptDependencyAnalyzer : BaseDependencyAnalyzer
                 if (!resolved.empty && exists(resolved))
                 {
                     resolvedDeps ~= buildNormalizedPath(resolved);
-                    Logger.debugLog("  [Resolved] " ~ importPath ~ " -> " ~ resolved);
+                    structuredLog.debug_("__resolved_").field("detail", "  [Resolved] " ~ importPath ~ " -> " ~ resolved).emit();
                 }
             }
             
@@ -126,15 +126,15 @@ final class TypeScriptDependencyAnalyzer : BaseDependencyAnalyzer
                 if ("paths" in options)
                 {
                     // Paths are more complex, would need full resolution logic
-                    Logger.debugLog("TypeScript paths configuration detected");
+                    structuredLog.debug_("typescript_paths_configuration_detected").emit();
                 }
             }
             
-            Logger.debugLog("Loaded TypeScript configuration");
+            structuredLog.debug_("loaded_typescript_configuration").emit();
         }
         catch (Exception e)
         {
-            Logger.debugLog("Failed to load tsconfig.json: " ~ e.msg);
+            structuredLog.debug_("failed_to_load_tsconfigjson_").field("detail", "Failed to load tsconfig.json: " ~ e.msg).emit();
         }
     }
     
@@ -251,7 +251,7 @@ struct TypeScriptIncrementalHelper
             if (deps.canFind(normalizedChanged))
             {
                 affected ~= source;
-                Logger.debugLog("  " ~ source ~ " affected by " ~ changedFile);
+                structuredLog.debug_("__").field("detail", "  " ~ source ~ " affected by " ~ changedFile).emit();
             }
         }
         

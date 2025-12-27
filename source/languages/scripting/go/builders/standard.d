@@ -15,7 +15,7 @@ import languages.scripting.go.tooling.tools;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionId, ActionType;
 
 /// Standard Go builder - uses go build command with action-level caching
@@ -54,7 +54,7 @@ class StandardBuilder : GoBuilder
         
         if (!inModule && config.modMode != GoModMode.Off)
         {
-            Logger.warning("No go.mod found. Consider running: go mod init <module-path>");
+            structuredLog.warning("no_gomod_found_consider_running_go_mod_i").emit();
         }
         
         // Run go generate if requested
@@ -85,7 +85,7 @@ class StandardBuilder : GoBuilder
             auto downloadResult = GoTools.modDownload(workDir);
             if (!downloadResult.success)
             {
-                Logger.warning("Failed to download dependencies: " ~ downloadResult.errors.join("\n"));
+                structuredLog.warning("failed_to_download_dependencies_").field("detail", "Failed to download dependencies: " ~ downloadResult.errors.join("\n")).emit();
             }
         }
         
@@ -95,7 +95,7 @@ class StandardBuilder : GoBuilder
             auto vendorResult = GoTools.modVendor(workDir);
             if (!vendorResult.success)
             {
-                Logger.warning("Failed to vendor dependencies: " ~ vendorResult.errors.join("\n"));
+                structuredLog.warning("failed_to_vendor_dependencies_").field("detail", "Failed to vendor dependencies: " ~ vendorResult.errors.join("\n")).emit();
             }
         }
         
@@ -105,7 +105,7 @@ class StandardBuilder : GoBuilder
             auto fmtResult = GoTools.format(sources, true);
             if (!fmtResult.success)
             {
-                Logger.warning("Formatting issues: " ~ fmtResult.errors.join("\n"));
+                structuredLog.warning("formatting_issues_").field("detail", "Formatting issues: " ~ fmtResult.errors.join("\n")).emit();
             }
             result.toolWarnings ~= fmtResult.warnings;
         }
@@ -118,7 +118,7 @@ class StandardBuilder : GoBuilder
             {
                 result.hadToolErrors = true;
                 result.toolWarnings ~= vetResult.errors;
-                Logger.warning("go vet found issues:\n" ~ vetResult.errors.join("\n"));
+                structuredLog.warning("go_vet_found_issuesn").field("detail", "go vet found issues:\n" ~ vetResult.errors.join("\n")).emit();
             }
         }
         
@@ -139,7 +139,7 @@ class StandardBuilder : GoBuilder
             if (lintResult.hasIssues())
             {
                 result.toolWarnings ~= lintResult.warnings;
-                Logger.info("Linter found issues:\n" ~ lintResult.warnings.join("\n"));
+                structuredLog.info("linter_found_issuesn").field("detail", "Linter found issues:\n" ~ lintResult.warnings.join("\n")).emit();
             }
         }
         
@@ -233,7 +233,7 @@ class StandardBuilder : GoBuilder
             // Verify output exists
             if (exists(outputPath))
             {
-                Logger.debugLog("  [Cached] Go build: " ~ target.name);
+                structuredLog.debug_("__cached_go_build_").field("detail", "  [Cached] Go build: " ~ target.name).emit();
                 result.success = true;
                 result.outputs = [outputPath];
                 result.outputHash = FastHash.hashFile(outputPath);
@@ -351,7 +351,7 @@ class StandardBuilder : GoBuilder
                 cmd ~= sources;
         }
         
-        Logger.debugLog("Building Go: " ~ cmd.join(" "));
+        structuredLog.debug_("building_go_").field("detail", "Building Go: " ~ cmd.join(" ")).emit();
         
         // Prepare environment
         string[string] env;
@@ -406,13 +406,13 @@ class StandardBuilder : GoBuilder
                 try {
                     remove(tempOutput);
                 } catch (Exception e) {
-                    Logger.warning("Failed to remove temp file: " ~ tempOutput);
+                    structuredLog.warning("failed_to_remove_temp_file_").field("detail", "Failed to remove temp file: " ~ tempOutput).emit();
                 }
             }
             
             result.outputs = [];
             result.outputHash = FastHash.hashStrings(sources);
-            Logger.info("Go library/package compiled successfully (no binary output)");
+            structuredLog.info("go_librarypackage_compiled_successfully_").emit();
         }
         else
         {

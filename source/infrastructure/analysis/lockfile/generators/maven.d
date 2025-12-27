@@ -12,7 +12,7 @@ import infrastructure.analysis.lockfile.cache;
 import infrastructure.analysis.manifests.maven : MavenManifestParser;
 import infrastructure.analysis.manifests.types : Dependency, DependencyType;
 import infrastructure.utils.files.hash : FastHash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Maven lockfile generator
@@ -40,7 +40,7 @@ final class MavenLockfileGenerator : ILockfileGenerator
             auto cached = cache.get(manifestHash);
             if (cached.isOk)
             {
-                Logger.debugLog("Maven lockfile cache hit");
+                structuredLog.debug_("maven_lockfile_cache_hit").emit();
                 return cached;
             }
         }
@@ -74,7 +74,7 @@ final class MavenLockfileGenerator : ILockfileGenerator
         if (cache !is null)
             cache.put(manifestHash, lockfile);
         
-        Logger.info("Generated Maven lockfile with " ~ lockfile.count().to!string ~ " dependencies");
+        structuredLog.info("generated_maven_lockfile_with_").field("detail", "Generated Maven lockfile with " ~ lockfile.count().to!string ~ " dependencies").emit();
         return Ok!(Lockfile, BuildError)(lockfile);
     }
     
@@ -130,7 +130,7 @@ final class MavenLockfileGenerator : ILockfileGenerator
         {
             auto content = generateMavenLock(lockfile);
             .write(outputPath, content);
-            Logger.info("Wrote Maven lockfile: " ~ outputPath);
+            structuredLog.info("wrote_maven_lockfile_").field("detail", "Wrote Maven lockfile: " ~ outputPath).emit();
             return Ok!(void, BuildError)();
         }
         catch (Exception e)

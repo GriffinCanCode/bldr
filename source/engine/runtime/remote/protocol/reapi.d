@@ -4,7 +4,7 @@ import std.datetime : Duration, seconds;
 import std.conv : to;
 import std.digest : toHexString;
 import std.string : toLower, format;
-import std.algorithm : map;
+import std.algorithm : canFind, map;
 import std.array : array;
 import engine.distributed.protocol.protocol;
 import engine.distributed.protocol.grpc.connection;
@@ -136,7 +136,9 @@ struct Command
     }
     
     /// Convert to Builder ActionRequest
-    ActionRequest toActionRequest(Digest actionDigest) const @safe
+    /// Optionally accepts trace context for distributed tracing
+    ActionRequest toActionRequest(Digest actionDigest, 
+        DistributedTraceContext traceCtx = DistributedTraceContext.init) const @safe
     {
         import std.algorithm : joiner, map;
         import std.range : chain;
@@ -170,7 +172,8 @@ struct Command
             outputs,
             caps,
             Priority.Normal,
-            caps.timeout
+            caps.timeout,
+            traceCtx
         );
     }
 }
@@ -437,8 +440,8 @@ final class ReapiAdapter
         if (grpcResult.isErr)
         {
             // gRPC NOT_FOUND is expected for cache misses
-            if (grpcResult.unwrapErr().indexOf("NOT_FOUND") >= 0 ||
-                grpcResult.unwrapErr().indexOf("5") >= 0)
+            if (grpcResult.unwrapErr().canFind("NOT_FOUND") ||
+                grpcResult.unwrapErr().canFind("5"))
             {
                 ActionResult emptyResult;
                 return Ok!(ActionResult, BuildError)(emptyResult);

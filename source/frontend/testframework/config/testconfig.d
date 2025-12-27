@@ -6,7 +6,7 @@ import std.conv : to;
 import frontend.testframework.execution : TestExecutionConfig, TestExecutionMode;
 import frontend.testframework.sharding : ShardStrategy;
 import frontend.testframework.flaky : RetryPolicy;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Test framework configuration
 /// Can be loaded from .buildertest file or specified via CLI
@@ -51,7 +51,7 @@ struct BuilderTestConfig
         
         if (!exists(path))
         {
-            Logger.debugLog("No .buildertest config found, using defaults");
+            structuredLog.debug_("no_buildertest_config_found_using_defaul").emit();
             return config;
         }
         
@@ -112,11 +112,11 @@ struct BuilderTestConfig
             if ("junitPath" in json)
                 config.junitPath = json["junitPath"].str;
             
-            Logger.info("Loaded test configuration from " ~ path);
+            structuredLog.info("loaded_test_configuration_from_").field("detail", "Loaded test configuration from " ~ path).emit();
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to load .buildertest: " ~ e.msg);
+            structuredLog.warning("failed_to_load_buildertest_").field("detail", "Failed to load .buildertest: " ~ e.msg).emit();
         }
         
         return config;

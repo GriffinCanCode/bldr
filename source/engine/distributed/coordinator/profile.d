@@ -11,7 +11,7 @@ import engine.economics.estimator : CostEstimator, ExecutionHistory, BuildEstima
 import engine.distributed.protocol.protocol : ActionId, ActionRequest, Priority;
 import infrastructure.config.schema.schema : TargetId;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import Concurrency = infrastructure.utils.concurrency.priority;
 
 /// Profile data for a single action
@@ -81,7 +81,7 @@ final class ProfileGuidedScheduler
             }
             
             profilesComputed = true;
-            Logger.info("Computed " ~ profiles.length.to!string ~ " action profiles for scheduling");
+            structuredLog.info("computed_").field("detail", "Computed " ~ profiles.length.to!string ~ " action profiles for scheduling").emit();
         }
     }
     

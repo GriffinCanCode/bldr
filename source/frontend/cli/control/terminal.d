@@ -5,6 +5,7 @@ import std.string : format;
 import std.process : environment;
 import std.algorithm : canFind;
 import std.conv : to;
+import infrastructure.utils.logging : Logger, structuredLog;
 
 /// Terminal capabilities and control
 /// Provides low-level ANSI escape sequence management and capability detection
@@ -159,7 +160,7 @@ struct Capabilities
             {
                 // Invalid number format - will use default below
                 import infrastructure.utils.logging.logger : Logger;
-                Logger.debugLog("Invalid COLUMNS environment variable: " ~ e.msg);
+                structuredLog.debug_("invalid_columns_environment_variable_").field("detail", "Invalid COLUMNS environment variable: " ~ e.msg).emit();
             }
         }
         
@@ -206,7 +207,7 @@ struct Capabilities
             {
                 // Invalid number format - will use default below
                 import infrastructure.utils.logging.logger : Logger;
-                Logger.debugLog("Invalid LINES environment variable: " ~ e.msg);
+                structuredLog.debug_("invalid_lines_environment_variable_").field("detail", "Invalid LINES environment variable: " ~ e.msg).emit();
             }
         }
         

@@ -12,7 +12,7 @@ import languages.scripting.lua.core.config;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache;
 
 /// Script builder - creates executable wrappers for Lua scripts
@@ -128,7 +128,7 @@ class ScriptBuilder : LuaBuilder
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to validate syntax: " ~ e.msg);
+            structuredLog.warning("failed_to_validate_syntax_").field("detail", "Failed to validate syntax: " ~ e.msg).emit();
             return false;
         }
     }
@@ -183,7 +183,7 @@ class ScriptBuilder : LuaBuilder
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to make executable: " ~ e.msg);
+            structuredLog.warning("failed_to_make_executable_").field("detail", "Failed to make executable: " ~ e.msg).emit();
         }
     }
 }

@@ -8,7 +8,7 @@ import std.array;
 import std.string;
 import languages.jvm.kotlin.tooling.formatters.base;
 import languages.jvm.kotlin.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// ktfmt formatter implementation (Google style)
 class KtFmtFormatter : KotlinFormatter_
@@ -17,7 +17,7 @@ class KtFmtFormatter : KotlinFormatter_
     {
         FormatResult result;
         
-        Logger.info("Formatting Kotlin code with ktfmt");
+        structuredLog.info("formatting_kotlin_code_with_ktfmt").emit();
         
         foreach (source; sources)
         {
@@ -55,7 +55,7 @@ class KtFmtFormatter : KotlinFormatter_
     {
         FormatResult result;
         
-        Logger.info("Checking Kotlin code style with ktfmt");
+        structuredLog.info("checking_kotlin_code_style_with_ktfmt").emit();
         
         foreach (source; sources)
         {

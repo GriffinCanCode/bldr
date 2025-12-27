@@ -6,7 +6,7 @@ import std.functional : toDelegate;
 import core.thread;
 import core.atomic;
 import frontend.lsp.core.transport;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Handler function types
 alias RequestHandler = JSONValue delegate(JSONValue params);
@@ -59,7 +59,7 @@ final class MessageDispatcher
         auto method = json["method"].str;
         auto id = json["id"];
         
-        Logger.debugLog("Request: " ~ method);
+        structuredLog.debug_("request_").field("detail", "Request: " ~ method).emit();
         
         if (auto handler = method in requestHandlers)
         {
@@ -71,13 +71,13 @@ final class MessageDispatcher
             }
             catch (Exception e)
             {
-                Logger.error("Request handler error: " ~ e.msg);
+                structuredLog.error("request_handler_error_").field("detail", "Request handler error: " ~ e.msg).emit();
                 if (errorCallback) errorCallback(id, -32603, "Internal error: " ~ e.msg);
             }
         }
         else
         {
-            Logger.warning("Unhandled request: " ~ method);
+            structuredLog.warning("unhandled_request_").field("detail", "Unhandled request: " ~ method).emit();
             if (errorCallback) errorCallback(id, -32601, "Method not found: " ~ method);
         }
     }
@@ -86,7 +86,7 @@ final class MessageDispatcher
     {
         auto method = json["method"].str;
         
-        Logger.debugLog("Notification: " ~ method);
+        structuredLog.debug_("notification_").field("detail", "Notification: " ~ method).emit();
         
         if (auto handler = method in notificationHandlers)
         {
@@ -97,12 +97,12 @@ final class MessageDispatcher
             }
             catch (Exception e)
             {
-                Logger.error("Notification handler error: " ~ e.msg);
+                structuredLog.error("notification_handler_error_").field("detail", "Notification handler error: " ~ e.msg).emit();
             }
         }
         else
         {
-            Logger.debugLog("Unhandled notification: " ~ method);
+            structuredLog.debug_("unhandled_notification_").field("detail", "Unhandled notification: " ~ method).emit();
         }
     }
 }
@@ -148,12 +148,12 @@ final class AsyncMessageLoop
             }
             catch (JSONException e)
             {
-                Logger.error("Invalid JSON: " ~ e.msg);
+                structuredLog.error("invalid_json_").field("detail", "Invalid JSON: " ~ e.msg).emit();
             }
         }
         
         transport.stop();
-        Logger.info("Message loop terminated");
+        structuredLog.info("message_loop_terminated").emit();
     }
     
     /// Start the message loop in a background thread

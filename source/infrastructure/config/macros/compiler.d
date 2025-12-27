@@ -71,8 +71,8 @@ class DCompiler
             
             if (config.verbose)
             {
-                import infrastructure.utils.logging.logger;
-                Logger.debugLog("Compiling macro: " ~ cmd.join(" "));
+                import infrastructure.utils.logging;
+                structuredLog.debug_("compiling_macro_").field("detail", "Compiling macro: " ~ cmd.join(" ")).emit();
             }
             
             // Execute compiler
@@ -260,8 +260,8 @@ class MacroExecutor
         catch (Exception e)
         {
             // If parsing fails, return empty array
-            import infrastructure.utils.logging.logger;
-            Logger.warning("Failed to parse macro output: " ~ e.msg);
+            import infrastructure.utils.logging;
+            structuredLog.warning("failed_to_parse_macro_output_").field("detail", "Failed to parse macro output: " ~ e.msg).emit();
         }
         
         return targets;

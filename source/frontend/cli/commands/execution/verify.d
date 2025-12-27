@@ -12,7 +12,7 @@ import engine.graph;
 import engine.runtime.hermetic.determinism;
 import engine.runtime.services;
 import engine.provenance;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import frontend.cli.control.terminal;
 import frontend.cli.display.format;
 import infrastructure.errors;

@@ -28,7 +28,7 @@ import engine.runtime.remote.monitoring.metrics : RemoteServiceMetricsCollector,
 import engine.runtime.hermetic;
 import engine.distributed.protocol.grpc.factory : UnifiedTransportFactory, TransportConfig, TransportType;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Cloud provider type
 enum ProviderType
@@ -197,7 +197,7 @@ final class RemoteExecutionService : IRemoteExecutionService
         this.coordinator = new Coordinator(graph, coordConfig);
         
         if (config.enableAffinityRouting)
-            Logger.info("Affinity-based worker routing enabled (consistent hashing)");
+            structuredLog.info("affinity_routing_enabled").emit();
         
         // Worker provisioner (SRP: separated from pool management)
         CloudProvider provider = createProvider(config.poolConfig);
@@ -220,7 +220,7 @@ final class RemoteExecutionService : IRemoteExecutionService
             
             // Log transport type
             if (config.transportType == RemoteTransportType.Grpc || config.enableGrpcReapi)
-                Logger.info("Using gRPC transport for remote execution");
+                structuredLog.info("grpc_transport_enabled").emit();
         }
         
         // Initialize dedicated monitoring components
@@ -236,7 +236,7 @@ final class RemoteExecutionService : IRemoteExecutionService
             pool
         );
         
-        Logger.info("Remote execution service initialized");
+        structuredLog.info("remote_execution_service_initialized").emit();
     }
     
     /// Create worker provider based on configuration
@@ -249,11 +249,11 @@ final class RemoteExecutionService : IRemoteExecutionService
         final switch (providerConfig.type)
         {
             case ProviderType.Mock:
-                Logger.info("Using Mock cloud provider");
+                structuredLog.info("cloud_provider").field("type", "mock").emit();
                 return new MockCloudProvider();
             
             case ProviderType.AWS:
-                Logger.info("Using AWS EC2 provider (region: " ~ providerConfig.awsRegion ~ ")");
+                structuredLog.info("cloud_provider").field("type", "aws_ec2").field("region", providerConfig.awsRegion).emit();
                 return new AwsEc2Provider(
                     providerConfig.awsRegion,
                     providerConfig.awsAccessKey,
@@ -261,7 +261,7 @@ final class RemoteExecutionService : IRemoteExecutionService
                 );
             
             case ProviderType.GCP:
-                Logger.info("Using GCP Compute Engine provider (project: " ~ providerConfig.gcpProject ~ ")");
+                structuredLog.info("cloud_provider").field("type", "gcp_compute").field("project", providerConfig.gcpProject).emit();
                 return new GcpComputeProvider(
                     providerConfig.gcpProject,
                     providerConfig.gcpZone,
@@ -269,14 +269,14 @@ final class RemoteExecutionService : IRemoteExecutionService
                 );
             
             case ProviderType.Kubernetes:
-                Logger.info("Using Kubernetes provider (namespace: " ~ providerConfig.k8sNamespace ~ ")");
+                structuredLog.info("cloud_provider").field("type", "kubernetes").field("namespace", providerConfig.k8sNamespace).emit();
                 return new KubernetesProvider(
                     providerConfig.k8sNamespace,
                     providerConfig.k8sKubeconfig
                 );
             
             case ProviderType.Azure:
-                Logger.info("Using Azure VM provider (subscription: " ~ providerConfig.azureSubscriptionId ~ ")");
+                structuredLog.info("cloud_provider").field("type", "azure_vm").field("subscription", providerConfig.azureSubscriptionId).emit();
                 return new AzureVmProvider(
                     providerConfig.azureSubscriptionId,
                     providerConfig.azureResourceGroup,
@@ -296,7 +296,7 @@ final class RemoteExecutionService : IRemoteExecutionService
             if (atomicLoad(running))
                 return Ok!BuildError();
             
-            Logger.info("Starting remote execution service...");
+            structuredLog.info("remote_execution_service_starting").emit();
             
             // Start coordinator
             auto coordResult = coordinator.start();
@@ -327,13 +327,14 @@ final class RemoteExecutionService : IRemoteExecutionService
             }
             
             atomicStore(running, true);
-            Logger.info("Remote execution service started");
-            Logger.info("  Coordinator: " ~ config.coordinatorHost ~ ":" ~ 
-                       config.coordinatorPort.to!string);
+            structuredLog.info("remote_execution_service_started")
+                .field("coordinator_host", config.coordinatorHost)
+                .field("coordinator_port", config.coordinatorPort)
+                .emit();
             
             if (config.enableReapi)
             {
-                Logger.info("  REAPI endpoint: port " ~ config.reapiPort.to!string);
+                structuredLog.info("reapi_endpoint").field("port", config.reapiPort).emit();
             }
             
             return Ok!BuildError();
@@ -343,7 +344,7 @@ final class RemoteExecutionService : IRemoteExecutionService
     /// Stop service
     void stop() @trusted
     {
-        Logger.info("Stopping remote execution service...");
+        structuredLog.info("remote_execution_service_stopping").emit();
         
         atomicStore(running, false);
         
@@ -362,7 +363,7 @@ final class RemoteExecutionService : IRemoteExecutionService
         // Log final statistics
         logFinalStats();
         
-        Logger.info("Remote execution service stopped");
+        structuredLog.info("remote_execution_service_stopped").emit();
     }
     
     /// Execute action remotely
@@ -428,11 +429,12 @@ final class RemoteExecutionService : IRemoteExecutionService
         {
             auto metrics = getMetrics();
             
-            Logger.info("Final execution statistics:");
-            Logger.info("  Total executions: " ~ metrics.totalExecutions.to!string);
-            Logger.info("  Successful: " ~ metrics.successfulExecutions.to!string);
-            Logger.info("  Failed: " ~ metrics.failedExecutions.to!string);
-            Logger.info("  Cached: " ~ metrics.cachedExecutions.to!string);
+            structuredLog.info("execution_statistics")
+                .field("total", metrics.totalExecutions)
+                .field("successful", metrics.successfulExecutions)
+                .field("failed", metrics.failedExecutions)
+                .field("cached", metrics.cachedExecutions)
+                .emit();
             
             if (metrics.totalExecutions > 0)
             {
@@ -441,13 +443,15 @@ final class RemoteExecutionService : IRemoteExecutionService
                 immutable cacheHitRate = 
                     (cast(float)metrics.cachedExecutions / metrics.totalExecutions) * 100;
                 
-                Logger.info("  Success rate: " ~ successRate.to!size_t.to!string ~ "%");
-                Logger.info("  Cache hit rate: " ~ cacheHitRate.to!size_t.to!string ~ "%");
+                structuredLog.info("execution_rates")
+                    .field("success_rate_pct", successRate)
+                    .field("cache_hit_rate_pct", cacheHitRate)
+                    .emit();
             }
         }
         catch (Exception e)
         {
-            Logger.error("Failed to log final stats: " ~ e.msg);
+            structuredLog.error("stats_logging_failed").field("error", e.msg).emit();
         }
     }
 }

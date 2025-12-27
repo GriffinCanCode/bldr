@@ -10,7 +10,7 @@ import std.regex : matchFirst, regex;
 import std.conv : to;
 import infrastructure.toolchain.core.spec;
 import infrastructure.toolchain.core.platform;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Toolchain detector interface
@@ -135,7 +135,7 @@ class ExecutableDetector : ToolchainDetector
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to detect version: " ~ e.msg);
+            structuredLog.warning("failed_to_detect_version_").field("detail", "Failed to detect version: " ~ e.msg).emit();
         }
         
         return Version(0, 0, 0);
@@ -438,12 +438,12 @@ class AutoDetector
                 auto detected = detector.detect();
                 allToolchains ~= detected;
                 
-                Logger.debugLog("Detected " ~ detected.length.to!string ~ 
-                          " toolchain(s) via " ~ detector.name());
+                structuredLog.debug_("detected_").field("detail", "Detected " ~ detected.length.to!string ~ 
+                          " toolchain(s) via " ~ detector.name()).emit();
             }
             catch (Exception e)
             {
-                Logger.warning("Detector " ~ detector.name() ~ " failed: " ~ e.msg);
+                structuredLog.warning("detector_").field("detail", "Detector " ~ detector.name() ~ " failed: " ~ e.msg).emit();
             }
         }
         

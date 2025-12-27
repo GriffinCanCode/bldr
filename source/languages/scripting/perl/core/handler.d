@@ -12,7 +12,7 @@ import languages.scripting.perl.core.config;
 import languages.scripting.perl.services;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig;
 import engine.runtime.shutdown.shutdown : ShutdownCoordinator;
 
@@ -64,7 +64,7 @@ final class PerlHandler : BaseLanguageHandler
         auto target = context.target;
         auto config = context.config;
         
-        Logger.debugLog("Building Perl target: " ~ target.name);
+        structuredLog.debug_("building_perl_target_").field("detail", "Building Perl target: " ~ target.name).emit();
         
         // Parse configuration
         auto perlConfig = configService.parse(target, config);
@@ -230,7 +230,7 @@ final class PerlHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to analyze imports in " ~ source ~ ": " ~ e.msg);
+                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source ~ ": " ~ e.msg).emit();
             }
         }
         

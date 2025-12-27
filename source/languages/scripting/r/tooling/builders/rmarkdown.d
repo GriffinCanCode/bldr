@@ -11,7 +11,7 @@ import infrastructure.config.schema.schema;
 import languages.scripting.r.core.config;
 import languages.scripting.r.tooling.builders.base;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// RMarkdown builder - renders RMarkdown documents
 class RMarkdownBuilder : RBuilder
@@ -74,8 +74,8 @@ class RMarkdownBuilder : RBuilder
         
         string[] cmd = [rCmd] ~ rArgs;
         
-        Logger.info("Rendering RMarkdown: " ~ rmdFile);
-        Logger.debugLog("Command: " ~ cmd.join(" "));
+        structuredLog.info("rendering_rmarkdown_").field("detail", "Rendering RMarkdown: " ~ rmdFile).emit();
+        structuredLog.debug_("command_").field("detail", "Command: " ~ cmd.join(" ")).emit();
         
         auto env = prepareEnvironment(rConfig);
         auto res = execute(cmd, env, Config.none, size_t.max, config.root);
@@ -90,7 +90,7 @@ class RMarkdownBuilder : RBuilder
         result.outputs = getOutputs(target, config, rConfig);
         result.outputHash = FastHash.hashStrings(target.sources);
         
-        Logger.info("RMarkdown rendered successfully");
+        structuredLog.info("rmarkdown_rendered_successfully").emit();
         return result;
     }
     
@@ -121,21 +121,21 @@ class RMarkdownBuilder : RBuilder
     {
         if (target.sources.empty)
         {
-            Logger.error("No RMarkdown file specified");
+            structuredLog.error("no_rmarkdown_file_specified").emit();
             return false;
         }
         
         string rmdFile = target.sources[0];
         if (!exists(rmdFile))
         {
-            Logger.error("RMarkdown file not found: " ~ rmdFile);
+            structuredLog.error("rmarkdown_file_not_found_").field("detail", "RMarkdown file not found: " ~ rmdFile).emit();
             return false;
         }
         
         // Check file extension
         if (!rmdFile.endsWith(".Rmd") && !rmdFile.endsWith(".rmd"))
         {
-            Logger.warning("File does not have .Rmd extension: " ~ rmdFile);
+            structuredLog.warning("file_does_not_have_rmd_extension_").field("detail", "File does not have .Rmd extension: " ~ rmdFile).emit();
         }
         
         return true;

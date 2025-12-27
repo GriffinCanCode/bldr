@@ -9,7 +9,7 @@ import std.array;
 import std.string;
 import languages.jvm.java.tooling.formatters.base;
 import languages.jvm.java.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Eclipse formatter
 class EclipseFormatter : JavaFormatter
@@ -18,7 +18,7 @@ class EclipseFormatter : JavaFormatter
     {
         FormatResult result;
         
-        Logger.info("Running Eclipse formatter");
+        structuredLog.info("running_eclipse_formatter").emit();
         
         // Eclipse formatter requires the JAR
         string eclipseJar = findEclipseFormatterJar(workingDir);

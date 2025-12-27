@@ -48,7 +48,7 @@ void initializeGrammars() @system {
     // Grammars with version() statements will auto-register via shared static this()
     // This function provides explicit initialization point for logging
     
-    import infrastructure.utils.logging.logger;
-    Logger.debugLog("Grammar loaders initialized");
+    import infrastructure.utils.logging;
+    structuredLog.debug_("grammar_loaders_initialized").emit();
 }
 

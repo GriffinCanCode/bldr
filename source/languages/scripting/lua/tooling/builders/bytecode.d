@@ -13,7 +13,7 @@ import languages.scripting.lua.core.config;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionId, ActionType;
 
 /// Bytecode builder with action-level caching - compiles Lua to bytecode using luac
@@ -80,7 +80,7 @@ class BytecodeBuilder : LuaBuilder
         if (usePerFile)
         {
             // Compile each source file individually with caching
-            Logger.debugLog("Compiling Lua sources to bytecode individually");
+            structuredLog.debug_("compiling_lua_sources_to_bytecode_indivi").emit();
             
             foreach (source; sources)
             {
@@ -102,7 +102,7 @@ class BytecodeBuilder : LuaBuilder
                 // Check if per-file compilation is cached
                 if (actionCache && actionCache.isCached(fileActionId, [source], fileMetadata) && exists(fileOutput))
                 {
-                    Logger.debugLog("  [Cached] Bytecode: " ~ baseName(source));
+                    structuredLog.debug_("__cached_bytecode_").field("detail", "  [Cached] Bytecode: " ~ baseName(source)).emit();
                     perFileOutputs ~= fileOutput;
                     continue;
                 }
@@ -115,7 +115,7 @@ class BytecodeBuilder : LuaBuilder
                 
                 cmd ~= source;
                 
-                Logger.debugLog("Compiling: " ~ source);
+                structuredLog.debug_("compiling_").field("detail", "Compiling: " ~ source).emit();
                 auto res = execute(cmd);
                 bool success = (res.status == 0);
                 
@@ -158,7 +158,7 @@ class BytecodeBuilder : LuaBuilder
         // Check if compilation is cached
         if (actionCache && actionCache.isCached(actionId, sources, metadata) && exists(outputPath))
         {
-            Logger.debugLog("  [Cached] Bytecode compilation: " ~ outputPath);
+            structuredLog.debug_("__cached_bytecode_compilation_").field("detail", "  [Cached] Bytecode compilation: " ~ outputPath).emit();
             result.success = true;
             result.outputs = [outputPath];
             result.outputHash = FastHash.hashFile(outputPath);
@@ -200,7 +200,7 @@ class BytecodeBuilder : LuaBuilder
         cmd ~= sources;
         
         // Compile bytecode
-        Logger.debugLog("Compiling bytecode: " ~ cmd.join(" "));
+        structuredLog.debug_("compiling_bytecode_").field("detail", "Compiling bytecode: " ~ cmd.join(" ")).emit();
         auto res = execute(cmd);
         
         bool success = (res.status == 0);

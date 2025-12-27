@@ -3,7 +3,7 @@ module languages.scripting.perl.services.config;
 import languages.scripting.perl.core.config;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import std.json : JSONValue, parseJSON;
 import std.range : empty;
 
@@ -45,11 +45,11 @@ final class PerlConfigService : IPerlConfigService
             }
             catch (JSONException e)
             {
-                Logger.warning("Failed to parse Perl config from target: " ~ e.msg);
+                structuredLog.warning("failed_to_parse_perl_config_from_target_").field("detail", "Failed to parse Perl config from target: " ~ e.msg).emit();
             }
             catch (Exception e)
             {
-                Logger.warning("Error processing Perl config: " ~ e.msg);
+                structuredLog.warning("error_processing_perl_config_").field("detail", "Error processing Perl config: " ~ e.msg).emit();
             }
         }
         
@@ -113,10 +113,10 @@ final class PerlConfigService : IPerlConfigService
         // Validate interpreter
         if (!validateInterpreter(config))
         {
-            Logger.warning("Perl interpreter not available: " ~ 
+            structuredLog.warning("perl_interpreter_not_available_").field("detail", "Perl interpreter not available: " ~ 
                           (config.perlVersion.interpreterPath.empty 
                            ? "perl" 
-                           : config.perlVersion.interpreterPath));
+                           : config.perlVersion.interpreterPath)).emit();
         }
     }
     
@@ -215,7 +215,7 @@ final class PerlConfigService : IPerlConfigService
         }
         catch (Exception e)
         {
-            Logger.warning("Error parsing Perl config fields: " ~ e.msg);
+            structuredLog.warning("error_parsing_perl_config_fields_").field("detail", "Error parsing Perl config fields: " ~ e.msg).emit();
         }
         
         return config;

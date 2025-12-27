@@ -9,7 +9,7 @@ import engine.economics.strategies;
 import engine.economics.estimator;
 import engine.graph : BuildGraph, BuildNode;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Optimization objective
 enum OptimizationObjective : ubyte
@@ -48,23 +48,23 @@ final class CostOptimizer
     /// Optimize build plan for entire graph
     BuildResult!BuildPlan optimize(BuildGraph graph, OptimizationConstraints constraints) @trusted
     {
-        Logger.info("Computing optimal build plan...");
+        structuredLog.info("computing_optimal_build_plan").emit();
         
         auto baselineResult = estimator.estimateGraph(graph);
         if (baselineResult.isErr)
             return Err!(BuildPlan, BuildError)(baselineResult.unwrapErr());
         
         auto baseline = baselineResult.unwrap();
-        Logger.debugLog("Baseline estimate: " ~ formatDuration(baseline.duration) ~ " (cost: " ~ formatCost(0.0f) ~ ")");
+        structuredLog.debug_("baseline_estimate_").field("detail", "Baseline estimate: " ~ formatDuration(baseline.duration) ~ " (cost: " ~ formatCost(0.0f) ~ ")").emit();
         
         immutable cacheHitProb = estimator.estimateCacheHitProbability(graph);
-        Logger.debugLog("Cache hit probability: " ~ (cacheHitProb * 100).to!int.to!string ~ "%");
+        structuredLog.debug_("cache_hit_probability_").field("detail", "Cache hit probability: " ~ (cacheHitProb * 100).to!int.to!string ~ "%").emit();
         
         auto candidates = enumerator.enumerate(baseline.duration, baseline.usage, cacheHitProb, pricingConfig.effectivePricing());
-        Logger.debugLog("Generated " ~ candidates.length.to!string ~ " candidate plans");
+        structuredLog.debug_("generated_").field("detail", "Generated " ~ candidates.length.to!string ~ " candidate plans").emit();
         
         auto pareto = ParetoFrontier.compute(candidates);
-        Logger.debugLog("Pareto frontier: " ~ pareto.plans.length.to!string ~ " optimal plans");
+        structuredLog.debug_("pareto_frontier_").field("detail", "Pareto frontier: " ~ pareto.plans.length.to!string ~ " optimal plans").emit();
         
         BuildPlan selectedPlan;
         
@@ -72,32 +72,32 @@ final class CostOptimizer
         {
             case OptimizationObjective.MinimizeCost:
                 selectedPlan = pareto.optimizeForCost();
-                Logger.info("Selected: Minimize cost");
+                structuredLog.info("selected_minimize_cost").emit();
                 break;
             case OptimizationObjective.MinimizeTime:
                 selectedPlan = pareto.optimizeForTime();
-                Logger.info("Selected: Minimize time");
+                structuredLog.info("selected_minimize_time").emit();
                 break;
             case OptimizationObjective.Balanced:
                 selectedPlan = pareto.optimizeBalanced();
-                Logger.info("Selected: Balanced optimization");
+                structuredLog.info("selected_balanced_optimization").emit();
                 break;
             case OptimizationObjective.Budget:
                 if (constraints.budgetUSD == float.infinity)
                     return Err!(BuildPlan, BuildError)(new EconomicsError("Budget constraint specified but no budget provided"));
                 selectedPlan = pareto.findWithinBudget(constraints.budgetUSD);
-                Logger.info("Selected: Fastest within $" ~ constraints.budgetUSD.to!string);
+                structuredLog.info("selected_fastest_within_").field("detail", "Selected: Fastest within $" ~ constraints.budgetUSD.to!string).emit();
                 break;
             case OptimizationObjective.TimeLimit:
                 if (constraints.timeLimit == Duration.max)
                     return Err!(BuildPlan, BuildError)(new EconomicsError("Time limit constraint specified but no limit provided"));
                 selectedPlan = pareto.findWithinTime(constraints.timeLimit);
-                Logger.info("Selected: Cheapest within " ~ formatDuration(constraints.timeLimit));
+                structuredLog.info("selected_cheapest_within_").field("detail", "Selected: Cheapest within " ~ formatDuration(constraints.timeLimit)).emit();
                 break;
         }
         
-        Logger.info("Optimized build plan:");
-        Logger.info("  " ~ formatPlan(selectedPlan).replace("\n", "\n  "));
+        structuredLog.info("optimized_build_plan").emit();
+        structuredLog.info("__").field("detail", "  " ~ formatPlan(selectedPlan).replace("\n", "\n  ")).emit();
         
         return Ok!(BuildPlan, BuildError)(selectedPlan);
     }

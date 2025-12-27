@@ -7,7 +7,7 @@ import std.conv : to;
 import engine.economics.pricing;
 import engine.graph : BuildGraph, BuildNode, BuildStatus;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Build estimate (time + resource usage)
 struct BuildEstimate
@@ -73,7 +73,7 @@ final class CostEstimator
             // Check historical data first
             if (auto historicalData = history.lookup(node.id.toString()))
             {
-                Logger.debugLog("Using historical data for " ~ node.idString);
+                structuredLog.debug_("using_historical_data_for_").field("detail", "Using historical data for " ~ node.idString).emit();
                 return Ok!(BuildEstimate, BuildError)(historicalData.estimate);
             }
             
@@ -235,8 +235,8 @@ final class ExecutionHistory
         catch (JSONException e)
         {
             // Return empty history on parse failure
-            import infrastructure.utils.logging.logger;
-            Logger.warning("Failed to parse execution history JSON: " ~ e.msg);
+            import infrastructure.utils.logging;
+            structuredLog.warning("failed_to_parse_execution_history_json_").field("detail", "Failed to parse execution history JSON: " ~ e.msg).emit();
         }
         
         return history;

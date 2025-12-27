@@ -13,7 +13,7 @@ import engine.workers.protocol;
 import engine.workers.pool;
 import engine.workers.base;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Go Persistent Worker Factory
 /// 
@@ -199,7 +199,7 @@ final class GoWorkerFactory : BasePersistentWorkerFactory
         {
             std.file.write(scriptPath, generateWorkerScript());
             execute(["chmod", "+x", scriptPath]);
-            Logger.debugLog("Created Go worker script: " ~ scriptPath);
+            structuredLog.debug_("created_go_worker_script_").field("detail", "Created Go worker script: " ~ scriptPath).emit();
         }
         
         return scriptPath;

@@ -8,7 +8,7 @@ import std.array;
 import std.string;
 import std.regex;
 import std.json;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Nimble package data
 struct NimbleData
@@ -75,7 +75,7 @@ class NimbleParser
         
         if (!exists(nimbleFile))
         {
-            Logger.warning("Nimble file not found: " ~ nimbleFile);
+            structuredLog.warning("nimble_file_not_found_").field("detail", "Nimble file not found: " ~ nimbleFile).emit();
             return data;
         }
         
@@ -86,7 +86,7 @@ class NimbleParser
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse nimble file: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_nimble_file_").field("detail", "Failed to parse nimble file: " ~ e.msg).emit();
         }
         
         return data;
@@ -276,7 +276,7 @@ class NimbleParser
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse lock file: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_lock_file_").field("detail", "Failed to parse lock file: " ~ e.msg).emit();
         }
         
         return deps;

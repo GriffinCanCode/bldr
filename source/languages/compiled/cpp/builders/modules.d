@@ -13,7 +13,7 @@ import languages.compiled.cpp.analysis.modules : CppModuleInfo = ModuleInfo, ana
     sortModulesByDependency, isModuleInterface, getModuleFlags, getBMIOutputPath, isModuleSupportedVersion;
 import infrastructure.toolchain : Tool, Toolchain;
 import infrastructure.utils.files.hash : FastHash;
-import infrastructure.utils.logging.logger : Logger;
+import infrastructure.utils.logging : Logger, structuredLog;
 import engine.caching.modules.bmi;
 
 /// Build compiler flags from CppConfig
@@ -128,7 +128,7 @@ final class ModuleBuilder
             ? moduleInfo.name ~ ":" ~ moduleInfo.partitionName 
             : moduleInfo.name;
         
-        Logger.debugLog("Compiling module interface: " ~ moduleName);
+        structuredLog.debug_("compiling_module_interface_").field("detail", "Compiling module interface: " ~ moduleName).emit();
         
         // Build compiler flags
         auto baseFlags = buildCompilerFlags(config, true);
@@ -150,7 +150,7 @@ final class ModuleBuilder
             auto pathResult = bmiCache.getBMIPath(key);
             if (pathResult.isOk)
             {
-                Logger.debugLog("  [BMI Cached] " ~ moduleName);
+                structuredLog.debug_("__bmi_cached_").field("detail", "  [BMI Cached] " ~ moduleName).emit();
                 result.success = true;
                 result.bmiPath = pathResult.unwrap();
                 result.fromCache = true;
@@ -196,7 +196,7 @@ final class ModuleBuilder
             cmd ~= ["-c", "-o", objPath];
         }
         
-        Logger.debugLog("  Command: " ~ cmd.join(" "));
+        structuredLog.debug_("__command_").field("detail", "  Command: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         
@@ -234,7 +234,7 @@ final class ModuleBuilder
     {
         ModuleCompileResult result;
         
-        Logger.debugLog("Compiling header unit: " ~ headerPath);
+        structuredLog.debug_("compiling_header_unit_").field("detail", "Compiling header unit: " ~ headerPath).emit();
         
         auto baseFlags = buildCompilerFlags(config, true);
         auto moduleFlags = getModuleFlags(compilerType);
@@ -253,7 +253,7 @@ final class ModuleBuilder
             auto pathResult = bmiCache.getBMIPath(key);
             if (pathResult.isOk)
             {
-                Logger.debugLog("  [BMI Cached] Header unit: " ~ baseName(headerPath));
+                structuredLog.debug_("__bmi_cached_header_unit_").field("detail", "  [BMI Cached] Header unit: " ~ baseName(headerPath)).emit();
                 result.success = true;
                 result.bmiPath = pathResult.unwrap();
                 result.fromCache = true;
@@ -278,7 +278,7 @@ final class ModuleBuilder
         cmd ~= headerPath;
         cmd ~= ["-o", bmiPath];
         
-        Logger.debugLog("  Command: " ~ cmd.join(" "));
+        structuredLog.debug_("__command_").field("detail", "  Command: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         
@@ -310,7 +310,7 @@ final class ModuleBuilder
     {
         ModuleCompileResult result;
         
-        Logger.debugLog("Compiling with modules: " ~ sourcePath);
+        structuredLog.debug_("compiling_with_modules_").field("detail", "Compiling with modules: " ~ sourcePath).emit();
         
         auto baseFlags = buildCompilerFlags(config, true);
         auto moduleFlags = getModuleFlags(compilerType);
@@ -331,7 +331,7 @@ final class ModuleBuilder
         
         cmd ~= ["-c", sourcePath, "-o", objPath];
         
-        Logger.debugLog("  Command: " ~ cmd.join(" "));
+        structuredLog.debug_("__command_").field("detail", "  Command: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         
@@ -386,7 +386,7 @@ final class ModuleBuilder
             auto result = compileModuleInterface(moduleSrc, outputDir, config, bmiPaths);
             if (!result.success)
             {
-                Logger.error("Module compilation failed: " ~ result.error);
+                structuredLog.error("module_compilation_failed_").field("detail", "Module compilation failed: " ~ result.error).emit();
                 return [];
             }
             
@@ -401,7 +401,7 @@ final class ModuleBuilder
             auto result = compileWithModules(source, outputDir, config, bmiPaths);
             if (!result.success)
             {
-                Logger.error("Source compilation failed: " ~ result.error);
+                structuredLog.error("source_compilation_failed_").field("detail", "Source compilation failed: " ~ result.error).emit();
                 return [];
             }
             objectFiles ~= result.objectPath;

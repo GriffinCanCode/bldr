@@ -12,7 +12,7 @@ import languages.jvm.kotlin.core.config;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache;
 
 /// Android Kotlin builder (AAR/APK)
@@ -29,7 +29,7 @@ class AndroidBuilder : KotlinBuilder
     {
         KotlinBuildResult result;
         
-        Logger.debugLog("Building Android Kotlin project");
+        structuredLog.debug_("building_android_kotlin_project").emit();
         
         // Android builds require Gradle
         if (config.buildTool != KotlinBuildTool.Gradle)

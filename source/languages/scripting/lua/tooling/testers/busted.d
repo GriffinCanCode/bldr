@@ -15,7 +15,7 @@ import languages.scripting.lua.core.config;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Busted test framework - elegant BDD-style testing
 class BustedTester : Tester
@@ -121,7 +121,7 @@ class BustedTester : Tester
             cmd ~= sources;
         }
         
-        Logger.debugLog("Running Busted: " ~ cmd.join(" "));
+        structuredLog.debug_("running_busted_").field("detail", "Running Busted: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         
@@ -182,7 +182,7 @@ class BustedTester : Tester
         catch (Exception e)
         {
             import infrastructure.utils.logging.logger : Logger;
-            Logger.debugLog("Failed to get Busted version: " ~ e.msg);
+            structuredLog.debug_("failed_to_get_busted_version_").field("detail", "Failed to get Busted version: " ~ e.msg).emit();
         }
         
         return "unknown";

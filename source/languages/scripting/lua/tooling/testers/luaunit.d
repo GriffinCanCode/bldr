@@ -15,7 +15,7 @@ import languages.scripting.lua.core.config;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// LuaUnit test framework - xUnit-style testing
 class LuaUnitTester : Tester
@@ -51,7 +51,7 @@ class LuaUnitTester : Tester
             // Add LuaUnit-specific arguments via environment or command line
             // Depending on how the test file is structured
             
-            Logger.debugLog("Running LuaUnit test: " ~ cmd.join(" "));
+            structuredLog.debug_("running_luaunit_test_").field("detail", "Running LuaUnit test: " ~ cmd.join(" ")).emit();
             
             auto res = execute(cmd);
             

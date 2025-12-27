@@ -6,7 +6,7 @@ import std.conv;
 import std.path;
 import engine.caching.incremental.dependency;
 import infrastructure.config.schema.schema;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Incremental test selector - determines which tests need to run
@@ -40,7 +40,7 @@ final class IncrementalTestSelector
             if (isTestFile !is null && isTestFile(changed))
             {
                 testsToRun[changed] = true;
-                Logger.debugLog("  [Direct] Test file changed: " ~ changed);
+                structuredLog.debug_("__direct_test_file_changed_").field("detail", "  [Direct] Test file changed: " ~ changed).emit();
             }
         }
         
@@ -66,8 +66,8 @@ final class IncrementalTestSelector
                 if (affectedSources.canFind(source))
                 {
                     testsToRun[testId] = true;
-                    Logger.debugLog("  [Coverage] Test " ~ testId ~ 
-                                  " covers changed source: " ~ source);
+                    structuredLog.debug_("__coverage_test_").field("detail", "  [Coverage] Test " ~ testId ~ 
+                                  " covers changed source: " ~ source).emit();
                     break;
                 }
             }
@@ -79,9 +79,9 @@ final class IncrementalTestSelector
         {
             immutable reduction = ((allTestIds.length - result.length) * 100.0) / 
                                  allTestIds.length;
-            Logger.info("Incremental test selection: " ~ result.length.to!string ~ 
+            structuredLog.info("incremental_test_selection_").field("detail", "Incremental test selection: " ~ result.length.to!string ~ 
                        "/" ~ allTestIds.length.to!string ~ " tests (" ~ 
-                       reduction.to!string[0..min(5, $)] ~ "% reduction)");
+                       reduction.to!string[0..min(5, $)] ~ "% reduction)").emit();
         }
         
         return result;

@@ -5,7 +5,7 @@ import infrastructure.parsing.treesitter.config;
 import infrastructure.parsing.treesitter.registry;
 import infrastructure.parsing.treesitter.parser;
 import infrastructure.analysis.ast.parser;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Haskell grammar loader for tree-sitter
 /// Dynamically loads grammar from system libraries if available
@@ -20,13 +20,13 @@ shared static this() @system {
         // Try to load grammar dynamically
         auto grammar = ts_load_haskell();
         if (!grammar) {
-            Logger.debugLog("Haskell grammar not available (will use file-level tracking)");
+            structuredLog.debug_("haskell_grammar_not_available_will_use_f").emit();
             return;
         }
         
         auto config = LanguageConfigs.get("haskell");
         if (!config) {
-            Logger.warning("Haskell config not found");
+            structuredLog.warning("haskell_config_not_found").emit();
             return;
         }
         
@@ -42,9 +42,9 @@ shared static this() @system {
         ASTParserRegistry.instance().registerParser(parser);
         
         grammarLoaded = true;
-        Logger.info("✓ Haskell tree-sitter grammar loaded");
+        structuredLog.info("_haskell_treesitter_grammar_loaded").emit();
     } catch (Exception e) {
-        Logger.debugLog("Haskell grammar not loaded: " ~ e.msg);
+        structuredLog.debug_("haskell_grammar_not_loaded_").field("detail", "Haskell grammar not loaded: " ~ e.msg).emit();
     }
 }
 

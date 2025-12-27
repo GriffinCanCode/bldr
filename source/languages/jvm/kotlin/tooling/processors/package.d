@@ -10,7 +10,7 @@ import std.file;
 import std.string;
 import std.algorithm;
 import languages.jvm.kotlin.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Processor runner for KAPT and KSP
 class ProcessorRunner
@@ -30,7 +30,7 @@ class ProcessorRunner
     /// Run KAPT
     private static bool runKAPT(ProcessorConfig config, string[] sources)
     {
-        Logger.info("Running KAPT annotation processors");
+        structuredLog.info("running_kapt_annotation_processors").emit();
         
         // KAPT is typically run through Gradle
         // For direct kotlinc usage, use -Xplugin option
@@ -79,7 +79,7 @@ class ProcessorRunner
         
         if (res.status != 0)
         {
-            Logger.error("KAPT processing failed: " ~ res.output);
+            structuredLog.error("kapt_processing_failed_").field("detail", "KAPT processing failed: " ~ res.output).emit();
             return false;
         }
         
@@ -89,7 +89,7 @@ class ProcessorRunner
     /// Run KSP
     private static bool runKSP(ProcessorConfig config, string[] sources)
     {
-        Logger.info("Running KSP symbol processors");
+        structuredLog.info("running_ksp_symbol_processors").emit();
         
         // KSP is typically run through Gradle with the KSP plugin
         // For direct usage, we need the KSP compiler plugin
@@ -137,7 +137,7 @@ class ProcessorRunner
         
         if (res.status != 0)
         {
-            Logger.error("KSP processing failed: " ~ res.output);
+            structuredLog.error("ksp_processing_failed_").field("detail", "KSP processing failed: " ~ res.output).emit();
             return false;
         }
         

@@ -12,7 +12,7 @@ import languages.base.base;
 import engine.runtime.services;
 import frontend.cli.events.events;
 import infrastructure.telemetry.distributed.tracing : Span, SpanKind, SpanStatus;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.di : IServiceContainer;
 import infrastructure.utils.simd.capabilities : SIMDCapabilities;
 import infrastructure.errors;

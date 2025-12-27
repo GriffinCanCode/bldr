@@ -7,7 +7,7 @@ import std.path;
 import std.algorithm;
 import std.array;
 import languages.scripting.elixir.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Hex package manager
 class HexManager
@@ -34,14 +34,14 @@ class HexManager
     /// Build Hex package
     static bool buildPackage(HexConfig config, string mixCmd = "mix")
     {
-        Logger.info("Building Hex package: " ~ config.packageName);
+        structuredLog.info("building_hex_package_").field("detail", "Building Hex package: " ~ config.packageName).emit();
         
         // Validate package
         auto validateRes = execute([mixCmd, "hex.build", "--unpack"]);
         if (validateRes.status != 0)
         {
-            Logger.error("Package validation failed");
-            Logger.error("  Output: " ~ validateRes.output);
+            structuredLog.error("package_validation_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ validateRes.output).emit();
             return false;
         }
         
@@ -49,19 +49,19 @@ class HexManager
         auto buildRes = execute([mixCmd, "hex.build"]);
         if (buildRes.status != 0)
         {
-            Logger.error("Package build failed");
-            Logger.error("  Output: " ~ buildRes.output);
+            structuredLog.error("package_build_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ buildRes.output).emit();
             return false;
         }
         
-        Logger.info("Hex package built successfully");
+        structuredLog.info("hex_package_built_successfully").emit();
         return true;
     }
     
     /// Publish package to Hex
     static bool publishPackage(HexConfig config, string mixCmd = "mix")
     {
-        Logger.info("Publishing package to Hex.pm");
+        structuredLog.info("publishing_package_to_hexpm").emit();
         
         string[] cmd = [mixCmd, "hex.publish"];
         
@@ -71,12 +71,12 @@ class HexManager
         auto res = execute(cmd);
         if (res.status != 0)
         {
-            Logger.error("Package publish failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("package_publish_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
-        Logger.info("Package published successfully");
+        structuredLog.info("package_published_successfully").emit();
         return true;
     }
     

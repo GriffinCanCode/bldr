@@ -6,6 +6,7 @@ import languages.dynamic : SpecRegistry, SpecBasedHandler;
 import languages.registry : parseLanguageName;
 import infrastructure.errors;
 import std.conv : to;
+import infrastructure.utils.logging : Logger, structuredLog;
 
 /// Handler registry interface
 interface IHandlerRegistry
@@ -137,7 +138,7 @@ final class HandlerRegistry : IHandlerRegistry
             import infrastructure.utils.logging.logger : Logger;
             auto count = result.unwrap();
             if (count > 0)
-                Logger.debugLog("Loaded " ~ count.to!string ~ " dynamic language specs");
+                structuredLog.debug_("loaded_").field("detail", "Loaded " ~ count.to!string ~ " dynamic language specs").emit();
         }
     }
     

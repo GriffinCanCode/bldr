@@ -9,7 +9,7 @@ import languages.web.css.core.config;
 import languages.web.css.processors.base;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// SCSS/Sass processor using sass CLI
 class SCSSProcessor : CSSProcessor
@@ -74,7 +74,7 @@ class SCSSProcessor : CSSProcessor
         string entry = config.entry.empty ? sources[0] : config.entry;
         cmd ~= [entry, outputPath];
         
-        Logger.debugLog("Running: " ~ cmd.join(" "));
+        structuredLog.debug_("running_").field("detail", "Running: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         

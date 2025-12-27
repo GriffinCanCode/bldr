@@ -11,7 +11,7 @@ import languages.scripting.elixir.config;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache;
 
 /// Script builder - for simple .ex/.exs files
@@ -33,7 +33,7 @@ class ScriptBuilder : ElixirBuilder
     {
         ElixirBuildResult result;
         
-        Logger.debugLog("Building Elixir script");
+        structuredLog.debug_("building_elixir_script").emit();
         
         // For scripts, we just validate syntax
         foreach (source; sources)

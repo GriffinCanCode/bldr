@@ -5,7 +5,7 @@ import std.array;
 import std.conv;
 import engine.caching.incremental.dependency;
 import engine.caching.actions.action;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Smart file filter for operations (lint, format, analyze)
 /// Reuses incremental infrastructure to skip unchanged files
@@ -68,8 +68,10 @@ struct IncrementalFilter
         
         if (result.length < allFiles.length)
         {
-            Logger.info("Incremental filter: " ~ result.length.to!string ~ 
-                       "/" ~ allFiles.length.to!string ~ " files need processing");
+            structuredLog.info("incremental_filter")
+                .field("to_process", result.length)
+                .field("total", allFiles.length)
+                .emit();
         }
         
         return result;

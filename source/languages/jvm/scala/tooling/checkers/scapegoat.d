@@ -3,7 +3,7 @@ module languages.jvm.scala.tooling.checkers.scapegoat;
 import std.stdio;
 import languages.jvm.scala.tooling.checkers.base;
 import languages.jvm.scala.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Scapegoat checker - static analysis tool
 class ScapegoatChecker : Checker
@@ -14,7 +14,7 @@ class ScapegoatChecker : Checker
         
         // Scapegoat is typically integrated as a compiler plugin
         // Not a standalone tool - needs to be configured in build.sbt
-        Logger.warning("Scapegoat requires sbt compiler plugin configuration");
+        structuredLog.warning("scapegoat_requires_sbt_compiler_plugin_c").emit();
         
         result.success = true;
         return result;

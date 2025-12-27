@@ -9,7 +9,7 @@ import std.string;
 import languages.dotnet.csharp.tooling.formatters.base;
 import languages.dotnet.csharp.tooling.detection;
 import languages.dotnet.csharp.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.security.validation;
 
 /// CSharpier formatter
@@ -24,7 +24,7 @@ class CSharpierFormatter : CSharpFormatter_
     {
         FormatResult result;
         
-        Logger.info("Formatting with CSharpier");
+        structuredLog.info("formatting_with_csharpier").emit();
         
         string[] cmd = ["dotnet", "csharpier"];
         
@@ -63,7 +63,7 @@ class CSharpierFormatter : CSharpFormatter_
         result.success = true;
         result.formattedFiles = sources.dup;
         
-        Logger.info("Formatting completed");
+        structuredLog.info("formatting_completed").emit();
         
         return result;
     }

@@ -18,7 +18,7 @@ import engine.workers.rust;
 import engine.workers.go;
 import engine.workers.python;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Persistent Worker Service
 /// 
@@ -133,7 +133,7 @@ final class PersistentWorkerService
         if (status != WorkerServiceStatus.Stopped) return;
         
         status = WorkerServiceStatus.Starting;
-        Logger.info("Starting persistent worker service");
+        structuredLog.info("worker_service_starting").emit();
         
         registerJVMWorkers();
         registerTypeScriptWorkers();
@@ -162,7 +162,9 @@ final class PersistentWorkerService
             config.enablePythonWorkers ? "Python" : null
         ].filter!(l => l !is null).array;
         
-        Logger.info("Persistent worker service started (" ~ langs.join(", ") ~ ")");
+        structuredLog.info("worker_service_started")
+            .field("languages", langs.join(","))
+            .emit();
     }
     
     /// Register JVM worker factories
@@ -177,7 +179,9 @@ final class PersistentWorkerService
             pool.registerFactory(new JVMWorkerFactory(cfg));
         }
         
-        Logger.debugLog("Registered JVM workers (javac, kotlinc, scalac, groovyc)");
+        structuredLog.debug_("jvm_workers_registered")
+            .field("compilers", "javac,kotlinc,scalac,groovyc")
+            .emit();
     }
     
     /// Register TypeScript worker factories
@@ -192,7 +196,9 @@ final class PersistentWorkerService
             pool.registerFactory(new TypeScriptWorkerFactory(cfg));
         }
         
-        Logger.debugLog("Registered TypeScript workers (tsc, swc, esbuild, bun)");
+        structuredLog.debug_("typescript_workers_registered")
+            .field("compilers", "tsc,swc,esbuild,bun")
+            .emit();
     }
     
     /// Register Rust worker factories
@@ -207,7 +213,9 @@ final class PersistentWorkerService
             pool.registerFactory(new RustWorkerFactory(cfg));
         }
         
-        Logger.debugLog("Registered Rust workers (cargo, cargo-check, rustc, clippy)");
+        structuredLog.debug_("rust_workers_registered")
+            .field("compilers", "cargo,cargo-check,rustc,clippy")
+            .emit();
     }
     
     /// Register Go worker factories
@@ -222,7 +230,9 @@ final class PersistentWorkerService
             pool.registerFactory(new GoWorkerFactory(cfg));
         }
         
-        Logger.debugLog("Registered Go workers (build, test, vet, fmt)");
+        structuredLog.debug_("go_workers_registered")
+            .field("compilers", "build,test,vet,fmt")
+            .emit();
     }
     
     /// Register Python worker factories
@@ -237,7 +247,9 @@ final class PersistentWorkerService
             pool.registerFactory(new PythonWorkerFactory(cfg));
         }
         
-        Logger.debugLog("Registered Python workers (mypy, ruff, pylint, black, pytest)");
+        structuredLog.debug_("python_workers_registered")
+            .field("tools", "mypy,ruff,pylint,black,pytest")
+            .emit();
     }
     
     /// Stop the worker service - TaskScope guarantees cleanup
@@ -246,7 +258,7 @@ final class PersistentWorkerService
         if (status == WorkerServiceStatus.Stopped) return;
         
         status = WorkerServiceStatus.Stopping;
-        Logger.info("Stopping persistent worker service");
+        structuredLog.info("worker_service_stopping").emit();
         
         atomicStore(running, false);
         
@@ -260,7 +272,7 @@ final class PersistentWorkerService
         pool.stop();
         
         status = WorkerServiceStatus.Stopped;
-        Logger.info("Persistent worker service stopped");
+        structuredLog.info("worker_service_stopped").emit();
     }
     
     // ==================== JVM Compilation ====================
@@ -670,16 +682,21 @@ final class PersistentWorkerService
         metrics.poolStats = stats;
         metrics.lastUpdated = MonoTime.currTime;
         
-        Logger.debugLog("Worker service: " ~
-            metrics.totalCompilations.to!string ~ " compilations, " ~
-            metrics.averageSpeedupFactor.to!string ~ "x avg speedup, " ~
-            metrics.totalSavedTime.total!"seconds".to!string ~ "s saved");
+        structuredLog.debug_("worker_service_metrics")
+            .field("total_compilations", metrics.totalCompilations)
+            .field("avg_speedup", metrics.averageSpeedupFactor)
+            .field("time_saved_s", metrics.totalSavedTime.total!"seconds")
+            .emit();
         
         // Check degraded state
         if (stats.totalFailures > stats.totalStartups / 4)
         {
             status = WorkerServiceStatus.Degraded;
-            Logger.warning("Worker service degraded: high failure rate");
+            structuredLog.warning("worker_service_degraded")
+                .field("reason", "high_failure_rate")
+                .field("failures", stats.totalFailures)
+                .field("startups", stats.totalStartups)
+                .emit();
         }
         else if (status == WorkerServiceStatus.Degraded)
         {

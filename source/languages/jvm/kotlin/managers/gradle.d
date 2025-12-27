@@ -8,7 +8,7 @@ import std.array;
 import std.process;
 import std.regex;
 import std.conv;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Gradle Kotlin project metadata
 struct GradleKotlinMetadata
@@ -195,7 +195,7 @@ class GradleOps
     /// Build Kotlin project
     static bool build(string projectDir, bool skipTests = false, bool useWrapper = true)
     {
-        Logger.info("Building Kotlin project with Gradle");
+        structuredLog.info("building_kotlin_project_with_gradle").emit();
         
         string[] args = ["build"];
         if (skipTests)
@@ -207,8 +207,8 @@ class GradleOps
         
         if (result.status != 0)
         {
-            Logger.error("Gradle build failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("gradle_build_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
@@ -218,7 +218,7 @@ class GradleOps
     /// Compile Kotlin sources
     static bool compileKotlin(string projectDir, bool useWrapper = true)
     {
-        Logger.info("Compiling Kotlin sources");
+        structuredLog.info("compiling_kotlin_sources").emit();
         
         auto result = useWrapper
             ? executeGradleWrapper(["compileKotlin"], projectDir)
@@ -226,8 +226,8 @@ class GradleOps
         
         if (result.status != 0)
         {
-            Logger.error("Kotlin compilation failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("kotlin_compilation_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
@@ -237,7 +237,7 @@ class GradleOps
     /// Run Kotlin tests
     static bool test(string projectDir, bool useWrapper = true)
     {
-        Logger.info("Running Kotlin tests");
+        structuredLog.info("running_kotlin_tests").emit();
         
         auto result = useWrapper
             ? executeGradleWrapper(["test"], projectDir)
@@ -245,8 +245,8 @@ class GradleOps
         
         if (result.status != 0)
         {
-            Logger.error("Kotlin tests failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("kotlin_tests_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
@@ -256,7 +256,7 @@ class GradleOps
     /// Create JAR
     static bool jar(string projectDir, bool useWrapper = true)
     {
-        Logger.info("Creating JAR with Gradle");
+        structuredLog.info("creating_jar_with_gradle").emit();
         
         auto result = useWrapper
             ? executeGradleWrapper(["jar"], projectDir)
@@ -268,7 +268,7 @@ class GradleOps
     /// Build multiplatform targets
     static bool buildMultiplatform(string projectDir, string[] targets = [], bool useWrapper = true)
     {
-        Logger.info("Building multiplatform targets");
+        structuredLog.info("building_multiplatform_targets").emit();
         
         string[] args;
         if (targets.empty)
@@ -291,7 +291,7 @@ class GradleOps
     /// Run detekt analysis
     static bool detekt(string projectDir, bool useWrapper = true)
     {
-        Logger.info("Running detekt analysis");
+        structuredLog.info("running_detekt_analysis").emit();
         
         auto result = useWrapper
             ? executeGradleWrapper(["detekt"], projectDir)
@@ -303,7 +303,7 @@ class GradleOps
     /// Format code with ktlint
     static bool ktlintFormat(string projectDir, bool useWrapper = true)
     {
-        Logger.info("Formatting Kotlin code with ktlint");
+        structuredLog.info("formatting_kotlin_code_with_ktlint").emit();
         
         auto result = useWrapper
             ? executeGradleWrapper(["ktlintFormat"], projectDir)
@@ -315,7 +315,7 @@ class GradleOps
     /// Check code style with ktlint
     static bool ktlintCheck(string projectDir, bool useWrapper = true)
     {
-        Logger.info("Checking Kotlin code style");
+        structuredLog.info("checking_kotlin_code_style").emit();
         
         auto result = useWrapper
             ? executeGradleWrapper(["ktlintCheck"], projectDir)
@@ -327,7 +327,7 @@ class GradleOps
     /// Clean build
     static bool clean(string projectDir, bool useWrapper = true)
     {
-        Logger.info("Cleaning Gradle project");
+        structuredLog.info("cleaning_gradle_project").emit();
         
         auto result = useWrapper
             ? executeGradleWrapper(["clean"], projectDir)
@@ -339,7 +339,7 @@ class GradleOps
     /// Install dependencies
     static bool installDependencies(string projectDir, bool useWrapper = true)
     {
-        Logger.info("Resolving Gradle dependencies");
+        structuredLog.info("resolving_gradle_dependencies").emit();
         
         auto result = useWrapper
             ? executeGradleWrapper(["dependencies"], projectDir)

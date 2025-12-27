@@ -7,6 +7,7 @@ import std.conv;
 import std.algorithm;
 import std.range;
 import infrastructure.errors;
+import infrastructure.utils.logging : Logger, structuredLog;
 
 
 /// Atomic temporary directory creation (prevents TOCTOU attacks)
@@ -186,7 +187,7 @@ struct AtomicTempDir
                 try
                 {
                     import infrastructure.utils.logging.logger : Logger;
-                    Logger.warning("Failed to clean up temp directory: " ~ path ~ " - " ~ e.msg);
+                    structuredLog.warning("failed_to_clean_up_temp_directory_").field("detail", "Failed to clean up temp directory: " ~ path ~ " - " ~ e.msg).emit();
                 }
                 catch (Exception)
                 {

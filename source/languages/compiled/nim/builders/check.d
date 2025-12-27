@@ -13,7 +13,7 @@ import languages.compiled.nim.tooling.tools;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache;
 
 /// Check builder - syntax and semantic checking without code generation
@@ -142,7 +142,7 @@ class CheckBuilder : NimBuilder
         
         if (config.verbose)
         {
-            Logger.debugLog("Check command: " ~ cmd.join(" "));
+            structuredLog.debug_("check_command_").field("detail", "Check command: " ~ cmd.join(" ")).emit();
         }
         
         // Execute check

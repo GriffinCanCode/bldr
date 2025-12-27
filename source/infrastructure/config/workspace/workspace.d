@@ -8,6 +8,7 @@ import infrastructure.config.parsing.lexer;
 import infrastructure.config.workspace.ast;
 import infrastructure.config.schema.schema;
 import infrastructure.errors;
+import infrastructure.utils.logging : Logger, structuredLog;
 
 /// Workspace-level configuration AST nodes
 
@@ -678,8 +679,8 @@ struct WorkspaceAnalyzer
         
         foreach (field; decl.fields.filter!(f => !knownFields.canFind(f.name)))
         {
-            import infrastructure.utils.logging.logger;
-            Logger.warning("Unknown Builderspace field '" ~ field.name ~ "' will be ignored");
+            import infrastructure.utils.logging;
+            structuredLog.warning("unknown_builderspace_field_").field("detail", "Unknown Builderspace field '" ~ field.name ~ "' will be ignored").emit();
         }
         
         return VoidBuildResult.ok();
@@ -818,8 +819,8 @@ class Workspace
             }
             catch (Exception e)
             {
-                import infrastructure.utils.logging.logger;
-                Logger.warning("Failed to parse Builderspace file at " ~ builderspacePath ~ ": " ~ e.msg);
+                import infrastructure.utils.logging;
+                structuredLog.warning("failed_to_parse_builderspace_file_at_").field("detail", "Failed to parse Builderspace file at " ~ builderspacePath ~ ": " ~ e.msg).emit();
             }
         }
         
@@ -852,7 +853,7 @@ class Workspace
         catch (Exception ex)
         {
             import infrastructure.utils.logging.logger : Logger;
-            Logger.warning("Failed to find Builderfiles in " ~ _rootPath ~ ": " ~ ex.msg);
+            structuredLog.warning("failed_to_find_builderfiles_in_").field("detail", "Failed to find Builderfiles in " ~ _rootPath ~ ": " ~ ex.msg).emit();
             return [];
         }
     }

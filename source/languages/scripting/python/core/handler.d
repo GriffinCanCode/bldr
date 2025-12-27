@@ -15,7 +15,7 @@ import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.python.pycheck;
 import infrastructure.utils.python.pywrap;
 import infrastructure.utils.security : execute;
@@ -49,7 +49,7 @@ class PythonHandler : BaseLanguageHandler
         if (config.packageManager == PyPackageManager.Auto)
         {
             config.packageManager = PackageManagerFactory.detectFromProject(sourceDir);
-            Logger.debugLog("Detected package manager: " ~ config.packageManager.to!string);
+            structuredLog.debug_("detected_package_manager_").field("detail", "Detected package manager: " ~ config.packageManager.to!string).emit();
         }
         
         if (config.venv.enabled && config.venv.tool == VirtualEnvConfig.Tool.Auto)
@@ -62,7 +62,7 @@ class PythonHandler : BaseLanguageHandler
             auto depFiles = DependencyAnalyzer.findDependencyFiles(sourceDir);
             if (!depFiles.empty)
             {
-                Logger.debugLog("Found dependency files: " ~ depFiles.join(", "));
+                structuredLog.debug_("found_dependency_files_").field("detail", "Found dependency files: " ~ depFiles.join(", ")).emit();
                 config.requirementsFiles = depFiles;
             }
         }
@@ -80,7 +80,7 @@ class PythonHandler : BaseLanguageHandler
         // Handle empty sources gracefully - Python is interpreted, no sources = nothing to do
         if (target.sources.empty)
         {
-            Logger.warning("No source files for Python target '" ~ target.name ~ "', skipping build");
+            structuredLog.warning("no_source_files_for_python_target_").field("detail", "No source files for Python target '" ~ target.name ~ "', skipping build").emit();
             result.success = true;
             result.outputHash = "";
             return result;
@@ -94,21 +94,21 @@ class PythonHandler : BaseLanguageHandler
 
         if (pyConfig.autoFormat && pyConfig.formatter != PyFormatter.None)
         {
-            Logger.info("Auto-formatting code");
+            structuredLog.info("autoformatting_code").emit();
             auto fmtResult = Formatter.format(target.sources, pyConfig.formatter, pythonCmd, false);
             if (!fmtResult.success)
-                Logger.warning("Formatting failed, continuing anyway");
+                structuredLog.warning("formatting_failed_continuing_anyway").emit();
         }
 
         if (pyConfig.autoLint && pyConfig.linter != PyLinter.None)
         {
-            Logger.info("Auto-linting code");
+            structuredLog.info("autolinting_code").emit();
             lintWithCaching(target.sources, pyConfig, target.name, pythonCmd);
         }
 
         if (pyConfig.typeCheck.enabled)
         {
-            Logger.info("Running type checking");
+            structuredLog.info("running_type_checking").emit();
             auto typeResult = typeCheckWithCaching(target.sources, pyConfig, target.name, pythonCmd);
             
             if (!typeResult.success)
@@ -133,7 +133,7 @@ class PythonHandler : BaseLanguageHandler
                 // Script mode: warn but continue for interpreted language
                 if (pyConfig.mode == PyBuildMode.Script)
                 {
-                    Logger.warning("Python validation issues (continuing for script mode): " ~ validationResult.firstError());
+                    structuredLog.warning("python_validation_issues_continuing_for_").field("detail", "Python validation issues (continuing for script mode): " ~ validationResult.firstError()).emit();
                 }
                 else
                 {
@@ -146,7 +146,7 @@ class PythonHandler : BaseLanguageHandler
         catch (Exception e)
         {
             // Validator not available or failed - warn but don't block for interpreted language
-            Logger.warning("Python validator unavailable, skipping syntax check: " ~ e.msg);
+            structuredLog.warning("python_validator_unavailable_skipping_sy").field("detail", "Python validator unavailable, skipping syntax check: " ~ e.msg).emit();
         }
 
         // For Script mode, skip wrapper generation - just run the script directly
@@ -215,7 +215,7 @@ class PythonHandler : BaseLanguageHandler
             catch (Exception e)
             {
                 // For interpreted languages, wrapper generation failure is not fatal
-                Logger.warning("Failed to generate wrapper: " ~ e.msg ~ " (sources remain runnable)");
+                structuredLog.warning("failed_to_generate_wrapper_").field("detail", "Failed to generate wrapper: " ~ e.msg ~ " (sources remain runnable)").emit();
             }
         }
 
@@ -241,7 +241,7 @@ class PythonHandler : BaseLanguageHandler
         // Handle empty sources gracefully for interpreted language
         if (target.sources.empty)
         {
-            Logger.warning("No source files for Python library '" ~ target.name ~ "', skipping build");
+            structuredLog.warning("no_source_files_for_python_library_").field("detail", "No source files for Python library '" ~ target.name ~ "', skipping build").emit();
             result.success = true;
             result.outputs = [];
             result.outputHash = "";
@@ -256,7 +256,7 @@ class PythonHandler : BaseLanguageHandler
         
         if (pyConfig.typeCheck.enabled)
         {
-            Logger.info("Running type checking");
+            structuredLog.info("running_type_checking").emit();
             auto typeResult = TypeChecker.check(target.sources, pyConfig.typeCheck, pythonCmd);
             
             if (typeResult.hasErrors)
@@ -275,7 +275,7 @@ class PythonHandler : BaseLanguageHandler
                 // For Script mode libraries, just warn
                 if (pyConfig.mode == PyBuildMode.Script)
                 {
-                    Logger.warning("Python library validation issues: " ~ validationResult.firstError());
+                    structuredLog.warning("python_library_validation_issues_").field("detail", "Python library validation issues: " ~ validationResult.firstError()).emit();
                 }
                 else
                 {
@@ -286,7 +286,7 @@ class PythonHandler : BaseLanguageHandler
         }
         catch (Exception e)
         {
-            Logger.warning("Python validator unavailable, skipping syntax check: " ~ e.msg);
+            structuredLog.warning("python_validator_unavailable_skipping_sy").field("detail", "Python validator unavailable, skipping syntax check: " ~ e.msg).emit();
         }
         
         if (pyConfig.generateStubs)
@@ -371,7 +371,7 @@ class PythonHandler : BaseLanguageHandler
     {
         if (!config.requirementsFiles.empty)
         {
-            Logger.info("Installing dependencies");
+            structuredLog.info("installing_dependencies").emit();
             auto installer = PackageManagerFactory.create(config.packageManager);
             foreach (reqFile; config.requirementsFiles)
             {
@@ -468,7 +468,7 @@ class PythonHandler : BaseLanguageHandler
             
             if (getCache().isCached(actionId, [source], metadata))
             {
-                Logger.debugLog("  [Cached] Lint: " ~ source);
+                structuredLog.debug_("__cached_lint_").field("detail", "  [Cached] Lint: " ~ source).emit();
                 continue;
             }
             
@@ -479,16 +479,16 @@ class PythonHandler : BaseLanguageHandler
             
             if (!success && lintResult.hasIssues())
             {
-                Logger.warning("Lint issues in " ~ source ~ ":");
+                structuredLog.warning("lint_issues_in_").field("detail", "Lint issues in " ~ source ~ ":").emit();
                 if (!lintResult.errors.empty)
                 {
                     foreach (error; lintResult.errors[0 .. min(3, $)])
-                        Logger.warning("  Error: " ~ error);
+                        structuredLog.warning("__error_").field("detail", "  Error: " ~ error).emit();
                 }
                 if (!lintResult.warnings.empty)
                 {
                     foreach (warning; lintResult.warnings[0 .. min(3, $)])
-                        Logger.warning("  Warning: " ~ warning);
+                        structuredLog.warning("__warning_").field("detail", "  Warning: " ~ warning).emit();
                 }
             }
         }
@@ -514,7 +514,7 @@ class PythonHandler : BaseLanguageHandler
         
         if (getCache().isCached(actionId, sources, metadata))
         {
-            Logger.debugLog("  [Cached] Type checking");
+            structuredLog.debug_("__cached_type_checking").emit();
             return result;
         }
         
@@ -545,7 +545,7 @@ class PythonHandler : BaseLanguageHandler
             
             if (getCache().isCached(actionId, [source], metadata))
             {
-                Logger.debugLog("  [Cached] Bytecode: " ~ source);
+                structuredLog.debug_("__cached_bytecode_").field("detail", "  [Cached] Bytecode: " ~ source).emit();
                 continue;
             }
             
@@ -556,19 +556,19 @@ class PythonHandler : BaseLanguageHandler
             getCache().update(actionId, [source], outputs, metadata, success);
             
             if (!success)
-                Logger.warning("Failed to compile " ~ source ~ " to bytecode");
+                structuredLog.warning("failed_to_compile_").field("detail", "Failed to compile " ~ source ~ " to bytecode").emit();
         }
     }
     
     private void generateStubs(const string[] sources, string pythonCmd)
     {
-        Logger.info("Generating stub files");
+        structuredLog.info("generating_stub_files").emit();
         
         auto cmd = [pythonCmd, "-m", "mypy.stubgen"] ~ sources;
         auto res = execute(cmd);
         
         if (res.status != 0)
-            Logger.warning("Failed to generate stubs (install mypy for stub generation)");
+            structuredLog.warning("failed_to_generate_stubs_install_mypy_fo").emit();
     }
     
     /// Analyze imports in Python source files

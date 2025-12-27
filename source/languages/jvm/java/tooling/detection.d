@@ -5,6 +5,7 @@ import std.string;
 import std.file;
 import std.path;
 import std.algorithm;
+import infrastructure.utils.logging : structuredLog;
 
 /// Tool detection utilities for Java ecosystem
 class JavaToolDetection
@@ -327,7 +328,7 @@ class JavaToolDetection
             catch (Exception e)
         {
             import infrastructure.utils.logging.logger : Logger;
-            Logger.debugLog("Failed to detect Java project info: " ~ e.msg);
+            structuredLog.debug_("failed_to_detect_java_project_info_").field("detail", "Failed to detect Java project info: " ~ e.msg).emit();
         }
         }
         
@@ -345,7 +346,7 @@ class JavaToolDetection
             catch (Exception e)
         {
             import infrastructure.utils.logging.logger : Logger;
-            Logger.debugLog("Failed to detect Java project info: " ~ e.msg);
+            structuredLog.debug_("failed_to_detect_java_project_info_").field("detail", "Failed to detect Java project info: " ~ e.msg).emit();
         }
         }
         
@@ -365,7 +366,7 @@ class JavaToolDetection
             catch (Exception e)
         {
             import infrastructure.utils.logging.logger : Logger;
-            Logger.debugLog("Failed to detect Java project info: " ~ e.msg);
+            structuredLog.debug_("failed_to_detect_java_project_info_").field("detail", "Failed to detect Java project info: " ~ e.msg).emit();
         }
         }
         
@@ -383,7 +384,7 @@ class JavaToolDetection
             catch (Exception e)
         {
             import infrastructure.utils.logging.logger : Logger;
-            Logger.debugLog("Failed to detect Java project info: " ~ e.msg);
+            structuredLog.debug_("failed_to_detect_java_project_info_").field("detail", "Failed to detect Java project info: " ~ e.msg).emit();
         }
         }
         

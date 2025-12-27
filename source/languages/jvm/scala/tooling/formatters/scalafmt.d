@@ -9,7 +9,7 @@ import std.array;
 import std.string;
 import languages.jvm.scala.tooling.formatters.base;
 import languages.jvm.scala.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Scalafmt formatter implementation
 class ScalafmtFormatter : Formatter
@@ -24,7 +24,7 @@ class ScalafmtFormatter : Formatter
             return result;
         }
         
-        Logger.debugLog("Formatting Scala sources with scalafmt");
+        structuredLog.debug_("formatting_scala_sources_with_scalafmt").emit();
         
         // Build scalafmt command
         string[] cmd = ["scalafmt"];
@@ -47,7 +47,7 @@ class ScalafmtFormatter : Formatter
         // Add sources
         cmd ~= sources;
         
-        Logger.debugLog("Scalafmt command: " ~ cmd.join(" "));
+        structuredLog.debug_("scalafmt_command_").field("detail", "Scalafmt command: " ~ cmd.join(" ")).emit();
         
         // Execute scalafmt
         auto res = execute(cmd, null, Config.none, size_t.max, workingDir);

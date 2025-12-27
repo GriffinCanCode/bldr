@@ -12,7 +12,7 @@ import infrastructure.analysis.lockfile.cache;
 import infrastructure.analysis.manifests.cargo : CargoManifestParser;
 import infrastructure.analysis.manifests.types : Dependency, DependencyType;
 import infrastructure.utils.files.hash : FastHash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Cargo.lock generator for Rust projects
@@ -40,7 +40,7 @@ final class CargoLockfileGenerator : ILockfileGenerator
             auto cached = cache.get(manifestHash);
             if (cached.isOk)
             {
-                Logger.debugLog("Cargo lockfile cache hit");
+                structuredLog.debug_("cargo_lockfile_cache_hit").emit();
                 return cached;
             }
         }
@@ -74,7 +74,7 @@ final class CargoLockfileGenerator : ILockfileGenerator
         if (cache !is null)
             cache.put(manifestHash, lockfile);
         
-        Logger.info("Generated Cargo.lock with " ~ lockfile.count().to!string ~ " dependencies");
+        structuredLog.info("generated_cargolock_with_").field("detail", "Generated Cargo.lock with " ~ lockfile.count().to!string ~ " dependencies").emit();
         return Ok!(Lockfile, BuildError)(lockfile);
     }
     
@@ -102,7 +102,7 @@ final class CargoLockfileGenerator : ILockfileGenerator
         {
             auto content = generateCargoLock(lockfile);
             .write(outputPath, content);
-            Logger.info("Wrote Cargo.lock: " ~ outputPath);
+            structuredLog.info("wrote_cargolock_").field("detail", "Wrote Cargo.lock: " ~ outputPath).emit();
             return Ok!(void, BuildError)();
         }
         catch (Exception e)

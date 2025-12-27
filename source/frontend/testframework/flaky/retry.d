@@ -6,7 +6,7 @@ import std.datetime : Duration, dur;
 import core.thread : Thread;
 import frontend.testframework.results : TestResult;
 import frontend.testframework.flaky.detector : FlakyDetector, FlakyConfidence;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Retry policy configuration
 struct RetryPolicy
@@ -121,8 +121,8 @@ final class RetryOrchestrator
         {
             attempt++;
             
-            Logger.debugLog("Test attempt " ~ attempt.to!string ~ "/" ~ 
-                getMaxAttempts(testId).to!string ~ ": " ~ testId);
+            structuredLog.debug_("test_attempt_").field("detail", "Test attempt " ~ attempt.to!string ~ "/" ~ 
+                getMaxAttempts(testId).to!string ~ ": " ~ testId).emit();
             
             // Execute test
             result = executeTest();
@@ -135,7 +135,7 @@ final class RetryOrchestrator
             {
                 if (attempt > 1)
                 {
-                    Logger.info("Test passed on attempt " ~ attempt.to!string ~ ": " ~ testId);
+                    structuredLog.info("test_passed_on_attempt_").field("detail", "Test passed on attempt " ~ attempt.to!string ~ ": " ~ testId).emit();
                 }
                 break;
             }
@@ -148,14 +148,14 @@ final class RetryOrchestrator
             
             // Wait before retry
             immutable delay = getRetryDelay(attempt);
-            Logger.debugLog("Retrying test after " ~ delay.total!"msecs".to!string ~ "ms: " ~ testId);
+            structuredLog.debug_("retrying_test_after_").field("detail", "Retrying test after " ~ delay.total!"msecs".to!string ~ "ms: " ~ testId).emit();
             Thread.sleep(delay);
         }
         
         // Log final result
         if (!result.passed && attempt > 1)
         {
-            Logger.warning("Test failed after " ~ attempt.to!string ~ " attempts: " ~ testId);
+            structuredLog.warning("test_failed_after_").field("detail", "Test failed after " ~ attempt.to!string ~ " attempts: " ~ testId).emit();
         }
         
         return result;

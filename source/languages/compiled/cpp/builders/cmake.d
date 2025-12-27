@@ -15,7 +15,7 @@ import languages.compiled.cpp.builders.base;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// CMake-based builder
 class CMakeBuilder : BaseCppBuilder
@@ -40,7 +40,7 @@ class CMakeBuilder : BaseCppBuilder
             return result;
         }
         
-        Logger.debugLog("Building with CMake");
+        structuredLog.debug_("building_with_cmake").emit();
         
         // Find CMakeLists.txt
         string cmakeFile = findCMakeFile(sources);
@@ -224,7 +224,7 @@ class CMakeBuilder : BaseCppBuilder
         // Custom options
         cmd ~= config.cmakeOptions;
         
-        Logger.debugLog("Configuring CMake: " ~ cmd.join(" "));
+        structuredLog.debug_("configuring_cmake_").field("detail", "Configuring CMake: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         
@@ -256,8 +256,8 @@ class CMakeBuilder : BaseCppBuilder
             cmd ~= ["--verbose"];
         }
         
-        Logger.info("Building with CMake...");
-        Logger.debugLog("Command: " ~ cmd.join(" "));
+        structuredLog.info("building_with_cmake").emit();
+        structuredLog.debug_("command_").field("detail", "Command: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         

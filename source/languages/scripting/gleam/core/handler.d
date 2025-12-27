@@ -16,7 +16,7 @@ import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.process : isCommandAvailable;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
 
@@ -46,11 +46,11 @@ class GleamHandler : BaseLanguageHandler
             {
                 auto content = readText(gleamTomlPath);
                 parseGleamToml(content, config);
-                Logger.debugLog("Parsed gleam.toml configuration");
+                structuredLog.debug_("parsed_gleamtoml_configuration").emit();
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to parse gleam.toml: " ~ e.msg);
+                structuredLog.warning("failed_to_parse_gleamtoml_").field("detail", "Failed to parse gleam.toml: " ~ e.msg).emit();
             }
         }
     }
@@ -160,7 +160,7 @@ class GleamHandler : BaseLanguageHandler
             auto formatResult = runFormat(gleamConfig, projectDir);
             if (!formatResult.success)
             {
-                Logger.warning("Format failed: " ~ formatResult.error);
+                structuredLog.warning("format_failed_").field("detail", "Format failed: " ~ formatResult.error).emit();
             }
         }
         
@@ -178,7 +178,7 @@ class GleamHandler : BaseLanguageHandler
         // Check cache
         if (getCache().isCached(buildActionId, target.sources, buildMetadata))
         {
-            Logger.info("  [Cached] Gleam build");
+            structuredLog.info("__cached_gleam_build").emit();
             result.success = true;
             result.outputHash = buildActionId.inputHash;
             return result;
@@ -193,7 +193,7 @@ class GleamHandler : BaseLanguageHandler
         if (gleamConfig.warningsAsErrors)
             cmd ~= "--warnings-as-errors";
         
-        Logger.info("Building Gleam project: " ~ cmd.join(" "));
+        structuredLog.info("building_gleam_project_").field("detail", "Building Gleam project: " ~ cmd.join(" ")).emit();
         
         // Set up environment
         string[string] env;
@@ -223,7 +223,7 @@ class GleamHandler : BaseLanguageHandler
             auto docsResult = runDocs(gleamConfig, projectDir);
             if (!docsResult.success)
             {
-                Logger.warning("Documentation generation failed: " ~ docsResult.error);
+                structuredLog.warning("documentation_generation_failed_").field("detail", "Documentation generation failed: " ~ docsResult.error).emit();
             }
         }
         
@@ -253,7 +253,7 @@ class GleamHandler : BaseLanguageHandler
         if (gleamConfig.target == GleamTarget.JavaScript)
             cmd ~= ["--target", "javascript"];
         
-        Logger.info("Running Gleam tests: " ~ cmd.join(" "));
+        structuredLog.info("running_gleam_tests_").field("detail", "Running Gleam tests: " ~ cmd.join(" ")).emit();
         
         // Set up environment
         string[string] env;
@@ -371,7 +371,7 @@ class GleamHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to analyze imports in " ~ source);
+                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source).emit();
             }
         }
         

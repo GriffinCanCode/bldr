@@ -10,7 +10,7 @@ import std.string;
 import std.conv;
 import languages.compiled.haskell.core.config;
 import infrastructure.config.schema.schema;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionId, ActionType;
 import infrastructure.utils.files.hash : FastHash;
 
@@ -51,7 +51,7 @@ struct StackWrapper
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to get Stack version: " ~ e.msg);
+            structuredLog.warning("failed_to_get_stack_version_").field("detail", "Failed to get Stack version: " ~ e.msg).emit();
         }
         return "unknown";
     }
@@ -83,7 +83,7 @@ struct StackWrapper
             return result;
         }
         
-        Logger.debugLog("Using Stack file: " ~ stackFile);
+        structuredLog.debug_("using_stack_file_").field("detail", "Using Stack file: " ~ stackFile).emit();
         
         // Gather input files for action caching
         string[] inputFiles = target.sources.dup;
@@ -121,7 +121,7 @@ struct StackWrapper
         // Check if build is cached
         if (actionCache !is null && actionCache.isCached(actionId, inputFiles, metadata) && exists(stackWorkDir))
         {
-            Logger.debugLog("  [Cached] Stack build");
+            structuredLog.debug_("__cached_stack_build").emit();
             result.success = true;
             result.outputs = findBuiltExecutables(stackWorkDir);
             if (!result.outputs.empty)
@@ -180,8 +180,8 @@ struct StackWrapper
         }
         
         // Execute build
-        Logger.debugLog("Building with Stack");
-        Logger.debugLog("  Command: " ~ args.join(" "));
+        structuredLog.debug_("building_with_stack").emit();
+        structuredLog.debug_("__command_").field("detail", "  Command: " ~ args.join(" ")).emit();
         
         bool success = false;
         
@@ -208,7 +208,7 @@ struct StackWrapper
                 
                 if (!execResult.output.empty)
                 {
-                    Logger.debugLog("Stack output: " ~ execResult.output);
+                    structuredLog.debug_("stack_output_").field("detail", "Stack output: " ~ execResult.output).emit();
                 }
                 
                 // Update cache with success
@@ -226,8 +226,8 @@ struct StackWrapper
             else
             {
                 result.error = execResult.output;
-                Logger.error("Stack build failed:");
-                Logger.error(execResult.output);
+                structuredLog.error("stack_build_failed").emit();
+                structuredLog.error("log_event").field("message", execResult.output).emit();
                 
                 // Update cache with failure
                 if (actionCache !is null)
@@ -245,7 +245,7 @@ struct StackWrapper
         catch (Exception e)
         {
             result.error = "Stack execution failed: " ~ e.msg;
-            Logger.error(result.error);
+            structuredLog.error("log_event").field("message", result.error).emit();
             
             // Update cache with failure
             if (actionCache !is null)
@@ -301,7 +301,7 @@ struct StackWrapper
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to find executables: " ~ e.msg);
+            structuredLog.warning("failed_to_find_executables_").field("detail", "Failed to find executables: " ~ e.msg).emit();
         }
         
         return executables;

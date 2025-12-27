@@ -13,7 +13,7 @@ import languages.dotnet.fsharp.managers.dotnet;
 import infrastructure.analysis.targets.types;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Builder for F# libraries (DLL)
 class LibraryBuilder : FSharpBuilder

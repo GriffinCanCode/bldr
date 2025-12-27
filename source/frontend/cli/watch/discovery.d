@@ -8,7 +8,7 @@ import std.array;
 import std.conv;
 import engine.graph;
 import infrastructure.config.schema.schema;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 import infrastructure.errors.formatting.format : formatError = format;
 
@@ -44,8 +44,8 @@ final class WatchDiscoveryTracker
             discoveredFileOrigins[output] = originKey;
         }
         
-        Logger.debugLog("Registered discovery: " ~ originKey ~ " -> " ~ 
-                       discovery.discoveredOutputs.length.to!string ~ " files");
+        structuredLog.debug_("registered_discovery_").field("detail", "Registered discovery: " ~ originKey ~ " -> " ~ 
+                       discovery.discoveredOutputs.length.to!string ~ " files").emit();
     }
     
     /// Check if a changed file requires re-discovery
@@ -64,7 +64,7 @@ final class WatchDiscoveryTracker
                     if (dynamicGraph.isDiscoverable(TargetId(targetId)))
                     {
                         targetsNeedingRediscovery[targetId] = true;
-                        Logger.info("File change triggers re-discovery: " ~ file ~ " -> " ~ targetId);
+                        structuredLog.info("file_change_triggers_rediscovery_").field("detail", "File change triggers re-discovery: " ~ file ~ " -> " ~ targetId).emit();
                     }
                 }
             }
@@ -73,8 +73,8 @@ final class WatchDiscoveryTracker
             if (file in discoveredFileOrigins)
             {
                 auto originTarget = discoveredFileOrigins[file];
-                Logger.warning("Discovered file changed: " ~ file ~ 
-                             " (originally from " ~ originTarget ~ ")");
+                structuredLog.warning("discovered_file_changed_").field("detail", "Discovered file changed: " ~ file ~ 
+                             " (originally from " ~ originTarget ~ ")").emit();
                 // This is unusual - user modified a generated file
                 // We should re-run discovery to regenerate
                 targetsNeedingRediscovery[originTarget] = true;
@@ -135,14 +135,14 @@ class WatchModeWithDiscovery
     /// Handle file changes in watch mode
     void onFilesChanged(string[] changedFiles) @system
     {
-        Logger.info("Files changed: " ~ changedFiles.length.to!string);
+        structuredLog.info("files_changed_").field("detail", "Files changed: " ~ changedFiles.length.to!string).emit();
         
         // Check if any changes require re-discovery
         auto rediscoveryResult = tracker.checkForRediscovery(changedFiles);
         if (rediscoveryResult.isErr)
         {
-            Logger.error("Failed to check for re-discovery");
-            Logger.error(rediscoveryResult.unwrapErr());
+            structuredLog.error("failed_to_check_for_rediscovery").emit();
+            structuredLog.error("log_event").field("message", rediscoveryResult.unwrapErr()).emit();
             return;
         }
         
@@ -150,25 +150,25 @@ class WatchModeWithDiscovery
         
         if (!targetsNeedingRediscovery.empty)
         {
-            Logger.info("Re-discovery needed for " ~ targetsNeedingRediscovery.length.to!string ~ " targets");
+            structuredLog.info("rediscovery_needed_for_").field("detail", "Re-discovery needed for " ~ targetsNeedingRediscovery.length.to!string ~ " targets").emit();
             
             foreach (targetId; targetsNeedingRediscovery)
-                Logger.info("  • " ~ targetId);
+                structuredLog.info("___").field("detail", "  • " ~ targetId).emit();
             
             // Execute full re-discovery workflow
             auto result = executeRediscovery(targetsNeedingRediscovery);
             if (result.isErr)
             {
-                Logger.error("Re-discovery failed");
-                Logger.error(result.unwrapErr());
+                structuredLog.error("rediscovery_failed").emit();
+                structuredLog.error("log_event").field("message", result.unwrapErr()).emit();
             }
             else
             {
                 auto stats = result.unwrap();
-                Logger.success("Re-discovery complete: " ~ 
+                structuredLog.info("rediscovery_complete_").field("detail", "Re-discovery complete: " ~ 
                              stats.rediscoveredTargets.to!string ~ " targets, " ~
                              stats.newNodes.to!string ~ " new nodes, " ~
-                             stats.rebuiltTargets.to!string ~ " targets rebuilt");
+                             stats.rebuiltTargets.to!string ~ " targets rebuilt").emit();
             }
         }
     }
@@ -231,7 +231,7 @@ class WatchModeWithDiscovery
             foreach (file; filesToRemove)
                 tracker.discoveredFileOrigins.remove(file);
             
-            Logger.debugLog("Cleared old discoveries for " ~ targetId);
+            structuredLog.debug_("cleared_old_discoveries_for_").field("detail", "Cleared old discoveries for " ~ targetId).emit();
         }
     }
     
@@ -255,7 +255,7 @@ class WatchModeWithDiscovery
             auto handler = handlers.get(node.target.language);
             if (handler is null)
             {
-                Logger.warning("No handler for language: " ~ node.target.language.to!string);
+                structuredLog.warning("no_handler_for_language_").field("detail", "No handler for language: " ~ node.target.language.to!string).emit();
                 continue;
             }
             
@@ -275,8 +275,8 @@ class WatchModeWithDiscovery
                 tracker.registerDiscovery(discoveryResult.discovery);
                 dynamicGraph.recordDiscovery(discoveryResult.discovery);
                 
-                Logger.info("Re-discovered " ~ discoveryResult.discovery.discoveredOutputs.length.to!string ~ 
-                          " files for " ~ node.idString);
+                structuredLog.info("rediscovered_").field("detail", "Re-discovered " ~ discoveryResult.discovery.discoveredOutputs.length.to!string ~ 
+                          " files for " ~ node.idString).emit();
             }
         }
         
@@ -314,7 +314,7 @@ class WatchModeWithDiscovery
         
         // Note: Actual rebuild execution would be triggered by the watch loop
         // This just prepares nodes for rebuild
-        Logger.info("Prepared " ~ rebuiltCount.to!string ~ " targets for rebuild");
+        structuredLog.info("prepared_").field("detail", "Prepared " ~ rebuiltCount.to!string ~ " targets for rebuild").emit();
         
         return Result!(size_t, string).ok(rebuiltCount);
     }

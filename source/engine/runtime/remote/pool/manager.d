@@ -16,7 +16,7 @@ import engine.runtime.remote.providers;
 import engine.runtime.remote.providers.provisioner : WorkerProvisioner;
 import infrastructure.errors;
 import infrastructure.errors.formatting.format : formatError = format;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Worker pool manager with dynamic scaling
 /// 
@@ -127,7 +127,7 @@ final class WorkerPool
             {
                 scalerThread = new Thread(&scalerLoop);
                 scalerThread.start();
-                Logger.info("Worker pool autoscaler started");
+                structuredLog.info("worker_pool_autoscaler_started").emit();
             }
             
             return Ok!BuildError();
@@ -142,7 +142,7 @@ final class WorkerPool
         if (scalerThread !is null)
             scalerThread.join();
         
-        Logger.info("Worker pool stopped");
+        structuredLog.info("worker_pool_stopped").emit();
     }
     
     /// Get pool statistics
@@ -210,11 +210,11 @@ final class WorkerPool
         // Clamp to bounds
         desired = max(config.minWorkers, min(config.maxWorkers, desired));
         
-        Logger.debugLog("Pool scaling decision: current=" ~ stats.totalWorkers.to!string ~
+        structuredLog.debug_("pool_scaling_decision_current").field("detail", "Pool scaling decision: current=" ~ stats.totalWorkers.to!string ~
                        ", util=" ~ (currentUtil * 100).to!size_t.to!string ~ "%" ~
                        ", predicted=" ~ (predictedUtil * 100).to!size_t.to!string ~ "%" ~
                        ", trend=" ~ trend.to!string ~
-                       ", desired=" ~ desired.to!string);
+                       ", desired=" ~ desired.to!string).emit();
         
         return desired;
     }
@@ -233,24 +233,24 @@ final class WorkerPool
             immutable now = Clock.currTime;
             if (now - lastScaleUp < config.scaleUpCooldown)
             {
-                Logger.debugLog("Scale up in cooldown");
+                structuredLog.debug_("scale_up_in_cooldown").emit();
                 return Ok!BuildError();
             }
             
             immutable toAdd = targetSize - currentSize;
-            Logger.info("Scaling up: adding " ~ toAdd.to!string ~ " workers");
+            structuredLog.info("scaling_up_adding_").field("detail", "Scaling up: adding " ~ toAdd.to!string ~ " workers").emit();
             
             // Delegate provisioning to WorkerProvisioner (SRP)
             auto result = provisioner.provisionBatch(toAdd);
             if (result.isErr)
             {
-                Logger.error("Failed to provision workers: " ~ 
-                           result.unwrapErr().message());
+                structuredLog.error("failed_to_provision_workers_").field("detail", "Failed to provision workers: " ~ 
+                           result.unwrapErr().message()).emit();
             }
             else
             {
-                Logger.info("Successfully provisioned " ~ 
-                           result.unwrap().length.to!string ~ " workers");
+                structuredLog.info("successfully_provisioned_").field("detail", "Successfully provisioned " ~ 
+                           result.unwrap().length.to!string ~ " workers").emit();
             }
             
             lastScaleUp = now;
@@ -261,19 +261,19 @@ final class WorkerPool
             immutable now = Clock.currTime;
             if (now - lastScaleDown < config.scaleDownCooldown)
             {
-                Logger.debugLog("Scale down in cooldown");
+                structuredLog.debug_("scale_down_in_cooldown").emit();
                 return Ok!BuildError();
             }
             
             immutable toRemove = currentSize - targetSize;
-            Logger.info("Scaling down: removing " ~ toRemove.to!string ~ " workers");
+            structuredLog.info("scaling_down_removing_").field("detail", "Scaling down: removing " ~ toRemove.to!string ~ " workers").emit();
             
             // Drain and remove least utilized workers
             auto result = drainWorkers(toRemove);
             if (result.isErr)
             {
-                Logger.error("Failed to drain workers");
-                Logger.error(formatError(result.unwrapErr()));
+                structuredLog.error("failed_to_drain_workers").emit();
+                structuredLog.error("log_event").field("message", formatError(result.unwrapErr())).emit();
             }
             
             lastScaleDown = now;
@@ -288,25 +288,25 @@ final class WorkerPool
     /// Delegates actual deprovisioning to WorkerProvisioner (SRP)
     private VoidBuildResult drainWorkers(size_t count) @trusted
     {
-        Logger.info("Draining " ~ count.to!string ~ " workers");
+        structuredLog.info("draining_").field("detail", "Draining " ~ count.to!string ~ " workers").emit();
         
         // 1. Select least utilized workers from registry (fully implemented)
         auto workersToDrain = registry.getLeastUtilizedWorkers(count);
         
         if (workersToDrain.empty)
         {
-            Logger.warning("No workers available for draining");
+            structuredLog.warning("no_workers_available_for_draining").emit();
             return Ok!BuildError();
         }
         
-        Logger.info("Selected " ~ workersToDrain.length.to!string ~ 
-                   " workers for draining based on utilization");
+        structuredLog.info("selected_").field("detail", "Selected " ~ workersToDrain.length.to!string ~ 
+                   " workers for draining based on utilization").emit();
         
         // 2. Mark workers as draining (no new work assigned)
         foreach (workerId; workersToDrain)
         {
             registry.markDraining(workerId);
-            Logger.debugLog("Marked worker " ~ workerId.toString() ~ " as draining");
+            structuredLog.debug_("marked_worker_").field("detail", "Marked worker " ~ workerId.toString() ~ " as draining").emit();
         }
         
         // 3. Wait for current work to complete with timeout
@@ -332,7 +332,7 @@ final class WorkerPool
             
             if (allDrained)
             {
-                Logger.info("All workers drained successfully");
+                structuredLog.info("all_workers_drained_successfully").emit();
                 break;
             }
             
@@ -344,8 +344,8 @@ final class WorkerPool
         auto result = provisioner.deprovisionBatch(workersToDrain);
         if (result.isErr)
         {
-            Logger.error("Failed to deprovision workers");
-            Logger.error(formatError(result.unwrapErr()));
+            structuredLog.error("failed_to_deprovision_workers").emit();
+            structuredLog.error("log_event").field("message", formatError(result.unwrapErr())).emit();
             return result;
         }
         
@@ -355,13 +355,13 @@ final class WorkerPool
             auto unregResult = registry.unregister(workerId);
             if (unregResult.isErr)
             {
-                Logger.warning("Failed to unregister worker " ~ workerId.toString() ~ 
-                             ": " ~ unregResult.unwrapErr().message());
+                structuredLog.warning("failed_to_unregister_worker_").field("detail", "Failed to unregister worker " ~ workerId.toString() ~ 
+                             ": " ~ unregResult.unwrapErr().message()).emit();
             }
         }
         
-        Logger.info("Successfully drained and deprovisioned " ~ 
-                   workersToDrain.length.to!string ~ " workers");
+        structuredLog.info("successfully_drained_and_deprovisioned_").field("detail", "Successfully drained and deprovisioned " ~ 
+                   workersToDrain.length.to!string ~ " workers").emit();
         
         return Ok!BuildError();
     }
@@ -380,13 +380,13 @@ final class WorkerPool
                 auto result = scale(desired);
                 if (result.isErr)
                 {
-                    Logger.error("Scaling failed");
-                    Logger.error(formatError(result.unwrapErr()));
+                    structuredLog.error("scaling_failed").emit();
+                    structuredLog.error("log_event").field("message", formatError(result.unwrapErr())).emit();
                 }
             }
             catch (Exception e)
             {
-                Logger.error("Scaler loop exception: " ~ e.msg);
+                structuredLog.error("scaler_loop_exception_").field("detail", "Scaler loop exception: " ~ e.msg).emit();
             }
             
             // Sleep in short intervals to allow fast shutdown

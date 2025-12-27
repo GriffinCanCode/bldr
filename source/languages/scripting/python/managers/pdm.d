@@ -6,7 +6,7 @@ import std.conv;
 import languages.scripting.python.managers.base;
 import languages.scripting.python.tooling.detection : ToolDetection;
 alias PyTools = ToolDetection;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// PDM package manager
 class PDMManager : PackageManager
@@ -24,7 +24,7 @@ class PDMManager : PackageManager
         
         InstallResult result;
         
-        Logger.info("Installing with PDM");
+        structuredLog.info("installing_with_pdm").emit();
         
         StopWatch sw;
         sw.start();
@@ -41,7 +41,7 @@ class PDMManager : PackageManager
         }
         
         result.success = true;
-        Logger.info("PDM installation completed in %.2fs".format(result.timeSeconds));
+        structuredLog.info("pdm_installation_completed_in_2fsformatr").emit();
         
         return result;
     }

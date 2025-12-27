@@ -15,7 +15,7 @@ import frontend.lsp.workspace.analysis;
 import infrastructure.config.workspace.ast : BuildFile, TargetDeclStmt, Field, Expr, ASTLocation = Location;
 import infrastructure.config.parsing.lexer : Token;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Document state in workspace
 struct Document
@@ -54,11 +54,11 @@ class WorkspaceManager
         string root = uriToPath(rootUri);
         if (root.length == 0 || !exists(root) || !isDir(root))
         {
-            Logger.warning("Cannot scan workspace: invalid root " ~ root);
+            structuredLog.warning("cannot_scan_workspace_invalid_root_").field("detail", "Cannot scan workspace: invalid root " ~ root).emit();
             return;
         }
         
-        Logger.info("Scanning workspace for Builderfiles: " ~ root);
+        structuredLog.info("scanning_workspace_for_builderfiles_").field("detail", "Scanning workspace for Builderfiles: " ~ root).emit();
         size_t fileCount = 0;
         
         try
@@ -78,11 +78,11 @@ class WorkspaceManager
         }
         catch (FileException e)
         {
-            Logger.warning("Error scanning workspace: " ~ e.msg);
+            structuredLog.warning("error_scanning_workspace_").field("detail", "Error scanning workspace: " ~ e.msg).emit();
         }
         
-        Logger.info("Indexed " ~ fileCount.to!string ~ " Builderfile(s), " ~ 
-                   index.getAllTargetNames().length.to!string ~ " target(s)");
+        structuredLog.info("indexed_").field("detail", "Indexed " ~ fileCount.to!string ~ " Builderfile(s), " ~ 
+                   index.getAllTargetNames().length.to!string ~ " target(s)").emit();
     }
     
     /// Index a file from disk (not currently open in editor)
@@ -106,12 +106,12 @@ class WorkspaceManager
             {
                 auto ast = parseResult.unwrap();
                 index.indexDocument(uri, ast);
-                Logger.debugLog("Indexed: " ~ filePath);
+                structuredLog.debug_("indexed_").field("detail", "Indexed: " ~ filePath).emit();
             }
         }
         catch (Exception e)
         {
-            Logger.debugLog("Failed to index " ~ filePath ~ ": " ~ e.msg);
+            structuredLog.debug_("failed_to_index_").field("detail", "Failed to index " ~ filePath ~ ": " ~ e.msg).emit();
         }
     }
     
@@ -137,7 +137,7 @@ class WorkspaceManager
         parseDocument(doc);
         
         documents[uri] = doc;
-        Logger.debugLog("Opened document: " ~ uri);
+        structuredLog.debug_("opened_document_").field("detail", "Opened document: " ~ uri).emit();
     }
     
     /// Update document content
@@ -158,7 +158,7 @@ class WorkspaceManager
         // Re-parse document
         parseDocument(*doc);
         
-        Logger.debugLog("Updated document: " ~ uri);
+        structuredLog.debug_("updated_document_").field("detail", "Updated document: " ~ uri).emit();
     }
     
     /// Close a document
@@ -166,7 +166,7 @@ class WorkspaceManager
     {
         index.removeDocument(uri);
         documents.remove(uri);
-        Logger.debugLog("Closed document: " ~ uri);
+        structuredLog.debug_("closed_document_").field("detail", "Closed document: " ~ uri).emit();
     }
     
     /// Get document by URI

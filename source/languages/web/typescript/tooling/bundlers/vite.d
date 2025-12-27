@@ -13,7 +13,7 @@ import std.conv;
 import std.json;
 import std.string;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Vite bundler for TypeScript - modern dev server with lightning-fast HMR and optimized production builds
 /// Best for: Modern TypeScript projects, React/Vue/Svelte with TypeScript, library development with type safety
@@ -43,7 +43,7 @@ class TSViteBundler : TSBundler
             {
                 result.hadTypeErrors = true;
                 result.typeErrors = checkResult.errors;
-                Logger.warning("Type check failed, but continuing with vite build");
+                structuredLog.warning("type_check_failed_but_continuing_with_vi").emit();
             }
         }
         
@@ -51,7 +51,7 @@ class TSViteBundler : TSBundler
         string viteConfig = detectViteConfig(sources);
         if (!viteConfig.empty)
         {
-            Logger.debugLog("Detected vite config: " ~ viteConfig);
+            structuredLog.debug_("detected_vite_config_").field("detail", "Detected vite config: " ~ viteConfig).emit();
             return bundleWithConfigFile(viteConfig, workspace, result);
         }
         
@@ -65,7 +65,7 @@ class TSViteBundler : TSBundler
         ref TSCompileResult result
     )
     {
-        Logger.debugLog("Using Vite config: " ~ configFile);
+        structuredLog.debug_("using_vite_config_").field("detail", "Using Vite config: " ~ configFile).emit();
         
         string[] cmd = ["npx", "vite", "build", "--config", configFile];
         
@@ -159,7 +159,7 @@ class TSViteBundler : TSBundler
                 remove(tempConfig);
         }
         
-        Logger.debugLog("Generated Vite config: " ~ tempConfig);
+        structuredLog.debug_("generated_vite_config_").field("detail", "Generated Vite config: " ~ tempConfig).emit();
         
         // Run Vite build
         string[] cmd = ["npx", "vite", "build", "--config", tempConfig];
@@ -172,7 +172,7 @@ class TSViteBundler : TSBundler
             return result;
         }
         
-        Logger.debugLog("Vite build completed successfully");
+        structuredLog.debug_("vite_build_completed_successfully").emit();
         
         result.success = true;
         

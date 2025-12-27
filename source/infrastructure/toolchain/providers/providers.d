@@ -8,7 +8,7 @@ import std.string : startsWith, endsWith, strip;
 import infrastructure.toolchain.core.spec;
 import infrastructure.toolchain.core.platform;
 import infrastructure.repository;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Toolchain provider interface
@@ -97,7 +97,7 @@ class LocalToolchainProvider : ToolchainProvider
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to scan toolchain directory: " ~ e.msg);
+            structuredLog.warning("failed_to_scan_toolchain_directory_").field("detail", "Failed to scan toolchain directory: " ~ e.msg).emit();
         }
         
         return tc;

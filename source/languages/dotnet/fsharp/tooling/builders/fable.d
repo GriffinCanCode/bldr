@@ -12,7 +12,7 @@ import languages.dotnet.fsharp.config;
 import infrastructure.analysis.targets.types;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Builder for Fable (F# to JavaScript/TypeScript)
 class FableBuilder : FSharpBuilder
@@ -97,14 +97,14 @@ class FableBuilder : FSharpBuilder
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to enumerate output files: " ~ e.msg);
+            structuredLog.warning("failed_to_enumerate_output_files_").field("detail", "Failed to enumerate output files: " ~ e.msg).emit();
         }
         
         result.success = true;
         result.outputs = outputs;
         result.outputHash = FastHash.hashStrings(sources);
         
-        Logger.info("Fable compilation successful");
+        structuredLog.info("fable_compilation_successful").emit();
         
         return result;
     }

@@ -10,7 +10,7 @@ import infrastructure.config.schema.schema;
 import engine.graph;
 import engine.runtime.services;
 import frontend.query;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import frontend.cli.control.terminal;
 import frontend.cli.display.format;
 import infrastructure.errors;
@@ -32,7 +32,7 @@ struct QueryCommand
     {
         if (queryExpression.length == 0)
         {
-            Logger.error("No query expression provided");
+            structuredLog.error("no_query_expression_provided").emit();
             showQueryHelp();
             return;
         }
@@ -41,8 +41,8 @@ struct QueryCommand
         auto formatResult = parseOutputFormat(outputFormat);
         if (formatResult.isErr)
         {
-            Logger.error("Invalid query format");
-            Logger.error(formatResult.unwrapErr());
+            structuredLog.error("invalid_query_format").emit();
+            structuredLog.error("log_event").field("message", formatResult.unwrapErr()).emit();
             return;
         }
         auto format = formatResult.unwrap();
@@ -51,9 +51,9 @@ struct QueryCommand
         auto configResult = ConfigParser.parseWorkspace(".");
         if (configResult.isErr)
         {
-            Logger.error("Failed to parse workspace configuration");
+            structuredLog.error("failed_to_parse_workspace_configuration").emit();
             import infrastructure.errors.formatting.format : errorFormat = format;
-            Logger.error(errorFormat(configResult.unwrapErr()));
+            structuredLog.error("log_event").field("message", errorFormat(configResult.unwrapErr())).emit();
             return;
         }
         
@@ -65,8 +65,8 @@ struct QueryCommand
         if (graphResult.isErr)
         {
             import infrastructure.errors.formatting.format : errorFormat = format;
-            Logger.error("Failed to analyze dependencies");
-            Logger.error(errorFormat(graphResult.unwrapErr()));
+            structuredLog.error("failed_to_analyze_dependencies").emit();
+            structuredLog.error("log_event").field("message", errorFormat(graphResult.unwrapErr())).emit();
             return;
         }
         auto graph = graphResult.unwrap();
@@ -78,8 +78,8 @@ struct QueryCommand
         
         if (queryResult.isErr)
         {
-            Logger.error("Query error");
-            Logger.error(queryResult.unwrapErr());
+            structuredLog.error("query_error").emit();
+            structuredLog.error("log_event").field("message", queryResult.unwrapErr()).emit();
             showQueryHelp();
             return;
         }

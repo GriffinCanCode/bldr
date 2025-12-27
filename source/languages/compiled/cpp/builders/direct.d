@@ -16,7 +16,7 @@ import languages.compiled.cpp.analysis.modules : isModuleInterface;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
 import engine.caching.modules.bmi : BMICache, BMICacheConfig;
 
@@ -116,7 +116,7 @@ class DirectBuilder : BaseCppBuilder
             return result;
         }
         
-        Logger.debugLog("Direct compilation with " ~ toolchain.name ~ " v" ~ compiler.version_.toString());
+        structuredLog.debug_("direct_compilation_with_").field("detail", "Direct compilation with " ~ toolchain.name ~ " v" ~ compiler.version_.toString()).emit();
         
         // Separate C, C++, and module files
         string[] cppFiles;
@@ -169,7 +169,7 @@ class DirectBuilder : BaseCppBuilder
             if (moduleBuilder is null)
                 moduleBuilder = new ModuleBuilder(toolchain, bmiCache);
             
-            Logger.debugLog("Building C++20 modules with BMI caching...");
+            structuredLog.debug_("building_c20_modules_with_bmi_caching").emit();
             moduleObjects = moduleBuilder.buildModuleProject(
                 cast(string[])moduleFiles ~ cast(string[])cppFiles, 
                 objDir, 
@@ -355,7 +355,7 @@ class DirectBuilder : BaseCppBuilder
             // Check if this compilation is cached
             if (actionCache.isCached(actionId, [source], metadata) && exists(objFile))
             {
-                Logger.debugLog("  [Cached] " ~ source);
+                structuredLog.debug_("__cached_").field("detail", "  [Cached] " ~ source).emit();
                 result.objects ~= objFile;
                 continue;
             }
@@ -366,8 +366,8 @@ class DirectBuilder : BaseCppBuilder
             cmd ~= ["-c", source];
             cmd ~= ["-o", objFile];
             
-            Logger.debugLog("Compiling: " ~ source);
-            Logger.debugLog("  Command: " ~ cmd.join(" "));
+            structuredLog.debug_("compiling_").field("detail", "Compiling: " ~ source).emit();
+            structuredLog.debug_("__command_").field("detail", "  Command: " ~ cmd.join(" ")).emit();
             
             // Execute compilation
             auto res = execute(cmd);
@@ -462,7 +462,7 @@ class DirectBuilder : BaseCppBuilder
         // Check if linking is cached
         if (actionCache.isCached(actionId, objects, metadata) && exists(outputFile))
         {
-            Logger.debugLog("  [Cached] Linking: " ~ outputFile);
+            structuredLog.debug_("__cached_linking_").field("detail", "  [Cached] Linking: " ~ outputFile).emit();
             result.success = true;
             return result;
         }
@@ -479,8 +479,8 @@ class DirectBuilder : BaseCppBuilder
         // Linker flags
         cmd ~= linkerFlags;
         
-        Logger.debugLog("Linking: " ~ outputFile);
-        Logger.debugLog("  Command: " ~ cmd.join(" "));
+        structuredLog.debug_("linking_").field("detail", "Linking: " ~ outputFile).emit();
+        structuredLog.debug_("__command_").field("detail", "  Command: " ~ cmd.join(" ")).emit();
         
         // Execute linking
         auto res = execute(cmd);

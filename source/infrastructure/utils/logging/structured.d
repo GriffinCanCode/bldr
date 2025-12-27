@@ -216,6 +216,38 @@ void clearLogContext() @system
     threadContext = LogContext.init;
 }
 
+/// Fluent log builder for structured logging
+/// Usage: logger.info("event_name").field("key", value).field("key2", value2).emit()
+struct LogBuilder
+{
+    private StructuredLogger logger;
+    private LogLevel level;
+    private string message;
+    private string[string] fields;
+    
+    /// Add a field with auto-conversion
+    ref LogBuilder field(T)(string key, T value) return @system
+    {
+        try { fields[key] = value.to!string; }
+        catch (Exception) { fields[key] = "<error>"; }
+        return this;
+    }
+    
+    /// Add multiple fields from associative array
+    ref LogBuilder withFields(string[string] f) return @system
+    {
+        foreach (k, v; f) fields[k] = v;
+        return this;
+    }
+    
+    /// Emit the log entry
+    void emit() @system
+    {
+        if (logger !is null)
+            logger.log(level, message, fields);
+    }
+}
+
 /// Structured logger with per-target buffering
 final class StructuredLogger
 {
@@ -256,35 +288,25 @@ final class StructuredLogger
             
             // Merge context fields with provided fields
             foreach (key, value; ctx.fields)
-            {
                 entry.fields[key] = value;
-            }
             if (fields !is null)
             {
                 foreach (key, value; fields)
-                {
                     entry.fields[key] = value;
-                }
             }
             
             // Add to global entries
             if (entries.length < maxBufferSize)
-            {
                 entries ~= entry;
-            }
             
             // Add to target buffer if buffering enabled
             if (enableBuffering && ctx.targetId.length > 0)
             {
                 if (ctx.targetId !in targetBuffers)
-                {
                     targetBuffers[ctx.targetId] = [];
-                }
                 
                 if (targetBuffers[ctx.targetId].length < maxBufferSize)
-                {
                     targetBuffers[ctx.targetId] ~= entry;
-                }
             }
             
             // Always write to console for errors
@@ -296,41 +318,23 @@ final class StructuredLogger
         }
     }
     
-    /// Log trace message
-    void trace(string message, string[string] fields = null) @system
-    {
-        log(LogLevel.Trace, message, fields);
-    }
+    /// Create trace log builder
+    LogBuilder trace(string message) @system => LogBuilder(this, LogLevel.Trace, message, null);
     
-    /// Log debug message
-    void debug_(string message, string[string] fields = null) @system
-    {
-        log(LogLevel.Debug, message, fields);
-    }
+    /// Create debug log builder
+    LogBuilder debug_(string message) @system => LogBuilder(this, LogLevel.Debug, message, null);
     
-    /// Log info message
-    void info(string message, string[string] fields = null) @system
-    {
-        log(LogLevel.Info, message, fields);
-    }
+    /// Create info log builder
+    LogBuilder info(string message) @system => LogBuilder(this, LogLevel.Info, message, null);
     
-    /// Log warning message
-    void warning(string message, string[string] fields = null) @system
-    {
-        log(LogLevel.Warning, message, fields);
-    }
+    /// Create warning log builder
+    LogBuilder warning(string message) @system => LogBuilder(this, LogLevel.Warning, message, null);
     
-    /// Log error message
-    void error(string message, string[string] fields = null) @system
-    {
-        log(LogLevel.Error, message, fields);
-    }
+    /// Create error log builder
+    LogBuilder error(string message) @system => LogBuilder(this, LogLevel.Error, message, null);
     
-    /// Log critical message
-    void critical(string message, string[string] fields = null) @system
-    {
-        log(LogLevel.Critical, message, fields);
-    }
+    /// Create critical log builder
+    LogBuilder critical(string message) @system => LogBuilder(this, LogLevel.Critical, message, null);
     
     /// Log exception with context
     void exception(Exception e, string message = "") @system

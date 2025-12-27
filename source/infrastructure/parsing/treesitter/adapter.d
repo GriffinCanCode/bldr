@@ -11,7 +11,7 @@ import infrastructure.parsing.treesitter.registry;
 import infrastructure.analysis.ast.parser;
 import infrastructure.utils.files.watch : FileEvent, FileEventKind;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 import engine.caching.incremental.ast_dependency;
 

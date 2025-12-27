@@ -7,7 +7,7 @@ import engine.graph;
 import infrastructure.config.schema.schema;
 import languages.base.base;
 import engine.runtime.services;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 import infrastructure.errors.formatting.format : formatError = format;
 
@@ -65,13 +65,13 @@ struct DiscoveryExecutor
         if (discoverableHandler is null)
         {
             // Handler doesn't support discovery, skip
-            Logger.debugLog("Handler for " ~ node.target.language.to!string ~ 
-                          " does not support discovery");
+            structuredLog.debug_("handler_for_").field("detail", "Handler for " ~ node.target.language.to!string ~ 
+                          " does not support discovery").emit();
             return result;
         }
         
         // Execute with discovery
-        Logger.info("Executing discovery for " ~ node.idString);
+        structuredLog.info("executing_discovery_for_").field("detail", "Executing discovery for " ~ node.idString).emit();
         auto discoveryResult = discoverableHandler.executeWithDiscovery(node.target, config);
         
         result.success = discoveryResult.success;
@@ -82,7 +82,7 @@ struct DiscoveryExecutor
         if (discoveryResult.hasDiscovery)
         {
             dynamicGraph.recordDiscovery(discoveryResult.discovery);
-            Logger.success("Discovery complete for " ~ node.idString);
+            structuredLog.info("discovery_complete_for_").field("detail", "Discovery complete for " ~ node.idString).emit();
         }
         
         return result;
@@ -94,7 +94,7 @@ struct DiscoveryExecutor
         if (!dynamicGraph.hasPendingDiscoveries())
             return BuildResult!(BuildNode[]).ok([]);
         
-        Logger.info("Applying pending discoveries...");
+        structuredLog.info("applying_pending_discoveries").emit();
         return dynamicGraph.applyDiscoveries();
     }
     
@@ -124,7 +124,7 @@ struct DiscoveryCoordinator
         {
             auto result = discoveryExec.executeWithDiscovery(node);
             if (!result.success && result.hasDiscovery)
-                Logger.error("Discovery failed for " ~ node.idString ~ ": " ~ result.error);
+                structuredLog.error("discovery_failed_for_").field("detail", "Discovery failed for " ~ node.idString ~ ": " ~ result.error).emit();
         }
         
         // Apply discoveries and get new nodes
@@ -138,8 +138,8 @@ struct DiscoveryCoordinator
             }
             else
             {
-                Logger.error("Failed to apply discoveries");
-                Logger.error(formatError(applyResult.unwrapErr()));
+                structuredLog.error("failed_to_apply_discoveries").emit();
+                structuredLog.error("log_event").field("message", formatError(applyResult.unwrapErr())).emit();
             }
         }
         
@@ -168,7 +168,7 @@ struct DiscoveryMarker
             if (node.target.language == TargetLanguage.Protobuf)
             {
                 dynamicGraph.markDiscoverable(node.id);
-                Logger.debugLog("Marked " ~ node.idString ~ " as discoverable (protobuf)");
+                structuredLog.debug_("marked_").field("detail", "Marked " ~ node.idString ~ " as discoverable (protobuf)").emit();
             }
             
             // Mark custom targets with code generation
@@ -179,7 +179,7 @@ struct DiscoveryMarker
                     "codegen" in node.target.langConfig)
                 {
                     dynamicGraph.markDiscoverable(node.id);
-                    Logger.debugLog("Marked " ~ node.idString ~ " as discoverable (custom codegen)");
+                    structuredLog.debug_("marked_").field("detail", "Marked " ~ node.idString ~ " as discoverable (custom codegen)").emit();
                 }
             }
         }

@@ -7,7 +7,7 @@ import std.algorithm;
 import std.array;
 import std.string;
 import languages.scripting.ruby.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Gemfile parser for dependency analysis
 class GemfileParser
@@ -41,7 +41,7 @@ class GemfileParser
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse Gemfile: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_gemfile_").field("detail", "Failed to parse Gemfile: " ~ e.msg).emit();
         }
         
         return gems;
@@ -229,7 +229,7 @@ class GemfileLockParser
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse Gemfile.lock: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_gemfilelock_").field("detail", "Failed to parse Gemfile.lock: " ~ e.msg).emit();
         }
         
         return info;

@@ -18,7 +18,7 @@ import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Advanced Swift build handler with SPM, Xcode, and cross-compilation support
 class SwiftHandler : BaseLanguageHandler
@@ -31,7 +31,7 @@ class SwiftHandler : BaseLanguageHandler
         
         LanguageBuildResult result;
         
-        Logger.debugLog("Building Swift target: " ~ target.name);
+        structuredLog.debug_("building_swift_target_").field("detail", "Building Swift target: " ~ target.name).emit();
         
         // Parse Swift configuration
         SwiftConfig swiftConfig = parseSwiftConfig(target);
@@ -49,7 +49,7 @@ class SwiftHandler : BaseLanguageHandler
             auto manifestPath = PackageManifestParser.findManifest(target.sources.dup);
             if (!manifestPath.empty)
             {
-                Logger.debugLog("Found Package.swift: " ~ manifestPath);
+                structuredLog.debug_("found_packageswift_").field("detail", "Found Package.swift: " ~ manifestPath).emit();
                 swiftConfig.manifest.manifestPath = manifestPath;
                 swiftConfig.packagePath = dirName(manifestPath);
                 
@@ -68,10 +68,10 @@ class SwiftHandler : BaseLanguageHandler
             auto lintResult = runSwiftLint(target, swiftConfig, config);
             if (lintResult.hadLintIssues && swiftConfig.swiftlint.strict)
             {
-                Logger.warning("SwiftLint found issues:");
+                structuredLog.warning("swiftlint_found_issues").emit();
                 foreach (issue; lintResult.lintIssues)
                 {
-                    Logger.warning("  " ~ issue);
+                    structuredLog.warning("__").field("detail", "  " ~ issue).emit();
                 }
                 
                 if (lintResult.hadLintErrors)
@@ -209,7 +209,7 @@ class SwiftHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to analyze imports in " ~ source);
+                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source).emit();
             }
         }
         
@@ -301,14 +301,14 @@ class SwiftHandler : BaseLanguageHandler
             return result;
         }
         
-        Logger.debugLog("Using Swift builder: " ~ builder.name() ~ " (" ~ builder.getVersion() ~ ")");
+        structuredLog.debug_("using_swift_builder_").field("detail", "Using Swift builder: " ~ builder.name() ~ " (" ~ builder.getVersion() ~ ")").emit();
         
         // Resolve dependencies if using SPM
         if (!swiftConfig.manifest.manifestPath.empty && !swiftConfig.skipUpdate)
         {
             if (!resolveDependencies(swiftConfig))
             {
-                Logger.warning("Failed to resolve dependencies, continuing anyway");
+                structuredLog.warning("failed_to_resolve_dependencies_continuin").emit();
             }
         }
         
@@ -324,10 +324,10 @@ class SwiftHandler : BaseLanguageHandler
         // Report warnings
         if (compileResult.warnings.length > 0)
         {
-            Logger.warning("Compilation warnings:");
+            structuredLog.warning("compilation_warnings").emit();
             foreach (warn; compileResult.warnings)
             {
-                Logger.warning("  " ~ warn);
+                structuredLog.warning("__").field("detail", "  " ~ warn).emit();
             }
         }
         
@@ -358,7 +358,7 @@ class SwiftHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to parse Swift config, using defaults: " ~ e.msg);
+                structuredLog.warning("failed_to_parse_swift_config_using_defau").field("detail", "Failed to parse Swift config, using defaults: " ~ e.msg).emit();
             }
         }
         
@@ -369,7 +369,7 @@ class SwiftHandler : BaseLanguageHandler
             if (!config.manifest.manifestPath.empty)
             {
                 config.packagePath = dirName(config.manifest.manifestPath);
-                Logger.debugLog("Found Package.swift: " ~ config.manifest.manifestPath);
+                structuredLog.debug_("found_packageswift_").field("detail", "Found Package.swift: " ~ config.manifest.manifestPath).emit();
             }
         }
         
@@ -392,11 +392,11 @@ class SwiftHandler : BaseLanguageHandler
     {
         if (!SPMRunner.isAvailable())
         {
-            Logger.warning("Swift Package Manager not available");
+            structuredLog.warning("swift_package_manager_not_available").emit();
             return false;
         }
         
-        Logger.info("Resolving Swift package dependencies...");
+        structuredLog.info("resolving_swift_package_dependencies").emit();
         
         auto runner = new SPMRunner(config.packagePath);
         
@@ -405,13 +405,13 @@ class SwiftHandler : BaseLanguageHandler
         
         if (res.status == 0)
         {
-            Logger.info("Dependencies resolved successfully");
+            structuredLog.info("dependencies_resolved_successfully").emit();
             return true;
         }
         else
         {
-            Logger.error("Failed to resolve dependencies");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("failed_to_resolve_dependencies").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
     }
@@ -422,12 +422,12 @@ class SwiftHandler : BaseLanguageHandler
         
         if (!SwiftLintRunner.isAvailable())
         {
-            Logger.warning("SwiftLint not available, skipping");
+            structuredLog.warning("swiftlint_not_available_skipping").emit();
             result.success = true;
             return result;
         }
         
-        Logger.info("Running SwiftLint...");
+        structuredLog.info("running_swiftlint").emit();
         
         auto runner = new SwiftLintRunner();
         auto res = runner.lint(
@@ -465,11 +465,11 @@ class SwiftHandler : BaseLanguageHandler
     {
         if (!SwiftFormatRunner.isAvailable())
         {
-            Logger.warning("SwiftFormat not available, skipping");
+            structuredLog.warning("swiftformat_not_available_skipping").emit();
             return;
         }
         
-        Logger.info("Running SwiftFormat...");
+        structuredLog.info("running_swiftformat").emit();
         
         auto runner = new SwiftFormatRunner();
         auto res = runner.format(
@@ -481,11 +481,11 @@ class SwiftHandler : BaseLanguageHandler
         
         if (res.status != 0)
         {
-            Logger.warning("SwiftFormat had issues: " ~ res.output);
+            structuredLog.warning("swiftformat_had_issues_").field("detail", "SwiftFormat had issues: " ~ res.output).emit();
         }
         else
         {
-            Logger.info("Code formatted successfully");
+            structuredLog.info("code_formatted_successfully").emit();
         }
     }
     
@@ -493,11 +493,11 @@ class SwiftHandler : BaseLanguageHandler
     {
         if (!DocCRunner.isAvailable())
         {
-            Logger.warning("Swift-DocC not available, skipping documentation");
+            structuredLog.warning("swiftdocc_not_available_skipping_documen").emit();
             return;
         }
         
-        Logger.info("Generating documentation...");
+        structuredLog.info("generating_documentation").emit();
         
         auto runner = new DocCRunner();
         auto res = runner.generate(
@@ -508,17 +508,17 @@ class SwiftHandler : BaseLanguageHandler
         
         if (res.status != 0)
         {
-            Logger.warning("Documentation generation failed: " ~ res.output);
+            structuredLog.warning("documentation_generation_failed_").field("detail", "Documentation generation failed: " ~ res.output).emit();
         }
         else
         {
-            Logger.info("Documentation generated successfully");
+            structuredLog.info("documentation_generated_successfully").emit();
         }
     }
     
     private void generateXCFramework(in Target target, SwiftConfig config, in WorkspaceConfig workspace)
     {
-        Logger.info("Generating XCFramework...");
+        structuredLog.info("generating_xcframework").emit();
         
         auto runner = new XCFrameworkBuilder();
         auto res = runner.create(
@@ -529,11 +529,11 @@ class SwiftHandler : BaseLanguageHandler
         
         if (res.status != 0)
         {
-            Logger.warning("XCFramework generation failed: " ~ res.output);
+            structuredLog.warning("xcframework_generation_failed_").field("detail", "XCFramework generation failed: " ~ res.output).emit();
         }
         else
         {
-            Logger.info("XCFramework generated successfully");
+            structuredLog.info("xcframework_generated_successfully").emit();
         }
     }
 }

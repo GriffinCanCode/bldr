@@ -8,7 +8,7 @@ import std.algorithm;
 import std.array;
 import std.string;
 import languages.compiled.nim.analysis.nimble;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Nimble package manager operations
 class NimbleManager
@@ -24,11 +24,11 @@ class NimbleManager
         
         if (nimbleFile.empty)
         {
-            Logger.warning("No nimble file found, skipping dependency installation");
+            structuredLog.warning("no_nimble_file_found_skipping_dependency").emit();
             return true;
         }
         
-        Logger.info("Installing nimble dependencies...");
+        structuredLog.info("installing_nimble_dependencies").emit();
         
         string[] cmd = ["nimble", "install", "-y"];
         
@@ -44,19 +44,19 @@ class NimbleManager
         
         if (res.status != 0)
         {
-            Logger.error("Dependency installation failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("dependency_installation_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
-        Logger.info("Dependencies installed successfully");
+        structuredLog.info("dependencies_installed_successfully").emit();
         return true;
     }
     
     /// Update package dependencies
     static bool updateDependencies(string projectDir, bool verbose = false)
     {
-        Logger.info("Updating nimble dependencies...");
+        structuredLog.info("updating_nimble_dependencies").emit();
         
         string[] cmd = ["nimble", "update"];
         
@@ -67,12 +67,12 @@ class NimbleManager
         
         if (res.status != 0)
         {
-            Logger.error("Dependency update failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("dependency_update_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
-        Logger.info("Dependencies updated successfully");
+        structuredLog.info("dependencies_updated_successfully").emit();
         return true;
     }
     
@@ -83,7 +83,7 @@ class NimbleManager
         bool verbose = false
     )
     {
-        Logger.info("Installing package: " ~ packageName);
+        structuredLog.info("installing_package_").field("detail", "Installing package: " ~ packageName).emit();
         
         string[] cmd = ["nimble", "install", "-y"];
         
@@ -99,12 +99,12 @@ class NimbleManager
         
         if (res.status != 0)
         {
-            Logger.error("Package installation failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("package_installation_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
-        Logger.info("Package installed successfully");
+        structuredLog.info("package_installed_successfully").emit();
         return true;
     }
     
@@ -169,25 +169,25 @@ class NimbleManager
     /// Uninstall a package
     static bool uninstallPackage(string packageName)
     {
-        Logger.info("Uninstalling package: " ~ packageName);
+        structuredLog.info("uninstalling_package_").field("detail", "Uninstalling package: " ~ packageName).emit();
         
         auto res = execute(["nimble", "uninstall", "-y", packageName]);
         
         if (res.status != 0)
         {
-            Logger.error("Package uninstallation failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("package_uninstallation_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
-        Logger.info("Package uninstalled successfully");
+        structuredLog.info("package_uninstalled_successfully").emit();
         return true;
     }
     
     /// Initialize a new nimble package
     static bool initPackage(string dir, string packageName, bool isLibrary = false)
     {
-        Logger.info("Initializing nimble package: " ~ packageName);
+        structuredLog.info("initializing_nimble_package_").field("detail", "Initializing nimble package: " ~ packageName).emit();
         
         string[] cmd = ["nimble", "init"];
         
@@ -200,12 +200,12 @@ class NimbleManager
         
         if (res.status != 0)
         {
-            Logger.error("Package initialization failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("package_initialization_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
-        Logger.info("Package initialized successfully");
+        structuredLog.info("package_initialized_successfully").emit();
         return true;
     }
 }

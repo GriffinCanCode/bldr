@@ -14,7 +14,7 @@ import languages.compiled.d.analysis.manifest;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
 
 /// DUB builder implementation with action-level caching
@@ -120,7 +120,7 @@ class DubBuilder : DBuilder
         
         if (actionCache.isCached(actionId, allSources, metadata) && allOutputsExist)
         {
-            Logger.debugLog("  [Cached] DUB build: " ~ target.name);
+            structuredLog.debug_("__cached_dub_build_").field("detail", "  [Cached] DUB build: " ~ target.name).emit();
             result.success = true;
             result.outputs = expectedOutputs;
             if (!expectedOutputs.empty && exists(expectedOutputs[0]))
@@ -221,7 +221,7 @@ class DubBuilder : DBuilder
             cmd ~= sources;
         }
         
-        Logger.debugLog("DUB command: " ~ cmd.join(" "));
+        structuredLog.debug_("dub_command_").field("detail", "DUB command: " ~ cmd.join(" ")).emit();
         
         // Set environment variables
         string[string] env = environment.toAA();
@@ -488,7 +488,7 @@ class DubBuilder : DBuilder
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to parse coverage file: " ~ lstFile);
+                structuredLog.warning("failed_to_parse_coverage_file_").field("detail", "Failed to parse coverage file: " ~ lstFile).emit();
             }
         }
         

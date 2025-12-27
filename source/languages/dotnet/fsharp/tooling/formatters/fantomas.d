@@ -8,7 +8,7 @@ import std.array;
 import std.string;
 import languages.dotnet.fsharp.tooling.formatters.base;
 import languages.dotnet.fsharp.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Fantomas formatter implementation
 class FantomasFormatter : FSharpFormatter_

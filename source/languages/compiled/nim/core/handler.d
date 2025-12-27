@@ -18,7 +18,7 @@ import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig;
 
 /// Comprehensive Nim build handler with multi-backend support and action-level caching
@@ -34,7 +34,7 @@ class NimHandler : BaseLanguageHandler
         
         LanguageBuildResult result;
         
-        Logger.debugLog("Building Nim target: " ~ target.name);
+        structuredLog.debug_("building_nim_target_").field("detail", "Building Nim target: " ~ target.name).emit();
         
         // Parse Nim configuration
         NimConfig nimConfig = parseNimConfig(target);
@@ -48,10 +48,10 @@ class NimHandler : BaseLanguageHandler
             auto fmtResult = formatCode(target.sources.dup, nimConfig);
             if (fmtResult.hasIssues)
             {
-                Logger.info("Formatting issues found:");
+                structuredLog.info("formatting_issues_found").emit();
                 foreach (warning; fmtResult.warnings)
                 {
-                    Logger.warning("  " ~ warning);
+                    structuredLog.warning("__").field("detail", "  " ~ warning).emit();
                 }
             }
         }
@@ -62,10 +62,10 @@ class NimHandler : BaseLanguageHandler
             auto checkResult = NimTools.check(target.sources.dup);
             if (!checkResult.success)
             {
-                Logger.warning("Check found issues:");
+                structuredLog.warning("check_found_issues").emit();
                 foreach (error; checkResult.errors)
                 {
-                    Logger.warning("  " ~ error);
+                    structuredLog.warning("__").field("detail", "  " ~ error).emit();
                 }
             }
         }
@@ -149,7 +149,7 @@ class NimHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to analyze imports in " ~ source);
+                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source).emit();
             }
         }
         
@@ -281,7 +281,7 @@ class NimHandler : BaseLanguageHandler
             return result;
         }
         
-        Logger.debugLog("Using Nim builder: " ~ builder.name() ~ " (" ~ builder.getVersion() ~ ")");
+        structuredLog.debug_("using_nim_builder_").field("detail", "Using Nim builder: " ~ builder.name() ~ " (" ~ builder.getVersion() ~ ")").emit();
         
         // Compile (with action-level caching)
         auto compileResult = builder.build(target.sources, nimConfig, target, config);
@@ -295,16 +295,16 @@ class NimHandler : BaseLanguageHandler
         // Report warnings
         if (compileResult.hadWarnings && !compileResult.warnings.empty)
         {
-            Logger.warning("Compilation warnings:");
+            structuredLog.warning("compilation_warnings").emit();
             import std.algorithm : min;
             foreach (warn; compileResult.warnings[0 .. min(5, $)])
             {
-                Logger.warning("  " ~ warn);
+                structuredLog.warning("__").field("detail", "  " ~ warn).emit();
             }
             if (compileResult.warnings.length > 5)
             {
                 import std.conv : to;
-                Logger.warning("  ... and " ~ (compileResult.warnings.length - 5).to!string ~ " more warnings");
+                structuredLog.warning("___and_").field("detail", "  ... and " ~ (compileResult.warnings.length - 5).to!string ~ " more warnings").emit();
             }
         }
         
@@ -335,7 +335,7 @@ class NimHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to parse Nim config, using defaults: " ~ e.msg);
+                structuredLog.warning("failed_to_parse_nim_config_using_default").field("detail", "Failed to parse Nim config, using defaults: " ~ e.msg).emit();
             }
         }
         
@@ -365,15 +365,15 @@ class NimHandler : BaseLanguageHandler
             string nimbleFile = NimbleParser.findNimbleFile(sourceDir);
             if (!nimbleFile.empty)
             {
-                Logger.debugLog("Detected nimble file: " ~ nimbleFile);
+                structuredLog.debug_("detected_nimble_file_").field("detail", "Detected nimble file: " ~ nimbleFile).emit();
                 config.nimble.nimbleFile = nimbleFile;
                 
                 // Parse nimble file for project info
                 auto nimbleData = NimbleParser.parseNimbleFile(nimbleFile);
                 if (!nimbleData.name.empty)
                 {
-                    Logger.debugLog("Package: " ~ nimbleData.name ~ 
-                                 (nimbleData.version_.empty ? "" : " v" ~ nimbleData.version_));
+                    structuredLog.debug_("package_").field("detail", "Package: " ~ nimbleData.name ~ 
+                                 (nimbleData.version_.empty ? "" : " v" ~ nimbleData.version_)).emit();
                     
                     // Set backend from nimble file if specified
                     if (!nimbleData.backend.empty && config.backend == NimBackend.C)

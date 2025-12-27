@@ -7,7 +7,7 @@ import std.algorithm;
 import std.array;
 import std.regex;
 import std.string;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Dependency information
 struct LuaDependency
@@ -37,7 +37,7 @@ class LuaDependencyAnalyzer
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to analyze dependencies in " ~ sourceFile ~ ": " ~ e.msg);
+            structuredLog.warning("failed_to_analyze_dependencies_in_").field("detail", "Failed to analyze dependencies in " ~ sourceFile ~ ": " ~ e.msg).emit();
         }
         
         return deps;

@@ -9,7 +9,7 @@ import std.array;
 import std.string;
 import std.regex;
 import std.conv;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Nim tooling utilities and version detection
 class NimTools

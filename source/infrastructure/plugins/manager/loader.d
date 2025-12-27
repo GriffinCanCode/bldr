@@ -9,7 +9,7 @@ import core.time : seconds, Duration;
 import std.datetime.stopwatch : StopWatch;
 import infrastructure.plugins.protocol;
 import infrastructure.plugins.discovery;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Plugin execution result
@@ -127,7 +127,7 @@ class PluginLoader {
             if (responseLine.empty) {
                 if (stderrLines.length > 0)
                     foreach (line; stderrLines)
-                        Logger.error("Plugin stderr: " ~ line);
+                        structuredLog.error("plugin_stderr_").field("detail", "Plugin stderr: " ~ line).emit();
                 
                 return Err!(PluginExecution, BuildError)(
                     Errors.plugin("Plugin did not produce any output", ErrorCode.PluginCrashed)

@@ -6,7 +6,7 @@ import infrastructure.resilience.core.breaker;
 import infrastructure.resilience.core.limiter;
 import infrastructure.resilience.policies.policy;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Network resilience coordinator - manages circuit breakers and rate limiters
 /// for distributed network communication (distinct from build recovery)
@@ -62,7 +62,7 @@ final class NetworkResilience
             }
         }
         
-        Logger.info("Registered network resilience policies for: " ~ endpoint);
+        structuredLog.info("registered_network_resilience_policies_f").field("detail", "Registered network resilience policies for: " ~ endpoint).emit();
     }
     
     /// Execute operation with full resilience (circuit breaker + rate limiter)
@@ -157,8 +157,8 @@ final class NetworkResilience
         if (limiter !is null)
         {
             limiter.adjustRate(healthScore);
-            Logger.debugLog("Adjusted rate for " ~ endpoint ~ 
-                " based on health: " ~ healthScore.to!string);
+            structuredLog.debug_("adjusted_rate_for_").field("detail", "Adjusted rate for " ~ endpoint ~ 
+                " based on health: " ~ healthScore.to!string).emit();
         }
     }
     
@@ -265,7 +265,7 @@ final class NetworkResilience
             policies.remove(endpoint);
         }
         
-        Logger.info("Unregistered endpoint: " ~ endpoint);
+        structuredLog.info("unregistered_endpoint_").field("detail", "Unregistered endpoint: " ~ endpoint).emit();
     }
     
     /// Ensure endpoint is registered with default policy
@@ -356,7 +356,7 @@ final class NetworkResilience
         }
         catch (Exception e)
         {
-            Logger.error("Error in metrics callback: " ~ e.msg);
+            structuredLog.error("error_in_metrics_callback_").field("detail", "Error in metrics callback: " ~ e.msg).emit();
         }
     }
 }

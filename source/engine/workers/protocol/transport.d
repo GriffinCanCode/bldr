@@ -10,7 +10,7 @@ import core.thread : Thread;
 import core.sync.mutex : Mutex;
 import engine.workers.protocol.types;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Transport interface for worker communication
 interface IWorkerTransport
@@ -78,7 +78,7 @@ final class StdioWorkerTransport : IWorkerTransport
                 auto json = request.toJson();
                 pipes.stdin.writeln(json);
                 pipes.stdin.flush();
-                Logger.debugLog("Sent request " ~ request.requestId.to!string ~ " to worker");
+                structuredLog.debug_("sent_request_").field("detail", "Sent request " ~ request.requestId.to!string ~ " to worker").emit();
                 return Result!WorkerError.ok();
             }
             catch (Exception e)
@@ -122,7 +122,7 @@ final class StdioWorkerTransport : IWorkerTransport
                             if (trimmed.length > 0)
                             {
                                 auto response = WorkResponse.fromJson(trimmed);
-                                Logger.debugLog("Received response " ~ response.requestId.to!string ~ " from worker");
+                                structuredLog.debug_("received_response_").field("detail", "Received response " ~ response.requestId.to!string ~ " from worker").emit();
                                 return Ok!(WorkResponse, WorkerError)(response);
                             }
                         }
@@ -172,7 +172,7 @@ final class StdioWorkerTransport : IWorkerTransport
                 }
                 catch (Exception e)
                 {
-                    Logger.error("Error closing worker transport: " ~ e.msg);
+                    structuredLog.error("error_closing_worker_transport_").field("detail", "Error closing worker transport: " ~ e.msg).emit();
                 }
             }
         }

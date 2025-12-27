@@ -8,7 +8,7 @@ import engine.distributed.coordinator.registry : WorkerRegistry;
 import engine.distributed.coordinator.scheduler : DistributedScheduler;
 import infrastructure.errors;
 import infrastructure.errors.formatting.format : formatError = format;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Coordinator message handler - single responsibility: handle incoming messages
 /// 
@@ -45,12 +45,12 @@ final class CoordinatorMessageHandler
                 case MessageType.ActionResult: handleActionResult(client); break;
                 case MessageType.WorkRequest: handleWorkRequest(client); break;
                 case MessageType.PeerDiscovery, MessageType.PeerAnnounce, MessageType.PeerMetrics:
-                    Logger.info("Peer message received"); break;
+                    structuredLog.info("peer_message_received").emit(); break;
                 case MessageType.ActionRequest, MessageType.StealRequest, MessageType.StealResponse, MessageType.Shutdown:
-                    Logger.warning("Unexpected message type from client"); break;
+                    structuredLog.warning("unexpected_message_type_from_client").emit(); break;
             }
         }
-        catch (Exception e) { Logger.error("Client handler failed: " ~ e.msg); }
+        catch (Exception e) { structuredLog.error("client_handler_failed_").field("detail", "Client handler failed: " ~ e.msg).emit(); }
     }
     
     /// Handle worker registration message (Responsibility: Parse registration and delegate to registry)
@@ -67,16 +67,16 @@ final class CoordinatorMessageHandler
             
             auto regResult = deserializeRegistration(data);
             if (regResult.isErr) { 
-                Logger.error("Failed to deserialize registration");
-                Logger.error(formatError(regResult.unwrapErr())); 
+                structuredLog.error("failed_to_deserialize_registration").emit();
+                structuredLog.error("log_event").field("message", formatError(regResult.unwrapErr())).emit(); 
                 return; 
             }
             
             auto registration = regResult.unwrap();
             auto workerIdResult = registry.register(registration.address);
             if (workerIdResult.isErr) { 
-                Logger.error("Failed to register worker");
-                Logger.error(formatError(workerIdResult.unwrapErr())); 
+                structuredLog.error("failed_to_register_worker").emit();
+                structuredLog.error("log_event").field("message", formatError(workerIdResult.unwrapErr())).emit(); 
                 return; 
             }
             
@@ -85,9 +85,9 @@ final class CoordinatorMessageHandler
             *cast(ulong*)idBytes.ptr = workerId.value;
             client.send(idBytes);
             
-            Logger.info("Worker registered: " ~ workerId.toString() ~ " (" ~ registration.address ~ ")");
+            structuredLog.info("worker_registered_").field("detail", "Worker registered: " ~ workerId.toString() ~ " (" ~ registration.address ~ ")").emit();
         }
-        catch (Exception e) { Logger.error("Registration handling failed: " ~ e.msg); }
+        catch (Exception e) { structuredLog.error("registration_handling_failed_").field("detail", "Registration handling failed: " ~ e.msg).emit(); }
     }
     
     /// Handle heartbeat message (Responsibility: Parse heartbeat and delegate to registry)
@@ -108,9 +108,9 @@ final class CoordinatorMessageHandler
             
             auto envelope = envResult.unwrap();
             registry.updateHeartbeat(envelope.payload.worker, envelope.payload);
-            Logger.debugLog("Heartbeat from worker " ~ envelope.payload.worker.toString());
+            structuredLog.debug_("heartbeat_from_worker_").field("detail", "Heartbeat from worker " ~ envelope.payload.worker.toString()).emit();
         }
-        catch (Exception e) { Logger.error("Heartbeat handling failed: " ~ e.msg); }
+        catch (Exception e) { structuredLog.error("heartbeat_handling_failed_").field("detail", "Heartbeat handling failed: " ~ e.msg).emit(); }
     }
     
     /// Handle action result message (Responsibility: Parse action result and delegate to scheduler)
@@ -127,15 +127,15 @@ final class CoordinatorMessageHandler
             
             auto http = new HttpTransport("", 0);
             auto envResult = http.deserializeMessage!ActionResult(data);
-            if (envResult.isErr) { Logger.error("Failed to deserialize result"); return; }
+            if (envResult.isErr) { structuredLog.error("failed_to_deserialize_result").emit(); return; }
             
             auto result = envResult.unwrap().payload;
             if (result.status == ResultStatus.Success) scheduler.onComplete(result.id, result);
             else scheduler.onFailure(result.id, result.stderr);
             
-            Logger.info("Action completed: " ~ result.id.toString());
+            structuredLog.info("action_completed_").field("detail", "Action completed: " ~ result.id.toString()).emit();
         }
-        catch (Exception e) { Logger.error("Result handling failed: " ~ e.msg); }
+        catch (Exception e) { structuredLog.error("result_handling_failed_").field("detail", "Result handling failed: " ~ e.msg).emit(); }
     }
     
     /// Handle work request message (Responsibility: Parse work request and delegate to scheduler)
@@ -178,10 +178,10 @@ final class CoordinatorMessageHandler
                     client.send(serialized);
                 }
                 import std.conv : to;
-                Logger.debugLog("Sent " ~ actions.length.to!string ~ " actions to worker " ~ request.worker.toString());
+                structuredLog.debug_("sent_").field("detail", "Sent " ~ actions.length.to!string ~ " actions to worker " ~ request.worker.toString()).emit();
             }
         }
-        catch (Exception e) { Logger.error("Work request handling failed: " ~ e.msg); }
+        catch (Exception e) { structuredLog.error("work_request_handling_failed_").field("detail", "Work request handling failed: " ~ e.msg).emit(); }
     }
     
     private void cleanupSocket(Socket client) nothrow

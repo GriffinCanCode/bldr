@@ -12,7 +12,7 @@ import languages.jvm.kotlin.core.config;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache;
 
 /// Fat JAR builder for Kotlin (includes all dependencies)
@@ -29,7 +29,7 @@ class FatJARBuilder : KotlinBuilder
     {
         KotlinBuildResult result;
         
-        Logger.debugLog("Building Kotlin Fat JAR");
+        structuredLog.debug_("building_kotlin_fat_jar").emit();
         
         // Fat JARs are best built with Gradle or Maven
         if (config.buildTool == KotlinBuildTool.Gradle)
@@ -43,7 +43,7 @@ class FatJARBuilder : KotlinBuilder
         }
         
         // Fallback: build regular JAR and warn about dependencies
-        Logger.warning("Fat JAR requires Gradle or Maven. Building regular JAR instead.");
+        structuredLog.warning("fat_jar_requires_gradle_or_maven_buildin").emit();
         
         import languages.jvm.kotlin.tooling.builders.jar;
         auto jarBuilder = new JARBuilder();

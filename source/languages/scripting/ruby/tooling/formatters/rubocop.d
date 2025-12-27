@@ -10,7 +10,7 @@ import std.string;
 import std.conv;
 import languages.scripting.ruby.core.config;
 import languages.scripting.ruby.tooling.formatters.base;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// RuboCop formatter/linter
 class RuboCopFormatter : Formatter
@@ -81,7 +81,7 @@ class RuboCopFormatter : Formatter
         if (!sources.empty)
             cmd ~= sources;
         
-        Logger.info("Running RuboCop" ~ (autoCorrect ? " with auto-correct" : ""));
+        structuredLog.info("running_rubocop").field("detail", "Running RuboCop" ~ (autoCorrect ? " with auto-correct" : "")).emit();
         
         auto res = execute(cmd);
         
@@ -136,12 +136,12 @@ class RuboCopFormatter : Formatter
     /// Initialize RuboCop configuration
     static bool initialize(string projectRoot)
     {
-        Logger.info("Initializing RuboCop configuration");
+        structuredLog.info("initializing_rubocop_configuration").emit();
         
         auto configFile = buildPath(projectRoot, ".rubocop.yml");
         if (exists(configFile))
         {
-            Logger.info(".rubocop.yml already exists");
+            structuredLog.info("rubocopyml_already_exists").emit();
             return true;
         }
         
@@ -170,12 +170,12 @@ Metrics/BlockLength:
         try
         {
             std.file.write(configFile, content);
-            Logger.info("Created .rubocop.yml");
+            structuredLog.info("created_rubocopyml").emit();
             return true;
         }
         catch (Exception e)
         {
-            Logger.error("Failed to create .rubocop.yml: " ~ e.msg);
+            structuredLog.error("failed_to_create_rubocopyml_").field("detail", "Failed to create .rubocop.yml: " ~ e.msg).emit();
             return false;
         }
     }
@@ -241,7 +241,7 @@ Metrics/BlockLength:
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse RuboCop JSON output: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_rubocop_json_output_").field("detail", "Failed to parse RuboCop JSON output: " ~ e.msg).emit();
             
             // Fallback: parse as plain text
             foreach (line; output.lineSplitter)

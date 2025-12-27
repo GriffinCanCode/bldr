@@ -10,7 +10,7 @@ import std.string;
 import std.conv;
 import languages.jvm.java.analysis.base;
 import languages.jvm.java.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// SpotBugs static analyzer
 class SpotBugsAnalyzer : Analyzer
@@ -19,7 +19,7 @@ class SpotBugsAnalyzer : Analyzer
     {
         AnalysisResult result;
         
-        Logger.info("Running SpotBugs analysis");
+        structuredLog.info("running_spotbugs_analysis").emit();
         
         string[] cmd = ["spotbugs"];
         

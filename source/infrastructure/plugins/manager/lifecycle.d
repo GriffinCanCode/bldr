@@ -12,7 +12,7 @@ import infrastructure.plugins.protocol;
 import infrastructure.plugins.manager.registry;
 import infrastructure.plugins.manager.loader;
 import infrastructure.plugins.discovery.scanner;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Plugin health status for circuit breaker pattern
@@ -63,7 +63,7 @@ struct PluginHealth {
         if (circuitState == CircuitState.HalfOpen) {
             circuitState = CircuitState.Closed;
             status = PluginHealthStatus.Healthy;
-            Logger.info("Plugin '" ~ pluginName ~ "' recovered, circuit closed");
+            structuredLog.info("plugin_").field("detail", "Plugin '" ~ pluginName ~ "' recovered, circuit closed").emit();
         } else if (status == PluginHealthStatus.Degraded) {
             status = PluginHealthStatus.Healthy;
         }
@@ -81,8 +81,8 @@ struct PluginHealth {
             if (circuitState != CircuitState.Open) {
                 circuitState = CircuitState.Open;
                 status = PluginHealthStatus.Unhealthy;
-                Logger.warning("Plugin '" ~ pluginName ~ "' circuit opened after " ~ 
-                    consecutiveFailures.to!string ~ " failures");
+                structuredLog.warning("plugin_").field("detail", "Plugin '" ~ pluginName ~ "' circuit opened after " ~ 
+                    consecutiveFailures.to!string ~ " failures").emit();
             }
         } else if (consecutiveFailures > 0) {
             status = PluginHealthStatus.Degraded;
@@ -99,7 +99,7 @@ struct PluginHealth {
                 if (Clock.currTime() - lastFailure >= resetTimeout) {
                     circuitState = CircuitState.HalfOpen;
                     status = PluginHealthStatus.Recovering;
-                    Logger.info("Plugin '" ~ pluginName ~ "' entering recovery mode");
+                    structuredLog.info("plugin_").field("detail", "Plugin '" ~ pluginName ~ "' entering recovery mode").emit();
                     return true;
                 }
                 return false;
@@ -185,7 +185,7 @@ class LifecycleManager {
                     // Plugin was removed
                     health.needsReload = true;
                     needsRefresh = true;
-                    Logger.info("Plugin '" ~ name ~ "' executable removed, marking for refresh");
+                    structuredLog.info("plugin_").field("detail", "Plugin '" ~ name ~ "' executable removed, marking for refresh").emit();
                     continue;
                 }
                 
@@ -194,7 +194,7 @@ class LifecycleManager {
                     health.needsReload = true;
                     health.lastModified = currentMtime;
                     needsRefresh = true;
-                    Logger.info("Plugin '" ~ name ~ "' executable changed, marking for reload");
+                    structuredLog.info("plugin_").field("detail", "Plugin '" ~ name ~ "' executable changed, marking for reload").emit();
                     
                     // Reset circuit breaker on reload - plugin may have been fixed
                     health.circuitState = CircuitState.Closed;
@@ -202,12 +202,12 @@ class LifecycleManager {
                     health.status = PluginHealthStatus.Healthy;
                 }
             } catch (Exception e) {
-                Logger.warning("Failed to check plugin '" ~ name ~ "' for changes: " ~ e.msg);
+                structuredLog.warning("failed_to_check_plugin_").field("detail", "Failed to check plugin '" ~ name ~ "' for changes: " ~ e.msg).emit();
             }
         }
         
         if (needsRefresh) {
-            Logger.info("Refreshing plugin registry due to detected changes");
+            structuredLog.info("refreshing_plugin_registry_due_to_detect").emit();
             return registry.refresh();
         }
         
@@ -235,9 +235,9 @@ class LifecycleManager {
         // Check for hot-reload before execution
         auto reloadResult = checkAndReloadPlugins();
         if (reloadResult.isErr)
-            Logger.warning("Hot-reload check failed: " ~ reloadResult.unwrapErr().message);
+            structuredLog.warning("hotreload_check_failed_").field("detail", "Hot-reload check failed: " ~ reloadResult.unwrapErr().message).emit();
         
-        Logger.debugLog("Executing pre-build hooks for " ~ plugins.length.to!string ~ " plugins");
+        structuredLog.debug_("executing_prebuild_hooks_for_").field("detail", "Executing pre-build hooks for " ~ plugins.length.to!string ~ " plugins").emit();
         
         foreach (plugin; plugins) {
             auto ctx = PluginExecutionContext(plugin, target, workspace, plugin.failMode);
@@ -262,7 +262,7 @@ class LifecycleManager {
         auto plugins = registry.withCapability("build.post_hook");
         if (plugins.length == 0) return Ok!BuildError();
         
-        Logger.debugLog("Executing post-build hooks for " ~ plugins.length.to!string ~ " plugins");
+        structuredLog.debug_("executing_postbuild_hooks_for_").field("detail", "Executing post-build hooks for " ~ plugins.length.to!string ~ " plugins").emit();
         
         foreach (plugin; plugins) {
             // Post-hooks always use graceful degradation - they shouldn't fail the build
@@ -285,7 +285,7 @@ class LifecycleManager {
         // Circuit breaker check
         if (!health.shouldAllowRequest()) {
             auto msg = "Plugin '" ~ ctx.plugin.name ~ "' circuit is open (too many failures)";
-            Logger.warning(msg);
+            structuredLog.warning("log_event").field("message", msg).emit();
             
             if (ctx.failMode == PluginFailMode.Required) {
                 return VoidBuildResult.err(
@@ -302,8 +302,8 @@ class LifecycleManager {
         VoidBuildResult lastResult;
         foreach (attempt; 0 .. ctx.maxRetries + 1) {
             if (attempt > 0) {
-                Logger.info("Retrying plugin '" ~ ctx.plugin.name ~ "' (attempt " ~ 
-                    (attempt + 1).to!string ~ "/" ~ (ctx.maxRetries + 1).to!string ~ ")");
+                structuredLog.info("retrying_plugin_").field("detail", "Retrying plugin '" ~ ctx.plugin.name ~ "' (attempt " ~ 
+                    (attempt + 1).to!string ~ "/" ~ (ctx.maxRetries + 1).to!string ~ ")").emit();
                 import core.thread : Thread;
                 Thread.sleep(ctx.retryDelay);
             }
@@ -330,7 +330,7 @@ class LifecycleManager {
             case PluginFailMode.Required:
                 return lastResult;
             case PluginFailMode.Optional:
-                Logger.warning("Plugin '" ~ ctx.plugin.name ~ "' failed (optional): " ~ error.message);
+                structuredLog.warning("plugin_").field("detail", "Plugin '" ~ ctx.plugin.name ~ "' failed (optional): " ~ error.message).emit();
                 return Ok!BuildError();
             case PluginFailMode.Silent:
                 return Ok!BuildError();
@@ -342,21 +342,21 @@ class LifecycleManager {
         auto sw = StopWatch();
         sw.start();
         
-        Logger.info("Running pre-build hook: " ~ ctx.plugin.name);
+        structuredLog.info("running_prebuild_hook_").field("detail", "Running pre-build hook: " ~ ctx.plugin.name).emit();
         
         auto result = loader.callPreHook(ctx.plugin.name, ctx.target, ctx.workspace);
         sw.stop();
         
         if (result.isErr) {
-            Logger.error("Pre-build hook failed: " ~ ctx.plugin.name ~ " - " ~ 
-                result.unwrapErr().message);
+            structuredLog.error("prebuild_hook_failed_").field("detail", "Pre-build hook failed: " ~ ctx.plugin.name ~ " - " ~ 
+                result.unwrapErr().message).emit();
             return VoidBuildResult.err(result.unwrapErr());
         }
         
         auto hookResult = result.unwrap();
         
         foreach (log; hookResult.logs)
-            Logger.info("[" ~ ctx.plugin.name ~ "] " ~ log);
+            structuredLog.info("log_event").field("detail", "[" ~ ctx.plugin.name ~ "] " ~ log).emit();
         
         if (!hookResult.success) {
             return VoidBuildResult.err(
@@ -364,8 +364,8 @@ class LifecycleManager {
                     .withContext("plugin", ctx.plugin.name));
         }
         
-        Logger.debugLog("Pre-build hook completed: " ~ ctx.plugin.name ~ " (" ~ 
-            sw.peek().total!"msecs".to!string ~ "ms)");
+        structuredLog.debug_("prebuild_hook_completed_").field("detail", "Pre-build hook completed: " ~ ctx.plugin.name ~ " (" ~ 
+            sw.peek().total!"msecs".to!string ~ "ms)").emit();
         
         return Ok!BuildError();
     }
@@ -381,14 +381,14 @@ class LifecycleManager {
         
         if (!health.shouldAllowRequest()) {
             if (ctx.failMode != PluginFailMode.Silent)
-                Logger.warning("Skipping post-hook '" ~ ctx.plugin.name ~ "' (circuit open)");
+                structuredLog.warning("skipping_posthook_").field("detail", "Skipping post-hook '" ~ ctx.plugin.name ~ "' (circuit open)").emit();
             return;
         }
         
         auto sw = StopWatch();
         sw.start();
         
-        Logger.info("Running post-build hook: " ~ ctx.plugin.name);
+        structuredLog.info("running_postbuild_hook_").field("detail", "Running post-build hook: " ~ ctx.plugin.name).emit();
         
         auto result = loader.callPostHook(
             ctx.plugin.name, ctx.target, ctx.workspace,
@@ -400,8 +400,8 @@ class LifecycleManager {
         if (result.isErr) {
             health.recordFailure(result.unwrapErr().message);
             if (ctx.failMode != PluginFailMode.Silent)
-                Logger.warning("Post-build hook failed: " ~ ctx.plugin.name ~ " - " ~ 
-                    result.unwrapErr().message);
+                structuredLog.warning("postbuild_hook_failed_").field("detail", "Post-build hook failed: " ~ ctx.plugin.name ~ " - " ~ 
+                    result.unwrapErr().message).emit();
             return;
         }
         
@@ -409,13 +409,13 @@ class LifecycleManager {
         health.recordSuccess();
         
         foreach (log; hookResult.logs)
-            Logger.info("[" ~ ctx.plugin.name ~ "] " ~ log);
+            structuredLog.info("log_event").field("detail", "[" ~ ctx.plugin.name ~ "] " ~ log).emit();
         
         if (!hookResult.success && ctx.failMode != PluginFailMode.Silent)
-            Logger.warning("Post-build hook reported failure: " ~ ctx.plugin.name);
+            structuredLog.warning("postbuild_hook_reported_failure_").field("detail", "Post-build hook reported failure: " ~ ctx.plugin.name).emit();
         
-        Logger.debugLog("Post-build hook completed: " ~ ctx.plugin.name ~ " (" ~ 
-            sw.peek().total!"msecs".to!string ~ "ms)");
+        structuredLog.debug_("postbuild_hook_completed_").field("detail", "Post-build hook completed: " ~ ctx.plugin.name ~ " (" ~ 
+            sw.peek().total!"msecs".to!string ~ "ms)").emit();
     }
     
     /// Get or create health tracking for a plugin
@@ -464,7 +464,7 @@ class LifecycleManager {
             health.consecutiveFailures = 0;
             health.circuitState = CircuitState.Closed;
             health.status = PluginHealthStatus.Healthy;
-            Logger.info("Reset health for plugin '" ~ name ~ "'");
+            structuredLog.info("reset_health_for_plugin_").field("detail", "Reset health for plugin '" ~ name ~ "'").emit();
         }
     }
     

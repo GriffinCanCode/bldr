@@ -8,7 +8,7 @@ import std.path : buildNormalizedPath;
 import core.sync.mutex;
 import infrastructure.parsing.treesitter.bindings;
 import infrastructure.parsing.treesitter.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Edit operation describing a text change
@@ -238,10 +238,10 @@ final class IncrementalTreeCache {
             
             cache[path] = newEntry;
             
-            Logger.debugLog(
+            structuredLog.debug_("log_event").field("message", 
                 (isIncremental ? "Incremental" : "Full") ~ " parse: " ~ filePath ~
                 " (" ~ (newEntry.parseTimeNs / 1000).to!string ~ "µs)"
-            );
+            ).emit();
             
             ParsedTree result;
             result.ptr = newTree;

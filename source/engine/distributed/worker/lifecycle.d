@@ -18,7 +18,7 @@ import engine.distributed.worker.adaptive;
 import engine.distributed.memory;
 import engine.distributed.metrics.steal : StealTelemetry;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Worker configuration
 struct WorkerConfig
@@ -93,11 +93,11 @@ struct WorkerLifecycle
             peerRegistry = new PeerRegistry(id);
             stealEngine = new StealEngine(id, peerRegistry, config.stealConfig);
             stealTelemetry = new StealTelemetry();
-            Logger.info("Work-stealing enabled");
+            structuredLog.info("workstealing_enabled").emit();
         }
         
         atomicStore(running, true);
-        Logger.info("Worker started: " ~ id.toString());
+        structuredLog.info("worker_started_").field("detail", "Worker started: " ~ id.toString()).emit();
         return Ok!DistributedError();
     }
     
@@ -110,16 +110,16 @@ struct WorkerLifecycle
         if (coordinatorTransport !is null) coordinatorTransport.close();
         
         // Log statistics
-        if (stealTelemetry !is null) Logger.info("Work-stealing stats: " ~ stealTelemetry.getStats().toString());
+        if (stealTelemetry !is null) structuredLog.info("workstealing_stats_").field("detail", "Work-stealing stats: " ~ stealTelemetry.getStats().toString()).emit();
         
         if (stealEngine !is null && stealEngine.isAdaptiveEnabled())
         {
             auto adaptiveState = stealEngine.getAdaptiveState();
             auto stats = stealEngine.getAdaptiveStats();
-            Logger.info("Adaptive thresholds: " ~ adaptiveState.toString());
-            Logger.info("Adaptive stats: " ~ stats.toString());
+            structuredLog.info("adaptive_thresholds_").field("detail", "Adaptive thresholds: " ~ adaptiveState.toString()).emit();
+            structuredLog.info("adaptive_stats_").field("detail", "Adaptive stats: " ~ stats.toString()).emit();
         }
-        Logger.info("Worker stopped: " ~ id.toString());
+        structuredLog.info("worker_stopped_").field("detail", "Worker stopped: " ~ id.toString()).emit();
     }
     
     /// Register with coordinator

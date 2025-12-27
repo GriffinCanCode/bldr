@@ -10,7 +10,7 @@ import std.string;
 import std.conv;
 import std.uni;
 import languages.dotnet.csharp.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.security.validation;
 
 /// MSBuild operations
@@ -19,7 +19,7 @@ struct MSBuildOps
     /// Build project with MSBuild
     static bool build(string projectRoot, CSharpConfig config)
     {
-        Logger.info("Building with MSBuild");
+        structuredLog.info("building_with_msbuild").emit();
         
         string[] cmd = ["msbuild"];
         
@@ -84,19 +84,19 @@ struct MSBuildOps
         
         if (result.status != 0)
         {
-            Logger.error("MSBuild failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("msbuild_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
-        Logger.info("MSBuild succeeded");
+        structuredLog.info("msbuild_succeeded").emit();
         return true;
     }
     
     /// Clean project with MSBuild
     static bool clean(string projectRoot, CSharpConfig config)
     {
-        Logger.info("Cleaning with MSBuild");
+        structuredLog.info("cleaning_with_msbuild").emit();
         
         string[] cmd = ["msbuild"];
         
@@ -116,7 +116,7 @@ struct MSBuildOps
         
         if (result.status != 0)
         {
-            Logger.warning("MSBuild clean had issues: " ~ result.output);
+            structuredLog.warning("msbuild_clean_had_issues_").field("detail", "MSBuild clean had issues: " ~ result.output).emit();
             return false;
         }
         
@@ -126,7 +126,7 @@ struct MSBuildOps
     /// Rebuild project with MSBuild
     static bool rebuild(string projectRoot, CSharpConfig config)
     {
-        Logger.info("Rebuilding with MSBuild");
+        structuredLog.info("rebuilding_with_msbuild").emit();
         
         string[] cmd = ["msbuild"];
         
@@ -146,19 +146,19 @@ struct MSBuildOps
         
         if (result.status != 0)
         {
-            Logger.error("MSBuild rebuild failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("msbuild_rebuild_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
-        Logger.info("MSBuild rebuild succeeded");
+        structuredLog.info("msbuild_rebuild_succeeded").emit();
         return true;
     }
     
     /// Run tests with MSBuild
     static bool test(string projectRoot, TestConfig config)
     {
-        Logger.info("Running tests with MSBuild");
+        structuredLog.info("running_tests_with_msbuild").emit();
         
         // MSBuild doesn't have a direct test target, use VSTest instead
         string[] cmd = ["vstest.console"];
@@ -167,7 +167,7 @@ struct MSBuildOps
         auto testDlls = findTestAssemblies(projectRoot);
         if (testDlls.empty)
         {
-            Logger.warning("No test assemblies found");
+            structuredLog.warning("no_test_assemblies_found").emit();
             return true;
         }
         
@@ -190,11 +190,11 @@ struct MSBuildOps
         
         if (result.status != 0)
         {
-            Logger.error("MSBuild tests failed: " ~ result.output);
+            structuredLog.error("msbuild_tests_failed_").field("detail", "MSBuild tests failed: " ~ result.output).emit();
             return false;
         }
         
-        Logger.info("MSBuild tests succeeded");
+        structuredLog.info("msbuild_tests_succeeded").emit();
         return true;
     }
     

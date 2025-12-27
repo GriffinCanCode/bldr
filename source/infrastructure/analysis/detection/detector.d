@@ -8,7 +8,7 @@ import std.array;
 import std.string;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.files.ignore;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.security.validation;
 import languages.registry;
 
@@ -155,7 +155,7 @@ class ProjectDetector
         }
         catch (Exception e)
         {
-            Logger.debugLog("Failed to scan directory: " ~ dir);
+            structuredLog.debug_("failed_to_scan_directory_").field("detail", "Failed to scan directory: " ~ dir).emit();
         }
     }
     
@@ -353,7 +353,7 @@ class ProjectDetector
         }
         catch (Exception e)
         {
-            Logger.debugLog("Failed to parse package.json: " ~ e.msg);
+            structuredLog.debug_("failed_to_parse_packagejson_").field("detail", "Failed to parse package.json: " ~ e.msg).emit();
         }
     }
     

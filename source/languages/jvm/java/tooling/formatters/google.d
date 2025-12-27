@@ -9,7 +9,7 @@ import std.array;
 import std.string;
 import languages.jvm.java.tooling.formatters.base;
 import languages.jvm.java.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Google Java Format formatter
 class GoogleJavaFormatter : JavaFormatter
@@ -18,7 +18,7 @@ class GoogleJavaFormatter : JavaFormatter
     {
         FormatResult result;
         
-        Logger.info("Running google-java-format");
+        structuredLog.info("running_googlejavaformat").emit();
         
         string[] cmd = ["google-java-format"];
         

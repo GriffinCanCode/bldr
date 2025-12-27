@@ -9,7 +9,7 @@ import std.string;
 import languages.scripting.python.core.config;
 import languages.scripting.python.tooling.detection : ToolDetection;
 alias PyTools = ToolDetection;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Package installation result
 struct InstallResult
@@ -46,7 +46,7 @@ class NullManager : PackageManager
     {
         InstallResult result;
         result.success = true;
-        Logger.warning("No package manager available, skipping installation");
+        structuredLog.warning("no_package_manager_available_skipping_in").emit();
         return result;
     }
     
@@ -54,7 +54,7 @@ class NullManager : PackageManager
     {
         InstallResult result;
         result.success = true;
-        Logger.warning("No package manager available, skipping installation");
+        structuredLog.warning("no_package_manager_available_skipping_in").emit();
         return result;
     }
     

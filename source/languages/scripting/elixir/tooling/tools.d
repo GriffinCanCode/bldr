@@ -8,7 +8,7 @@ import std.algorithm;
 import std.array;
 import std.string;
 import std.regex;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.process : isCommandAvailable;
 
 /// Elixir tools availability and version checking

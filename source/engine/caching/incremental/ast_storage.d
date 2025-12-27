@@ -9,7 +9,7 @@ import std.conv : to;
 import std.datetime : SysTime;
 import engine.caching.incremental.ast_dependency;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Binary storage for AST cache
 /// Uses efficient binary format for fast load/save

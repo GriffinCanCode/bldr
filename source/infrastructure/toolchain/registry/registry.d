@@ -8,7 +8,7 @@ import infrastructure.toolchain.core.platform;
 import infrastructure.toolchain.detection.detector;
 import infrastructure.toolchain.providers.providers;
 import infrastructure.toolchain.registry.constraints;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Toolchain registry - central repository for all toolchains
@@ -41,7 +41,7 @@ class ToolchainRegistry
         if (initialized)
             return;
         
-        Logger.debugLog("Initializing toolchain registry...");
+        structuredLog.debug_("initializing_toolchain_registry").emit();
         
         // Auto-detect toolchains
         auto detected = detector.detectAll();
@@ -51,7 +51,7 @@ class ToolchainRegistry
             register(tc);
         }
         
-        Logger.debugLog("Registered " ~ toolchains.length.to!string ~ " toolchain(s)");
+        structuredLog.debug_("registered_").field("detail", "Registered " ~ toolchains.length.to!string ~ " toolchain(s)").emit();
         initialized = true;
     }
     
@@ -60,14 +60,14 @@ class ToolchainRegistry
     {
         if (toolchain.id in byId)
         {
-            Logger.warning("Toolchain already registered: " ~ toolchain.id);
+            structuredLog.warning("toolchain_already_registered_").field("detail", "Toolchain already registered: " ~ toolchain.id).emit();
             return;
         }
         
         toolchains ~= toolchain;
         byId[toolchain.id] = toolchain;
         
-        Logger.debugLog("Registered toolchain: " ~ toolchain.id);
+        structuredLog.debug_("registered_toolchain_").field("detail", "Registered toolchain: " ~ toolchain.id).emit();
     }
     
     /// Get toolchain by ID
@@ -215,7 +215,7 @@ class ToolchainRegistry
     /// Provision toolchains from providers (fetch if needed)
     void provision() @system
     {
-        Logger.debugLog("Provisioning toolchains from providers...");
+        structuredLog.debug_("provisioning_toolchains_from_providers").emit();
         
         foreach (provider; providers)
         {
@@ -227,8 +227,8 @@ class ToolchainRegistry
                 auto result = provider.provide();
                 if (result.isErr)
                 {
-                    Logger.warning("Provider " ~ provider.name() ~ " failed: " ~ 
-                                 result.unwrapErr().message());
+                    structuredLog.warning("provider_").field("detail", "Provider " ~ provider.name() ~ " failed: " ~ 
+                                 result.unwrapErr().message()).emit();
                     continue;
                 }
                 
@@ -238,12 +238,12 @@ class ToolchainRegistry
                     register(tc);
                 }
                 
-                Logger.debugLog("Provisioned " ~ tcs.length.to!string ~ 
-                          " toolchain(s) from " ~ provider.name());
+                structuredLog.debug_("provisioned_").field("detail", "Provisioned " ~ tcs.length.to!string ~ 
+                          " toolchain(s) from " ~ provider.name()).emit();
             }
             catch (Exception e)
             {
-                Logger.warning("Provider " ~ provider.name() ~ " threw: " ~ e.msg);
+                structuredLog.warning("provider_").field("detail", "Provider " ~ provider.name() ~ " threw: " ~ e.msg).emit();
             }
         }
     }

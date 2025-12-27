@@ -22,7 +22,7 @@ import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.process : isCommandAvailable;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
 
@@ -43,14 +43,14 @@ class LuaHandler : BaseLanguageHandler
         if (config.runtime == LuaRuntime.Auto)
         {
             config.runtime = detectRuntime();
-            Logger.debugLog("Auto-detected runtime: " ~ runtimeToString(config.runtime));
+            structuredLog.debug_("autodetected_runtime_").field("detail", "Auto-detected runtime: " ~ runtimeToString(config.runtime)).emit();
         }
         
         // Validate configuration
         auto validation = validateConfig(config, target);
         if (!validation.empty)
         {
-            Logger.warning("Configuration validation failed: " ~ validation);
+            structuredLog.warning("configuration_validation_failed_").field("detail", "Configuration validation failed: " ~ validation).emit();
         }
     }
     
@@ -150,7 +150,7 @@ class LuaHandler : BaseLanguageHandler
             auto formatResult = runFormatter(target, luaConfig);
             if (!formatResult.success && !luaConfig.format.checkOnly)
             {
-                Logger.warning("Formatting failed: " ~ formatResult.error);
+                structuredLog.warning("formatting_failed_").field("detail", "Formatting failed: " ~ formatResult.error).emit();
             }
         }
         
@@ -165,7 +165,7 @@ class LuaHandler : BaseLanguageHandler
             }
             if (!lintResult.success)
             {
-                Logger.warning("Lint warnings: " ~ lintResult.error);
+                structuredLog.warning("lint_warnings_").field("detail", "Lint warnings: " ~ lintResult.error).emit();
             }
         }
         
@@ -282,7 +282,7 @@ class LuaHandler : BaseLanguageHandler
         if (luaConfig.test.framework == LuaTestFramework.Auto)
         {
             luaConfig.test.framework = detectTestFramework(target);
-            Logger.debugLog("Auto-detected test framework: " ~ testFrameworkToString(luaConfig.test.framework));
+            structuredLog.debug_("autodetected_test_framework_").field("detail", "Auto-detected test framework: " ~ testFrameworkToString(luaConfig.test.framework)).emit();
         }
         
         // Cache test framework initialization
@@ -301,7 +301,7 @@ class LuaHandler : BaseLanguageHandler
         bool frameworkInitialized = false;
         if (getCache().isCached(initActionId, [], initMetadata))
         {
-            Logger.debugLog("  [Cached] Test framework initialization: " ~ frameworkName);
+            structuredLog.debug_("__cached_test_framework_initialization_").field("detail", "  [Cached] Test framework initialization: " ~ frameworkName).emit();
             frameworkInitialized = true;
         }
         
@@ -476,12 +476,12 @@ class LuaHandler : BaseLanguageHandler
             // Check if rockspec installation is cached
             if (getCache().isCached(rockspecActionId, [rockspecFile], rockspecMetadata))
             {
-                Logger.info("  [Cached] LuaRocks dependencies from rockspec");
+                structuredLog.info("__cached_luarocks_dependencies_from_rock").emit();
             }
             else
             {
                 // Install dependencies from rockspec
-                Logger.info("Installing dependencies from rockspec: " ~ rockspecFile);
+                structuredLog.info("installing_dependencies_from_rockspec_").field("detail", "Installing dependencies from rockspec: " ~ rockspecFile).emit();
                 auto rockResult = manager.installDependencies(rockspecFile);
                 
                 bool success = rockResult.success;
@@ -492,14 +492,14 @@ class LuaHandler : BaseLanguageHandler
                     return result;
                 }
                 
-                Logger.info("Successfully installed dependencies from rockspec");
+                structuredLog.info("successfully_installed_dependencies_from").emit();
                 getCache().update(rockspecActionId, [rockspecFile], [], rockspecMetadata, true);
             }
         }
         else if (!config.luarocks.dependencies.empty)
         {
             // Install specified rocks with per-rock caching
-            Logger.info("Installing " ~ config.luarocks.dependencies.length.to!string ~ " rocks");
+            structuredLog.info("installing_").field("detail", "Installing " ~ config.luarocks.dependencies.length.to!string ~ " rocks").emit();
             
             foreach (rock; config.luarocks.dependencies)
             {
@@ -517,7 +517,7 @@ class LuaHandler : BaseLanguageHandler
                 // Check if rock installation is cached
                 if (getCache().isCached(rockActionId, [], rockMetadata))
                 {
-                    Logger.debugLog("  [Cached] Rock: " ~ rock);
+                    structuredLog.debug_("__cached_rock_").field("detail", "  [Cached] Rock: " ~ rock).emit();
                     continue;
                 }
                 
@@ -531,13 +531,13 @@ class LuaHandler : BaseLanguageHandler
                     return result;
                 }
                 
-                Logger.info("Installed rock: " ~ rock);
+                structuredLog.info("installed_rock_").field("detail", "Installed rock: " ~ rock).emit();
                 getCache().update(rockActionId, [], [], rockMetadata, true);
             }
         }
         else
         {
-            Logger.debugLog("No rockspec file found and no rocks specified, skipping dependency installation");
+            structuredLog.debug_("no_rockspec_file_found_and_no_rocks_spec").emit();
         }
         
         result.success = true;
@@ -581,7 +581,7 @@ class LuaHandler : BaseLanguageHandler
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to search for rockspec: " ~ e.msg);
+            structuredLog.warning("failed_to_search_for_rockspec_").field("detail", "Failed to search for rockspec: " ~ e.msg).emit();
         }
         
         return "";
@@ -839,7 +839,7 @@ class LuaHandler : BaseLanguageHandler
                 catch (Exception e)
                 {
                     import infrastructure.utils.logging.logger : Logger;
-                    Logger.debugLog("Failed to detect Lua test framework: " ~ e.msg);
+                    structuredLog.debug_("failed_to_detect_lua_test_framework_").field("detail", "Failed to detect Lua test framework: " ~ e.msg).emit();
                 }
             }
         }
@@ -917,7 +917,7 @@ class LuaHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to analyze imports in " ~ source);
+                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source).emit();
             }
         }
         

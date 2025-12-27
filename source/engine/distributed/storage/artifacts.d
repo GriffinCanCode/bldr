@@ -10,7 +10,7 @@ import std.conv : to;
 import engine.distributed.protocol.protocol : ArtifactId, InputSpec, DistributedError;
 import infrastructure.errors;
 import infrastructure.errors.formatting.format : formatError = format;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.crypto.blake3 : Blake3;
 import infrastructure.utils.memory.mmap : MmapRegion, MapMode;
 import infrastructure.utils.files.cdc : FastCDC, ChunkManifest, shouldChunk, LARGE_ARTIFACT_THRESHOLD;
@@ -58,7 +58,7 @@ final class ArtifactStore
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to create artifact cache directory: " ~ e.msg);
+                structuredLog.warning("failed_to_create_artifact_cache_director").field("detail", "Failed to create artifact cache directory: " ~ e.msg).emit();
             }
         }
     }
@@ -87,19 +87,19 @@ final class ArtifactStore
                     {
                         scope(exit) region.unmap();
                         artifact.data = region[].dup;
-                        Logger.debugLog("Artifact fetched from local cache (mmap): " ~ spec.id.toString());
+                        structuredLog.debug_("artifact_fetched_from_local_cache_mmap_").field("detail", "Artifact fetched from local cache (mmap): " ~ spec.id.toString()).emit();
                         return Ok!(InputArtifact, BuildError)(artifact);
                     }
                 }
                 
                 // Small artifacts or mmap fallback: standard read
                 artifact.data = cast(ubyte[])read(localPath);
-                Logger.debugLog("Artifact fetched from local cache: " ~ spec.id.toString());
+                structuredLog.debug_("artifact_fetched_from_local_cache_").field("detail", "Artifact fetched from local cache: " ~ spec.id.toString()).emit();
                 return Ok!(InputArtifact, BuildError)(artifact);
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to read from local cache: " ~ e.msg);
+                structuredLog.warning("failed_to_read_from_local_cache_").field("detail", "Failed to read from local cache: " ~ e.msg).emit();
                 // Fall through to remote fetch
             }
         }
@@ -119,16 +119,16 @@ final class ArtifactStore
                 }
                 catch (Exception e)
                 {
-                    Logger.warning("Failed to save to local cache: " ~ e.msg);
+                    structuredLog.warning("failed_to_save_to_local_cache_").field("detail", "Failed to save to local cache: " ~ e.msg).emit();
                 }
                 
-                Logger.debugLog("Artifact fetched from remote: " ~ spec.id.toString());
+                structuredLog.debug_("artifact_fetched_from_remote_").field("detail", "Artifact fetched from remote: " ~ spec.id.toString()).emit();
                 return Ok!(InputArtifact, BuildError)(artifact);
             }
             else
             {
-                Logger.error("Failed to fetch from remote");
-                Logger.error(formatError(remoteResult.unwrapErr()));
+                structuredLog.error("failed_to_fetch_from_remote").emit();
+                structuredLog.error("log_event").field("message", formatError(remoteResult.unwrapErr())).emit();
             }
         }
         
@@ -161,7 +161,7 @@ final class ArtifactStore
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to save to local cache: " ~ e.msg);
+            structuredLog.warning("failed_to_save_to_local_cache_").field("detail", "Failed to save to local cache: " ~ e.msg).emit();
         }
         
         // Upload to remote if enabled
@@ -170,12 +170,12 @@ final class ArtifactStore
             auto remoteResult = uploadRemote(id, data);
             if (remoteResult.isErr)
             {
-                Logger.warning("Failed to upload to remote: " ~ remoteResult.unwrapErr().message());
+                structuredLog.warning("failed_to_upload_to_remote_").field("detail", "Failed to upload to remote: " ~ remoteResult.unwrapErr().message()).emit();
                 // Don't fail - local cache is sufficient
             }
             else
             {
-                Logger.debugLog("Artifact uploaded to remote: " ~ id.toString());
+                structuredLog.debug_("artifact_uploaded_to_remote_").field("detail", "Artifact uploaded to remote: " ~ id.toString()).emit();
             }
         }
         
@@ -212,7 +212,7 @@ final class ArtifactStore
             auto putResult = executeHttpPut(chunkUrl, chunkData);
             if (putResult.isErr)
             {
-                Logger.warning("Failed to upload chunk: " ~ chunkHash);
+                structuredLog.warning("failed_to_upload_chunk_").field("detail", "Failed to upload chunk: " ~ chunkHash).emit();
                 continue;  // Try other chunks
             }
             chunksUploaded++;
@@ -227,14 +227,14 @@ final class ArtifactStore
         auto manifestResult = executeHttpPut(manifestUrl, manifestData);
         
         if (manifestResult.isErr)
-            Logger.warning("Failed to upload manifest for: " ~ id.toString());
+            structuredLog.warning("failed_to_upload_manifest_for_").field("detail", "Failed to upload manifest for: " ~ id.toString()).emit();
         
         // Save to local cache
         try { saveToLocalCache(id, data); }
-        catch (Exception e) { Logger.warning("Failed to save to local cache: " ~ e.msg); }
+        catch (Exception e) { structuredLog.warning("failed_to_save_to_local_cache_").field("detail", "Failed to save to local cache: " ~ e.msg).emit(); }
         
-        Logger.debugLog("Uploaded large artifact via CDC: " ~ id.toString() ~ 
-                       " (" ~ chunksUploaded.to!string ~ "/" ~ chunkResult.chunks.length.to!string ~ " chunks uploaded)");
+        structuredLog.debug_("uploaded_large_artifact_via_cdc_").field("detail", "Uploaded large artifact via CDC: " ~ id.toString() ~ 
+                       " (" ~ chunksUploaded.to!string ~ "/" ~ chunkResult.chunks.length.to!string ~ " chunks uploaded)").emit();
         
         return Ok!BuildError();
     }
@@ -358,20 +358,20 @@ final class ArtifactStore
                     immutable fileSize = getSize(file);
                     remove(file);
                     freed += fileSize;
-                    Logger.debugLog("Evicted cache entry: " ~ baseName(file));
+                    structuredLog.debug_("evicted_cache_entry_").field("detail", "Evicted cache entry: " ~ baseName(file)).emit();
                 }
                 catch (Exception e)
                 {
-                    Logger.warning("Failed to evict cache entry: " ~ e.msg);
+                    structuredLog.warning("failed_to_evict_cache_entry_").field("detail", "Failed to evict cache entry: " ~ e.msg).emit();
                 }
             }
             
             currentCacheSize -= freed;
-            Logger.info("Evicted " ~ freed.to!string ~ " bytes from artifact cache");
+            structuredLog.info("evicted_").field("detail", "Evicted " ~ freed.to!string ~ " bytes from artifact cache").emit();
         }
         catch (Exception e)
         {
-            Logger.warning("Cache eviction failed: " ~ e.msg);
+            structuredLog.warning("cache_eviction_failed_").field("detail", "Cache eviction failed: " ~ e.msg).emit();
         }
     }
     

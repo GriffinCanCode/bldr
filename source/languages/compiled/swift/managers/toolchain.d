@@ -8,7 +8,7 @@ import std.file;
 import std.path;
 import std.conv;
 import std.regex;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Swift toolchain information
 struct Toolchain
@@ -118,7 +118,7 @@ class SwiftToolchainManager
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse target info: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_target_info_").field("detail", "Failed to parse target info: " ~ e.msg).emit();
         }
         
         return "";
@@ -152,7 +152,7 @@ class SwiftToolchainManager
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse target info: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_target_info_").field("detail", "Failed to parse target info: " ~ e.msg).emit();
         }
         
         return targets;

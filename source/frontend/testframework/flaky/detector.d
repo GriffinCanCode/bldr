@@ -6,7 +6,7 @@ import std.math : exp, log, abs;
 import std.datetime : SysTime, Clock, Duration, dur;
 import core.sync.mutex : Mutex;
 import frontend.testframework.results : TestResult;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Flakiness confidence level
 enum FlakyConfidence
@@ -190,8 +190,8 @@ final class FlakyDetector
             if (!record.quarantined && record.shouldQuarantine())
             {
                 quarantineTest(record, timestamp);
-                Logger.warning("Test quarantined: " ~ testId ~ 
-                    " (confidence: " ~ record.confidence.to!string ~ ")");
+                structuredLog.warning("test_quarantined_").field("detail", "Test quarantined: " ~ testId ~ 
+                    " (confidence: " ~ record.confidence.to!string ~ ")").emit();
             }
             
             records[testId] = record;
@@ -280,7 +280,7 @@ final class FlakyDetector
             recordPtr.status = FlakyStatus.Suspect;
             recordPtr.quarantineRuns = 0;
             
-            Logger.info("Test released from quarantine: " ~ testId);
+            structuredLog.info("test_released_from_quarantine_").field("detail", "Test released from quarantine: " ~ testId).emit();
         }
     }
     

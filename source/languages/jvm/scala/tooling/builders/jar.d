@@ -16,7 +16,7 @@ import languages.jvm.scala.tooling.info;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
 
 /// Standard JAR builder using scalac with action-level caching
@@ -45,7 +45,7 @@ class JARBuilder : ScalaBuilder
     {
         ScalaBuildResult result;
         
-        Logger.debugLog("Building Scala JAR: " ~ target.name);
+        structuredLog.debug_("building_scala_jar_").field("detail", "Building Scala JAR: " ~ target.name).emit();
         
         // Determine output path
         string outputPath = getOutputPath(target, workspace);
@@ -155,7 +155,7 @@ class JARBuilder : ScalaBuilder
                 
                 if (classExists)
                 {
-                    Logger.debugLog("  [Cached] " ~ source);
+                    structuredLog.debug_("__cached_").field("detail", "  [Cached] " ~ source).emit();
                     continue;
                 }
             }
@@ -179,7 +179,7 @@ class JARBuilder : ScalaBuilder
             // Add this source file
             cmd ~= [source];
             
-            Logger.debugLog("Compiling: " ~ source);
+            structuredLog.debug_("compiling_").field("detail", "Compiling: " ~ source).emit();
             
             // Execute compilation
             auto compileRes = execute(cmd);
@@ -272,7 +272,7 @@ class JARBuilder : ScalaBuilder
         // Check if packaging is cached
         if (actionCache.isCached(actionId, classFiles, metadata) && exists(outputPath))
         {
-            Logger.debugLog("  [Cached] JAR package: " ~ outputPath);
+            structuredLog.debug_("__cached_jar_package_").field("detail", "  [Cached] JAR package: " ~ outputPath).emit();
             return true;
         }
         
@@ -286,7 +286,7 @@ class JARBuilder : ScalaBuilder
             string mainClass = detectMainClass(classDir, config);
             if (mainClass.empty)
             {
-                Logger.warning("No main class found for executable");
+                structuredLog.warning("no_main_class_found_for_executable").emit();
             }
             else
             {
@@ -304,7 +304,7 @@ class JARBuilder : ScalaBuilder
         // Add class files
         cmd ~= ["-C", classDir, "."];
         
-        Logger.debugLog("JAR command: " ~ cmd.join(" "));
+        structuredLog.debug_("jar_command_").field("detail", "JAR command: " ~ cmd.join(" ")).emit();
         
         // Execute jar packaging
         auto jarRes = execute(cmd);
@@ -437,7 +437,7 @@ class JARBuilder : ScalaBuilder
         import std.file : dirEntries, SpanMode;
         import std.algorithm : endsWith;
         
-        Logger.debugLog("Scanning for main class in: " ~ classDir);
+        structuredLog.debug_("scanning_for_main_class_in_").field("detail", "Scanning for main class in: " ~ classDir).emit();
         
         // Search for .class files
         foreach (entry; dirEntries(classDir, SpanMode.depth))
@@ -460,12 +460,12 @@ class JARBuilder : ScalaBuilder
             // Check if this class has a main method
             if (hasMainMethod(className, classDir))
             {
-                Logger.debugLog("Found main class: " ~ className);
+                structuredLog.debug_("found_main_class_").field("detail", "Found main class: " ~ className).emit();
                 return className;
             }
         }
         
-        Logger.debugLog("No main class detected");
+        structuredLog.debug_("no_main_class_detected").emit();
         return "";
     }
     
@@ -496,7 +496,7 @@ class JARBuilder : ScalaBuilder
         }
         catch (Exception e)
         {
-            Logger.debugLog("Error checking class " ~ className ~ ": " ~ e.msg);
+            structuredLog.debug_("error_checking_class_").field("detail", "Error checking class " ~ className ~ ": " ~ e.msg).emit();
         }
         
         return false;

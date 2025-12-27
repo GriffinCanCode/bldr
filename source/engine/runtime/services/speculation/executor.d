@@ -14,7 +14,7 @@ import engine.runtime.services.speculation.service;
 import engine.runtime.services.speculation.engine : SpeculativeEngine, EngineConfig, EngineStats, SpeculativeResult;
 import engine.runtime.services.speculation.speculator : CacheHitSpeculator = SpeculativeExecutor, SpeculatorStats, createSpeculator;
 import engine.runtime.services.scheduling : ISchedulingService, NodeBuildResult;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Speculation executor - coordinates speculative execution during builds
 /// Wraps the regular execution flow and adds speculation capabilities
@@ -74,8 +74,9 @@ final class SpeculationExecutor
         if (_nodeExecutor !is null)
             _engine.setExecutor(_nodeExecutor);
         
-        Logger.debugLog("Speculation: initialized engine with " ~ 
-                       config.workerCount.to!string ~ " workers");
+        structuredLog.debug_("speculation_engine_initialized")
+            .field("worker_count", config.workerCount)
+            .emit();
     }
     
     /// Start the speculative engine workers
@@ -112,8 +113,9 @@ final class SpeculationExecutor
         auto estimator = new CostEstimator(history);
         _cacheHitSpeculator = new CacheHitSpeculator(estimator, threshold);
         
-        Logger.debugLog("Speculation: initialized cache-hit speculator (threshold=" ~ 
-                       (cast(int)(threshold * 100)).to!string ~ "%)");
+        structuredLog.debug_("cache_hit_speculator_initialized")
+            .field("threshold_pct", cast(int)(threshold * 100))
+            .emit();
     }
     
     /// Get cache-hit speculator for external decision queries
@@ -140,7 +142,9 @@ final class SpeculationExecutor
         
         if (candidates.length > 0)
         {
-            Logger.info("Speculation: starting " ~ candidates.length.to!string ~ " candidates");
+            structuredLog.info("speculation_starting")
+                .field("candidate_count", candidates.length)
+                .emit();
             
             // Start engine if available
             if (_engine !is null && !_engineStarted)
@@ -173,8 +177,9 @@ final class SpeculationExecutor
             
             if (cacheHitCandidates.length > 0)
             {
-                Logger.debugLog("Speculation: " ~ cacheHitCandidates.length.to!string ~ 
-                               " cache-hit candidates");
+                structuredLog.debug_("cache_hit_candidates_found")
+                    .field("count", cacheHitCandidates.length)
+                    .emit();
                 
                 foreach (candidateId; cacheHitCandidates)
                 {
@@ -216,8 +221,10 @@ final class SpeculationExecutor
                     buildResult.success = true;
                     buildResult.cached = true;
                     
-                    Logger.debugLog("Speculation: engine hit for " ~ targetId.toString() ~ 
-                                   " (saved " ~ result.executionTime.total!"msecs".to!string ~ "ms)");
+                    structuredLog.debug_("speculation_engine_hit")
+                        .field("target", targetId.toString())
+                        .field("saved_ms", result.executionTime.total!"msecs")
+                        .emit();
                     
                     return Nullable!NodeBuildResult(buildResult);
                 }
@@ -253,8 +260,10 @@ final class SpeculationExecutor
         buildResult.success = true;
         buildResult.cached = true;  // Treat speculation hit like cache hit
         
-        Logger.debugLog("Speculation: hit for " ~ targetId.toString() ~ 
-                       " (saved " ~ task.actualDuration.total!"msecs".to!string ~ "ms)");
+        structuredLog.debug_("speculation_hit")
+            .field("target", targetId.toString())
+            .field("saved_ms", task.actualDuration.total!"msecs")
+            .emit();
         
         return Nullable!NodeBuildResult(buildResult);
     }
@@ -372,21 +381,15 @@ final class SpeculationExecutor
             auto stats = getStats();
             if (stats.totalSpeculated > 0 || stats.cacheHitSpeculations > 0)
             {
-                Logger.info("Speculation Summary:");
-                Logger.info("  Speculated: " ~ stats.totalSpeculated.to!string);
-                Logger.info("  Hits: " ~ stats.hits.to!string);
-                Logger.info("  Aborted: " ~ stats.aborted.to!string);
-                Logger.info("  Time saved: " ~ stats.timeSaved.total!"msecs".to!string ~ "ms");
-                
-                if (stats.enginePendingTasks > 0 || stats.engineActiveWorkers > 0)
-                    Logger.info("  Engine pending: " ~ stats.enginePendingTasks.to!string);
-                
-                // Log cache-hit speculator stats
-                if (stats.cacheHitSpeculations > 0)
-                {
-                    Logger.info("  Cache-hit speculations: " ~ stats.cacheHitSpeculations.to!string ~ 
-                               " (" ~ (cast(int)(stats.cacheHitConfirmRate * 100)).to!string ~ "% confirmed)");
-                }
+                structuredLog.info("speculation_summary")
+                    .field("total_speculated", stats.totalSpeculated)
+                    .field("hits", stats.hits)
+                    .field("aborted", stats.aborted)
+                    .field("time_saved_ms", stats.timeSaved.total!"msecs")
+                    .field("engine_pending", stats.enginePendingTasks)
+                    .field("cache_hit_speculations", stats.cacheHitSpeculations)
+                    .field("cache_hit_confirm_rate_pct", cast(int)(stats.cacheHitConfirmRate * 100))
+                    .emit();
             }
         }
     }

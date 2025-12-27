@@ -453,7 +453,7 @@ final class CertificateManager
         import std.process : execute;
         import std.file : write, exists, mkdirRecurse;
         import std.path : dirName;
-        import infrastructure.utils.logging.logger;
+        import infrastructure.utils.logging;
         
         // Check if certbot is available
         auto checkResult = execute(["certbot", "--version"]);
@@ -482,14 +482,14 @@ final class CertificateManager
             "--key-path", config.keyFile
         ];
         
-        Logger.info("Renewing certificate for domain: " ~ domain);
+        structuredLog.info("certificate_renewing").field("domain", domain).emit();
         auto result = execute(certbotArgs);
         
         if (result.status != 0)
             return VoidBuildResult.err(
                 Errors.system("Certificate renewal failed: " ~ result.output, ErrorCode.NetworkError));
         
-        Logger.info("Certificate renewed successfully for: " ~ domain);
+        structuredLog.info("certificate_renewed").field("domain", domain).emit();
         return Ok!BuildError();
     }
     
@@ -514,7 +514,7 @@ final class CertificateManager
     /// Hot-reload certificates without downtime
     VoidBuildResult reload() @trusted
     {
-        import infrastructure.utils.logging.logger;
+        import infrastructure.utils.logging;
         
         // Verify new certificates exist and are valid
         if (!exists(config.certFile) || !exists(config.keyFile))
@@ -533,7 +533,7 @@ final class CertificateManager
         // 4. New connections use new context
         // 5. Old context freed when last connection closes
         
-        Logger.info("Certificate reload completed successfully");
+        structuredLog.info("certificate_reload_complete").emit();
         return Ok!BuildError();
     }
 }
@@ -553,7 +553,7 @@ struct TlsUtil
         import std.file : exists, mkdirRecurse, write;
         import std.path : dirName;
         import std.conv : to;
-        import infrastructure.utils.logging.logger;
+        import infrastructure.utils.logging;
         
         // Check if openssl is available
         auto checkResult = execute(["openssl", "version"]);
@@ -569,7 +569,7 @@ struct TlsUtil
         if (!exists(keyDir))
             mkdirRecurse(keyDir);
         
-        Logger.info("Generating self-signed certificate for: " ~ commonName);
+        structuredLog.info("generating_self_signed_cert").field("common_name", commonName).emit();
         
         // Generate private key (RSA 2048-bit)
         string[] keyGenArgs = [
@@ -599,10 +599,11 @@ struct TlsUtil
             return VoidBuildResult.err(
                 Errors.system("Failed to generate certificate: " ~ certResult.output, ErrorCode.NetworkError));
         
-        Logger.info("Self-signed certificate generated successfully");
-        Logger.info("  Certificate: " ~ certPath);
-        Logger.info("  Private key: " ~ keyPath);
-        Logger.info("  Valid for: " ~ validDays.to!string ~ " days");
+        structuredLog.info("self_signed_cert_generated")
+            .field("cert_path", certPath)
+            .field("key_path", keyPath)
+            .field("valid_days", validDays)
+            .emit();
         
         return Ok!BuildError();
     }

@@ -12,7 +12,7 @@ import languages.dotnet.csharp.core.config;
 import infrastructure.analysis.targets.spec;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Native AOT builder
 class AOTBuilder : CSharpBuilder
@@ -29,7 +29,7 @@ class AOTBuilder : CSharpBuilder
     {
         BuildResult result;
         
-        Logger.info("Building with Native AOT builder");
+        structuredLog.info("building_with_native_aot_builder").emit();
         
         // Enable AOT in config
         auto mutableConfig = cast(CSharpConfig)config;
@@ -68,7 +68,7 @@ class AOTBuilder : CSharpBuilder
             result.success = true;
             result.outputHash = FastHash.hashFile(result.outputs[0]);
             
-            Logger.info("Native AOT build succeeded, output: " ~ result.outputs[0]);
+            structuredLog.info("native_aot_build_succeeded_output_").field("detail", "Native AOT build succeeded, output: " ~ result.outputs[0]).emit();
         }
         else
         {

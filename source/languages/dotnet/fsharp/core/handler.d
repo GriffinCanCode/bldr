@@ -15,7 +15,7 @@ import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// F# build handler with action-level caching
 class FSharpHandler : BaseLanguageHandler
@@ -116,7 +116,7 @@ class FSharpHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to analyze imports in " ~ source);
+                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source).emit();
             }
         }
         
@@ -231,7 +231,7 @@ class FSharpHandler : BaseLanguageHandler
         // Check if build is cached
         if (getCache().isCached(actionId, inputFiles, metadata) && exists(outputPath))
         {
-            Logger.debugLog("  [Cached] dotnet F# build: " ~ outputPath);
+            structuredLog.debug_("__cached_dotnet_f_build_").field("detail", "  [Cached] dotnet F# build: " ~ outputPath).emit();
             result.success = true;
             result.outputs = outputs;
             result.outputHash = FastHash.hashFile(outputPath);
@@ -430,7 +430,7 @@ class FSharpHandler : BaseLanguageHandler
         // Check if build is cached
         if (getCache().isCached(actionId, target.sources, metadata) && exists(outputPath))
         {
-            Logger.debugLog("  [Cached] fsc build: " ~ outputPath);
+            structuredLog.debug_("__cached_fsc_build_").field("detail", "  [Cached] fsc build: " ~ outputPath).emit();
             result.success = true;
             result.outputs = outputs;
             result.outputHash = FastHash.hashFile(outputPath);
@@ -666,7 +666,7 @@ class FSharpHandler : BaseLanguageHandler
                         foreach (cmd; commandsJson.array)
                         {
                             string command = cmd.str;
-                            Logger.info("Executing custom command: " ~ command);
+                            structuredLog.info("executing_custom_command_").field("detail", "Executing custom command: " ~ command).emit();
                             
                             auto res = executeShell(command);
                             if (res.status != 0)

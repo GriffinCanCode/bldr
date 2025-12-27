@@ -14,7 +14,7 @@ import infrastructure.parsing.treesitter.bindings;
 import infrastructure.parsing.treesitter.config;
 import infrastructure.parsing.treesitter.incremental;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Universal tree-sitter based AST parser
@@ -137,9 +137,9 @@ final class TreeSitterParser : BaseASTParser {
             // Extract imports
             ast.includes = extractImports(root, content);
             
-            Logger.debugLog("Parsed " ~ filePath ~ ": " ~ 
+            structuredLog.debug_("parsed_").field("detail", "Parsed " ~ filePath ~ ": " ~ 
                           ast.symbols.length.to!string ~ " symbols, " ~
-                          ast.includes.length.to!string ~ " imports");
+                          ast.includes.length.to!string ~ " imports").emit();
             
             return BuildResult!FileAST.ok(ast);
         } catch (Exception e) {

@@ -8,7 +8,7 @@ import core.thread : Thread;
 import engine.distributed.coordinator.coordinator;
 import engine.runtime.remote.pool;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Remote execution service health monitor
 /// 
@@ -56,7 +56,7 @@ final class RemoteServiceHealthMonitor
             monitorThread = new Thread(&healthLoop);
             monitorThread.start();
             
-            Logger.info("Remote service health monitor started");
+            structuredLog.info("remote_service_health_monitor_started").emit();
             return Ok!BuildError();
         }
     }
@@ -69,7 +69,7 @@ final class RemoteServiceHealthMonitor
         if (monitorThread !is null)
             monitorThread.join();
         
-        Logger.info("Remote service health monitor stopped");
+        structuredLog.info("remote_service_health_monitor_stopped").emit();
     }
     
     /// Health monitoring loop
@@ -88,28 +88,28 @@ final class RemoteServiceHealthMonitor
                 // Log health status
                 if (enableMetrics)
                 {
-                    Logger.debugLog("Health check: " ~ 
+                    structuredLog.debug_("health_check_").field("detail", "Health check: " ~ 
                                    "workers=" ~ poolStats.totalWorkers.to!string ~
                                    ", busy=" ~ poolStats.busyWorkers.to!string ~
                                    ", queue=" ~ coordStats.pendingActions.to!string ~
-                                   ", util=" ~ (poolStats.avgUtilization * 100).to!size_t.to!string ~ "%");
+                                   ", util=" ~ (poolStats.avgUtilization * 100).to!size_t.to!string ~ "%").emit();
                 }
                 
                 // Detect issues
                 if (poolStats.totalWorkers == 0)
                 {
-                    Logger.warning("No workers available!");
+                    structuredLog.warning("no_workers_available").emit();
                 }
                 
                 if (coordStats.pendingActions > poolStats.totalWorkers * 10)
                 {
-                    Logger.warning("High queue depth: " ~ 
-                                  coordStats.pendingActions.to!string ~ " pending");
+                    structuredLog.warning("high_queue_depth_").field("detail", "High queue depth: " ~ 
+                                  coordStats.pendingActions.to!string ~ " pending").emit();
                 }
             }
             catch (Exception e)
             {
-                Logger.error("Health check failed: " ~ e.msg);
+                structuredLog.error("health_check_failed_").field("detail", "Health check failed: " ~ e.msg).emit();
             }
             
             // Sleep in short intervals to allow fast shutdown

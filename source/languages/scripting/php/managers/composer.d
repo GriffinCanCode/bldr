@@ -8,7 +8,7 @@ import std.algorithm;
 import std.array;
 import std.process;
 import std.range;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Composer.json metadata
 struct ComposerMetadata
@@ -149,7 +149,7 @@ struct AutoloadConfig
             string fullPath = buildPath(projectRoot, dir);
             if (!exists(fullPath) || !isDir(fullPath))
             {
-                Logger.warning("PSR-4 directory not found: " ~ fullPath ~ " for namespace " ~ ns);
+                structuredLog.warning("psr4_directory_not_found_").field("detail", "PSR-4 directory not found: " ~ fullPath ~ " for namespace " ~ ns).emit();
                 return false;
             }
         }
@@ -292,14 +292,14 @@ class ComposerTool
         
         cmd ~= "--no-interaction";
         
-        Logger.info("Running: " ~ cmd.join(" "));
+        structuredLog.info("running_").field("detail", "Running: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, projectRoot);
         
         if (res.status != 0)
         {
-            Logger.error("Composer install failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("composer_install_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -316,14 +316,14 @@ class ComposerTool
         else
             cmd ~= "--no-interaction";
         
-        Logger.info("Running: " ~ cmd.join(" "));
+        structuredLog.info("running_").field("detail", "Running: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, projectRoot);
         
         if (res.status != 0)
         {
-            Logger.error("Composer update failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("composer_update_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -344,14 +344,14 @@ class ComposerTool
         if (apcu)
             cmd ~= "--apcu";
         
-        Logger.info("Running: " ~ cmd.join(" "));
+        structuredLog.info("running_").field("detail", "Running: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, projectRoot);
         
         if (res.status != 0)
         {
-            Logger.error("Composer dump-autoload failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("composer_dumpautoload_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -363,13 +363,13 @@ class ComposerTool
     {
         string[] cmd = [composerPath, "validate", "--no-check-all"];
         
-        Logger.debugLog("Validating composer.json");
+        structuredLog.debug_("validating_composerjson").emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, projectRoot);
         
         if (res.status != 0)
         {
-            Logger.warning("Composer validation failed: " ~ res.output);
+            structuredLog.warning("composer_validation_failed_").field("detail", "Composer validation failed: " ~ res.output).emit();
             return false;
         }
         
@@ -426,7 +426,7 @@ class PSR4Validator
             auto declaredNs = extractNamespace(content);
             if (declaredNs.empty)
             {
-                Logger.warning("No namespace found in: " ~ filePath);
+                structuredLog.warning("no_namespace_found_in_").field("detail", "No namespace found in: " ~ filePath).emit();
                 return false;
             }
             
@@ -435,8 +435,8 @@ class PSR4Validator
             
             if (declaredNs != expectedNs)
             {
-                Logger.warning("Namespace mismatch in " ~ filePath ~ 
-                             ": expected " ~ expectedNs ~ ", found " ~ declaredNs);
+                structuredLog.warning("namespace_mismatch_in_").field("detail", "Namespace mismatch in " ~ filePath ~ 
+                             ": expected " ~ expectedNs ~ ", found " ~ declaredNs).emit();
                 return false;
             }
             
@@ -444,7 +444,7 @@ class PSR4Validator
             string className = extractClassName(content);
             if (className.empty)
             {
-                Logger.warning("No class/interface/trait found in: " ~ filePath);
+                structuredLog.warning("no_classinterfacetrait_found_in_").field("detail", "No class/interface/trait found in: " ~ filePath).emit();
                 return false;
             }
             
@@ -454,8 +454,8 @@ class PSR4Validator
             
             if (actualFilename != expectedFilename)
             {
-                Logger.warning("Filename mismatch in " ~ filePath ~
-                             ": expected " ~ expectedFilename ~ ", found " ~ actualFilename);
+                structuredLog.warning("filename_mismatch_in_").field("detail", "Filename mismatch in " ~ filePath ~
+                             ": expected " ~ expectedFilename ~ ", found " ~ actualFilename).emit();
                 return false;
             }
             
@@ -463,7 +463,7 @@ class PSR4Validator
         }
         catch (Exception e)
         {
-            Logger.error("Failed to validate " ~ filePath ~ ": " ~ e.msg);
+            structuredLog.error("failed_to_validate_").field("detail", "Failed to validate " ~ filePath ~ ": " ~ e.msg).emit();
             return false;
         }
     }

@@ -8,7 +8,7 @@ import core.sync.mutex;
 import engine.graph.core.graph;
 import engine.graph.dynamic.discovery;
 import infrastructure.config.schema.schema;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Dynamic build graph - extends BuildGraph with runtime mutation capabilities
@@ -79,9 +79,9 @@ final class DynamicBuildGraph
             // Record in extension
             extension.recordDiscovery(discovery);
             
-            Logger.debugLog("Discovery recorded for " ~ originKey ~ 
+            structuredLog.debug_("discovery_recorded_for_").field("detail", "Discovery recorded for " ~ originKey ~ 
                           ": " ~ discovery.newTargets.length.to!string ~ " new targets, " ~
-                          discovery.discoveredDependents.length.to!string ~ " new dependents");
+                          discovery.discoveredDependents.length.to!string ~ " new dependents").emit();
         }
     }
     
@@ -110,7 +110,7 @@ final class DynamicBuildGraph
         foreach (node; newNodes)
             node.initPendingDeps();
         
-        Logger.info("Applied discoveries: " ~ newNodes.length.to!string ~ " new nodes scheduled");
+        structuredLog.info("applied_discoveries_").field("detail", "Applied discoveries: " ~ newNodes.length.to!string ~ " new nodes scheduled").emit();
         
         return BuildResult!(BuildNode[]).ok(newNodes);
     }

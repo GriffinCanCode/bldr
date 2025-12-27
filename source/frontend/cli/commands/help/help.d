@@ -2,7 +2,7 @@ module frontend.cli.commands.help.help;
 
 import std.stdio;
 import std.string : toLower;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import frontend.cli.control.terminal;
 import frontend.cli.display.format;
 import frontend.cli.commands.extensions.watch : WatchCommand;
@@ -340,7 +340,7 @@ struct HelpCommand
                 showHelpHelp();
                 break;
             default:
-                Logger.error("Unknown command: " ~ command);
+                structuredLog.error("unknown_command_").field("detail", "Unknown command: " ~ command).emit();
                 terminal.write("Run ");
                 terminal.writeColored("'bldr help'", Color.Cyan, Style.Bold);
                 terminal.write(" to see available commands.");

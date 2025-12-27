@@ -3,7 +3,7 @@ module engine.runtime.remote.providers.kubernetes;
 import engine.runtime.remote.providers.base;
 import engine.distributed.protocol.protocol : WorkerId;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import std.process : execute, pipeProcess, Redirect, wait;
 import std.format : format;
 import std.datetime : Clock, SysTime;
@@ -115,7 +115,7 @@ spec:
         auto hash = hasher.finish();
         ulong id = *cast(ulong*)&hash[0];
         
-        Logger.info("Created Kubernetes pod: " ~ podName);
+        structuredLog.info("created_kubernetes_pod_").field("detail", "Created Kubernetes pod: " ~ podName).emit();
         podNameMap[WorkerId(id)] = podName;
         return Ok!(WorkerId, BuildError)(WorkerId(id));
     }
@@ -146,7 +146,7 @@ spec:
             return VoidBuildResult.err(
                 Errors.system(format("Failed to delete Kubernetes pod %s: %s", podName, result.output), ErrorCode.ProcessSpawnFailed));
         
-        Logger.info("Deleted Kubernetes pod: " ~ podName);
+        structuredLog.info("deleted_kubernetes_pod_").field("detail", "Deleted Kubernetes pod: " ~ podName).emit();
         podNameMap.remove(workerId);
         return Ok!BuildError();
     }

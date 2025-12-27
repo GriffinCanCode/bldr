@@ -20,7 +20,7 @@ import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action;
 
 /// Ruby build handler with action-level caching
@@ -50,13 +50,13 @@ class RubyHandler : BaseLanguageHandler
         if (config.packageManager == RubyPackageManager.Auto)
         {
             config.packageManager = detectPackageManager(sourceDir);
-            Logger.debugLog("Detected package manager: " ~ config.packageManager.to!string);
+            structuredLog.debug_("detected_package_manager_").field("detail", "Detected package manager: " ~ config.packageManager.to!string).emit();
         }
         
         if (config.versionManager == RubyVersionManager.Auto)
         {
             config.versionManager = detectVersionManager(sourceDir);
-            Logger.debugLog("Detected version manager: " ~ config.versionManager.to!string);
+            structuredLog.debug_("detected_version_manager_").field("detail", "Detected version manager: " ~ config.versionManager.to!string).emit();
         }
     }
     
@@ -83,17 +83,17 @@ class RubyHandler : BaseLanguageHandler
         
         if (rubyConfig.format.autoFormat && rubyConfig.format.formatter != RubyFormatter.None)
         {
-            Logger.info("Auto-formatting code");
+            structuredLog.info("autoformatting_code").emit();
             auto formatter = FormatterFactory.create(rubyConfig.format.formatter);
             auto fmtResult = formatter.format(target.sources, rubyConfig.format, rubyConfig.format.autoCorrect);
             
             if (!fmtResult.success)
-                Logger.warning("Formatting failed, continuing anyway");
+                structuredLog.warning("formatting_failed_continuing_anyway").emit();
             else if (fmtResult.hasOffenses())
             {
-                Logger.info("Found " ~ fmtResult.offenseCount.to!string ~ " style offenses");
+                structuredLog.info("found_").field("detail", "Found " ~ fmtResult.offenseCount.to!string ~ " style offenses").emit();
                 if (fmtResult.autoFixed)
-                    Logger.info("Auto-fixed offenses");
+                    structuredLog.info("autofixed_offenses").emit();
             }
         }
         
@@ -254,7 +254,7 @@ class RubyHandler : BaseLanguageHandler
             if (versionManager.isVersionInstalled(versionStr))
             {
                 rubyCmd = versionManager.getRubyPath(versionStr);
-                Logger.debugLog("Using Ruby version: " ~ versionStr);
+                structuredLog.debug_("using_ruby_version_").field("detail", "Using Ruby version: " ~ versionStr).emit();
             }
         }
         
@@ -267,7 +267,7 @@ class RubyHandler : BaseLanguageHandler
         
         if (packageManager.hasLockfile())
         {
-            Logger.info("Installing dependencies");
+            structuredLog.info("installing_dependencies").emit();
             auto result = packageManager.installFromFile(buildPath(projectRoot, "Gemfile"));
             return result.success;
         }
@@ -387,11 +387,11 @@ class RubyHandler : BaseLanguageHandler
         if (!CucumberRunner.isAvailable())
         {
             result.error = "Cucumber not available (install: gem install cucumber)";
-            Logger.error(result.error);
+            structuredLog.error("log_event").field("message", result.error).emit();
             return result;
         }
         
-        Logger.info("Running Cucumber BDD tests");
+        structuredLog.info("running_cucumber_bdd_tests").emit();
         
         // Determine feature files
         string[] featureFiles;
@@ -418,14 +418,14 @@ class RubyHandler : BaseLanguageHandler
                     foreach (entry; dirEntries(featuresDir, "*.feature", SpanMode.depth))
                         featureFiles ~= entry.name;
                 } catch (Exception e) {
-                    Logger.warning("Failed to scan features directory: " ~ e.msg);
+                    structuredLog.warning("failed_to_scan_features_directory_").field("detail", "Failed to scan features directory: " ~ e.msg).emit();
                 }
             }
         }
         
         if (featureFiles.empty)
         {
-            Logger.warning("No feature files found, skipping Cucumber tests");
+            structuredLog.warning("no_feature_files_found_skipping_cucumber").emit();
             result.success = true;
             result.outputHash = FastHash.hashStrings(target.sources);
             return result;
@@ -445,20 +445,20 @@ class RubyHandler : BaseLanguageHandler
         
         if (cucumberResult.hasFailures())
         {
-            Logger.error("Cucumber tests failed:");
-            Logger.error("  Scenarios: " ~ cucumberResult.scenariosPassed.to!string ~ "/" ~ 
-                        cucumberResult.scenarios.to!string ~ " passed");
-            Logger.error("  Steps: " ~ cucumberResult.stepsPassed.to!string ~ "/" ~ 
-                        cucumberResult.steps.to!string ~ " passed");
+            structuredLog.error("cucumber_tests_failed").emit();
+            structuredLog.error("__scenarios_").field("detail", "  Scenarios: " ~ cucumberResult.scenariosPassed.to!string ~ "/" ~ 
+                        cucumberResult.scenarios.to!string ~ " passed").emit();
+            structuredLog.error("__steps_").field("detail", "  Steps: " ~ cucumberResult.stepsPassed.to!string ~ "/" ~ 
+                        cucumberResult.steps.to!string ~ " passed").emit();
             
             if (!result.error.empty)
-                Logger.error("  " ~ result.error);
+                structuredLog.error("__").field("detail", "  " ~ result.error).emit();
         }
         else if (cucumberResult.scenarios > 0)
         {
-            Logger.info("All Cucumber tests passed:");
-            Logger.info("  " ~ cucumberResult.scenarios.to!string ~ " scenarios, " ~ 
-                       cucumberResult.steps.to!string ~ " steps");
+            structuredLog.info("all_cucumber_tests_passed").emit();
+            structuredLog.info("__").field("detail", "  " ~ cucumberResult.scenarios.to!string ~ " scenarios, " ~ 
+                       cucumberResult.steps.to!string ~ " steps").emit();
         }
         
         return result;
@@ -474,7 +474,7 @@ class RubyHandler : BaseLanguageHandler
         
         if (getCache().isCached(actionId, target.sources, metadata))
             {
-            Logger.debugLog("  [Cached] Type checking");
+            structuredLog.debug_("__cached_type_checking").emit();
             return TypeCheckResult();
             }
             

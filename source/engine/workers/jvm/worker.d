@@ -12,7 +12,7 @@ import engine.workers.protocol;
 import engine.workers.pool;
 import engine.workers.base;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// JVM Persistent Worker Factory
 /// 

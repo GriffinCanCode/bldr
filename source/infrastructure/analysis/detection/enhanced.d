@@ -7,7 +7,7 @@ import std.range : empty;
 import infrastructure.analysis.detection.detector;
 import infrastructure.analysis.manifests;
 import infrastructure.config.schema.schema : TargetLanguage;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Enhanced project detector that uses manifest parsing
 class EnhancedProjectDetector
@@ -45,7 +45,7 @@ class EnhancedProjectDetector
                     if (result.isOk)
                     {
                         enhanced.manifestInfo[langInfo.language] = result.unwrap();
-                        Logger.debugLog("Parsed manifest: " ~ manifestPath);
+                        structuredLog.debug_("parsed_manifest_").field("detail", "Parsed manifest: " ~ manifestPath).emit();
                     }
                 }
             }

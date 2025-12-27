@@ -15,7 +15,7 @@ import languages.base.base;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Gem builder for Ruby gems/libraries
 class GemBuilder : Builder
@@ -40,7 +40,7 @@ class GemBuilder : Builder
                 return result;
             }
             gemspecFile = gemspecs[0];
-            Logger.debugLog("Using gemspec: " ~ gemspecFile);
+            structuredLog.debug_("using_gemspec_").field("detail", "Using gemspec: " ~ gemspecFile).emit();
         }
         
         if (!exists(gemspecFile))
@@ -81,7 +81,7 @@ class GemBuilder : Builder
                 }
                 catch (Exception e)
                 {
-                    Logger.warning("Failed to create output directory: " ~ e.msg);
+                    structuredLog.warning("failed_to_create_output_directory_").field("detail", "Failed to create output directory: " ~ e.msg).emit();
                 }
             }
             
@@ -96,7 +96,7 @@ class GemBuilder : Builder
                 }
                 catch (Exception e)
                 {
-                    Logger.warning("Failed to move gem to output directory: " ~ e.msg);
+                    structuredLog.warning("failed_to_move_gem_to_output_directory_").field("detail", "Failed to move gem to output directory: " ~ e.msg).emit();
                 }
             }
         }
@@ -105,7 +105,7 @@ class GemBuilder : Builder
         result.outputs = [gemFile];
         result.outputHash = FastHash.hashStrings(sources);
         
-        Logger.info("Gem built successfully: " ~ gemFile);
+        structuredLog.info("gem_built_successfully_").field("detail", "Gem built successfully: " ~ gemFile).emit();
         
         return result;
     }
@@ -130,14 +130,14 @@ class GemBuilder : Builder
             cmd ~= ["--sign", config.key];
         }
         
-        Logger.info("Building gem from " ~ gemspecFile);
+        structuredLog.info("building_gem_from_").field("detail", "Building gem from " ~ gemspecFile).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, workDir);
         
         if (res.status != 0)
         {
-            Logger.error("Gem build failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("gem_build_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return "";
         }
         
@@ -169,13 +169,13 @@ class GemBuilder : Builder
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to find gem file: " ~ e.msg);
+                structuredLog.warning("failed_to_find_gem_file_").field("detail", "Failed to find gem file: " ~ e.msg).emit();
             }
         }
         
         if (gemFile.empty)
         {
-            Logger.error("Could not determine gem filename");
+            structuredLog.error("could_not_determine_gem_filename").emit();
             return "";
         }
         

@@ -13,7 +13,7 @@ import languages.jvm.kotlin.core.config;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
 
 /// Standard JAR builder for Kotlin with action-level caching
@@ -42,7 +42,7 @@ class JARBuilder : KotlinBuilder
     {
         KotlinBuildResult result;
         
-        Logger.debugLog("Building standard Kotlin JAR");
+        structuredLog.debug_("building_standard_kotlin_jar").emit();
         
         // Determine output path
         string outputPath;
@@ -145,7 +145,7 @@ class JARBuilder : KotlinBuilder
         // Check if Gradle build is cached
         if (actionCache.isCached(actionId, inputFiles, metadata) && exists(outputPath))
         {
-            Logger.debugLog("  [Cached] Gradle JAR: " ~ outputPath);
+            structuredLog.debug_("__cached_gradle_jar_").field("detail", "  [Cached] Gradle JAR: " ~ outputPath).emit();
             result.success = true;
             result.outputs = [outputPath];
             result.outputHash = FastHash.hashFile(outputPath);
@@ -246,7 +246,7 @@ class JARBuilder : KotlinBuilder
         // Check if Maven build is cached
         if (actionCache.isCached(actionId, inputFiles, metadata) && exists(outputPath))
         {
-            Logger.debugLog("  [Cached] Maven JAR: " ~ outputPath);
+            structuredLog.debug_("__cached_maven_jar_").field("detail", "  [Cached] Maven JAR: " ~ outputPath).emit();
             result.success = true;
             result.outputs = [outputPath];
             result.outputHash = FastHash.hashFile(outputPath);
@@ -403,7 +403,7 @@ class JARBuilder : KotlinBuilder
                 
                 if (classExists)
                 {
-                    Logger.debugLog("  [Cached] " ~ source);
+                    structuredLog.debug_("__cached_").field("detail", "  [Cached] " ~ source).emit();
                     continue;
                 }
             }
@@ -456,7 +456,7 @@ class JARBuilder : KotlinBuilder
             // Specify output directory
             cmd ~= ["-d", outputDir];
             
-            Logger.debugLog("Compiling: " ~ source);
+            structuredLog.debug_("compiling_").field("detail", "Compiling: " ~ source).emit();
             
             // Execute compilation
             auto res = execute(cmd);
@@ -550,7 +550,7 @@ class JARBuilder : KotlinBuilder
         // Check if packaging is cached
         if (actionCache.isCached(actionId, classFiles, metadata) && exists(outputPath))
         {
-            Logger.debugLog("  [Cached] JAR package: " ~ outputPath);
+            structuredLog.debug_("__cached_jar_package_").field("detail", "  [Cached] JAR package: " ~ outputPath).emit();
             result.success = true;
             result.outputs = [outputPath];
             result.outputHash = FastHash.hashFile(outputPath);
@@ -563,8 +563,8 @@ class JARBuilder : KotlinBuilder
         // Add class files
         cmd ~= ["-C", classDir, "."];
         
-        Logger.debugLog("Packaging JAR: " ~ outputPath);
-        Logger.debugLog("  Command: " ~ cmd.join(" "));
+        structuredLog.debug_("packaging_jar_").field("detail", "Packaging JAR: " ~ outputPath).emit();
+        structuredLog.debug_("__command_").field("detail", "  Command: " ~ cmd.join(" ")).emit();
         
         // Execute jar command
         auto res = execute(cmd);

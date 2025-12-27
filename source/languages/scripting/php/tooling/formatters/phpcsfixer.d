@@ -11,7 +11,7 @@ import std.algorithm;
 import std.array;
 import std.regex;
 import std.conv;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// PHP-CS-Fixer code formatter
 class PHPCSFixerFormatter : Formatter
@@ -83,7 +83,7 @@ class PHPCSFixerFormatter : Formatter
             cmd ~= projectRoot;
         }
         
-        Logger.info("Running PHP-CS-Fixer: " ~ cmd.join(" "));
+        structuredLog.info("running_phpcsfixer_").field("detail", "Running PHP-CS-Fixer: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, projectRoot);
         result.output = res.output;
@@ -98,7 +98,7 @@ class PHPCSFixerFormatter : Formatter
         if (res.status == 0)
         {
             result.success = true;
-            Logger.info("PHP-CS-Fixer: All files are properly formatted");
+            structuredLog.info("phpcsfixer_all_files_are_properly_format").emit();
         }
         else if (res.status == 8)
         {
@@ -108,7 +108,7 @@ class PHPCSFixerFormatter : Formatter
             
             if (!result.filesChanged.empty)
             {
-                Logger.warning("PHP-CS-Fixer: " ~ result.filesChanged.length.to!string ~ " file(s) need formatting");
+                structuredLog.warning("phpcsfixer_").field("detail", "PHP-CS-Fixer: " ~ result.filesChanged.length.to!string ~ " file(s) need formatting").emit();
             }
         }
         else

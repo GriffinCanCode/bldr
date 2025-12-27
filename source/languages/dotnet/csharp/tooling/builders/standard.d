@@ -13,7 +13,7 @@ import languages.dotnet.csharp.core.config;
 import infrastructure.analysis.targets.spec;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
 import engine.runtime.shutdown.shutdown : ShutdownCoordinator;
 
@@ -46,7 +46,7 @@ class StandardBuilder : CSharpBuilder
     {
         BuildResult result;
         
-        Logger.info("Building with standard builder");
+        structuredLog.info("building_with_standard_builder").emit();
         
         // Build metadata for cache validation
         string[string] metadata;
@@ -99,7 +99,7 @@ class StandardBuilder : CSharpBuilder
             
             if (result.outputs.length > 0)
             {
-                Logger.debugLog("  [Cached] dotnet build: " ~ result.outputs[0]);
+                structuredLog.debug_("__cached_dotnet_build_").field("detail", "  [Cached] dotnet build: " ~ result.outputs[0]).emit();
                 result.success = true;
                 result.outputHash = FastHash.hashFile(result.outputs[0]);
                 return result;

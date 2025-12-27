@@ -10,7 +10,7 @@ import languages.web.css.core.config;
 import languages.web.css.processors.base;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// PostCSS processor
 class PostCSSProcessor : CSSProcessor
@@ -58,7 +58,7 @@ class PostCSSProcessor : CSSProcessor
             cmd ~= ["--map"];
         }
         
-        Logger.debugLog("Running: " ~ cmd.join(" "));
+        structuredLog.debug_("running_").field("detail", "Running: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         
@@ -150,7 +150,7 @@ class LessProcessor : CSSProcessor
         // Strict math (recommended)
         cmd ~= ["--math=parens-division"];
         
-        Logger.debugLog("Running: " ~ cmd.join(" "));
+        structuredLog.debug_("running_").field("detail", "Running: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         
@@ -242,7 +242,7 @@ class StylusProcessor : CSSProcessor
         // Include CSS (allow importing .css files)
         cmd ~= ["--include-css"];
         
-        Logger.debugLog("Running: " ~ cmd.join(" "));
+        structuredLog.debug_("running_").field("detail", "Running: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         

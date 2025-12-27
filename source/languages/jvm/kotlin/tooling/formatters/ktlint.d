@@ -8,7 +8,7 @@ import std.array;
 import std.string;
 import languages.jvm.kotlin.tooling.formatters.base;
 import languages.jvm.kotlin.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// ktlint formatter implementation
 class KtLintFormatter : KotlinFormatter_
@@ -17,7 +17,7 @@ class KtLintFormatter : KotlinFormatter_
     {
         FormatResult result;
         
-        Logger.info("Formatting Kotlin code with ktlint");
+        structuredLog.info("formatting_kotlin_code_with_ktlint").emit();
         
         auto cmd = ["ktlint"];
         
@@ -56,7 +56,7 @@ class KtLintFormatter : KotlinFormatter_
     {
         FormatResult result;
         
-        Logger.info("Checking Kotlin code style with ktlint");
+        structuredLog.info("checking_kotlin_code_style_with_ktlint").emit();
         
         auto cmd = ["ktlint"];
         

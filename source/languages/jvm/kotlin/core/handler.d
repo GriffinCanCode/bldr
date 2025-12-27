@@ -16,7 +16,7 @@ import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.workers.integration : KotlinWorkerIntegration, shouldUsePersistentWorker;
 
 /// Kotlin build handler with action-level caching
@@ -118,7 +118,7 @@ class KotlinHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to analyze imports in " ~ source);
+                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source).emit();
             }
         }
         
@@ -218,9 +218,9 @@ class KotlinHandler : BaseLanguageHandler
                     auto r = workerResult.unwrap();
                     if (r.success)
                     {
-                        Logger.info("  [Warm worker] Compiled tests in " ~ 
+                        structuredLog.info("__warm_worker_compiled_tests_in_").field("detail", "  [Warm worker] Compiled tests in " ~ 
                                    r.executionTimeMs.to!string ~ "ms" ~
-                                   " (speedup: " ~ r.estimatedSpeedup().to!string ~ "x)");
+                                   " (speedup: " ~ r.estimatedSpeedup().to!string ~ "x)").emit();
                     }
                     else
                     {
@@ -231,7 +231,7 @@ class KotlinHandler : BaseLanguageHandler
                 else
                 {
                     // Fall through to direct compilation
-                    Logger.debugLog("Persistent worker unavailable, using direct kotlinc");
+                    structuredLog.debug_("persistent_worker_unavailable_using_dire").emit();
                     if (!compileTestsDirect(target.sources, tempJar, classpath, options, result))
                         return result;
                 }

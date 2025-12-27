@@ -13,7 +13,7 @@ import engine.distributed.protocol.protocol;
 import engine.distributed.coordinator.registry;
 import engine.distributed.coordinator.scheduler;
 import infrastructure.errors : Result, Ok, Err;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Worker health state (circuit breaker states)
 enum HealthState : ubyte
@@ -107,7 +107,7 @@ final class HealthMonitor
         
         atomicStore(running, true);
         (monitorThread = new Thread(&monitorLoop)).start();
-        Logger.info("Health monitor started");
+        structuredLog.info("health_monitor_started").emit();
         return Ok!DistributedError();
     }
     
@@ -116,7 +116,7 @@ final class HealthMonitor
     {
         atomicStore(running, false);
         if (monitorThread !is null) { monitorThread.join(); monitorThread = null; }
-        Logger.info("Health monitor stopped");
+        structuredLog.info("health_monitor_stopped").emit();
     }
     
     /// Process heartbeat from worker
@@ -242,7 +242,7 @@ final class HealthMonitor
         while (atomicLoad(running))
         {
             try { checkHealth(); }
-            catch (Exception e) { Logger.error("Health check failed: " ~ e.msg); }
+            catch (Exception e) { structuredLog.error("health_check_failed_").field("detail", "Health check failed: " ~ e.msg).emit(); }
             
             // Sleep in short intervals to allow fast shutdown
             auto remaining = heartbeatInterval;
@@ -263,7 +263,7 @@ final class HealthMonitor
         h.lastFailed = Clock.currTime;
         atomicOp!"+="(failedChecks, 1);
         
-        Logger.warning("Worker timeout: " ~ worker.toString() ~ " (elapsed: " ~ elapsed.toString() ~ ", failures: " ~ h.consecutiveFailures.to!string ~ ")");
+        structuredLog.warning("worker_timeout_").field("detail", "Worker timeout: " ~ worker.toString() ~ " (elapsed: " ~ elapsed.toString() ~ ", failures: " ~ h.consecutiveFailures.to!string ~ ")").emit();
         
         if (h.consecutiveFailures >= failureThreshold)
         {
@@ -279,7 +279,7 @@ final class HealthMonitor
     void attemptRecovery(WorkerId worker, WorkerHealth* h) @trusted
     {
         h.recoveryAttempts++;
-        Logger.info("Attempting recovery for worker " ~ worker.toString() ~ " (attempt " ~ h.recoveryAttempts.to!string ~ ")");
+        structuredLog.info("attempting_recovery_for_worker_").field("detail", "Attempting recovery for worker " ~ worker.toString() ~ " (attempt " ~ h.recoveryAttempts.to!string ~ ")").emit();
         transitionState(worker, HealthState.Recovering, "Recovery attempt " ~ h.recoveryAttempts.to!string);
         // If worker responds, it will call onHeartBeat and transition to Healthy; if not, next timeout will transition back to Failed
     }
@@ -293,7 +293,7 @@ final class HealthMonitor
             if (oldState != newState)
             {
                 h.state = newState;
-                Logger.info("Worker " ~ worker.toString() ~ " health transition: " ~ oldState.to!string ~ " -> " ~ newState.to!string ~ " (" ~ reason ~ ")");
+                structuredLog.info("worker_").field("detail", "Worker " ~ worker.toString() ~ " health transition: " ~ oldState.to!string ~ " -> " ~ newState.to!string ~ " (" ~ reason ~ ")").emit();
                 if (newState == HealthState.Healthy) h.recoveryAttempts = 0;
             }
         }

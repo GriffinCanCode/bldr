@@ -11,7 +11,7 @@ import std.json;
 import std.conv;
 import languages.scripting.r.core.config;
 import languages.scripting.r.tooling.info;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Lint result
 struct LintResult
@@ -64,11 +64,11 @@ LintResult lintFiles(
     
     if (config.linter == RLinter.None)
     {
-        Logger.debugLog("Linting disabled");
+        structuredLog.debug_("linting_disabled").emit();
         return LintResult(true, "", [], 0, 0);
     }
     
-    Logger.info("Linting " ~ files.length.to!string ~ " R file(s) with " ~ config.linter.to!string);
+    structuredLog.info("linting_").field("detail", "Linting " ~ files.length.to!string ~ " R file(s) with " ~ config.linter.to!string).emit();
     
     final switch (config.linter)
     {
@@ -201,21 +201,21 @@ cat(jsonlite::toJSON(all_results, auto_unbox = TRUE))
     }
     catch (Exception e)
     {
-        Logger.warning("Failed to parse lintr output: " ~ e.msg);
+        structuredLog.warning("failed_to_parse_lintr_output_").field("detail", "Failed to parse lintr output: " ~ e.msg).emit();
     }
     
     // Report results
     if (result.issues.empty)
     {
-        Logger.info("No linting issues found");
+        structuredLog.info("no_linting_issues_found").emit();
     }
     else
     {
-        Logger.warning("Found " ~ result.issues.length.to!string ~ " linting issue(s)");
+        structuredLog.warning("found_").field("detail", "Found " ~ result.issues.length.to!string ~ " linting issue(s)").emit();
         foreach (issue; result.issues)
         {
             string location = issue.file ~ ":" ~ issue.line.to!string ~ ":" ~ issue.column.to!string;
-            Logger.warning("  [" ~ issue.severity ~ "] " ~ location ~ " - " ~ issue.message);
+            structuredLog.warning("__").field("detail", "  [" ~ issue.severity ~ "] " ~ location ~ " - " ~ issue.message).emit();
         }
     }
     
@@ -320,7 +320,7 @@ cat(jsonlite::toJSON(all_issues, auto_unbox = TRUE))
     }
     catch (Exception e)
     {
-        Logger.warning("Failed to parse goodpractice output: " ~ e.msg);
+        structuredLog.warning("failed_to_parse_goodpractice_output_").field("detail", "Failed to parse goodpractice output: " ~ e.msg).emit();
     }
     
     result.success = !config.failOnWarnings || result.warningCount == 0;
@@ -348,11 +348,11 @@ FormatResult formatFiles(
     
     if (config.formatter == RFormatter.None)
     {
-        Logger.debugLog("Formatting disabled");
+        structuredLog.debug_("formatting_disabled").emit();
         return FormatResult(true, "", [], 0);
     }
     
-    Logger.info("Formatting " ~ files.length.to!string ~ " R file(s) with " ~ config.formatter.to!string);
+    structuredLog.info("formatting_").field("detail", "Formatting " ~ files.length.to!string ~ " R file(s) with " ~ config.formatter.to!string).emit();
     
     final switch (config.formatter)
     {
@@ -451,16 +451,16 @@ cat(jsonlite::toJSON(changed_files))
     }
     catch (Exception e)
     {
-        Logger.warning("Failed to parse styler output: " ~ e.msg);
+        structuredLog.warning("failed_to_parse_styler_output_").field("detail", "Failed to parse styler output: " ~ e.msg).emit();
     }
     
     if (result.changedFiles > 0)
     {
-        Logger.info("Formatted " ~ result.changedFiles.to!string ~ " file(s)");
+        structuredLog.info("formatted_").field("detail", "Formatted " ~ result.changedFiles.to!string ~ " file(s)").emit();
     }
     else
     {
-        Logger.info("All files already formatted");
+        structuredLog.info("all_files_already_formatted").emit();
     }
     
     result.success = true;
@@ -545,16 +545,16 @@ cat(jsonlite::toJSON(changed_files))
     }
     catch (Exception e)
     {
-        Logger.warning("Failed to parse formatR output: " ~ e.msg);
+        structuredLog.warning("failed_to_parse_formatr_output_").field("detail", "Failed to parse formatR output: " ~ e.msg).emit();
     }
     
     if (result.changedFiles > 0)
     {
-        Logger.info("Formatted " ~ result.changedFiles.to!string ~ " file(s)");
+        structuredLog.info("formatted_").field("detail", "Formatted " ~ result.changedFiles.to!string ~ " file(s)").emit();
     }
     else
     {
-        Logger.info("All files already formatted");
+        structuredLog.info("all_files_already_formatted").emit();
     }
     
     result.success = true;
@@ -567,7 +567,7 @@ bool validateSyntax(const string[] files, string rCmd, string workDir)
     if (files.empty)
         return true;
     
-    Logger.debugLog("Validating syntax for " ~ files.length.to!string ~ " R file(s)");
+    structuredLog.debug_("validating_syntax_for_").field("detail", "Validating syntax for " ~ files.length.to!string ~ " R file(s)").emit();
     
     // Create R script to validate all files
     string validateScript = `
@@ -606,12 +606,12 @@ if (length(errors) > 0) {
     
     if (res.status != 0)
     {
-        Logger.error("Syntax validation failed:");
-        Logger.error(res.output);
+        structuredLog.error("syntax_validation_failed").emit();
+        structuredLog.error("log_event").field("message", res.output).emit();
         return false;
     }
     
-    Logger.debugLog("Syntax validation passed");
+    structuredLog.debug_("syntax_validation_passed").emit();
     return true;
 }
 

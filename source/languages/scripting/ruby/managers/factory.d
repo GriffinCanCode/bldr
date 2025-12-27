@@ -6,7 +6,7 @@ import languages.scripting.ruby.core.config;
 import languages.scripting.ruby.managers.base;
 import languages.scripting.ruby.managers.bundler;
 import languages.scripting.ruby.managers.rubygems;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Package manager factory
 class PackageManagerFactory
@@ -36,7 +36,7 @@ class PackageManagerFactory
             auto bundler = new BundlerManager(projectRoot);
             if (bundler.isAvailable())
             {
-                Logger.debugLog("Detected Bundler from Gemfile");
+                structuredLog.debug_("detected_bundler_from_gemfile").emit();
                 return bundler;
             }
         }
@@ -48,7 +48,7 @@ class PackageManagerFactory
             auto files = dirEntries(projectRoot, "*.gemspec", SpanMode.shallow);
             if (!files.empty)
             {
-                Logger.debugLog("Detected gemspec file, using RubyGems");
+                structuredLog.debug_("detected_gemspec_file_using_rubygems").emit();
                 return new RubyGemsManager(projectRoot);
             }
         }

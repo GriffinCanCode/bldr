@@ -8,7 +8,7 @@ import std.array;
 import std.process;
 import std.regex;
 import std.conv;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Maven Kotlin project metadata
 struct MavenKotlinMetadata
@@ -105,7 +105,7 @@ struct MavenKotlinMetadata
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse pom.xml: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_pomxml_").field("detail", "Failed to parse pom.xml: " ~ e.msg).emit();
         }
         
         return meta;
@@ -124,7 +124,7 @@ class MavenOps
     /// Build Kotlin project
     static bool build(string projectDir, bool skipTests = false)
     {
-        Logger.info("Building Kotlin project with Maven");
+        structuredLog.info("building_kotlin_project_with_maven").emit();
         
         string[] args = ["compile"];
         if (skipTests)
@@ -134,8 +134,8 @@ class MavenOps
         
         if (result.status != 0)
         {
-            Logger.error("Maven build failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("maven_build_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
@@ -145,7 +145,7 @@ class MavenOps
     /// Package Kotlin project
     static bool package_(string projectDir, bool skipTests = false)
     {
-        Logger.info("Packaging Kotlin project with Maven");
+        structuredLog.info("packaging_kotlin_project_with_maven").emit();
         
         string[] args = ["package"];
         if (skipTests)
@@ -155,8 +155,8 @@ class MavenOps
         
         if (result.status != 0)
         {
-            Logger.error("Maven package failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("maven_package_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
@@ -166,13 +166,13 @@ class MavenOps
     /// Run Kotlin tests
     static bool test(string projectDir)
     {
-        Logger.info("Running Kotlin tests with Maven");
+        structuredLog.info("running_kotlin_tests_with_maven").emit();
         
         auto result = executeMaven(["test"], projectDir);
         
         if (result.status != 0)
         {
-            Logger.error("Maven tests failed: " ~ result.output);
+            structuredLog.error("maven_tests_failed_").field("detail", "Maven tests failed: " ~ result.output).emit();
             return false;
         }
         
@@ -182,7 +182,7 @@ class MavenOps
     /// Clean build
     static bool clean(string projectDir)
     {
-        Logger.info("Cleaning Maven project");
+        structuredLog.info("cleaning_maven_project").emit();
         
         auto result = executeMaven(["clean"], projectDir);
         
@@ -192,7 +192,7 @@ class MavenOps
     /// Install dependencies
     static bool installDependencies(string projectDir)
     {
-        Logger.info("Installing Maven dependencies");
+        structuredLog.info("installing_maven_dependencies").emit();
         
         auto result = executeMaven(["dependency:resolve"], projectDir);
         
@@ -202,13 +202,13 @@ class MavenOps
     /// Compile Kotlin sources
     static bool compileKotlin(string projectDir)
     {
-        Logger.info("Compiling Kotlin sources with Maven");
+        structuredLog.info("compiling_kotlin_sources_with_maven").emit();
         
         auto result = executeMaven(["kotlin:compile"], projectDir);
         
         if (result.status != 0)
         {
-            Logger.error("Kotlin compilation failed: " ~ result.output);
+            structuredLog.error("kotlin_compilation_failed_").field("detail", "Kotlin compilation failed: " ~ result.output).emit();
             return false;
         }
         

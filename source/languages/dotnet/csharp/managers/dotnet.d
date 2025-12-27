@@ -9,7 +9,7 @@ import std.array;
 import std.string;
 import std.conv;
 import languages.dotnet.csharp.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.security.validation;
 
 /// dotnet CLI operations
@@ -18,7 +18,7 @@ struct DotNetOps
     /// Build project with dotnet CLI
     static bool build(string projectRoot, in CSharpConfig config)
     {
-        Logger.info("Building with dotnet CLI");
+        structuredLog.info("building_with_dotnet_cli").emit();
         
         string[] cmd = ["dotnet", "build"];
         
@@ -76,19 +76,19 @@ struct DotNetOps
         
         if (result.status != 0)
         {
-            Logger.error("dotnet build failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("dotnet_build_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
-        Logger.info("dotnet build succeeded");
+        structuredLog.info("dotnet_build_succeeded").emit();
         return true;
     }
     
     /// Publish project with dotnet CLI
     static bool publish(string projectRoot, in CSharpConfig config)
     {
-        Logger.info("Publishing with dotnet CLI");
+        structuredLog.info("publishing_with_dotnet_cli").emit();
         
         string[] cmd = ["dotnet", "publish"];
         
@@ -170,19 +170,19 @@ struct DotNetOps
         
         if (result.status != 0)
         {
-            Logger.error("dotnet publish failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("dotnet_publish_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
-        Logger.info("dotnet publish succeeded");
+        structuredLog.info("dotnet_publish_succeeded").emit();
         return true;
     }
     
     /// Run tests with dotnet CLI
     static bool test(string projectRoot, TestConfig config)
     {
-        Logger.info("Running tests with dotnet CLI");
+        structuredLog.info("running_tests_with_dotnet_cli").emit();
         
         string[] cmd = ["dotnet", "test"];
         
@@ -222,19 +222,19 @@ struct DotNetOps
         
         if (result.status != 0)
         {
-            Logger.error("dotnet test failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("dotnet_test_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
-        Logger.info("dotnet test succeeded");
+        structuredLog.info("dotnet_test_succeeded").emit();
         return true;
     }
     
     /// Run project with dotnet CLI
     static bool run(string projectRoot, string[] args = [])
     {
-        Logger.info("Running with dotnet CLI");
+        structuredLog.info("running_with_dotnet_cli").emit();
         
         string[] cmd = ["dotnet", "run"];
         
@@ -249,8 +249,8 @@ struct DotNetOps
         
         if (result.status != 0)
         {
-            Logger.error("dotnet run failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("dotnet_run_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
@@ -260,7 +260,7 @@ struct DotNetOps
     /// Clean project with dotnet CLI
     static bool clean(string projectRoot)
     {
-        Logger.info("Cleaning with dotnet CLI");
+        structuredLog.info("cleaning_with_dotnet_cli").emit();
         
         string[] cmd = ["dotnet", "clean"];
         
@@ -269,7 +269,7 @@ struct DotNetOps
         
         if (result.status != 0)
         {
-            Logger.warning("dotnet clean had issues: " ~ result.output);
+            structuredLog.warning("dotnet_clean_had_issues_").field("detail", "dotnet clean had issues: " ~ result.output).emit();
             return false;
         }
         
@@ -279,7 +279,7 @@ struct DotNetOps
     /// Pack project into NuGet package
     static bool pack(string projectRoot, CSharpConfig config)
     {
-        Logger.info("Packing with dotnet CLI");
+        structuredLog.info("packing_with_dotnet_cli").emit();
         
         string[] cmd = ["dotnet", "pack"];
         
@@ -305,12 +305,12 @@ struct DotNetOps
         
         if (result.status != 0)
         {
-            Logger.error("dotnet pack failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("dotnet_pack_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
-        Logger.info("dotnet pack succeeded");
+        structuredLog.info("dotnet_pack_succeeded").emit();
         return true;
     }
 }

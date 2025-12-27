@@ -14,7 +14,7 @@ import engine.economics.estimator : CostEstimator, ExecutionHistory, BuildEstima
 import engine.economics.pricing : ResourceUsageEstimate;
 import engine.distributed.coordinator.profile : ProfileGuidedScheduler, ActionProfile;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.concurrency.priority : Priority;
 
 // Integration with new components
@@ -283,7 +283,7 @@ final class SpeculationService : ISpeculationService
             _predictor.importState(_history.getPredictorState());
             
             _usePredictiveMode = true;
-            Logger.debugLog("Speculation: initialized predictive mode");
+            structuredLog.debug_("speculation_initialized_predictive_mode").emit();
         }
     }
     
@@ -316,8 +316,8 @@ final class SpeculationService : ISpeculationService
             _profiler.computeProfiles();
             _candidates = computeCandidates();
             
-            Logger.debugLog("Speculation: analyzed " ~ graph.nodes.length.to!string ~ 
-                           " nodes, found " ~ _candidates.length.to!string ~ " candidates");
+            structuredLog.debug_("speculation_analyzed_").field("detail", "Speculation: analyzed " ~ graph.nodes.length.to!string ~ 
+                           " nodes, found " ~ _candidates.length.to!string ~ " candidates").emit();
         }
     }
     
@@ -343,7 +343,7 @@ final class SpeculationService : ISpeculationService
             // Check concurrent limit
             if (atomicLoad(_activeCount) >= _policy.maxConcurrent)
             {
-                Logger.debugLog("Speculation: at concurrent limit, skipping " ~ key);
+                structuredLog.debug_("speculation_at_concurrent_limit_skipping").field("detail", "Speculation: at concurrent limit, skipping " ~ key).emit();
                 return null;
             }
             
@@ -359,9 +359,9 @@ final class SpeculationService : ISpeculationService
             // Check min cost threshold
             if (profile.estimatedCostMs < _policy.minCostMs)
             {
-                Logger.debugLog("Speculation: " ~ key ~ " too cheap (" ~ 
+                structuredLog.debug_("speculation_").field("detail", "Speculation: " ~ key ~ " too cheap (" ~ 
                                profile.estimatedCostMs.to!string ~ "ms < " ~ 
-                               _policy.minCostMs.to!string ~ "ms)");
+                               _policy.minCostMs.to!string ~ "ms)").emit();
                 return null;
             }
             
@@ -383,7 +383,7 @@ final class SpeculationService : ISpeculationService
             _stats.totalSpeculated++;
             
             task.setStatus(SpeculativeStatus.Running);
-            Logger.info("Speculation: starting " ~ key ~ " (" ~ reason ~ ")");
+            structuredLog.info("speculation_starting_").field("detail", "Speculation: starting " ~ key ~ " (" ~ reason ~ ")").emit();
             
             return task;
         }
@@ -411,7 +411,7 @@ final class SpeculationService : ISpeculationService
                     {
                         task.abort();
                         _stats.aborted++;
-                        Logger.warning("Speculation: aborting " ~ key ~ " (input changed: " ~ path ~ ")");
+                        structuredLog.warning("speculation_aborting_").field("detail", "Speculation: aborting " ~ key ~ " (input changed: " ~ path ~ ")").emit();
                     }
                 }
             }
@@ -461,8 +461,8 @@ final class SpeculationService : ISpeculationService
                     task.setStatus(SpeculativeStatus.Promoted);
                     _stats.successful++;
                     _stats.timeSaved += task.actualDuration;
-                    Logger.success("Speculation: promoted " ~ key ~ 
-                                  " (saved " ~ task.actualDuration.total!"msecs".to!string ~ "ms)");
+                    structuredLog.info("speculation_promoted_").field("detail", "Speculation: promoted " ~ key ~ 
+                                  " (saved " ~ task.actualDuration.total!"msecs".to!string ~ "ms)").emit();
                     
                     // Record successful speculation in history
                     if (_history !is null)
@@ -519,11 +519,11 @@ final class SpeculationService : ISpeculationService
             {
                 _history.updatePredictorState(_predictor.exportState());
                 _history.flush();
-                Logger.debugLog("Speculation: saved predictor state");
+                structuredLog.debug_("speculation_saved_predictor_state").emit();
             }
         }
         
-        Logger.debugLog("Speculation: shutdown, stats: " ~ formatStats(_stats));
+        structuredLog.debug_("speculation_shutdown_stats_").field("detail", "Speculation: shutdown, stats: " ~ formatStats(_stats)).emit();
     }
     
     /// Record a change event (for learning)

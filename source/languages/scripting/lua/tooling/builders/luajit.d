@@ -14,7 +14,7 @@ import languages.scripting.lua.core.config;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache;
 
 /// LuaJIT builder - uses LuaJIT for JIT compilation or bytecode generation
@@ -136,7 +136,7 @@ class LuaJITBuilder : LuaBuilder
         cmd ~= outputPath;
         
         // Compile bytecode
-        Logger.debugLog("Compiling LuaJIT bytecode: " ~ cmd.join(" "));
+        structuredLog.debug_("compiling_luajit_bytecode_").field("detail", "Compiling LuaJIT bytecode: " ~ cmd.join(" ")).emit();
         auto res = execute(cmd);
         
         if (res.status != 0)
@@ -278,7 +278,7 @@ class LuaJITBuilder : LuaBuilder
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to make executable: " ~ e.msg);
+            structuredLog.warning("failed_to_make_executable_").field("detail", "Failed to make executable: " ~ e.msg).emit();
         }
     }
 }

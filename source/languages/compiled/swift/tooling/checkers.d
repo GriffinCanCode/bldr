@@ -7,7 +7,7 @@ import std.path;
 import std.algorithm;
 import std.array;
 import std.string;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import languages.compiled.swift.config : SwiftPlatform;
 
 /// SwiftLint runner
@@ -60,7 +60,7 @@ class SwiftLintRunner
         cmd ~= ["--path"];
         cmd ~= paths;
         
-        Logger.debugLog("Running: " ~ cmd.join(" "));
+        structuredLog.debug_("running_").field("detail", "Running: " ~ cmd.join(" ")).emit();
         
         return execute(cmd);
     }
@@ -86,7 +86,7 @@ class SwiftLintRunner
         cmd ~= ["--path"];
         cmd ~= paths;
         
-        Logger.debugLog("Running: " ~ cmd.join(" "));
+        structuredLog.debug_("running_").field("detail", "Running: " ~ cmd.join(" ")).emit();
         
         return execute(cmd);
     }
@@ -107,7 +107,7 @@ class SwiftLintRunner
         cmd ~= ["--path"];
         cmd ~= paths;
         
-        Logger.debugLog("Running: " ~ cmd.join(" "));
+        structuredLog.debug_("running_").field("detail", "Running: " ~ cmd.join(" ")).emit();
         
         return execute(cmd);
     }
@@ -156,7 +156,7 @@ class DocCRunner
         if (!hostingBasePath.empty)
             cmd ~= ["--hosting-base-path", hostingBasePath];
         
-        Logger.debugLog("Running: " ~ cmd.join(" "));
+        structuredLog.debug_("running_").field("detail", "Running: " ~ cmd.join(" ")).emit();
         
         return execute(cmd, null, Config.none, size_t.max, packagePath);
     }
@@ -166,7 +166,7 @@ class DocCRunner
     {
         string[] cmd = ["swift", "package", "preview-documentation"];
         
-        Logger.debugLog("Running: " ~ cmd.join(" "));
+        structuredLog.debug_("running_").field("detail", "Running: " ~ cmd.join(" ")).emit();
         
         return execute(cmd, null, Config.none, size_t.max, packagePath);
     }
@@ -215,7 +215,7 @@ class XCFrameworkBuilder
             // Output
             cmd ~= ["-output", outputPath];
             
-            Logger.debugLog("Running: " ~ cmd.join(" "));
+            structuredLog.debug_("running_").field("detail", "Running: " ~ cmd.join(" ")).emit();
             
             return execute(cmd);
         }

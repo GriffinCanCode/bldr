@@ -9,7 +9,7 @@ import std.array;
 import std.string;
 import std.conv;
 import languages.scripting.elixir.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Credo result
 struct CredoResult
@@ -69,7 +69,7 @@ class CredoChecker
         if (!config.files.empty)
             cmd ~= config.files;
         
-        Logger.debugLog("Running Credo: " ~ cmd.join(" "));
+        structuredLog.debug_("running_credo_").field("detail", "Running Credo: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         

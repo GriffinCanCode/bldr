@@ -13,7 +13,7 @@ import languages.compiled.nim.tooling.tools;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache;
 
 /// Documentation generator builder
@@ -153,7 +153,7 @@ class DocBuilder : NimBuilder
         
         if (config.verbose)
         {
-            Logger.info("Doc generation command: " ~ cmd.join(" "));
+            structuredLog.info("doc_generation_command_").field("detail", "Doc generation command: " ~ cmd.join(" ")).emit();
         }
         
         // Execute doc generation
@@ -171,7 +171,7 @@ class DocBuilder : NimBuilder
         
         if (!exists(outputFile))
         {
-            Logger.warning("Expected documentation file not found: " ~ outputFile);
+            structuredLog.warning("expected_documentation_file_not_found_").field("detail", "Expected documentation file not found: " ~ outputFile).emit();
         }
         
         result.success = true;
@@ -194,11 +194,11 @@ class DocBuilder : NimBuilder
         
         if (res.status != 0)
         {
-            Logger.warning("Index generation failed: " ~ res.output);
+            structuredLog.warning("index_generation_failed_").field("detail", "Index generation failed: " ~ res.output).emit();
         }
         else
         {
-            Logger.info("Generated documentation index");
+            structuredLog.info("generated_documentation_index").emit();
         }
     }
 }

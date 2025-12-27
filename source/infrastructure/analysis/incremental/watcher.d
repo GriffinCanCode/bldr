@@ -7,7 +7,7 @@ import std.array;
 import std.conv;
 import core.time : Duration, msecs;
 import infrastructure.utils.files.watch;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.analysis.incremental.interface_;
 import infrastructure.config.schema.schema;
 import infrastructure.parsing.treesitter.adapter;
@@ -51,7 +51,7 @@ final class AnalysisWatcher
         
         immutable path = watchPath.empty ? config.root : watchPath;
         
-        Logger.info("Starting incremental analysis watcher on: " ~ path);
+        structuredLog.info("starting_incremental_analysis_watcher_on").field("detail", "Starting incremental analysis watcher on: " ~ path).emit();
         
         WatchConfig watchConfig;
         watchConfig.debounceDelay = 200.msecs;  // 200ms debounce
@@ -61,12 +61,12 @@ final class AnalysisWatcher
         auto result = watcher.watch(path, watchConfig, &handleFileEvents);
         if (result.isErr)
         {
-            Logger.error("Failed to start file watcher");
+            structuredLog.error("failed_to_start_file_watcher").emit();
             return result;
         }
         
         active = true;
-        Logger.success("Incremental analysis watcher started");
+        structuredLog.info("incremental_analysis_watcher_started").emit();
         
         return Ok!BuildError();
     }
@@ -81,7 +81,7 @@ final class AnalysisWatcher
         parseAdapter.clear();
         active = false;
         
-        Logger.info("Incremental analysis watcher stopped");
+        structuredLog.info("incremental_analysis_watcher_stopped").emit();
     }
     
     /// Check if watcher is active
@@ -133,8 +133,8 @@ final class AnalysisWatcher
                 sourceEvents ~= event;
                 affectedFiles ~= event.path;
                 
-                Logger.debugLog("File change detected: " ~ event.path ~ 
-                               " (" ~ event.kind.to!string ~ ")");
+                structuredLog.debug_("file_change_detected_").field("detail", "File change detected: " ~ event.path ~ 
+                               " (" ~ event.kind.to!string ~ ")").emit();
             }
         }
         
@@ -148,19 +148,19 @@ final class AnalysisWatcher
             auto updatedASTs = parseAdapter.processChanges(sourceEvents);
             incrementalParses += updatedASTs.length;
             
-            Logger.debugLog("Incrementally parsed " ~ updatedASTs.length.to!string ~ 
-                           " file(s)");
+            structuredLog.debug_("incrementally_parsed_").field("detail", "Incrementally parsed " ~ updatedASTs.length.to!string ~ 
+                           " file(s)").emit();
             
             // Invalidate analyzer cache for affected files
             analyzer.invalidate(affectedFiles);
             filesInvalidated += affectedFiles.length;
             
-            Logger.debugLog("Invalidated " ~ affectedFiles.length.to!string ~ 
-                           " file(s) from analysis cache");
+            structuredLog.debug_("invalidated_").field("detail", "Invalidated " ~ affectedFiles.length.to!string ~ 
+                           " file(s) from analysis cache").emit();
         }
         catch (Exception e)
         {
-            Logger.error("Failed to process file changes: " ~ e.msg);
+            structuredLog.error("failed_to_process_file_changes_").field("detail", "Failed to process file changes: " ~ e.msg).emit();
         }
     }
     

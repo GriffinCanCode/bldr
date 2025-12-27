@@ -7,7 +7,7 @@ import std.algorithm;
 import std.array;
 import std.string;
 import std.json;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Build.zig project information
 struct BuildZigProject
@@ -55,7 +55,7 @@ class BuildZigParser
             string buildZigPath = buildPath(currentPath, "build.zig");
             if (exists(buildZigPath))
             {
-                Logger.debugLog("Found build.zig at: " ~ buildZigPath);
+                structuredLog.debug_("found_buildzig_at_").field("detail", "Found build.zig at: " ~ buildZigPath).emit();
                 return buildZigPath;
             }
             
@@ -73,7 +73,7 @@ class BuildZigParser
         
         if (!exists(path))
         {
-            Logger.warning("build.zig not found: " ~ path);
+            structuredLog.warning("buildzig_not_found_").field("detail", "build.zig not found: " ~ path).emit();
             return project;
         }
         
@@ -102,7 +102,7 @@ class BuildZigParser
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse build.zig: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_buildzig_").field("detail", "Failed to parse build.zig: " ~ e.msg).emit();
         }
         
         return project;
@@ -235,7 +235,7 @@ class BuildZigParser
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse build.zig.zon: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_buildzigzon_").field("detail", "Failed to parse build.zig.zon: " ~ e.msg).emit();
         }
         
         return deps;
@@ -318,7 +318,7 @@ class ZonParser
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse .zon file: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_zon_file_").field("detail", "Failed to parse .zon file: " ~ e.msg).emit();
         }
         
         return result;
@@ -355,7 +355,7 @@ class ZonParser
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to read .zon file: " ~ e.msg);
+            structuredLog.warning("failed_to_read_zon_file_").field("detail", "Failed to read .zon file: " ~ e.msg).emit();
         }
         
         return "";
@@ -392,7 +392,7 @@ class ZonParser
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to read .zon file: " ~ e.msg);
+            structuredLog.warning("failed_to_read_zon_file_").field("detail", "Failed to read .zon file: " ~ e.msg).emit();
         }
         
         return "";

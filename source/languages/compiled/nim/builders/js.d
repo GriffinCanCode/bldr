@@ -14,7 +14,7 @@ import languages.compiled.nim.tooling.tools;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache;
 
 /// JavaScript backend builder - compiles Nim to JavaScript
@@ -59,7 +59,7 @@ class JsBuilder : NimBuilder
         
         if (jsConfig.verbose || jsConfig.listCmd)
         {
-            Logger.info("Nim JS compile command: " ~ cmd.join(" "));
+            structuredLog.info("nim_js_compile_command_").field("detail", "Nim JS compile command: " ~ cmd.join(" ")).emit();
         }
         
         // Set environment variables

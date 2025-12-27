@@ -7,7 +7,7 @@ import std.array;
 import std.file;
 import std.path;
 import std.conv;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Rust toolchain information
 struct Toolchain
@@ -125,19 +125,19 @@ class Rustup
     /// Install toolchain
     static bool installToolchain(string toolchain)
     {
-        Logger.info("Installing Rust toolchain: " ~ toolchain);
+        structuredLog.info("installing_rust_toolchain_").field("detail", "Installing Rust toolchain: " ~ toolchain).emit();
         
         auto res = execute(["rustup", "toolchain", "install", toolchain]);
         
         if (res.status == 0)
         {
-            Logger.info("Toolchain installed successfully");
+            structuredLog.info("toolchain_installed_successfully").emit();
             return true;
         }
         else
         {
-            Logger.error("Failed to install toolchain");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("failed_to_install_toolchain").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
     }
@@ -182,7 +182,7 @@ class Rustup
     /// Install target for toolchain
     static bool installTarget(string target, string toolchain = "")
     {
-        Logger.info("Installing Rust target: " ~ target);
+        structuredLog.info("installing_rust_target_").field("detail", "Installing Rust target: " ~ target).emit();
         
         string[] cmd = ["rustup", "target", "add", target];
         if (!toolchain.empty)
@@ -192,13 +192,13 @@ class Rustup
         
         if (res.status == 0)
         {
-            Logger.info("Target installed successfully");
+            structuredLog.info("target_installed_successfully").emit();
             return true;
         }
         else
         {
-            Logger.error("Failed to install target");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("failed_to_install_target").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
     }
@@ -247,7 +247,7 @@ class Rustup
     /// Install component
     static bool installComponent(string component, string toolchain = "")
     {
-        Logger.info("Installing Rust component: " ~ component);
+        structuredLog.info("installing_rust_component_").field("detail", "Installing Rust component: " ~ component).emit();
         
         string[] cmd = ["rustup", "component", "add", component];
         if (!toolchain.empty)
@@ -257,13 +257,13 @@ class Rustup
         
         if (res.status == 0)
         {
-            Logger.info("Component installed successfully");
+            structuredLog.info("component_installed_successfully").emit();
             return true;
         }
         else
         {
-            Logger.error("Failed to install component");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("failed_to_install_component").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
     }

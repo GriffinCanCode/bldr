@@ -88,9 +88,9 @@ unittest
     auto cas = new ContentAddressableStorage(testDir);
     auto engine = new DedupEngine(cas);
     
-    auto outputs = [
-        cast(ubyte[])"file 1 content",
-        cast(ubyte[])"file 2 content"
+    const(ubyte)[][] outputs = [
+        cast(const(ubyte)[])"file 1 content",
+        cast(const(ubyte)[])"file 2 content"
     ];
     auto paths = ["out/file1.o", "out/file2.o"];
     
@@ -140,9 +140,9 @@ unittest
     
     auto store = new DedupStore(testDir);
     
-    auto outputs = [
-        cast(ubyte[])"output content 1",
-        cast(ubyte[])"output content 2"
+    const(ubyte)[][] outputs = [
+        cast(const(ubyte)[])"output content 1",
+        cast(const(ubyte)[])"output content 2"
     ];
     auto paths = ["lib/foo.a", "lib/bar.a"];
     
@@ -172,9 +172,9 @@ unittest
     
     auto store = new DedupStore(testDir);
     
-    auto content1 = cast(ubyte[])"content one";
-    auto content2 = cast(ubyte[])"content two";
-    auto outputs = [content1, content2];
+    auto content1 = cast(const(ubyte)[])"content one";
+    auto content2 = cast(const(ubyte)[])"content two";
+    const(ubyte)[][] outputs = [content1, content2];
     auto paths = ["file1.txt", "file2.txt"];
     
     store.put("action:test", outputs, paths, "hash");

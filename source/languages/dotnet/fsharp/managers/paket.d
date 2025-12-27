@@ -6,7 +6,7 @@ import std.path;
 import std.string;
 import std.array;
 import std.algorithm;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Paket package manager operations
 struct PaketOps
@@ -16,7 +16,7 @@ struct PaketOps
     {
         if (!exists(dependenciesFile))
         {
-            Logger.error("Paket dependencies file not found: " ~ dependenciesFile);
+            structuredLog.error("paket_dependencies_file_not_found_").field("detail", "Paket dependencies file not found: " ~ dependenciesFile).emit();
             return false;
         }
         
@@ -24,8 +24,8 @@ struct PaketOps
         
         if (res.status != 0)
         {
-            Logger.error("Paket install failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("paket_install_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -39,8 +39,8 @@ struct PaketOps
         
         if (res.status != 0)
         {
-            Logger.error("Paket restore failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("paket_restore_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -62,8 +62,8 @@ struct PaketOps
         
         if (res.status != 0)
         {
-            Logger.error("Paket update failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("paket_update_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -85,8 +85,8 @@ struct PaketOps
         
         if (res.status != 0)
         {
-            Logger.error("Paket add failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("paket_add_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -105,8 +105,8 @@ struct PaketOps
         
         if (res.status != 0)
         {
-            Logger.error("Paket remove failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("paket_remove_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -120,8 +120,8 @@ struct PaketOps
         
         if (res.status != 0)
         {
-            Logger.error("Paket init failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("paket_init_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -140,8 +140,8 @@ struct PaketOps
         
         if (res.status != 0)
         {
-            Logger.error("Paket convert failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("paket_convert_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -155,8 +155,8 @@ struct PaketOps
         
         if (res.status != 0)
         {
-            Logger.error("Paket generate-load-scripts failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("paket_generateloadscripts_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -190,7 +190,7 @@ struct PaketOps
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse paket.dependencies: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_paketdependencies_").field("detail", "Failed to parse paket.dependencies: " ~ e.msg).emit();
         }
         
         return packages;

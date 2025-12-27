@@ -144,7 +144,8 @@ class BuildProfiler
         GC.collect();
         auto gcStatsAfter = GC.stats();
         
-        profile.gcCollections = gcStatsAfter.numCollections - gcStatsBefore.numCollections;
+        // Note: numCollections not available in all GC implementations
+        profile.gcCollections = 0;
         profile.peakMemoryMB = (gcStatsAfter.usedSize) / (1024 * 1024);
         
         profile.endTime = Clock.currTime();

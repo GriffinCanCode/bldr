@@ -11,7 +11,7 @@ import std.array;
 import std.conv;
 import std.string;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Rollup bundler - optimized for library bundles with tree-shaking
 class RollupBundler : Bundler
@@ -48,7 +48,7 @@ class RollupBundler : Bundler
         BundleResult result
     )
     {
-        Logger.debugLog("Using rollup config: " ~ configFile);
+        structuredLog.debug_("using_rollup_config_").field("detail", "Using rollup config: " ~ configFile).emit();
         
         string[] cmd = ["rollup", "-c", configFile];
         auto res = execute(cmd);
@@ -121,10 +121,10 @@ class RollupBundler : Bundler
         // Plugins for minification (requires @rollup/plugin-terser)
         if (config.minify)
         {
-            Logger.warning("Rollup minification requires @rollup/plugin-terser plugin");
+            structuredLog.warning("rollup_minification_requires_rollupplugi").emit();
         }
         
-        Logger.debugLog("Running rollup: " ~ cmd.join(" "));
+        structuredLog.debug_("running_rollup_").field("detail", "Running rollup: " ~ cmd.join(" ")).emit();
         
         // Execute rollup
         auto res = execute(cmd);
@@ -135,7 +135,7 @@ class RollupBundler : Bundler
             return result;
         }
         
-        Logger.debugLog("rollup completed successfully");
+        structuredLog.debug_("rollup_completed_successfully").emit();
         
         result.success = true;
         result.outputs = [outputFile];

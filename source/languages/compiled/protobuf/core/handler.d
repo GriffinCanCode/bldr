@@ -15,7 +15,7 @@ import languages.compiled.protobuf.tooling.protoc;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
 import engine.graph;
 
@@ -32,7 +32,7 @@ class ProtobufHandler : BaseLanguageHandler, DiscoverableAction
         
         LanguageBuildResult result;
         
-        Logger.debugLog("Building Protocol Buffer target: " ~ target.name);
+        structuredLog.debug_("building_protocol_buffer_target_").field("detail", "Building Protocol Buffer target: " ~ target.name).emit();
         
         // Parse protobuf configuration
         ProtobufConfig pbConfig = parseProtobufConfig(target, config);
@@ -63,19 +63,19 @@ class ProtobufHandler : BaseLanguageHandler, DiscoverableAction
         // Run linter if requested
         if (pbConfig.lint && BufWrapper.isAvailable())
         {
-            Logger.debugLog("Running buf lint...");
+            structuredLog.debug_("running_buf_lint").emit();
             auto lintResult = BufWrapper.lint(protoFiles);
             if (!lintResult.success)
             {
-                Logger.warning("Linting issues found:");
-                Logger.warning(lintResult.error);
+                structuredLog.warning("linting_issues_found").emit();
+                structuredLog.warning("log_event").field("message", lintResult.error).emit();
             }
             else if (!lintResult.warnings.empty)
             {
                 foreach (warning; lintResult.warnings)
                 {
                     if (!warning.empty)
-                        Logger.warning("  " ~ warning);
+                        structuredLog.warning("__").field("detail", "  " ~ warning).emit();
                 }
             }
         }
@@ -83,11 +83,11 @@ class ProtobufHandler : BaseLanguageHandler, DiscoverableAction
         // Run formatter if requested
         if (pbConfig.format && BufWrapper.isAvailable())
         {
-            Logger.debugLog("Running buf format...");
+            structuredLog.debug_("running_buf_format").emit();
             auto fmtResult = BufWrapper.format(protoFiles, true);
             if (!fmtResult.success)
             {
-                Logger.warning("Format issues found: " ~ fmtResult.error);
+                structuredLog.warning("format_issues_found_").field("detail", "Format issues found: " ~ fmtResult.error).emit();
             }
         }
         
@@ -125,7 +125,7 @@ class ProtobufHandler : BaseLanguageHandler, DiscoverableAction
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to analyze imports in " ~ source ~ ": " ~ e.msg);
+                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source ~ ": " ~ e.msg).emit();
             }
         }
         
@@ -139,7 +139,7 @@ class ProtobufHandler : BaseLanguageHandler, DiscoverableAction
         result.success = false;
         result.hasDiscovery = false;
         
-        Logger.info("Executing protobuf discovery for " ~ target.name);
+        structuredLog.info("executing_protobuf_discovery_for_").field("detail", "Executing protobuf discovery for " ~ target.name).emit();
         
         // Parse configuration
         ProtobufConfig pbConfig = parseProtobufConfig(target, config);
@@ -215,8 +215,8 @@ class ProtobufHandler : BaseLanguageHandler, DiscoverableAction
             builder = builder.addTargets(compileTargets);
             builder = builder.addDependents(compileIds);
             
-            Logger.success("Discovered " ~ compileTargets.length.to!string ~ 
-                         " compile targets from protobuf generation");
+            structuredLog.info("discovered_").field("detail", "Discovered " ~ compileTargets.length.to!string ~ 
+                         " compile targets from protobuf generation").emit();
         }
         
         result.discovery = builder.build();
@@ -291,7 +291,7 @@ class ProtobufHandler : BaseLanguageHandler, DiscoverableAction
             }
             else
             {
-                Logger.warning("Buf compiler not available, falling back to protoc");
+                structuredLog.warning("buf_compiler_not_available_falling_back_").emit();
             }
         }
         
@@ -302,7 +302,7 @@ class ProtobufHandler : BaseLanguageHandler, DiscoverableAction
             return result;
         }
         
-        Logger.debugLog("Using protoc: " ~ ProtocWrapper.getVersion());
+        structuredLog.debug_("using_protoc_").field("detail", "Using protoc: " ~ ProtocWrapper.getVersion()).emit();
         
         // Compile with action-level caching
         auto compileResult = ProtocWrapper.compile(
@@ -322,10 +322,10 @@ class ProtobufHandler : BaseLanguageHandler, DiscoverableAction
         // Report warnings
         if (!compileResult.warnings.empty)
         {
-            Logger.warning("Compilation warnings:");
+            structuredLog.warning("compilation_warnings").emit();
             foreach (warn; compileResult.warnings)
             {
-                Logger.warning("  " ~ warn);
+                structuredLog.warning("__").field("detail", "  " ~ warn).emit();
             }
         }
         
@@ -361,7 +361,7 @@ class ProtobufHandler : BaseLanguageHandler, DiscoverableAction
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to parse Protobuf config, using defaults: " ~ e.msg);
+                structuredLog.warning("failed_to_parse_protobuf_config_using_de").field("detail", "Failed to parse Protobuf config, using defaults: " ~ e.msg).emit();
             }
         }
         

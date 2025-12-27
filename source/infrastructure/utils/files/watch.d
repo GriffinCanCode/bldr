@@ -204,8 +204,8 @@ final class FSEventsWatcher : IFileWatcher
         }
         catch (Exception e)
         {
-            import infrastructure.utils.logging.logger;
-            Logger.error("FSEvents watcher failed: " ~ e.msg);
+            import infrastructure.utils.logging;
+            structuredLog.error("fsevents_watcher_failed_").field("detail", "FSEvents watcher failed: " ~ e.msg).emit();
             _active = false;
         }
     }
@@ -335,8 +335,8 @@ final class INotifyWatcher : IFileWatcher
         }
         catch (Exception e)
         {
-            import infrastructure.utils.logging.logger;
-            Logger.error("inotify watcher failed: " ~ e.msg);
+            import infrastructure.utils.logging;
+            structuredLog.error("inotify_watcher_failed_").field("detail", "inotify watcher failed: " ~ e.msg).emit();
             _active = false;
         }
     }
@@ -438,8 +438,8 @@ final class KQueueWatcher : IFileWatcher
             }
             catch (Exception e)
             {
-                import infrastructure.utils.logging.logger;
-                Logger.error("kqueue watcher failed: " ~ e.msg);
+                import infrastructure.utils.logging;
+                structuredLog.error("kqueue_watcher_failed_").field("detail", "kqueue watcher failed: " ~ e.msg).emit();
                 _active = false;
             }
         }
@@ -725,8 +725,8 @@ final class FileWatcher
                 try { onChange(); }
                 catch (Exception e)
                 {
-                    import infrastructure.utils.logging.logger;
-                    Logger.error("Watch callback failed: " ~ e.msg);
+                    import infrastructure.utils.logging;
+                    structuredLog.error("watch_callback_failed_").field("detail", "Watch callback failed: " ~ e.msg).emit();
                 }
             }
         }

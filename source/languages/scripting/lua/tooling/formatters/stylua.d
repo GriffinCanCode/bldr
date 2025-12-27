@@ -12,7 +12,7 @@ import std.string : strip;
 import languages.scripting.lua.tooling.formatters.base;
 import languages.scripting.lua.tooling.detection;
 import languages.scripting.lua.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// StyLua formatter - modern, opinionated Lua formatter
 class StyLuaFormatter : Formatter
@@ -84,7 +84,7 @@ class StyLuaFormatter : Formatter
         // Add source files
         cmd ~= sources;
         
-        Logger.debugLog("Running StyLua: " ~ cmd.join(" "));
+        structuredLog.debug_("running_stylua_").field("detail", "Running StyLua: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         
@@ -135,7 +135,7 @@ class StyLuaFormatter : Formatter
         catch (Exception e)
         {
             import infrastructure.utils.logging.logger : Logger;
-            Logger.debugLog("Failed to get StyLua version: " ~ e.msg);
+            structuredLog.debug_("failed_to_get_stylua_version_").field("detail", "Failed to get StyLua version: " ~ e.msg).emit();
         }
         
         return "unknown";

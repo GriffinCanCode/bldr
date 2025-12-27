@@ -15,7 +15,7 @@ import engine.workers.go;
 import engine.workers.python;
 import infrastructure.config.schema.schema : TargetLanguage;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Persistent Worker Pool
 /// 
@@ -239,7 +239,7 @@ final class PersistentWorkerPool
         pool.start();
         atomicStore(running, true);
         
-        Logger.info("Persistent worker pool started");
+        structuredLog.info("persistent_worker_pool_started").emit();
     }
     
     /// Stop the worker pool
@@ -251,9 +251,16 @@ final class PersistentWorkerPool
         pool.stop();
         
         if (config.trackEconomics)
-            Logger.info(economics.summary());
+        {
+            auto summary = economics.summary();
+            structuredLog.info("worker_economics_summary")
+                .field("warm_executions", economics.warmExecutions.length)
+                .field("time_saved_ms", economics.totalTimeSavedMs())
+                .field("avg_speedup", economics.averageSpeedup())
+                .emit();
+        }
         
-        Logger.info("Persistent worker pool stopped");
+        structuredLog.info("persistent_worker_pool_stopped").emit();
     }
     
     /// Execute compilation with warm worker for specified language
@@ -367,7 +374,7 @@ final class PersistentWorkerPool
                 cfg.maxHeapMB = config.maxHeapMB;
                 pool.registerFactory(new JVMWorkerFactory(cfg));
             }
-            Logger.debugLog("Registered JVM workers");
+            structuredLog.debug_("registered_jvm_workers").emit();
         }
         
         // Go workers
@@ -379,7 +386,7 @@ final class PersistentWorkerPool
                 cfg.compiler = compiler;
                 pool.registerFactory(new GoWorkerFactory(cfg));
             }
-            Logger.debugLog("Registered Go workers");
+            structuredLog.debug_("registered_go_workers").emit();
         }
         
         // Python workers
@@ -391,7 +398,7 @@ final class PersistentWorkerPool
                 cfg.tool = tool;
                 pool.registerFactory(new PythonWorkerFactory(cfg));
             }
-            Logger.debugLog("Registered Python workers");
+            structuredLog.debug_("registered_python_workers").emit();
         }
     }
     

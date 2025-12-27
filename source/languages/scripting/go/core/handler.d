@@ -18,7 +18,7 @@ import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionId, ActionType;
 
 /// Go build handler - modular and extensible with action-level caching
@@ -67,13 +67,13 @@ class GoHandler : BaseLanguageHandler
         if (!goModPath.empty && config.modMode == GoModMode.Auto)
         {
             config.modMode = GoModMode.On;
-            Logger.debugLog("Detected go.mod at: " ~ goModPath);
+            structuredLog.debug_("detected_gomod_at_").field("detail", "Detected go.mod at: " ~ goModPath).emit();
             
             auto mod = ModuleAnalyzer.parseGoMod(goModPath);
             if (mod.isValid())
             {
-                Logger.debugLog("Module path: " ~ mod.path);
-                Logger.debugLog("Go version: " ~ mod.goVersion);
+                structuredLog.debug_("module_path_").field("detail", "Module path: " ~ mod.path).emit();
+                structuredLog.debug_("go_version_").field("detail", "Go version: " ~ mod.goVersion).emit();
                 
                 if (config.modPath.empty)
                     config.modPath = mod.path;
@@ -83,11 +83,11 @@ class GoHandler : BaseLanguageHandler
         auto goWorkPath = ModuleAnalyzer.findGoWork(sourceDir);
         if (!goWorkPath.empty)
         {
-            Logger.debugLog("Detected go.work at: " ~ goWorkPath);
+            structuredLog.debug_("detected_gowork_at_").field("detail", "Detected go.work at: " ~ goWorkPath).emit();
             
             auto ws = ModuleAnalyzer.parseGoWork(goWorkPath);
             if (ws.isValid())
-                Logger.debugLog("Workspace modules: " ~ ws.use.join(", "));
+                structuredLog.debug_("workspace_modules_").field("detail", "Workspace modules: " ~ ws.use.join(", ")).emit();
         }
         
         if (!config.cgo.enabled)
@@ -96,7 +96,7 @@ class GoHandler : BaseLanguageHandler
             {
                 if (exists(source) && hasCGoCode(source))
                 {
-                    Logger.debugLog("Detected CGO code in: " ~ source);
+                    structuredLog.debug_("detected_cgo_code_in_").field("detail", "Detected CGO code in: " ~ source).emit();
                     config.cgo.enabled = true;
                     break;
                 }
@@ -126,7 +126,7 @@ class GoHandler : BaseLanguageHandler
             return result;
         }
         
-        Logger.debugLog("Using builder: " ~ builder.name() ~ " (" ~ builder.getVersion() ~ ")");
+        structuredLog.debug_("using_builder_").field("detail", "Using builder: " ~ builder.name() ~ " (" ~ builder.getVersion() ~ ")").emit();
         
         auto buildResult = builder.build(target.sources, goConfig, target, config);
         
@@ -137,9 +137,9 @@ class GoHandler : BaseLanguageHandler
         
         if (!buildResult.toolWarnings.empty)
         {
-            Logger.info("Build completed with warnings from tools:");
+            structuredLog.info("build_completed_with_warnings_from_tools").emit();
             foreach (warning; buildResult.toolWarnings)
-                Logger.warning("  " ~ warning);
+                structuredLog.warning("__").field("detail", "  " ~ warning).emit();
         }
         
         return result;
@@ -162,7 +162,7 @@ class GoHandler : BaseLanguageHandler
             return result;
         }
         
-        Logger.debugLog("Building Go library/package");
+        structuredLog.debug_("building_go_librarypackage").emit();
         
         auto buildResult = builder.build(target.sources, goConfig, target, config);
         
@@ -211,7 +211,7 @@ class GoHandler : BaseLanguageHandler
         else
             cmd ~= target.sources;
         
-        Logger.info("Running Go tests: " ~ cmd.join(" "));
+        structuredLog.info("running_go_tests_").field("detail", "Running Go tests: " ~ cmd.join(" ")).emit();
         
         string[string] env;
         foreach (key, value; environment.toAA())
@@ -292,7 +292,7 @@ class GoHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to analyze imports in " ~ source);
+                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source).emit();
             }
         }
         

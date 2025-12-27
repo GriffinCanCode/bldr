@@ -8,7 +8,7 @@ import std.algorithm;
 import std.array;
 import std.string;
 import languages.scripting.ruby.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Ruby tool availability checking and execution
 class RubyTools
@@ -137,7 +137,7 @@ class RakeTool
         string[] cmd = ["rake", task];
         cmd ~= args;
         
-        Logger.info("Running Rake task: " ~ task);
+        structuredLog.info("running_rake_task_").field("detail", "Running Rake task: " ~ task).emit();
         
         return execute(cmd, null, Config.none, size_t.max, projectRoot);
     }
@@ -198,7 +198,7 @@ class DocGenerator
     {
         if (!RubyTools.isYARDAvailable())
         {
-            Logger.error("YARD not available (install: gem install yard)");
+            structuredLog.error("yard_not_available_install_gem_install_y").emit();
             return false;
         }
         
@@ -240,18 +240,18 @@ class DocGenerator
         if (!sources.empty)
             cmd ~= sources;
         
-        Logger.info("Generating YARD documentation");
+        structuredLog.info("generating_yard_documentation").emit();
         
         auto res = execute(cmd);
         
         if (res.status != 0)
         {
-            Logger.error("YARD documentation generation failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("yard_documentation_generation_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
-        Logger.info("YARD documentation generated successfully");
+        structuredLog.info("yard_documentation_generated_successfull").emit();
         return true;
     }
     
@@ -260,7 +260,7 @@ class DocGenerator
     {
         if (!RubyTools.isRDocAvailable())
         {
-            Logger.error("RDoc not available");
+            structuredLog.error("rdoc_not_available").emit();
             return false;
         }
         
@@ -278,18 +278,18 @@ class DocGenerator
         else
             cmd ~= "."; // Generate for entire project
         
-        Logger.info("Generating RDoc documentation");
+        structuredLog.info("generating_rdoc_documentation").emit();
         
         auto res = execute(cmd);
         
         if (res.status != 0)
         {
-            Logger.error("RDoc documentation generation failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("rdoc_documentation_generation_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
-        Logger.info("RDoc documentation generated successfully");
+        structuredLog.info("rdoc_documentation_generated_successfull").emit();
         return true;
     }
     
@@ -338,7 +338,7 @@ class IRBTool
                 cmd ~= ["-r", file];
         }
         
-        Logger.info("Launching IRB");
+        structuredLog.info("launching_irb").emit();
         
         return spawnProcess(cmd);
     }
@@ -447,7 +447,7 @@ class GemspecUtil
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to search for gemspecs: " ~ e.msg);
+            structuredLog.warning("failed_to_search_for_gemspecs_").field("detail", "Failed to search for gemspecs: " ~ e.msg).emit();
         }
         
         return gemspecs;
@@ -480,7 +480,7 @@ class GemspecUtil
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse gemspec: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_gemspec_").field("detail", "Failed to parse gemspec: " ~ e.msg).emit();
         }
         
         return "";

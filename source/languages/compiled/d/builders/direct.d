@@ -13,7 +13,7 @@ import languages.compiled.d.core.config;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
 
 /// Direct compiler invocation builder (dmd/ldc/gdc) with action-level caching
@@ -85,7 +85,7 @@ class DirectCompilerBuilder : DBuilder
         // Check if this compilation is cached
         if (actionCache.isCached(actionId, sources, metadata) && exists(outputPath))
         {
-            Logger.debugLog("  [Cached] D compilation: " ~ outputPath);
+            structuredLog.debug_("__cached_d_compilation_").field("detail", "  [Cached] D compilation: " ~ outputPath).emit();
             result.success = true;
             result.outputs = [outputPath];
             result.outputHash = FastHash.hashFile(outputPath);
@@ -95,7 +95,7 @@ class DirectCompilerBuilder : DBuilder
         // Build command based on compiler
         string[] cmd = buildCompilerCommand(sources, outputPath, config);
         
-        Logger.debugLog("Compiler command: " ~ cmd.join(" "));
+        structuredLog.debug_("compiler_command_").field("detail", "Compiler command: " ~ cmd.join(" ")).emit();
         
         // Set environment variables
         string[string] env = environment.toAA();
@@ -586,11 +586,11 @@ class DirectCompilerBuilder : DBuilder
         if (res.status == 0)
         {
             result.artifacts ~= config.compilerConfig.docDir;
-            Logger.info("Documentation generated in " ~ config.compilerConfig.docDir);
+            structuredLog.info("documentation_generated_in_").field("detail", "Documentation generated in " ~ config.compilerConfig.docDir).emit();
         }
         else
         {
-            Logger.warning("Documentation generation failed: " ~ res.output);
+            structuredLog.warning("documentation_generation_failed_").field("detail", "Documentation generation failed: " ~ res.output).emit();
         }
     }
     
@@ -613,11 +613,11 @@ class DirectCompilerBuilder : DBuilder
         if (res.status == 0)
         {
             result.artifacts ~= jsonFile;
-            Logger.info("JSON description generated: " ~ jsonFile);
+            structuredLog.info("json_description_generated_").field("detail", "JSON description generated: " ~ jsonFile).emit();
         }
         else
         {
-            Logger.warning("JSON generation failed: " ~ res.output);
+            structuredLog.warning("json_generation_failed_").field("detail", "JSON generation failed: " ~ res.output).emit();
         }
     }
     

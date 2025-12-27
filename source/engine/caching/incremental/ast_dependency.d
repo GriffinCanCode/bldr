@@ -8,7 +8,7 @@ import std.file;
 import std.path;
 import core.sync.mutex;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// AST symbol types for dependency tracking
@@ -163,8 +163,10 @@ final class ASTDependencyCache
             astCache[buildNormalizedPath(mutableAst.filePath)] = mutableAst;
             dirty = true;
             
-            Logger.debugLog("Recorded AST for " ~ ast.filePath ~ 
-                          " with " ~ ast.symbols.length.to!string ~ " symbols");
+            structuredLog.debug_("ast_recorded")
+                .field("file", ast.filePath)
+                .field("symbols", ast.symbols.length)
+                .emit();
         }
     }
     
@@ -319,10 +321,11 @@ final class ASTDependencyCache
                 ? (cast(float)analysis.changedSymbolCount / totalSymbols) * 100.0
                 : 0.0;
             
-            Logger.info("AST-level analysis: " ~
-                       analysis.changedSymbolCount.to!string ~ "/" ~
-                       analysis.totalSymbolCount.to!string ~ " symbols changed (" ~
-                       analysis.granularity.to!string[0..min(5, $)] ~ "% granularity)");
+            structuredLog.info("ast_level_analysis")
+                .field("changed_symbols", analysis.changedSymbolCount)
+                .field("total_symbols", analysis.totalSymbolCount)
+                .field("granularity_pct", analysis.granularity)
+                .emit();
             
             return analysis;
         }
@@ -353,7 +356,7 @@ final class ASTDependencyCache
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to flush AST cache: " ~ e.msg);
+                structuredLog.warning("ast_cache_flush_failed").field("error", e.msg).emit();
             }
         }
     }
@@ -405,13 +408,12 @@ final class ASTDependencyCache
                     astCache[key] = ast;
                 }
                 
-                Logger.debugLog("Loaded " ~ astCache.length.to!string ~ 
-                              " AST entries from cache");
+                structuredLog.debug_("ast_cache_loaded").field("entries", astCache.length).emit();
             }
         }
         catch (Exception e)
         {
-            Logger.debugLog("Failed to load AST cache: " ~ e.msg);
+            structuredLog.debug_("ast_cache_load_failed").field("error", e.msg).emit();
         }
     }
     
@@ -425,13 +427,13 @@ final class ASTDependencyCache
         auto result = storage.save(entries);
         if (result.isErr)
         {
-            Logger.warning("Failed to save AST cache: " ~ 
-                         result.unwrapErr().message());
+            structuredLog.warning("ast_cache_save_failed")
+                .field("error", result.unwrapErr().message())
+                .emit();
         }
         else
         {
-            Logger.debugLog("Saved " ~ entries.length.to!string ~ 
-                          " AST entries to cache");
+            structuredLog.debug_("ast_cache_saved").field("entries", entries.length).emit();
         }
     }
     

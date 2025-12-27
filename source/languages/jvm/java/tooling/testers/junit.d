@@ -8,7 +8,7 @@ import std.array;
 import std.string;
 import std.regex;
 import std.conv;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.security : execute;
 
 /// JUnit test result
@@ -55,7 +55,7 @@ JUnitVersion detectJUnitVersion(string projectDir)
             if (version_ != JUnitVersion.Unknown) return version_;
         }
     } catch (Exception e) {
-        Logger.debugLog("Failed to detect JUnit version: " ~ e.msg);
+        structuredLog.debug_("failed_to_detect_junit_version_").field("detail", "Failed to detect JUnit version: " ~ e.msg).emit();
     }
     
     return JUnitVersion.JUnit5; // Default to JUnit 5 for modern projects
@@ -65,7 +65,7 @@ JUnitVersion detectJUnitVersion(string projectDir)
 JUnitTestResult runJUnitWithMaven(string projectDir, bool useWrapper, string[] args = [])
 {
     JUnitTestResult result;
-    Logger.info("Running JUnit tests with Maven");
+    structuredLog.info("running_junit_tests_with_maven").emit();
     
     auto cmd = (useWrapper && exists(buildPath(projectDir, "mvnw")) ? ["./mvnw"] : ["mvn"]) ~ "test" ~ args;
     auto execResult = execute(cmd, null, Config.none, size_t.max, projectDir);
@@ -81,7 +81,7 @@ JUnitTestResult runJUnitWithMaven(string projectDir, bool useWrapper, string[] a
 JUnitTestResult runJUnitWithGradle(string projectDir, bool useWrapper, string[] args = [])
 {
     JUnitTestResult result;
-    Logger.info("Running JUnit tests with Gradle");
+    structuredLog.info("running_junit_tests_with_gradle").emit();
     
     auto cmd = (useWrapper && exists(buildPath(projectDir, "gradlew")) ? ["./gradlew"] : ["gradle"]) ~ "test" ~ args;
     auto execResult = execute(cmd, null, Config.none, size_t.max, projectDir);
@@ -98,7 +98,7 @@ JUnitTestResult runJUnitDirect(string[] testClasses, string classpath, JUnitVers
 {
     JUnitTestResult result;
     
-    Logger.info("Running JUnit tests directly");
+    structuredLog.info("running_junit_tests_directly").emit();
     
     if (testClasses.empty)
     {
@@ -163,7 +163,7 @@ private void parseMavenTestOutput(string output, ref JUnitTestResult result)
         result.failed = failures + errors;
         result.passed = tests - result.failed - result.skipped;
     } catch (Exception e) {
-        Logger.debugLog("Failed to parse Maven test output: " ~ e.msg);
+        structuredLog.debug_("failed_to_parse_maven_test_output_").field("detail", "Failed to parse Maven test output: " ~ e.msg).emit();
     }
 }
 
@@ -179,7 +179,7 @@ private void parseGradleTestOutput(string output, ref JUnitTestResult result)
             result.skipped = summaryMatch[3].to!size_t;
             result.passed = total - result.failed - result.skipped;
         } catch (Exception e) {
-            Logger.debugLog("Failed to parse Gradle test output: " ~ e.msg);
+            structuredLog.debug_("failed_to_parse_gradle_test_output_").field("detail", "Failed to parse Gradle test output: " ~ e.msg).emit();
         }
     }
 }
@@ -196,7 +196,7 @@ private void parseJUnit5Output(string output, ref JUnitTestResult result)
         if (!failedMatch.empty) result.failed = failedMatch[1].to!size_t;
         if (!skippedMatch.empty) result.skipped = skippedMatch[1].to!size_t;
     } catch (Exception e) {
-        Logger.debugLog("Failed to parse JUnit 5 output: " ~ e.msg);
+        structuredLog.debug_("failed_to_parse_junit_5_output_").field("detail", "Failed to parse JUnit 5 output: " ~ e.msg).emit();
     }
 }
 
@@ -218,7 +218,7 @@ private void parseJUnit4Output(string output, ref JUnitTestResult result)
             result.passed = total - result.failed;
         }
     } catch (Exception e) {
-        Logger.debugLog("Failed to parse JUnit 4 output: " ~ e.msg);
+        structuredLog.debug_("failed_to_parse_junit_4_output_").field("detail", "Failed to parse JUnit 4 output: " ~ e.msg).emit();
     }
 }
 

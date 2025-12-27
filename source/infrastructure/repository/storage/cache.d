@@ -7,7 +7,7 @@ import std.algorithm : map, filter;
 import std.array : array;
 import std.conv : to;
 import infrastructure.repository.core.types;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Repository cache manager
@@ -43,7 +43,7 @@ final class RepositoryCache
         if (!cached.isValid())
         {
             // Invalid cache entry - remove it
-            Logger.warning("Invalid cache entry for " ~ name ~ ", removing...");
+            structuredLog.warning("invalid_cache_entry_for_").field("detail", "Invalid cache entry for " ~ name ~ ", removing...").emit();
             cache.remove(name);
             saveMetadata();
             
@@ -76,7 +76,7 @@ final class RepositoryCache
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to enumerate files in repository: " ~ e.msg);
+            structuredLog.warning("failed_to_enumerate_files_in_repository_").field("detail", "Failed to enumerate files in repository: " ~ e.msg).emit();
         }
         
         // Calculate size
@@ -91,7 +91,7 @@ final class RepositoryCache
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to calculate repository size: " ~ e.msg);
+            structuredLog.warning("failed_to_calculate_repository_size_").field("detail", "Failed to calculate repository size: " ~ e.msg).emit();
         }
         
         auto cached = CachedRepository(
@@ -106,7 +106,7 @@ final class RepositoryCache
         cache[name] = cached;
         saveMetadata();
         
-        Logger.debugLog("Cached repository: " ~ name ~ " (" ~ (size / 1024).to!string ~ " KB)");
+        structuredLog.debug_("cached_repository_").field("detail", "Cached repository: " ~ name ~ " (" ~ (size / 1024).to!string ~ " KB)").emit();
         
         return Ok!RepositoryError();
     }
@@ -138,14 +138,14 @@ final class RepositoryCache
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to remove repository from disk: " ~ e.msg);
+            structuredLog.warning("failed_to_remove_repository_from_disk_").field("detail", "Failed to remove repository from disk: " ~ e.msg).emit();
         }
         
         // Remove from memory cache
         cache.remove(name);
         saveMetadata();
         
-        Logger.info("Removed repository from cache: " ~ name);
+        structuredLog.info("removed_repository_from_cache_").field("detail", "Removed repository from cache: " ~ name).emit();
         
         return Ok!RepositoryError();
     }
@@ -153,21 +153,21 @@ final class RepositoryCache
     /// Clear all cached repositories
     Result!RepositoryError clear() @trusted
     {
-        Logger.info("Clearing repository cache...");
+        structuredLog.info("clearing_repository_cache").emit();
         
         foreach (name; cache.byKey().array)
         {
             auto result = remove(name);
             if (result.isErr)
             {
-                Logger.warning("Failed to remove " ~ name ~ ": " ~ result.unwrapErr().message());
+                structuredLog.warning("failed_to_remove_").field("detail", "Failed to remove " ~ name ~ ": " ~ result.unwrapErr().message()).emit();
             }
         }
         
         cache.clear();
         saveMetadata();
         
-        Logger.success("Repository cache cleared");
+        structuredLog.info("repository_cache_cleared").emit();
         
         return Ok!RepositoryError();
     }
@@ -243,11 +243,11 @@ final class RepositoryCache
                 cache[name] = cached;
             }
             
-            Logger.debugLog("Loaded " ~ cache.length.to!string ~ " cached repositories");
+            structuredLog.debug_("loaded_").field("detail", "Loaded " ~ cache.length.to!string ~ " cached repositories").emit();
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to load repository cache metadata: " ~ e.msg);
+            structuredLog.warning("failed_to_load_repository_cache_metadata").field("detail", "Failed to load repository cache metadata: " ~ e.msg).emit();
         }
     }
     
@@ -283,7 +283,7 @@ final class RepositoryCache
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to save repository cache metadata: " ~ e.msg);
+            structuredLog.warning("failed_to_save_repository_cache_metadata").field("detail", "Failed to save repository cache metadata: " ~ e.msg).emit();
         }
     }
 }

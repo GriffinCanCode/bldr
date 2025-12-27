@@ -9,7 +9,7 @@ import std.string;
 import std.regex;
 import languages.dotnet.csharp.tooling.testers.base;
 import languages.dotnet.csharp.config.test;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.security : execute;
 
 /// xUnit test runner
@@ -29,7 +29,7 @@ class XUnitRunner : ITestRunner
     override TestResult runTests(in string[] testFiles, in TestConfig config, in string workingDir)
     {
         TestResult result;
-        Logger.info("Running xUnit tests");
+        structuredLog.info("running_xunit_tests").emit();
         
         // Find test assemblies - either from testFiles or output directory
         auto assemblies = testFiles.filter!(f => [".dll", ".exe"].canFind(f.extension)).array;
@@ -56,7 +56,7 @@ class XUnitRunner : ITestRunner
         if (!result.success && result.error.empty) result.error = "xUnit tests failed";
         
         import std.format : format;
-        Logger.info(format!"xUnit results: %d passed, %d failed, %d skipped"(result.passed, result.failed, result.skipped));
+        structuredLog.info("log_event").field("message", format!"xUnit results: %d passed, %d failed, %d skipped"(result.passed, result.failed, result.skipped)).emit();
         return result;
     }
     
@@ -73,7 +73,7 @@ class XUnitRunner : ITestRunner
             if (!failedMatch.empty) result.failed = failedMatch[1].to!size_t;
             if (!skippedMatch.empty) result.skipped = skippedMatch[1].to!size_t;
         } catch (Exception e) {
-            Logger.debugLog("Failed to parse xUnit output: " ~ e.msg);
+            structuredLog.debug_("failed_to_parse_xunit_output_").field("detail", "Failed to parse xUnit output: " ~ e.msg).emit();
         }
     }
 }

@@ -9,7 +9,7 @@ import std.string : format;
 import infrastructure.analysis.detection.inference;
 import infrastructure.analysis.detection.templates;
 import infrastructure.analysis.detection.detector;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import frontend.cli.control.terminal;
 import frontend.cli.display.format;
 

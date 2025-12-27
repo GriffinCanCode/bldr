@@ -16,7 +16,7 @@ import frontend.testframework.config;
 import frontend.testframework.execution;
 import frontend.testframework.analytics;
 import engine.runtime.shutdown.shutdown;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import frontend.cli.control.terminal;
 import frontend.cli.display.format;
 import infrastructure.errors;
@@ -153,7 +153,7 @@ struct TestCommand
             }
             else
             {
-                Logger.error("Unknown option: " ~ arg);
+                structuredLog.error("unknown_option_").field("detail", "Unknown option: " ~ arg).emit();
                 showHelp();
                 return 1;
             }
@@ -193,15 +193,15 @@ struct TestCommand
     {
         auto sw = StopWatch(AutoStart.yes);
         
-        Logger.info("Discovering tests...");
+        structuredLog.info("discovering_tests").emit();
         
         // Parse workspace configuration
         auto configResult = ConfigParser.parseWorkspace(".");
         if (configResult.isErr)
         {
-            Logger.error("Failed to parse workspace configuration");
+            structuredLog.error("failed_to_parse_workspace_configuration").emit();
             import infrastructure.errors.formatting.format : format;
-            Logger.error(format(configResult.unwrapErr()));
+            structuredLog.error("log_event").field("message", format(configResult.unwrapErr())).emit();
             return 1;
         }
         
@@ -222,13 +222,13 @@ struct TestCommand
         
         if (testTargets.empty)
         {
-            Logger.warning("No test targets found");
+            structuredLog.warning("no_test_targets_found").emit();
             if (!targetSpec.empty)
-                Logger.info("Target specification: " ~ targetSpec);
+                structuredLog.info("target_specification_").field("detail", "Target specification: " ~ targetSpec).emit();
             return 0;
         }
         
-        Logger.info("Found " ~ testTargets.length.to!string ~ " test targets");
+        structuredLog.info("found_").field("detail", "Found " ~ testTargets.length.to!string ~ " test targets").emit();
         
         // Create services
         auto services = new BuildServices(wsConfig, wsConfig.options);
@@ -258,7 +258,7 @@ struct TestCommand
             
             if (!result.passed && config.failFast)
             {
-                Logger.info("Stopping due to --fail-fast");
+                structuredLog.info("stopping_due_to_failfast").emit();
                 break;
             }
         }
@@ -281,11 +281,11 @@ struct TestCommand
             try
             {
                 exportJUnit(results, config.junitPath);
-                Logger.info("JUnit XML exported to: " ~ config.junitPath);
+                structuredLog.info("junit_xml_exported_to_").field("detail", "JUnit XML exported to: " ~ config.junitPath).emit();
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to export JUnit XML: " ~ e.msg);
+                structuredLog.warning("failed_to_export_junit_xml_").field("detail", "Failed to export JUnit XML: " ~ e.msg).emit();
             }
         }
         
@@ -295,7 +295,7 @@ struct TestCommand
         
         sw.stop();
         
-        Logger.info("Total execution time: " ~ sw.peek().total!"msecs".to!string ~ "ms");
+        structuredLog.info("total_execution_time_").field("detail", "Total execution time: " ~ sw.peek().total!"msecs".to!string ~ "ms").emit();
         
         // Return exit code
         return stats.allPassed ? 0 : 1;
@@ -307,9 +307,9 @@ struct TestCommand
         try
         {
             import std.array : replicate;
-            Logger.info("\n" ~ "═".replicate(60));
-            Logger.info("Test Analytics Report");
-            Logger.info("═".replicate(60));
+            structuredLog.info("n").field("detail", "\n" ~ "═".replicate(60)).emit();
+            structuredLog.info("test_analytics_report").emit();
+            structuredLog.info("replicate60").emit();
             
             // Get flaky records from detector
             FlakyRecord[] flakyRecords;
@@ -322,11 +322,11 @@ struct TestCommand
             auto performance = TestAnalytics.analyzePerformance(results);
             auto report = TestAnalytics.generateReport(stats, health, performance);
             
-            Logger.info("\n" ~ report);
+            structuredLog.info("n").field("detail", "\n" ~ report).emit();
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to generate analytics: " ~ e.msg);
+            structuredLog.warning("failed_to_generate_analytics_").field("detail", "Failed to generate analytics: " ~ e.msg).emit();
         }
     }
     

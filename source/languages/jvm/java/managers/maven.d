@@ -8,7 +8,7 @@ import std.array;
 import std.process;
 import std.regex;
 import std.conv;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Maven pom.xml metadata
 struct MavenMetadata
@@ -79,7 +79,7 @@ struct MavenMetadata
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse pom.xml: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_pomxml_").field("detail", "Failed to parse pom.xml: " ~ e.msg).emit();
         }
         
         return meta;
@@ -228,7 +228,7 @@ class MavenOps
     /// Install dependencies
     static bool installDependencies(string projectDir, bool useWrapper = false)
     {
-        Logger.info("Installing Maven dependencies");
+        structuredLog.info("installing_maven_dependencies").emit();
         
         auto result = useWrapper 
             ? executeMavenWrapper(["dependency:resolve"], projectDir)
@@ -236,8 +236,8 @@ class MavenOps
         
         if (result.status != 0)
         {
-            Logger.error("Maven dependency installation failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("maven_dependency_installation_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
@@ -247,7 +247,7 @@ class MavenOps
     /// Clean build
     static bool clean(string projectDir, bool useWrapper = false)
     {
-        Logger.info("Cleaning Maven project");
+        structuredLog.info("cleaning_maven_project").emit();
         
         auto result = useWrapper
             ? executeMavenWrapper(["clean"], projectDir)
@@ -259,7 +259,7 @@ class MavenOps
     /// Compile sources
     static bool compile(string projectDir, bool skipTests = false, bool useWrapper = false)
     {
-        Logger.info("Compiling Maven project");
+        structuredLog.info("compiling_maven_project").emit();
         
         string[] args = ["compile"];
         if (skipTests)
@@ -271,8 +271,8 @@ class MavenOps
         
         if (result.status != 0)
         {
-            Logger.error("Maven compilation failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("maven_compilation_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
@@ -282,7 +282,7 @@ class MavenOps
     /// Package project
     static bool packageProject(string projectDir, bool skipTests = false, bool useWrapper = false)
     {
-        Logger.info("Packaging Maven project");
+        structuredLog.info("packaging_maven_project").emit();
         
         string[] args = ["package"];
         if (skipTests)
@@ -294,8 +294,8 @@ class MavenOps
         
         if (result.status != 0)
         {
-            Logger.error("Maven packaging failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("maven_packaging_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
@@ -305,7 +305,7 @@ class MavenOps
     /// Run tests
     static bool test(string projectDir, bool useWrapper = false)
     {
-        Logger.info("Running Maven tests");
+        structuredLog.info("running_maven_tests").emit();
         
         auto result = useWrapper
             ? executeMavenWrapper(["test"], projectDir)
@@ -313,8 +313,8 @@ class MavenOps
         
         if (result.status != 0)
         {
-            Logger.error("Maven tests failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("maven_tests_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         

@@ -6,6 +6,7 @@ import std.algorithm;
 import std.array;
 import std.regex;
 import std.string;
+import infrastructure.utils.logging : Logger, structuredLog;
 
 /// Fast file scanner for dependency analysis
 class FileScanner
@@ -37,7 +38,7 @@ class FileScanner
         {
             // File read error, log for debugging
             import infrastructure.utils.logging.logger : Logger;
-            Logger.debugLog("Failed to scan file for imports: " ~ path ~ ": " ~ e.msg);
+            structuredLog.debug_("failed_to_scan_file_for_imports_").field("detail", "Failed to scan file for imports: " ~ path ~ ": " ~ e.msg).emit();
         }
         
         return imports;

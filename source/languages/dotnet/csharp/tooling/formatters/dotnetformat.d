@@ -9,7 +9,7 @@ import std.string;
 import languages.dotnet.csharp.tooling.formatters.base;
 import languages.dotnet.csharp.tooling.detection;
 import languages.dotnet.csharp.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.security.validation;
 
 /// dotnet-format formatter
@@ -24,7 +24,7 @@ class DotNetFormatter : CSharpFormatter_
     {
         FormatResult result;
         
-        Logger.info("Formatting with dotnet-format");
+        structuredLog.info("formatting_with_dotnetformat").emit();
         
         string[] cmd = ["dotnet", "format"];
         
@@ -62,7 +62,7 @@ class DotNetFormatter : CSharpFormatter_
         result.success = true;
         result.formattedFiles = sources.dup;
         
-        Logger.info("Formatting completed");
+        structuredLog.info("formatting_completed").emit();
         
         return result;
     }

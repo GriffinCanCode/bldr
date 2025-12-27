@@ -6,7 +6,7 @@ import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import engine.caching.actions.action;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import std.range : empty;
 
 /// Build service interface
@@ -181,7 +181,7 @@ final class PerlBuildService : IPerlBuildService
         import std.path : buildPath, baseName;
         
         LanguageBuildResult result;
-        Logger.info("Building with Module::Build");
+        structuredLog.info("building_with_modulebuild").emit();
         
         // Gather input files for caching
         string buildPL = buildPath(projectRoot, "Build.PL");
@@ -209,7 +209,7 @@ final class PerlBuildService : IPerlBuildService
         // Check cache
         if (cache.isCached(actionId, inputFiles, metadata))
         {
-            Logger.info("  [Cached] Module::Build");
+            structuredLog.info("__cached_modulebuild").emit();
             result.success = true;
             return result;
         }
@@ -249,7 +249,7 @@ final class PerlBuildService : IPerlBuildService
         import std.path : buildPath, baseName;
         
         LanguageBuildResult result;
-        Logger.info("Building with ExtUtils::MakeMaker");
+        structuredLog.info("building_with_extutilsmakemaker").emit();
         
         // Gather input files
         string makefilePL = buildPath(projectRoot, "Makefile.PL");
@@ -277,7 +277,7 @@ final class PerlBuildService : IPerlBuildService
         // Check cache
         if (cache.isCached(actionId, inputFiles, metadata))
         {
-            Logger.info("  [Cached] ExtUtils::MakeMaker");
+            structuredLog.info("__cached_extutilsmakemaker").emit();
             result.success = true;
             return result;
         }
@@ -322,7 +322,7 @@ final class PerlBuildService : IPerlBuildService
             return result;
         }
         
-        Logger.info("Building with Dist::Zilla");
+        structuredLog.info("building_with_distzilla").emit();
         
         auto buildRes = execute(["dzil", "build"], null, Config.none, size_t.max, projectRoot);
         
@@ -348,7 +348,7 @@ final class PerlBuildService : IPerlBuildService
             return result;
         }
         
-        Logger.info("Building with Minilla");
+        structuredLog.info("building_with_minilla").emit();
         
         auto buildRes = execute(["minil", "build"], null, Config.none, size_t.max, projectRoot);
         

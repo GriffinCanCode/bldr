@@ -10,13 +10,15 @@ import core.thread : Thread;
 import engine.distributed.protocol.protocol;
 import engine.distributed.coordinator.coordinator;
 import engine.distributed.coordinator.scheduler;
+import engine.distributed.worker.tracing : createTraceContextForAction;
 import engine.runtime.hermetic;
 import engine.runtime.remote.serialization.codec : HermeticSpecCodec;
 import engine.runtime.remote.artifacts.manager : ArtifactManager;
 import engine.caching.distributed.remote.client;
 import engine.distributed.storage.store : ArtifactStore;
+import infrastructure.telemetry.distributed.tracing : Tracer;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Remote executor - executes actions on remote workers using native hermetic sandboxing
 ///
@@ -198,10 +200,12 @@ final class RemoteExecutor
     private Coordinator coordinator;
     private ArtifactManager artifactManager;
     private ActionCompletionTracker completionTracker;
+    private Tracer tracer;  // Optional tracer for distributed tracing
     
-    this(RemoteExecutorConfig config) @trusted
+    this(RemoteExecutorConfig config, Tracer tracer = null) @trusted
     {
         this.config = config;
+        this.tracer = tracer;
         
         // Initialize artifact store client
         import engine.caching.distributed.remote.protocol : RemoteCacheConfig;
@@ -219,6 +223,9 @@ final class RemoteExecutor
         this.completionTracker = new ActionCompletionTracker();
     }
     
+    /// Set tracer for distributed tracing
+    void setTracer(Tracer t) @safe nothrow { this.tracer = t; }
+    
     /// Execute action remotely
     BuildResult!RemoteExecutionResult execute(
         ActionId actionId,
@@ -229,7 +236,7 @@ final class RemoteExecutor
     {
         auto startTime = MonoTime.currTime;
         
-        Logger.info("Remote execution: " ~ actionId.toString());
+        structuredLog.info("remote_execution_").field("detail", "Remote execution: " ~ actionId.toString()).emit();
         
         // 1. Check action cache
         if (config.enableCaching)
@@ -238,7 +245,7 @@ final class RemoteExecutor
             if (cacheResult.isOk)
             {
                 auto cached = cacheResult.unwrap();
-                Logger.info("Action cache hit: " ~ actionId.toString());
+                structuredLog.info("action_cache_hit_").field("detail", "Action cache hit: " ~ actionId.toString()).emit();
                 return Ok!(RemoteExecutionResult, BuildError)(cached);
             }
         }
@@ -252,12 +259,14 @@ final class RemoteExecutor
         
         auto inputArtifacts = uploadResult.unwrap();
         
-        // 3. Build action request with hermetic spec
+        // 3. Build action request with hermetic spec + trace context
+        auto traceCtx = createTraceContextForAction(tracer);
         auto request = buildActionRequest(
             actionId,
             spec,
             command,
-            inputArtifacts
+            inputArtifacts,
+            traceCtx
         );
         
         // 4. Submit to coordinator for execution
@@ -295,8 +304,8 @@ final class RemoteExecutor
         }
         
         immutable totalDuration = MonoTime.currTime - startTime;
-        Logger.info("Remote execution completed in " ~ 
-                   totalDuration.total!"msecs".to!string ~ "ms");
+        structuredLog.info("remote_execution_completed_in_").field("detail", "Remote execution completed in " ~ 
+                   totalDuration.total!"msecs".to!string ~ "ms").emit();
         
         return Ok!(RemoteExecutionResult, BuildError)(result);
     }
@@ -306,7 +315,8 @@ final class RemoteExecutor
         ActionId actionId,
         SandboxSpec spec,
         string[] command,
-        InputSpec[] inputs
+        InputSpec[] inputs,
+        DistributedTraceContext traceCtx = DistributedTraceContext.init
     ) @safe
     {
         import std.algorithm : joiner;
@@ -340,7 +350,8 @@ final class RemoteExecutor
             outputs,
             caps,
             Priority.Normal,
-            timeout
+            timeout,
+            traceCtx
         );
     }
     
@@ -391,7 +402,7 @@ final class RemoteExecutor
             return Err!(engine.distributed.protocol.protocol.ActionResult, BuildError)(error);
         }
         
-        Logger.debugLog("Action " ~ request.id.toString() ~ " scheduled, waiting for completion...");
+        structuredLog.debug_("action_").field("detail", "Action " ~ request.id.toString() ~ " scheduled, waiting for completion...").emit();
         
         // Wait for completion asynchronously with timeout
         // The coordinator will call onActionComplete() when the action finishes
@@ -400,14 +411,14 @@ final class RemoteExecutor
         
         if (waitResult.isErr)
         {
-            Logger.error("Action " ~ request.id.toString() ~ " wait failed: " ~ 
-                       waitResult.unwrapErr().message());
+            structuredLog.error("action_").field("detail", "Action " ~ request.id.toString() ~ " wait failed: " ~ 
+                       waitResult.unwrapErr().message()).emit();
             return waitResult;
         }
         
         auto result = waitResult.unwrap();
-        Logger.info("Action " ~ request.id.toString() ~ " completed with status: " ~ 
-                   result.status.to!string);
+        structuredLog.info("action_").field("detail", "Action " ~ request.id.toString() ~ " completed with status: " ~ 
+                   result.status.to!string).emit();
         
         return Ok!(engine.distributed.protocol.protocol.ActionResult, BuildError)(result);
     }
@@ -416,7 +427,7 @@ final class RemoteExecutor
     /// This method is invoked asynchronously when a remote action completes
     void onActionComplete(ActionId actionId, ActionResult result) @trusted
     {
-        Logger.debugLog("Action completion callback: " ~ actionId.toString());
+        structuredLog.debug_("action_completion_callback_").field("detail", "Action completion callback: " ~ actionId.toString()).emit();
         completionTracker.notifyComplete(actionId, result);
     }
     
@@ -424,7 +435,7 @@ final class RemoteExecutor
     /// This method is invoked asynchronously when a remote action fails
     void onActionFailed(ActionId actionId, string errorMsg) @trusted
     {
-        Logger.debugLog("Action failure callback: " ~ actionId.toString());
+        structuredLog.debug_("action_failure_callback_").field("detail", "Action failure callback: " ~ actionId.toString()).emit();
         completionTracker.notifyError(actionId, 
             Errors.generic("Remote action failed: " ~ errorMsg, ErrorCode.BuildFailed)
                 .withLocation(__FILE__, __LINE__)
@@ -450,7 +461,7 @@ final class RemoteExecutor
     ) @trusted
     {
         // Store in action cache (would integrate with action cache service)
-        Logger.debugLog("Caching action result: " ~ actionId.toString());
+        structuredLog.debug_("caching_action_result_").field("detail", "Caching action result: " ~ actionId.toString()).emit();
         return Ok!BuildError();
     }
     

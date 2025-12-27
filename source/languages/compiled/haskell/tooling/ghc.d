@@ -10,7 +10,7 @@ import std.string;
 import std.conv;
 import languages.compiled.haskell.core.config;
 import infrastructure.config.schema.schema;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionId, ActionType;
 import infrastructure.utils.files.hash : FastHash;
 
@@ -51,7 +51,7 @@ struct GHCWrapper
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to get GHC version: " ~ e.msg);
+            structuredLog.warning("failed_to_get_ghc_version_").field("detail", "Failed to get GHC version: " ~ e.msg).emit();
         }
         return "unknown";
     }
@@ -154,7 +154,7 @@ struct GHCWrapper
         // Check if compilation is cached
         if (actionCache !is null && actionCache.isCached(actionId, inputFiles, metadata) && exists(outputPath))
         {
-            Logger.debugLog("  [Cached] GHC compilation: " ~ outputPath);
+            structuredLog.debug_("__cached_ghc_compilation_").field("detail", "  [Cached] GHC compilation: " ~ outputPath).emit();
             result.success = true;
             result.outputs = [outputPath];
             result.outputHash = FastHash.hashFile(outputPath);
@@ -262,7 +262,7 @@ struct GHCWrapper
                 break;
             case HaskellBuildMode.Library:
                 // For libraries, we'd typically use Cabal
-                Logger.warning("Library compilation with GHC directly is limited. Consider using Cabal.");
+                structuredLog.warning("library_compilation_with_ghc_directly_is").emit();
                 break;
             case HaskellBuildMode.Test:
                 // Tests are usually managed by Cabal/Stack
@@ -301,8 +301,8 @@ struct GHCWrapper
         args ~= mainFile;
         
         // Execute compilation
-        Logger.debugLog("Compiling with GHC: " ~ mainFile);
-        Logger.debugLog("  Command: " ~ args.join(" "));
+        structuredLog.debug_("compiling_with_ghc_").field("detail", "Compiling with GHC: " ~ mainFile).emit();
+        structuredLog.debug_("__command_").field("detail", "  Command: " ~ args.join(" ")).emit();
         
         bool success = false;
         
@@ -325,7 +325,7 @@ struct GHCWrapper
                 
                 if (!execResult.output.empty)
                 {
-                    Logger.debugLog("GHC output: " ~ execResult.output);
+                    structuredLog.debug_("ghc_output_").field("detail", "GHC output: " ~ execResult.output).emit();
                 }
                 
                 // Update cache with success
@@ -343,8 +343,8 @@ struct GHCWrapper
             else
             {
                 result.error = execResult.output;
-                Logger.error("GHC compilation failed:");
-                Logger.error(execResult.output);
+                structuredLog.error("ghc_compilation_failed").emit();
+                structuredLog.error("log_event").field("message", execResult.output).emit();
                 
                 // Update cache with failure
                 if (actionCache !is null)
@@ -362,7 +362,7 @@ struct GHCWrapper
         catch (Exception e)
         {
             result.error = "GHC execution failed: " ~ e.msg;
-            Logger.error(result.error);
+            structuredLog.error("log_event").field("message", result.error).emit();
             
             // Update cache with failure
             if (actionCache !is null)
@@ -406,7 +406,7 @@ struct GHCWrapper
         }
         catch (Exception e)
         {
-            Logger.warning("HLint execution failed: " ~ e.msg);
+            structuredLog.warning("hlint_execution_failed_").field("detail", "HLint execution failed: " ~ e.msg).emit();
         }
         
         return result;
@@ -417,7 +417,7 @@ struct GHCWrapper
     {
         if (!isOroluAvailable())
         {
-            Logger.warning("Ormolu not available");
+            structuredLog.warning("ormolu_not_available").emit();
             return;
         }
         
@@ -430,16 +430,16 @@ struct GHCWrapper
                 auto execResult = execute(args);
                 if (execResult.status == 0)
                 {
-                    Logger.debugLog("Formatted: " ~ source);
+                    structuredLog.debug_("formatted_").field("detail", "Formatted: " ~ source).emit();
                 }
                 else
                 {
-                    Logger.warning("Ormolu failed for " ~ source ~ ": " ~ execResult.output);
+                    structuredLog.warning("ormolu_failed_for_").field("detail", "Ormolu failed for " ~ source ~ ": " ~ execResult.output).emit();
                 }
             }
             catch (Exception e)
             {
-                Logger.warning("Ormolu execution failed: " ~ e.msg);
+                structuredLog.warning("ormolu_execution_failed_").field("detail", "Ormolu execution failed: " ~ e.msg).emit();
             }
         }
     }
@@ -449,7 +449,7 @@ struct GHCWrapper
     {
         if (!isFourmoluAvailable())
         {
-            Logger.warning("Fourmolu not available");
+            structuredLog.warning("fourmolu_not_available").emit();
             return;
         }
         
@@ -462,16 +462,16 @@ struct GHCWrapper
                 auto execResult = execute(args);
                 if (execResult.status == 0)
                 {
-                    Logger.debugLog("Formatted: " ~ source);
+                    structuredLog.debug_("formatted_").field("detail", "Formatted: " ~ source).emit();
                 }
                 else
                 {
-                    Logger.warning("Fourmolu failed for " ~ source ~ ": " ~ execResult.output);
+                    structuredLog.warning("fourmolu_failed_for_").field("detail", "Fourmolu failed for " ~ source ~ ": " ~ execResult.output).emit();
                 }
             }
             catch (Exception e)
             {
-                Logger.warning("Fourmolu execution failed: " ~ e.msg);
+                structuredLog.warning("fourmolu_execution_failed_").field("detail", "Fourmolu execution failed: " ~ e.msg).emit();
             }
         }
     }

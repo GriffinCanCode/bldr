@@ -13,7 +13,7 @@ import infrastructure.analysis.lockfile.cache;
 import infrastructure.analysis.manifests.npm : NpmManifestParser;
 import infrastructure.analysis.manifests.types : Dependency, DependencyType;
 import infrastructure.utils.files.hash : FastHash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// NPM/Yarn/PNPM lockfile generator
@@ -51,7 +51,7 @@ final class NpmLockfileGenerator : ILockfileGenerator
             auto cached = cache.get(manifestHash);
             if (cached.isOk)
             {
-                Logger.debugLog("Lockfile cache hit for " ~ manifestPath);
+                structuredLog.debug_("lockfile_cache_hit_for_").field("detail", "Lockfile cache hit for " ~ manifestPath).emit();
                 if (options.frozen)
                     return cached;  // CI mode: use cached
                 
@@ -92,7 +92,7 @@ final class NpmLockfileGenerator : ILockfileGenerator
         if (cache !is null)
             cache.put(manifestHash, lockfile);
         
-        Logger.info("Generated lockfile with " ~ lockfile.count().to!string ~ " dependencies");
+        structuredLog.info("generated_lockfile_with_").field("detail", "Generated lockfile with " ~ lockfile.count().to!string ~ " dependencies").emit();
         return Ok!(Lockfile, BuildError)(lockfile);
     }
     
@@ -127,7 +127,7 @@ final class NpmLockfileGenerator : ILockfileGenerator
                     : generatePnpmLock(lockfile);
             
             .write(outputPath, content);
-            Logger.info("Wrote lockfile: " ~ outputPath);
+            structuredLog.info("wrote_lockfile_").field("detail", "Wrote lockfile: " ~ outputPath).emit();
             return Ok!(void, BuildError)();
         }
         catch (Exception e)

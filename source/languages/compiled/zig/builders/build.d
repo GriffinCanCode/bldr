@@ -15,7 +15,7 @@ import languages.compiled.zig.tooling.tools;
 import languages.compiled.zig.builders.base;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.security.validation;
 import engine.caching.actions.action;
 
@@ -51,7 +51,7 @@ class BuildZigBuilder : ZigBuilder
         {
             // Use target.root relative to workspace root
             workDir = target.root.isAbsolute ? target.root : buildPath(workspace.root, target.root);
-            Logger.debugLog("Using target root: " ~ workDir);
+            structuredLog.debug_("using_target_root_").field("detail", "Using target root: " ~ workDir).emit();
         }
         else if (!sources.empty)
         {
@@ -75,14 +75,14 @@ class BuildZigBuilder : ZigBuilder
             workDir = dirName(buildZigPath);
         }
         
-        Logger.debugLog("Using build.zig at: " ~ buildZigPath);
+        structuredLog.debug_("using_buildzig_at_").field("detail", "Using build.zig at: " ~ buildZigPath).emit();
         
         // Parse build.zig to get project info
         auto project = BuildZigParser.parseBuildZig(buildZigPath);
         if (!project.name.empty)
         {
-            Logger.debugLog("Building project: " ~ project.name ~ 
-                         (project.version_.empty ? "" : " v" ~ project.version_));
+            structuredLog.debug_("building_project_").field("detail", "Building project: " ~ project.name ~ 
+                         (project.version_.empty ? "" : " v" ~ project.version_)).emit();
         }
         
         // Collect all source files for caching
@@ -132,7 +132,7 @@ class BuildZigBuilder : ZigBuilder
         // Check if build is cached
         if (actionCache.isCached(actionId, inputFiles, metadata) && !outputs.empty && exists(outputs[0]))
         {
-            Logger.debugLog("  [Cached] build.zig build: " ~ workDir);
+            structuredLog.debug_("__cached_buildzig_build_").field("detail", "  [Cached] build.zig build: " ~ workDir).emit();
             result.success = true;
             result.outputs = outputs;
             result.outputHash = FastHash.hashFile(outputs[0]);
@@ -221,7 +221,7 @@ class BuildZigBuilder : ZigBuilder
         // Add target flags if specified
         cmd ~= target.flags;
         
-        Logger.info("Building with zig build: " ~ cmd.join(" "));
+        structuredLog.info("building_with_zig_build_").field("detail", "Building with zig build: " ~ cmd.join(" ")).emit();
         
         // Prepare environment
         string[string] env;

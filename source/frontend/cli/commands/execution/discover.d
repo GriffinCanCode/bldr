@@ -11,21 +11,21 @@ import infrastructure.config.parsing.parser;
 import infrastructure.analysis.inference.analyzer;
 import engine.runtime.services;
 import engine.graph;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 import infrastructure.errors.formatting.format;
 
 /// Discover command - preview dynamic dependency discovery without building
 void discoverCommand(string[] args)
 {
-    Logger.info("Analyzing project for dynamic dependencies...");
+    structuredLog.info("analyzing_project_for_dynamic_dependenci").emit();
     
     // Parse configuration
     auto configResult = ConfigParser.parseWorkspace(".");
     if (configResult.isErr)
     {
-        Logger.error("Failed to parse workspace configuration");
-        Logger.error(format(configResult.unwrapErr()));
+        structuredLog.error("failed_to_parse_workspace_configuration").emit();
+        structuredLog.error("log_event").field("message", format(configResult.unwrapErr())).emit();
         return;
     }
     
@@ -38,8 +38,8 @@ void discoverCommand(string[] args)
     auto graphResult = analyzer.analyze("");
     if (graphResult.isErr)
     {
-        Logger.error("Failed to analyze dependencies");
-        Logger.error(format(graphResult.unwrapErr()));
+        structuredLog.error("failed_to_analyze_dependencies").emit();
+        structuredLog.error("log_event").field("message", format(graphResult.unwrapErr())).emit();
         return;
     }
     
@@ -67,7 +67,7 @@ void discoverCommand(string[] args)
     
     // Report findings
     writeln();
-    Logger.success("Discovery Analysis Complete");
+    structuredLog.info("discovery_analysis_complete").emit();
     writeln();
     writeln("Targets with discovery capability: " ~ discoverableCount.to!string);
     
@@ -114,12 +114,12 @@ void discoverCommand(string[] args)
 /// Show discovery history from previous builds
 void discoverHistoryCommand()
 {
-    Logger.info("Loading discovery history...");
+    structuredLog.info("loading_discovery_history").emit();
     
     auto historyFile = ".builder-cache/discovery-history.json";
     if (!exists(historyFile))
     {
-        Logger.warning("No discovery history found");
+        structuredLog.warning("no_discovery_history_found").emit();
         writeln("Run 'bldr build' first to generate discovery data");
         return;
     }
@@ -134,7 +134,7 @@ void discoverHistoryCommand()
             auto discoveries = history["discoveries"].array;
             
             writeln();
-            Logger.success("Discovery History (" ~ discoveries.length.to!string ~ " discoveries)");
+            structuredLog.info("discovery_history_").field("detail", "Discovery History (" ~ discoveries.length.to!string ~ " discoveries)").emit();
             writeln();
             
             foreach (i, discovery; discoveries)
@@ -165,7 +165,7 @@ void discoverHistoryCommand()
     }
     catch (Exception e)
     {
-        Logger.error("Failed to read discovery history: " ~ e.msg);
+        structuredLog.error("failed_to_read_discovery_history_").field("detail", "Failed to read discovery history: " ~ e.msg).emit();
     }
 }
 

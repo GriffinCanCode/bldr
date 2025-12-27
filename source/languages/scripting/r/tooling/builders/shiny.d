@@ -13,7 +13,7 @@ import languages.scripting.r.core.config;
 import languages.scripting.r.tooling.builders.base;
 import languages.scripting.r.tooling.checkers;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Shiny app builder - validates and prepares Shiny applications
 class RShinyBuilder : RBuilder
@@ -67,7 +67,7 @@ class RShinyBuilder : RBuilder
             }
         }
         
-        Logger.info("Shiny app validated successfully at: " ~ appDir);
+        structuredLog.info("shiny_app_validated_successfully_at_").field("detail", "Shiny app validated successfully at: " ~ appDir).emit();
         
         result.success = true;
         result.outputs = outputs;
@@ -98,7 +98,7 @@ class RShinyBuilder : RBuilder
     {
         if (target.sources.empty)
         {
-            Logger.error("No source files specified for Shiny app");
+            structuredLog.error("no_source_files_specified_for_shiny_app").emit();
             return false;
         }
         
@@ -111,7 +111,7 @@ class RShinyBuilder : RBuilder
         
         if (!hasAppR && !hasServerUI)
         {
-            Logger.error("Shiny app must have either app.R or server.R/ui.R");
+            structuredLog.error("shiny_app_must_have_either_appr_or_serve").emit();
             return false;
         }
         
@@ -161,12 +161,12 @@ class RShinyBuilder : RBuilder
                 setAttributes(outputPath, attrs | S_IXUSR | S_IXGRP | S_IXOTH);
             }
             
-            Logger.info("Created Shiny launcher: " ~ outputPath);
+            structuredLog.info("created_shiny_launcher_").field("detail", "Created Shiny launcher: " ~ outputPath).emit();
             return true;
         }
         catch (Exception e)
         {
-            Logger.error("Failed to create Shiny launcher: " ~ e.msg);
+            structuredLog.error("failed_to_create_shiny_launcher_").field("detail", "Failed to create Shiny launcher: " ~ e.msg).emit();
             return false;
         }
     }

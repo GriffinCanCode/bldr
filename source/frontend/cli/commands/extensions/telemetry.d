@@ -4,7 +4,7 @@ import std.stdio;
 import std.conv : to;
 import std.algorithm : min;
 import infrastructure.telemetry;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors.formatting.format : formatError = format;
 
 /// Telemetry command - display build analytics and insights
@@ -31,7 +31,7 @@ struct TelemetryCommand
                 clearData(storage);
                 break;
             default:
-                Logger.error("Unknown telemetry subcommand: " ~ subcommand);
+                structuredLog.error("unknown_telemetry_subcommand_").field("detail", "Unknown telemetry subcommand: " ~ subcommand).emit();
                 printUsage();
         }
     }
@@ -41,14 +41,14 @@ struct TelemetryCommand
         auto sessionsResult = storage.getSessions();
         if (sessionsResult.isErr)
         {
-            Logger.error("Failed to load telemetry data: " ~ sessionsResult.unwrapErr().toString());
+            structuredLog.error("failed_to_load_telemetry_data_").field("detail", "Failed to load telemetry data: " ~ sessionsResult.unwrapErr().toString()).emit();
             return;
         }
         
         auto sessions = sessionsResult.unwrap();
         if (sessions.length == 0)
         {
-            Logger.info("No telemetry data available yet. Run a build first!");
+            structuredLog.info("no_telemetry_data_available_yet_run_a_bu").emit();
             return;
         }
         
@@ -57,8 +57,8 @@ struct TelemetryCommand
         
         if (reportResult.isErr)
         {
-            Logger.error("Failed to analyze telemetry");
-            Logger.error(reportResult.unwrapErr().message);
+            structuredLog.error("failed_to_analyze_telemetry").emit();
+            structuredLog.error("log_event").field("message", reportResult.unwrapErr().message).emit();
             return;
         }
         
@@ -67,8 +67,8 @@ struct TelemetryCommand
         
         if (summaryResult.isErr)
         {
-            Logger.error("Failed to generate summary");
-            Logger.error(summaryResult.unwrapErr().message);
+            structuredLog.error("failed_to_generate_summary").emit();
+            structuredLog.error("log_event").field("message", summaryResult.unwrapErr().message).emit();
             return;
         }
         
@@ -100,15 +100,15 @@ struct TelemetryCommand
         auto recentResult = storage.getRecent(count);
         if (recentResult.isErr)
         {
-            Logger.error("Failed to load recent builds");
-            Logger.error(recentResult.unwrapErr().message);
+            structuredLog.error("failed_to_load_recent_builds").emit();
+            structuredLog.error("log_event").field("message", recentResult.unwrapErr().message).emit();
             return;
         }
         
         auto sessions = recentResult.unwrap();
         if (sessions.length == 0)
         {
-            Logger.info("No telemetry data available yet. Run a build first!");
+            structuredLog.info("no_telemetry_data_available_yet_run_a_bu").emit();
             return;
         }
         
@@ -153,14 +153,14 @@ struct TelemetryCommand
         auto sessionsResult = storage.getSessions();
         if (sessionsResult.isErr)
         {
-            Logger.error("Failed to load telemetry data: " ~ sessionsResult.unwrapErr().toString());
+            structuredLog.error("failed_to_load_telemetry_data_").field("detail", "Failed to load telemetry data: " ~ sessionsResult.unwrapErr().toString()).emit();
             return;
         }
         
         auto sessions = sessionsResult.unwrap();
         if (sessions.length == 0)
         {
-            Logger.info("No telemetry data to export");
+            structuredLog.info("no_telemetry_data_to_export").emit();
             return;
         }
         
@@ -173,8 +173,8 @@ struct TelemetryCommand
             }
             else
             {
-                Logger.error("Failed to export JSON");
-                Logger.error(jsonResult.unwrapErr().message);
+                structuredLog.error("failed_to_export_json").emit();
+                structuredLog.error("log_event").field("message", jsonResult.unwrapErr().message).emit();
             }
         }
         else if (format == "csv")
@@ -186,29 +186,29 @@ struct TelemetryCommand
             }
             else
             {
-                Logger.error("Failed to export CSV");
-                Logger.error(csvResult.unwrapErr().message);
+                structuredLog.error("failed_to_export_csv").emit();
+                structuredLog.error("log_event").field("message", csvResult.unwrapErr().message).emit();
             }
         }
         else
         {
-            Logger.error("Unknown export format: " ~ format);
+            structuredLog.error("unknown_export_format_").field("detail", "Unknown export format: " ~ format).emit();
         }
     }
     
     private static void clearData(TelemetryStorage storage)
     {
-        Logger.info("Clearing telemetry data...");
+        structuredLog.info("clearing_telemetry_data").emit();
         
         auto result = storage.clear();
         if (result.isErr)
         {
-            Logger.error("Failed to clear telemetry");
-            Logger.error(result.unwrapErr().message);
+            structuredLog.error("failed_to_clear_telemetry").emit();
+            structuredLog.error("log_event").field("message", result.unwrapErr().message).emit();
             return;
         }
         
-        Logger.success("Telemetry data cleared successfully!");
+        structuredLog.info("telemetry_data_cleared_successfully").emit();
     }
     
     private static void printUsage()

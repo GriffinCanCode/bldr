@@ -11,7 +11,7 @@ import core.sync.mutex : Mutex;
 import engine.graph : BuildGraph, BuildNode, BuildStatus;
 import infrastructure.config.schema.schema : TargetId;
 import engine.economics.estimator : CostEstimator, ExecutionHistory;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Speculation decision based on cache hit probability
 /// Single responsibility: decide IF a node should be speculatively executed
@@ -129,7 +129,7 @@ final class SpeculativeExecutor
             // Don't duplicate
             if (key in _activeSpeculations)
             {
-                Logger.debugLog("Speculator: already speculating " ~ key);
+                structuredLog.debug_("speculator_already_speculating_").field("detail", "Speculator: already speculating " ~ key).emit();
                 return;
             }
             
@@ -141,7 +141,7 @@ final class SpeculativeExecutor
             );
             
             atomicOp!"+="(_speculationsStarted, 1);
-            Logger.debugLog("Speculator: started speculation for " ~ key);
+            structuredLog.debug_("speculator_started_speculation_for_").field("detail", "Speculator: started speculation for " ~ key).emit();
         }
     }
     
@@ -155,7 +155,7 @@ final class SpeculativeExecutor
             
             if (ctxPtr is null)
             {
-                Logger.debugLog("Speculator: no active speculation for " ~ key);
+                structuredLog.debug_("speculator_no_active_speculation_for_").field("detail", "Speculator: no active speculation for " ~ key).emit();
                 return;
             }
             
@@ -163,8 +163,8 @@ final class SpeculativeExecutor
             _activeSpeculations.remove(key);
             
             atomicOp!"+="(_speculationsConfirmed, 1);
-            Logger.debugLog("Speculator: confirmed " ~ key ~ 
-                           " in " ~ ctx.timer.peek().total!"msecs".to!string ~ "ms");
+            structuredLog.debug_("speculator_confirmed_").field("detail", "Speculator: confirmed " ~ key ~ 
+                           " in " ~ ctx.timer.peek().total!"msecs".to!string ~ "ms").emit();
             
             if (ctx.onConfirm !is null)
                 ctx.onConfirm();
@@ -185,8 +185,8 @@ final class SpeculativeExecutor
             _activeSpeculations.remove(key);
             
             atomicOp!"+="(_speculationsAborted, 1);
-            Logger.debugLog("Speculator: aborted " ~ key ~ 
-                           (reason.length > 0 ? " (" ~ reason ~ ")" : ""));
+            structuredLog.debug_("speculator_aborted_").field("detail", "Speculator: aborted " ~ key ~ 
+                           (reason.length > 0 ? " (" ~ reason ~ ")" : "")).emit();
             
             if (ctx.onAbort !is null)
                 ctx.onAbort();
@@ -198,7 +198,7 @@ final class SpeculativeExecutor
     {
         synchronized (_mutex)
         {
-            return targetId.toString() in _activeSpeculations;
+            return (targetId.toString() in _activeSpeculations) !is null;
         }
     }
     
@@ -214,7 +214,7 @@ final class SpeculativeExecutor
                     ctx.onAbort();
             }
             _activeSpeculations.clear();
-            Logger.debugLog("Speculator: aborted all speculations (" ~ reason ~ ")");
+            structuredLog.debug_("speculator_aborted_all_speculations_").field("detail", "Speculator: aborted all speculations (" ~ reason ~ ")").emit();
         }
     }
     
@@ -252,7 +252,7 @@ struct SpeculatorStats
     
     @property size_t active() const pure nothrow @nogc => started - confirmed - aborted;
     
-    @property float confirmRate() const pure nothrow @nogc
+    @property float confirmRate() const pure nothrow @nogc @safe
     {
         auto resolved = confirmed + aborted;
         return resolved == 0 ? 0.0f : cast(float)confirmed / cast(float)resolved;

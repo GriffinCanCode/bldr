@@ -8,7 +8,7 @@ import std.algorithm;
 import std.array;
 import std.string;
 import languages.scripting.elixir.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Dialyzer result
 struct DialyzerResult
@@ -66,7 +66,7 @@ class DialyzerChecker
         if (!config.paths.empty)
             cmd ~= config.paths;
         
-        Logger.debugLog("Running Dialyzer: " ~ cmd.join(" "));
+        structuredLog.debug_("running_dialyzer_").field("detail", "Running Dialyzer: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         
@@ -91,7 +91,7 @@ class DialyzerChecker
     /// Build/update PLT
     static bool buildPLT(DialyzerConfig config, string mixCmd = "mix") @system
     {
-        Logger.info("Building Dialyzer PLT");
+        structuredLog.info("building_dialyzer_plt").emit();
         
         bool useDialyxir = isDialyxirAvailable(mixCmd);
         

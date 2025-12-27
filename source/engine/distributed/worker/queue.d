@@ -10,7 +10,7 @@ import engine.distributed.protocol.protocol;
 import engine.distributed.protocol.transport;
 import engine.distributed.worker.peers;
 import infrastructure.errors : Result, Ok, Err;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Distributed queue manager
 /// Bridges local work-stealing deque with network steal protocol
@@ -87,11 +87,11 @@ final class DistributedQueue
             if (response.hasWork)
             {
                 atomicOp!"+="(stealsReceived, 1);
-                Logger.debugLog("Successfully stole work from " ~ victimId.toString());
+                structuredLog.debug_("successfully_stole_work_from_").field("detail", "Successfully stole work from " ~ victimId.toString()).emit();
                 return response.action;
             }
         }
-        catch (Exception e) { Logger.error("Steal from peer failed: " ~ e.msg); peers.markDead(victimId); }
+        catch (Exception e) { structuredLog.error("steal_from_peer_failed_").field("detail", "Steal from peer failed: " ~ e.msg).emit(); peers.markDead(victimId); }
         return null;
     }
     
@@ -101,7 +101,7 @@ final class DistributedQueue
         immutable queueSize = localQueue.size();
         if (queueSize <= minLocalReserve)
         {
-            Logger.debugLog("Rejecting steal from " ~ req.thief.toString() ~ " (queue too small: " ~ queueSize.to!string ~ ")");
+            structuredLog.debug_("rejecting_steal_from_").field("detail", "Rejecting steal from " ~ req.thief.toString() ~ " (queue too small: " ~ queueSize.to!string ~ ")").emit();
             return null;
         }
         
@@ -109,7 +109,7 @@ final class DistributedQueue
         if (stolen !is null)
         {
             atomicOp!"+="(stealsGiven, 1);
-            Logger.debugLog("Gave work to " ~ req.thief.toString());
+            structuredLog.debug_("gave_work_to_").field("detail", "Gave work to " ~ req.thief.toString()).emit();
             peers.updateMetrics(selfId, localQueue.size(), calculateLoadFactor());
         }
         return stolen;

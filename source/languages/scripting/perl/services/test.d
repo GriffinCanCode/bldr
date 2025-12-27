@@ -5,7 +5,7 @@ import infrastructure.config.schema.schema : LanguageBuildResult, Target;
 import infrastructure.analysis.targets.types;
 import engine.caching.actions.action;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import std.range : empty;
 import std.array : join;
 
@@ -125,7 +125,7 @@ final class PerlTestService : IPerlTestService
         // Check cache
         if (cache.isCached(actionId, testFiles, metadata))
         {
-            Logger.info("  [Cached] Test execution: prove");
+            structuredLog.info("__cached_test_execution_prove").emit();
             result.success = true;
             result.outputHash = FastHash.hashStrings(target.sources);
             return result;
@@ -165,7 +165,7 @@ final class PerlTestService : IPerlTestService
         else
             cmd ~= "t/";
         
-        Logger.info("Running tests with prove");
+        structuredLog.info("running_tests_with_prove").emit();
         
         // Execute tests
         bool success = false;
@@ -236,7 +236,7 @@ final class PerlTestService : IPerlTestService
             return result;
         }
         
-        Logger.info("Running " ~ testFiles.length.to!string ~ " test files");
+        structuredLog.info("running_").field("detail", "Running " ~ testFiles.length.to!string ~ " test files").emit();
         
         bool allPassed = true;
         foreach (testFile; testFiles)
@@ -260,13 +260,13 @@ final class PerlTestService : IPerlTestService
                 auto res = execute(cmd, null, Config.none, size_t.max, projectRoot);
                 if (res.status != 0)
                 {
-                    Logger.error("Test failed: " ~ testFile);
+                    structuredLog.error("test_failed_").field("detail", "Test failed: " ~ testFile).emit();
                     allPassed = false;
                 }
             }
             catch (Exception e)
             {
-                Logger.error("Failed to run test " ~ testFile ~ ": " ~ e.msg);
+                structuredLog.error("failed_to_run_test_").field("detail", "Failed to run test " ~ testFile ~ ": " ~ e.msg).emit();
                 allPassed = false;
             }
         }

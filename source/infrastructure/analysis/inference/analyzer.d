@@ -14,7 +14,7 @@ import infrastructure.analysis.targets.spec;
 import infrastructure.analysis.metadata.metagen;
 import infrastructure.analysis.scanning.scanner;
 import infrastructure.analysis.resolution.resolver;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import languages.registry;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.concurrency.parallel;
@@ -82,7 +82,7 @@ class DependencyAnalyzer
     /// Returns: Ok with BuildGraph on success, Err with BuildError on validation failure
     BuildResult!BuildGraph analyze(in string targetFilter = "") @trusted
     {
-        Logger.debugLog("Analyzing dependencies...");
+        structuredLog.debug_("analyzing_dependencies").emit();
         auto sw = StopWatch(AutoStart.yes);
         
         // Collect all configuration files for cache validation
@@ -93,8 +93,8 @@ class DependencyAnalyzer
         if (cachedGraph !is null)
         {
             sw.stop();
-            Logger.success("Loaded dependency graph from cache (" ~ 
-                         sw.peek().total!"msecs".to!string ~ "ms)");
+            structuredLog.info("loaded_dependency_graph_from_cache_").field("detail", "Loaded dependency graph from cache (" ~ 
+                         sw.peek().total!"msecs".to!string ~ "ms)").emit();
             
             // Apply target filter if specified
             if (!targetFilter.empty)
@@ -106,7 +106,7 @@ class DependencyAnalyzer
             return BuildResult!BuildGraph.ok(cachedGraph);
         }
         
-        Logger.debugLog("Graph cache miss - analyzing dependencies...");
+        structuredLog.debug_("graph_cache_miss__analyzing_dependencies").emit();
         
         // Use deferred validation for O(V+E) performance instead of O(V²)
         // Arena allocation reduces GC pressure 10-100x during graph construction
@@ -126,8 +126,8 @@ class DependencyAnalyzer
                 auto addResult = graph.addTarget(target);
                 if (addResult.isErr)
                 {
-                    Logger.error("Failed to add target");
-                    Logger.error(format(addResult.unwrapErr()));
+                    structuredLog.error("failed_to_add_target").emit();
+                    structuredLog.error("log_event").field("message", format(addResult.unwrapErr())).emit();
                 }
             }
         }
@@ -154,8 +154,8 @@ class DependencyAnalyzer
                 if (analysisResult.isErr)
                 {
                     auto error = analysisResult.unwrapErr();
-                    Logger.warning("Analysis failed for " ~ target.name);
-                    Logger.error(format(error));
+                    structuredLog.warning("analysis_failed_for_").field("detail", "Analysis failed for " ~ target.name).emit();
+                    structuredLog.error("log_event").field("message", format(error)).emit();
                     continue;
                 }
                 
@@ -163,7 +163,7 @@ class DependencyAnalyzer
                 
                 if (!analysis.isValid)
                 {
-                    Logger.warning("Analysis errors in " ~ target.name);
+                    structuredLog.warning("analysis_errors_in_").field("detail", "Analysis errors in " ~ target.name).emit();
                     continue;
                 }
                 
@@ -176,14 +176,14 @@ class DependencyAnalyzer
                         if (addResult.isErr)
                         {
                             auto error = addResult.unwrapErr();
-                            Logger.error("Failed to add dependency: " ~ format(error));
+                            structuredLog.error("failed_to_add_dependency_").field("detail", "Failed to add dependency: " ~ format(error)).emit();
                             // Continue processing other dependencies
                         }
                     }
                 }
                 
-                Logger.debugLog("  " ~ target.name ~ ": " ~ 
-                             analysis.dependencies.length.to!string ~ " dependencies");
+                structuredLog.debug_("__").field("detail", "  " ~ target.name ~ ": " ~ 
+                             analysis.dependencies.length.to!string ~ " dependencies").emit();
             }
         }
         else if (targetsToAnalyze.length == 1)
@@ -195,8 +195,8 @@ class DependencyAnalyzer
             if (analysisResult.isErr)
             {
                 auto error = analysisResult.unwrapErr();
-                Logger.warning("Analysis failed for " ~ target.name);
-                Logger.error(format(error));
+                structuredLog.warning("analysis_failed_for_").field("detail", "Analysis failed for " ~ target.name).emit();
+                structuredLog.error("log_event").field("message", format(error)).emit();
             }
             else
             {
@@ -204,7 +204,7 @@ class DependencyAnalyzer
                 
                 if (!analysis.isValid)
                 {
-                    Logger.warning("Analysis errors in " ~ target.name);
+                    structuredLog.warning("analysis_errors_in_").field("detail", "Analysis errors in " ~ target.name).emit();
                 }
                 else
                 {
@@ -217,13 +217,13 @@ class DependencyAnalyzer
                             if (addResult.isErr)
                             {
                                 auto error = addResult.unwrapErr();
-                                Logger.error("Failed to add dependency: " ~ format(error));
+                                structuredLog.error("failed_to_add_dependency_").field("detail", "Failed to add dependency: " ~ format(error)).emit();
                             }
                         }
                     }
                     
-                    Logger.debugLog("  " ~ target.name ~ ": " ~ 
-                                 analysis.dependencies.length.to!string ~ " dependencies");
+                    structuredLog.debug_("__").field("detail", "  " ~ target.name ~ ": " ~ 
+                                 analysis.dependencies.length.to!string ~ " dependencies").emit();
                 }
             }
         }
@@ -233,7 +233,7 @@ class DependencyAnalyzer
         if (validateResult.isErr)
         {
             auto error = validateResult.unwrapErr();
-            Logger.error("Graph validation failed: " ~ format(error));
+            structuredLog.error("graph_validation_failed_").field("detail", "Graph validation failed: " ~ format(error)).emit();
             return BuildResult!BuildGraph.err(error);
         }
         
@@ -241,16 +241,16 @@ class DependencyAnalyzer
         try
         {
             graphCache.put(graph, configFiles);
-            Logger.debugLog("Cached dependency graph for future builds");
+            structuredLog.debug_("cached_dependency_graph_for_future_build").emit();
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to cache dependency graph: " ~ e.msg);
+            structuredLog.warning("failed_to_cache_dependency_graph_").field("detail", "Failed to cache dependency graph: " ~ e.msg).emit();
             // Non-fatal - continue with analysis result
         }
         
         sw.stop();
-        Logger.success("Analysis complete (" ~ sw.peek().total!"msecs".to!string ~ "ms)");
+        structuredLog.info("analysis_complete_").field("detail", "Analysis complete (" ~ sw.peek().total!"msecs".to!string ~ "ms)").emit();
         
         return BuildResult!BuildGraph.ok(graph);
     }
@@ -278,7 +278,7 @@ class DependencyAnalyzer
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to collect config files: " ~ e.msg);
+            structuredLog.warning("failed_to_collect_config_files_").field("detail", "Failed to collect config files: " ~ e.msg).emit();
         }
         
         return files;
@@ -301,8 +301,8 @@ class DependencyAnalyzer
                 auto result = filteredGraph.addTarget(node.target);
                 if (result.isErr)
                 {
-                    Logger.error("Failed to add target to filtered graph: " ~ 
-                               format(result.unwrapErr()));
+                    structuredLog.error("failed_to_add_target_to_filtered_graph_").field("detail", "Failed to add target to filtered graph: " ~ 
+                               format(result.unwrapErr())).emit();
                 }
             }
         }
@@ -321,8 +321,8 @@ class DependencyAnalyzer
                         auto result = filteredGraph.addDependency(key, depKey);
                         if (result.isErr)
                         {
-                            Logger.error("Failed to add dependency: " ~ 
-                                       format(result.unwrapErr()));
+                            structuredLog.error("failed_to_add_dependency_").field("detail", "Failed to add dependency: " ~ 
+                                       format(result.unwrapErr())).emit();
                         }
                     }
                 }
@@ -333,8 +333,8 @@ class DependencyAnalyzer
         auto validateResult = filteredGraph.validate();
         if (validateResult.isErr)
         {
-            Logger.warning("Filtered graph validation failed: " ~ 
-                         format(validateResult.unwrapErr()));
+            structuredLog.warning("filtered_graph_validation_failed_").field("detail", "Filtered graph validation failed: " ~ 
+                         format(validateResult.unwrapErr())).emit();
         }
         
         return filteredGraph;
@@ -357,7 +357,7 @@ class DependencyAnalyzer
             }
             catch (Exception e)
             {
-                Logger.warning("Incremental analysis failed, falling back to full analysis: " ~ e.msg);
+                structuredLog.warning("incremental_analysis_failed_falling_back").field("detail", "Incremental analysis failed, falling back to full analysis: " ~ e.msg).emit();
                 // Fall through to full analysis
             }
         }
@@ -414,14 +414,14 @@ class DependencyAnalyzer
         // Log analysis results
         if (aggregated.hasErrors)
         {
-            Logger.warning(
+            structuredLog.warning("log_event").field("message", 
                 "Failed to analyze " ~ aggregated.errors.length.to!string ~
                 " source file(s) in " ~ target.name
-            );
+            ).emit();
             
             foreach (error; aggregated.errors)
             {
-                Logger.error(format(error));
+                structuredLog.error("log_event").field("message", format(error)).emit();
             }
         }
         
@@ -571,7 +571,7 @@ class BuildInferenceAnalyzer
         }
         catch (Exception e)
         {
-            Logger.debugLog("Failed to infer dependencies from " ~ basePath ~ ": " ~ e.msg);
+            structuredLog.debug_("failed_to_infer_dependencies_from_").field("detail", "Failed to infer dependencies from " ~ basePath ~ ": " ~ e.msg).emit();
         }
         
         return dependencies;
@@ -609,7 +609,7 @@ class BuildInferenceAnalyzer
         }
         catch (Exception e)
         {
-            Logger.debugLog("Failed to infer compiler flags from " ~ basePath ~ ": " ~ e.msg);
+            structuredLog.debug_("failed_to_infer_compiler_flags_from_").field("detail", "Failed to infer compiler flags from " ~ basePath ~ ": " ~ e.msg).emit();
         }
         
         return flags;
@@ -657,7 +657,7 @@ class BuildInferenceAnalyzer
         }
         catch (Exception e)
         {
-            Logger.debugLog("Failed to infer include directories from " ~ basePath ~ ": " ~ e.msg);
+            structuredLog.debug_("failed_to_infer_include_directories_from").field("detail", "Failed to infer include directories from " ~ basePath ~ ": " ~ e.msg).emit();
         }
         
         return includes;
@@ -712,7 +712,7 @@ class BuildInferenceAnalyzer
         }
         catch (Exception e)
         {
-            Logger.debugLog("Failed to check for main function in " ~ basePath ~ ": " ~ e.msg);
+            structuredLog.debug_("failed_to_check_for_main_function_in_").field("detail", "Failed to check for main function in " ~ basePath ~ ": " ~ e.msg).emit();
         }
         
         return false;
@@ -750,7 +750,7 @@ class BuildInferenceAnalyzer
         }
         catch (Exception e)
         {
-            Logger.debugLog("Failed to check for test patterns in " ~ basePath ~ ": " ~ e.msg);
+            structuredLog.debug_("failed_to_check_for_test_patterns_in_").field("detail", "Failed to check for test patterns in " ~ basePath ~ ": " ~ e.msg).emit();
         }
         
         return false;
@@ -775,7 +775,7 @@ class BuildInferenceAnalyzer
         }
         catch (Exception e)
         {
-            Logger.debugLog("Failed to check for library patterns in " ~ basePath ~ ": " ~ e.msg);
+            structuredLog.debug_("failed_to_check_for_library_patterns_in_").field("detail", "Failed to check for library patterns in " ~ basePath ~ ": " ~ e.msg).emit();
         }
         
         return false;
@@ -798,7 +798,7 @@ class BuildInferenceAnalyzer
         }
         catch (Exception e)
         {
-            Logger.debugLog("Failed to check for manifest files in " ~ basePath ~ ": " ~ e.msg);
+            structuredLog.debug_("failed_to_check_for_manifest_files_in_").field("detail", "Failed to check for manifest files in " ~ basePath ~ ": " ~ e.msg).emit();
         }
         
         return false;
@@ -827,7 +827,7 @@ class BuildInferenceAnalyzer
         }
         catch (Exception e)
         {
-            Logger.debugLog("Failed to get source files from " ~ basePath ~ ": " ~ e.msg);
+            structuredLog.debug_("failed_to_get_source_files_from_").field("detail", "Failed to get source files from " ~ basePath ~ ": " ~ e.msg).emit();
         }
         
         return files;
@@ -866,7 +866,7 @@ class BuildInferenceAnalyzer
         }
         catch (Exception e)
         {
-            Logger.debugLog("Failed to extract dependencies from content: " ~ e.msg);
+            structuredLog.debug_("failed_to_extract_dependencies_from_cont").field("detail", "Failed to extract dependencies from content: " ~ e.msg).emit();
         }
         
         return deps;
@@ -905,7 +905,7 @@ class BuildInferenceAnalyzer
         }
         catch (Exception e)
         {
-            Logger.debugLog("Failed to parse package.json dependencies: " ~ e.msg);
+            structuredLog.debug_("failed_to_parse_packagejson_dependencies").field("detail", "Failed to parse package.json dependencies: " ~ e.msg).emit();
         }
         
         return deps;

@@ -8,7 +8,7 @@ import std.string;
 import languages.scripting.python.core.config;
 import languages.scripting.python.tooling.results;
 import languages.scripting.python.tooling.detection;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Code linting utilities
 class PyLinters
@@ -27,7 +27,7 @@ class PyLinters
         
         string[] cmd = ["ruff", "check"] ~ sources;
         
-        Logger.debugLog("Running ruff check: " ~ cmd.join(" "));
+        structuredLog.debug_("running_ruff_check_").field("detail", "Running ruff check: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         result.output = res.output;
@@ -62,7 +62,7 @@ class PyLinters
         
         string[] cmd = [pythonCmd, "-m", "pylint"] ~ sources;
         
-        Logger.debugLog("Running pylint: " ~ cmd.join(" "));
+        structuredLog.debug_("running_pylint_").field("detail", "Running pylint: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         result.output = res.output;
@@ -96,7 +96,7 @@ class PyLinters
         
         string[] cmd = [pythonCmd, "-m", "flake8"] ~ sources;
         
-        Logger.debugLog("Running flake8: " ~ cmd.join(" "));
+        structuredLog.debug_("running_flake8_").field("detail", "Running flake8: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         result.output = res.output;
@@ -158,26 +158,26 @@ class Linter
         
         if (ToolDetection.isRuffAvailable())
         {
-            Logger.debugLog("Using ruff for linting");
+            structuredLog.debug_("using_ruff_for_linting").emit();
             return PyLinters.lintRuff(sources);
         }
         
         if (ToolDetection.isPylintAvailable(pythonCmd))
         {
-            Logger.debugLog("Using pylint for linting");
+            structuredLog.debug_("using_pylint_for_linting").emit();
             return PyLinters.lintPylint(sources, pythonCmd);
         }
         
         if (ToolDetection.isFlake8Available(pythonCmd))
         {
-            Logger.debugLog("Using flake8 for linting");
+            structuredLog.debug_("using_flake8_for_linting").emit();
             return PyLinters.lintFlake8(sources, pythonCmd);
         }
         
         // No linter available
         ToolResult result;
         result.success = true;
-        Logger.info("No linter available (install ruff, pylint, or flake8)");
+        structuredLog.info("no_linter_available_install_ruff_pylint_").emit();
         
         return result;
     }
@@ -189,7 +189,7 @@ class Linter
         
         string[] cmd = [pythonCmd, "-m", "bandit", "-r"] ~ sources;
         
-        Logger.info("Running bandit security checks");
+        structuredLog.info("running_bandit_security_checks").emit();
         
         auto res = execute(cmd);
         result.output = res.output;
@@ -217,7 +217,7 @@ class Linter
         
         string[] cmd = [pythonCmd, "-m", "pyflakes"] ~ sources;
         
-        Logger.info("Running pyflakes");
+        structuredLog.info("running_pyflakes").emit();
         
         auto res = execute(cmd);
         result.output = res.output;

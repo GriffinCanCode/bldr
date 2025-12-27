@@ -95,20 +95,26 @@ final class ObservabilityService : IObservabilityService
     
     void logInfo(string message, string[string] fields = null) @trusted
     {
-        string[string] f = fields is null ? (string[string]).init : fields;
-        _structuredLogger.info(message, f);
+        auto builder = _structuredLogger.info(message);
+        if (fields !is null)
+            foreach (k, v; fields) builder.field(k, v);
+        builder.emit();
     }
     
     void logDebug(string message, string[string] fields = null) @trusted
     {
-        string[string] f = fields is null ? (string[string]).init : fields;
-        _structuredLogger.debug_(message, f);
+        auto builder = _structuredLogger.debug_(message);
+        if (fields !is null)
+            foreach (k, v; fields) builder.field(k, v);
+        builder.emit();
     }
     
     void logError(string message, string[string] fields = null) @trusted
     {
-        string[string] f = fields is null ? (string[string]).init : fields;
-        _structuredLogger.error(message, f);
+        auto builder = _structuredLogger.error(message);
+        if (fields !is null)
+            foreach (k, v; fields) builder.field(k, v);
+        builder.emit();
     }
     
     void logException(Exception e, string message = "") @trusted

@@ -7,7 +7,7 @@ import std.conv;
 import engine.graph;
 import infrastructure.config.schema.schema : TargetId;
 import engine.distributed.protocol.protocol;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Remote discovery executor - handles discovery in distributed builds
@@ -22,7 +22,7 @@ struct RemoteDiscoveryExecutor
         string workDir
     ) @system
     {
-        Logger.info("Executing remote discovery for action: " ~ actionId.toString());
+        structuredLog.info("executing_remote_discovery_for_action_").field("detail", "Executing remote discovery for action: " ~ actionId.toString()).emit();
         
         // Execute the action remotely (integrates with remote execution)
         // Pattern for remote action execution and discovery

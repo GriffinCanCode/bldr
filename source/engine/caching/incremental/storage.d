@@ -6,7 +6,7 @@ import std.path;
 import engine.caching.incremental.dependency;
 import engine.caching.incremental.schema;
 import infrastructure.utils.serialization;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// High-performance binary storage for dependency cache

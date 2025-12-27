@@ -21,7 +21,7 @@ import frontend.lsp.providers.symbols;
 import frontend.lsp.providers.graph;
 import frontend.lsp.providers.codelens;
 import frontend.lsp.providers.formatting;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// LSP Server implementation with async message loop
 /// Handles JSON-RPC 2.0 protocol over stdio using async transport
@@ -46,7 +46,7 @@ class LSPServer
     
     @system this()
     {
-        Logger.info("Builder LSP Server starting...");
+        structuredLog.info("builder_lsp_server_starting").emit();
         transport = new AsyncTransport();
         dispatcher = new MessageDispatcher();
         messageLoop = new AsyncMessageLoop(transport, dispatcher);
@@ -57,7 +57,7 @@ class LSPServer
     @system void start()
     {
         messageLoop.run();
-        Logger.info("Builder LSP Server stopped");
+        structuredLog.info("builder_lsp_server_stopped").emit();
     }
     
     /// Start server in background thread
@@ -88,7 +88,7 @@ class LSPServer
         dispatcher.onRequest("workspace/executeCommand", (p) => handleExecuteCommand(p));
         
         // Notifications
-        dispatcher.onNotification("initialized", (_) { Logger.info("Client initialized"); });
+        dispatcher.onNotification("initialized", (_) { structuredLog.info("client_initialized").emit(); });
         dispatcher.onNotification("exit", (_) { stop(); });
         dispatcher.onNotification("textDocument/didOpen", (p) => handleDidOpen(p));
         dispatcher.onNotification("textDocument/didChange", (p) => handleDidChange(p));
@@ -130,9 +130,9 @@ class LSPServer
         // Create formatting provider
         formattingProvider = FormattingProvider(workspace);
         
-        Logger.info("Workspace root: " ~ rootUri);
+        structuredLog.info("workspace_root_").field("detail", "Workspace root: " ~ rootUri).emit();
         if (graphProvider.hasGraph)
-            Logger.info("Graph provider initialized with build graph awareness");
+            structuredLog.info("graph_provider_initialized_with_build_gr").emit();
         
         // Return capabilities
         InitializeResult result;
@@ -142,7 +142,7 @@ class LSPServer
     /// Shutdown server
     private JSONValue handleShutdown()
     {
-        Logger.info("Shutting down...");
+        structuredLog.info("shutting_down").emit();
         return JSONValue(null);
     }
     
@@ -303,7 +303,7 @@ class LSPServer
     {
         auto cmdParams = ExecuteCommandParams.fromJSON(params);
         
-        Logger.debugLog("Execute command: " ~ cmdParams.command);
+        structuredLog.debug_("execute_command_").field("detail", "Execute command: " ~ cmdParams.command).emit();
         
         // Extract args from array if needed
         JSONValue args = cmdParams.arguments;
@@ -332,7 +332,7 @@ class LSPServer
                 return handleNavigateToTarget(args);
                 
             default:
-                Logger.warning("Unknown command: " ~ cmdParams.command);
+                structuredLog.warning("unknown_command_").field("detail", "Unknown command: " ~ cmdParams.command).emit();
                 JSONValue error;
                 error["error"] = "Unknown command: " ~ cmdParams.command;
                 return error;

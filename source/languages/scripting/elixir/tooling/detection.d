@@ -7,7 +7,7 @@ import std.algorithm;
 import std.array;
 import std.string;
 import languages.scripting.elixir.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Project detector - identifies Elixir project types
 class ProjectDetector

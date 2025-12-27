@@ -3,7 +3,7 @@ module engine.runtime.remote.providers.aws;
 import engine.runtime.remote.providers.base;
 import engine.distributed.protocol.protocol : WorkerId;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import std.process : execute, environment;
 import std.format : format;
 import std.datetime : Clock;
@@ -106,7 +106,7 @@ final class AwsEc2Provider : CloudProvider
         auto hash = hasher.finish();
         ulong id = *cast(ulong*)&hash[0];
         
-        Logger.info("Launched EC2 instance: " ~ instanceId);
+        structuredLog.info("launched_ec2_instance_").field("detail", "Launched EC2 instance: " ~ instanceId).emit();
         // Store mapping for later retrieval
         instanceIdMap[WorkerId(id)] = instanceId;
         return Ok!(WorkerId, BuildError)(WorkerId(id));
@@ -143,7 +143,7 @@ final class AwsEc2Provider : CloudProvider
             return VoidBuildResult.err(
                 Errors.system(format("Failed to terminate EC2 instance %s: %s", instanceId, result.output), ErrorCode.NetworkError));
         
-        Logger.info("Terminated EC2 instance: " ~ instanceId);
+        structuredLog.info("terminated_ec2_instance_").field("detail", "Terminated EC2 instance: " ~ instanceId).emit();
         instanceIdMap.remove(workerId);
         return Ok!BuildError();
     }
@@ -262,7 +262,7 @@ final class AwsEc2Provider : CloudProvider
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse AWS status JSON: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_aws_status_json_").field("detail", "Failed to parse AWS status JSON: " ~ e.msg).emit();
             status.state = WorkerStatus.State.Failed;
         }
         

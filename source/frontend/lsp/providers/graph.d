@@ -8,7 +8,7 @@ import std.conv : to;
 import frontend.lsp.core.protocol;
 import frontend.lsp.workspace.workspace;
 import engine.graph.persistence.index;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// LSP commands for build graph navigation
 enum GraphCommand : string
@@ -45,12 +45,12 @@ struct GraphProvider
         {
             this.graphIndex = new GraphIndex(cacheDir);
             this.graphAvailable = true;
-            Logger.info("Graph provider initialized with cache: " ~ cacheDir);
+            structuredLog.info("graph_provider_initialized_with_cache_").field("detail", "Graph provider initialized with cache: " ~ cacheDir).emit();
         }
         catch (Exception e)
         {
             this.graphAvailable = false;
-            Logger.warning("Graph index unavailable: " ~ e.msg);
+            structuredLog.warning("graph_index_unavailable_").field("detail", "Graph index unavailable: " ~ e.msg).emit();
         }
     }
 

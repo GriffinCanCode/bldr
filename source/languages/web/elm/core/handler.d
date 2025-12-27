@@ -14,7 +14,7 @@ import languages.web.elm.core.config;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.process.checker : isCommandAvailable;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
 
@@ -50,7 +50,7 @@ class ElmHandler : BaseLanguageHandler
         
         LanguageBuildResult result;
         
-        Logger.debugLog("Building Elm target: " ~ target.name);
+        structuredLog.debug_("building_elm_target_").field("detail", "Building Elm target: " ~ target.name).emit();
         
         // Check if elm is available
         if (!isCommandAvailable("elm"))
@@ -131,29 +131,29 @@ class ElmHandler : BaseLanguageHandler
         // Install dependencies if requested
         if (elmConfig.installDeps && exists("elm.json"))
         {
-            Logger.debugLog("Installing Elm dependencies...");
+            structuredLog.debug_("installing_elm_dependencies").emit();
             auto installResult = installDependencies();
             if (!installResult.success)
             {
-                Logger.warning("Failed to install dependencies: " ~ installResult.error);
+                structuredLog.warning("failed_to_install_dependencies_").field("detail", "Failed to install dependencies: " ~ installResult.error).emit();
             }
         }
         
         // Run elm-format if requested
         if (elmConfig.format && isCommandAvailable("elm-format"))
         {
-            Logger.debugLog("Running elm-format...");
+            structuredLog.debug_("running_elmformat").emit();
             formatCode(target.sources);
         }
         
         // Run elm-review if requested
         if (elmConfig.review && isCommandAvailable("elm-review"))
         {
-            Logger.debugLog("Running elm-review...");
+            structuredLog.debug_("running_elmreview").emit();
             auto reviewResult = reviewCode();
             if (!reviewResult.success)
             {
-                Logger.warning("Code review issues found: " ~ reviewResult.error);
+                structuredLog.warning("code_review_issues_found_").field("detail", "Code review issues found: " ~ reviewResult.error).emit();
             }
         }
         
@@ -168,7 +168,7 @@ class ElmHandler : BaseLanguageHandler
         // Generate documentation for libraries
         if (elmConfig.docs || config.options.verbose)
         {
-            Logger.debugLog("Generating Elm documentation...");
+            structuredLog.debug_("generating_elm_documentation").emit();
             generateDocs();
         }
         
@@ -187,7 +187,7 @@ class ElmHandler : BaseLanguageHandler
             return result;
         }
         
-        Logger.info("Running Elm tests...");
+        structuredLog.info("running_elm_tests").emit();
         
         try
         {
@@ -200,7 +200,7 @@ class ElmHandler : BaseLanguageHandler
             }
             
             result.success = true;
-            Logger.success("Tests passed");
+            structuredLog.info("tests_passed").emit();
         }
         catch (Exception e)
         {
@@ -273,7 +273,7 @@ class ElmHandler : BaseLanguageHandler
             catch (Exception e)
             {
                 // If we can't parse elm.json, just use provided sources
-                Logger.warning("Could not parse elm.json for source discovery: " ~ e.msg);
+                structuredLog.warning("could_not_parse_elmjson_for_source_disco").field("detail", "Could not parse elm.json for source discovery: " ~ e.msg).emit();
             }
         }
         
@@ -304,7 +304,7 @@ class ElmHandler : BaseLanguageHandler
         {
             if (exists(outputPath))
             {
-                Logger.debugLog("  [Cached] Elm compilation: " ~ target.name);
+                structuredLog.debug_("__cached_elm_compilation_").field("detail", "  [Cached] Elm compilation: " ~ target.name).emit();
                 result.success = true;
                 result.outputs = [outputPath];
                 result.outputHash = FastHash.hashFile(outputPath);
@@ -333,10 +333,10 @@ class ElmHandler : BaseLanguageHandler
         // Add any additional flags
         cmd ~= elmConfig.compilerFlags;
         
-        Logger.info("Compiling Elm: " ~ elmConfig.entry);
+        structuredLog.info("compiling_elm_").field("detail", "Compiling Elm: " ~ elmConfig.entry).emit();
         if (config.options.verbose)
         {
-            Logger.debugLog("Command: " ~ cmd.join(" "));
+            structuredLog.debug_("command_").field("detail", "Command: " ~ cmd.join(" ")).emit();
         }
         
         bool success = false;
@@ -384,11 +384,11 @@ class ElmHandler : BaseLanguageHandler
             result.outputs = [outputPath];
             result.outputHash = FastHash.hashFile(outputPath);
             
-            Logger.success("Compiled: " ~ baseName(outputPath));
+            structuredLog.info("compiled_").field("detail", "Compiled: " ~ baseName(outputPath)).emit();
             
             if (!compileResult.output.empty && config.options.verbose)
             {
-                Logger.debugLog(compileResult.output);
+                structuredLog.debug_("log_event").field("message", compileResult.output).emit();
             }
         }
         catch (Exception e)
@@ -443,7 +443,7 @@ class ElmHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to parse Elm config, using defaults: " ~ e.msg);
+                structuredLog.warning("failed_to_parse_elm_config_using_default").field("detail", "Failed to parse Elm config, using defaults: " ~ e.msg).emit();
             }
         }
         
@@ -462,7 +462,7 @@ class ElmHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to parse elm.json: " ~ e.msg);
+                structuredLog.warning("failed_to_parse_elmjson_").field("detail", "Failed to parse elm.json: " ~ e.msg).emit();
             }
         }
         
@@ -531,7 +531,7 @@ class ElmHandler : BaseLanguageHandler
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to format code: " ~ e.msg);
+            structuredLog.warning("failed_to_format_code_").field("detail", "Failed to format code: " ~ e.msg).emit();
         }
     }
     
@@ -569,12 +569,12 @@ class ElmHandler : BaseLanguageHandler
             auto docsResult = execute(["elm", "make", "--docs=docs.json"]);
             if (docsResult.status == 0)
             {
-                Logger.success("Documentation generated: docs.json");
+                structuredLog.info("documentation_generated_docsjson").emit();
             }
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to generate documentation: " ~ e.msg);
+            structuredLog.warning("failed_to_generate_documentation_").field("detail", "Failed to generate documentation: " ~ e.msg).emit();
         }
     }
 }

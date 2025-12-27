@@ -14,7 +14,7 @@ import languages.scripting.r.tooling.builders.base;
 import languages.scripting.r.analysis.dependencies;
 import languages.scripting.r.managers.packages;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Package builder - builds R packages
 class RPackageBuilder : RBuilder
@@ -38,7 +38,7 @@ class RPackageBuilder : RBuilder
             return result;
         }
         
-        Logger.info("Building R package from: " ~ packageRoot);
+        structuredLog.info("building_r_package_from_").field("detail", "Building R package from: " ~ packageRoot).emit();
         
         // Check or install dependencies first
         if (rConfig.installDeps)
@@ -46,20 +46,20 @@ class RPackageBuilder : RBuilder
             auto deps = parseDESCRIPTION(descPath);
             if (!deps.empty)
             {
-                Logger.info("Package has " ~ deps.length.to!string ~ " dependencies");
+                structuredLog.info("package_has_").field("detail", "Package has " ~ deps.length.to!string ~ " dependencies").emit();
                 auto installResult = installPackages(deps, rConfig.packageManager, rCmd, packageRoot, rConfig);
                 
                 if (!installResult.success)
                 {
-                    Logger.warning("Failed to install some dependencies: " ~ installResult.error);
+                    structuredLog.warning("failed_to_install_some_dependencies_").field("detail", "Failed to install some dependencies: " ~ installResult.error).emit();
                     if (!installResult.failedPackages.empty)
                     {
-                        Logger.warning("Failed packages: " ~ installResult.failedPackages.join(", "));
+                        structuredLog.warning("failed_packages_").field("detail", "Failed packages: " ~ installResult.failedPackages.join(", ")).emit();
                     }
                 }
                 else
                 {
-                    Logger.info("Successfully installed " ~ installResult.installedPackages.length.to!string ~ " dependencies");
+                    structuredLog.info("successfully_installed_").field("detail", "Successfully installed " ~ installResult.installedPackages.length.to!string ~ " dependencies").emit();
                 }
             }
         }
@@ -104,7 +104,7 @@ class RPackageBuilder : RBuilder
                 return result;
         }
         
-        Logger.debugLog("Running: " ~ cmdArgs.join(" "));
+        structuredLog.debug_("running_").field("detail", "Running: " ~ cmdArgs.join(" ")).emit();
         
         try
         {
@@ -121,7 +121,7 @@ class RPackageBuilder : RBuilder
             result.outputs = [outputPath];
             result.outputHash = FastHash.hashFile(descPath);
             
-            Logger.info("R package build completed successfully");
+            structuredLog.info("r_package_build_completed_successfully").emit();
             
             return result;
         }

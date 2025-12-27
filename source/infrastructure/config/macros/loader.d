@@ -5,7 +5,7 @@ import std.algorithm;
 import infrastructure.config.macros.api;
 import infrastructure.config.schema.schema : Target;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Macro function type
 alias MacroFunction = Target[] delegate(string[]);
@@ -36,7 +36,7 @@ final class MacroRegistry
         macros[name] = delegate Target[](string[] args) {
             return fn(args);
         };
-        Logger.debugLog("Registered macro: " ~ name);
+        structuredLog.debug_("registered_macro_").field("detail", "Registered macro: " ~ name).emit();
     }
     
     /// Check if macro exists
@@ -92,7 +92,7 @@ struct MacroLoader
             return typeof(return).err(
                 Errors.io(filename, "Macro file not found: " ~ filename, ErrorCode.FileNotFound));
         
-        Logger.info("Loading and compiling macros from: " ~ filename);
+        structuredLog.info("loading_and_compiling_macros_from_").field("detail", "Loading and compiling macros from: " ~ filename).emit();
         
         // 1. Generate unique shared library name
         immutable libName = "macro_" ~ stripExtension(baseName(filename)) ~ "_" ~ randomUUID().toString()[0..8];
@@ -120,7 +120,7 @@ struct MacroLoader
         if (loadResult.isErr)
             return typeof(return).err(loadResult.unwrapErr());
         
-        Logger.info("Successfully loaded macros from: " ~ filename);
+        structuredLog.info("successfully_loaded_macros_from_").field("detail", "Successfully loaded macros from: " ~ filename).emit();
         return typeof(return).ok(true);
     }
     
@@ -146,7 +146,7 @@ struct MacroLoader
             sourceFile
         ];
         
-        Logger.debugLog("Compiling macro: " ~ compilerArgs.join(" "));
+        structuredLog.debug_("compiling_macro_").field("detail", "Compiling macro: " ~ compilerArgs.join(" ")).emit();
         
         auto result = execute(compilerArgs);
         if (result.status != 0)
@@ -221,7 +221,7 @@ struct MacroLoader
         }
         
         // Keep library loaded (store handle for cleanup if needed)
-        Logger.debugLog("Loaded macro library: " ~ libPath);
+        structuredLog.debug_("loaded_macro_library_").field("detail", "Loaded macro library: " ~ libPath).emit();
         return Ok!BuildError();
     }
     

@@ -3,7 +3,7 @@ module engine.runtime.remote.providers.gcp;
 import engine.runtime.remote.providers.base;
 import engine.distributed.protocol.protocol : WorkerId;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import std.process : execute;
 import std.format : format;
 import std.datetime : Clock;
@@ -86,7 +86,7 @@ final class GcpComputeProvider : CloudProvider
         auto hash = hasher.finish();
         ulong id = *cast(ulong*)&hash[0];
         
-        Logger.info("Created GCP instance: " ~ instanceName);
+        structuredLog.info("created_gcp_instance_").field("detail", "Created GCP instance: " ~ instanceName).emit();
         instanceNameMap[WorkerId(id)] = instanceName;
         return Ok!(WorkerId, BuildError)(WorkerId(id));
     }
@@ -120,7 +120,7 @@ final class GcpComputeProvider : CloudProvider
             return VoidBuildResult.err(
                 Errors.system(format("Failed to delete GCP instance %s: %s", instanceName, result.output), ErrorCode.NetworkError));
         
-        Logger.info("Deleted GCP instance: " ~ instanceName);
+        structuredLog.info("deleted_gcp_instance_").field("detail", "Deleted GCP instance: " ~ instanceName).emit();
         instanceNameMap.remove(workerId);
         return Ok!BuildError();
     }
@@ -235,7 +235,7 @@ final class GcpComputeProvider : CloudProvider
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse GCP status JSON: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_gcp_status_json_").field("detail", "Failed to parse GCP status JSON: " ~ e.msg).emit();
             status.state = WorkerStatus.State.Failed;
         }
         

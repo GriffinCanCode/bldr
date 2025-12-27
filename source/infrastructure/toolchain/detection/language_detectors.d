@@ -3,7 +3,7 @@ module infrastructure.toolchain.detection.language_detectors;
 import infrastructure.toolchain.core.spec;
 import infrastructure.toolchain.core.platform;
 import infrastructure.toolchain.detection.detector;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import std.conv : to;
 import std.range : empty;
 

@@ -315,7 +315,7 @@ bool validateProfile(string profile) @system
     }
 }
 
-@safe unittest
+@system unittest
 {
     // Test profile generation
     auto spec = SandboxSpecBuilder.create()
@@ -326,7 +326,8 @@ bool validateProfile(string profile) @system
     
     if (spec.isOk)
     {
-        auto profile = SBPLGenerator.generate(spec.unwrap());
+        auto unwrapped = spec.unwrap();
+        auto profile = SBPLGenerator.generate(unwrapped);
         
         assert(profile.canFind("(version 1)"));
         assert(profile.canFind("(deny default)"));

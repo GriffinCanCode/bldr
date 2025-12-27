@@ -10,7 +10,7 @@ import std.path : buildPath;
 import std.json : JSONValue, parseJSON, JSONType, JSONException;
 import core.sync.mutex : Mutex;
 import infrastructure.config.schema.schema : TargetId;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 import engine.runtime.services.speculation.predictor : PredictorState, TargetStats;
 
@@ -336,7 +336,7 @@ private:
         
         if (!exists(historyFile))
         {
-            Logger.debugLog("No speculation history found, starting fresh");
+            structuredLog.debug_("no_speculation_history_found_starting_fr").emit();
             return;
         }
         
@@ -385,12 +385,12 @@ private:
                 }
             }
             
-            Logger.debugLog("Loaded speculation history: " ~ 
-                           _predictorState.targetStats.length.to!string ~ " targets");
+            structuredLog.debug_("loaded_speculation_history_").field("detail", "Loaded speculation history: " ~ 
+                           _predictorState.targetStats.length.to!string ~ " targets").emit();
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to load speculation history: " ~ e.msg);
+            structuredLog.warning("failed_to_load_speculation_history_").field("detail", "Failed to load speculation history: " ~ e.msg).emit();
         }
     }
     
@@ -448,11 +448,11 @@ private:
             
             write(historyFile, root.toPrettyString());
             
-            Logger.debugLog("Saved speculation history");
+            structuredLog.debug_("saved_speculation_history").emit();
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to save speculation history: " ~ e.msg);
+            structuredLog.warning("failed_to_save_speculation_history_").field("detail", "Failed to save speculation history: " ~ e.msg).emit();
         }
     }
 }

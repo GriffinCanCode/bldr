@@ -13,7 +13,7 @@ import languages.jvm.scala.tooling.detection;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Scala.js builder - compiles Scala to JavaScript
 class ScalaJSBuilder : ScalaBuilder
@@ -30,7 +30,7 @@ class ScalaJSBuilder : ScalaBuilder
     {
         ScalaBuildResult result;
         
-        Logger.debugLog("Building Scala.js target: " ~ target.name);
+        structuredLog.debug_("building_scalajs_target_").field("detail", "Building Scala.js target: " ~ target.name).emit();
         
         // Detect build tool
         ScalaBuildTool buildTool = config.buildTool;
@@ -87,8 +87,8 @@ class ScalaJSBuilder : ScalaBuilder
         
         cmd ~= task;
         
-        Logger.info("Running sbt " ~ task ~ "...");
-        Logger.debugLog("Command: " ~ cmd.join(" "));
+        structuredLog.info("running_sbt_").field("detail", "Running sbt " ~ task ~ "...").emit();
+        structuredLog.debug_("command_").field("detail", "Command: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, workspace.root);
         
@@ -145,8 +145,8 @@ class ScalaJSBuilder : ScalaBuilder
         string task = config.scalaJs.mode == "fullOpt" ? "fullOpt" : "fastOpt";
         cmd ~= target.name ~ "." ~ task;
         
-        Logger.info("Running Mill " ~ task ~ "...");
-        Logger.debugLog("Command: " ~ cmd.join(" "));
+        structuredLog.info("running_mill_").field("detail", "Running Mill " ~ task ~ "...").emit();
+        structuredLog.debug_("command_").field("detail", "Command: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, workspace.root);
         
@@ -204,7 +204,7 @@ class ScalaJSBuilder : ScalaBuilder
         }
         catch (Exception e)
         {
-            Logger.warning("Error searching for JS file: " ~ e.msg);
+            structuredLog.warning("error_searching_for_js_file_").field("detail", "Error searching for JS file: " ~ e.msg).emit();
         }
         
         return "";

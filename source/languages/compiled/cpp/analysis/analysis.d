@@ -7,7 +7,7 @@ import std.algorithm;
 import std.array;
 import std.string;
 import std.regex;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// C++ header dependency analyzer
 class HeaderAnalyzer
@@ -38,7 +38,7 @@ class HeaderAnalyzer
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to analyze includes in " ~ filePath ~ ": " ~ e.msg);
+            structuredLog.warning("failed_to_analyze_includes_in_").field("detail", "Failed to analyze includes in " ~ filePath ~ ": " ~ e.msg).emit();
         }
         
         return includes;
@@ -183,7 +183,7 @@ class TemplateAnalyzer
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to extract template declarations from " ~ filePath);
+            structuredLog.warning("failed_to_extract_template_declarations_").field("detail", "Failed to extract template declarations from " ~ filePath).emit();
         }
         
         return declarations;
@@ -245,7 +245,7 @@ class MacroAnalyzer
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to extract macros from " ~ filePath);
+            structuredLog.warning("failed_to_extract_macros_from_").field("detail", "Failed to extract macros from " ~ filePath).emit();
         }
         
         return macros;
@@ -279,7 +279,7 @@ class MacroAnalyzer
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to find conditional blocks in " ~ filePath);
+            structuredLog.warning("failed_to_find_conditional_blocks_in_").field("detail", "Failed to find conditional blocks in " ~ filePath).emit();
         }
         
         return blocks;
@@ -314,7 +314,7 @@ class NamespaceAnalyzer
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to extract namespaces from " ~ filePath);
+            structuredLog.warning("failed_to_extract_namespaces_from_").field("detail", "Failed to extract namespaces from " ~ filePath).emit();
         }
         
         return namespaces;
@@ -354,7 +354,7 @@ class ClassAnalyzer
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to extract classes from " ~ filePath);
+            structuredLog.warning("failed_to_extract_classes_from_").field("detail", "Failed to extract classes from " ~ filePath).emit();
         }
         
         return classes;

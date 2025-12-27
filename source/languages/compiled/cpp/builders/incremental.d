@@ -21,7 +21,7 @@ import engine.caching.incremental.ast_dependency;
 import engine.caching.actions.action;
 import infrastructure.analysis.ast.parser;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Incremental C++ builder with AST-level dependency tracking
@@ -78,7 +78,7 @@ class IncrementalCppBuilder : BaseCppBuilder
         }
         
         if (this.toolchain is null)
-            Logger.warning("No C++ compiler toolchain detected, build may fail");
+            structuredLog.warning("no_c_compiler_toolchain_detected_build_m").emit();
         
         // Initialize caches
         if (actionCache is null)
@@ -117,7 +117,7 @@ class IncrementalCppBuilder : BaseCppBuilder
         initializeASTParsers();
         
         if (enableASTLevel)
-            Logger.info("AST-level incremental compilation enabled for C++");
+            structuredLog.info("astlevel_incremental_compilation_enabled").emit();
     }
     
     override CppCompileResult build(
@@ -135,7 +135,7 @@ class IncrementalCppBuilder : BaseCppBuilder
             return result;
         }
         
-        Logger.info("Incremental C++ compilation with " ~ toolchain.name);
+        structuredLog.info("incremental_c_compilation_with_").field("detail", "Incremental C++ compilation with " ~ toolchain.name).emit();
         
         // Separate C and C++ files
         string[] cppFiles;
@@ -218,8 +218,8 @@ class IncrementalCppBuilder : BaseCppBuilder
         
         // Log incremental statistics
         auto stats = incEngine.getStats();
-        Logger.success("Incremental compilation complete: " ~
-                      stats.validDependencies.to!string ~ " dependencies tracked");
+        structuredLog.info("incremental_compilation_complete_").field("detail", "Incremental compilation complete: " ~
+                      stats.validDependencies.to!string ~ " dependencies tracked").emit();
         
         return result;
     }
@@ -278,7 +278,7 @@ class IncrementalCppBuilder : BaseCppBuilder
         string[] filesToCompile;
         if (useASTLevel && changedFiles.length > 0)
         {
-            Logger.debugLog("Attempting AST-level incremental analysis...");
+            structuredLog.debug_("attempting_astlevel_incremental_analysis").emit();
             auto astAnalysisResult = astEngine.analyzeChanges(sources, changedFiles);
             
             if (astAnalysisResult.isOk)
@@ -286,19 +286,19 @@ class IncrementalCppBuilder : BaseCppBuilder
                 auto astAnalysis = astAnalysisResult.unwrap();
                 filesToCompile = astAnalysis.filesToRebuild.dup;
                 
-                Logger.info("AST-level granularity: " ~ 
-                          astAnalysis.granularity.to!string[0..min(5, $)] ~ "% of symbols changed");
+                structuredLog.info("astlevel_granularity_").field("detail", "AST-level granularity: " ~ 
+                          astAnalysis.granularity.to!string[0..min(5, $)] ~ "% of symbols changed").emit();
                 
                 // Log symbol-level rebuild info
                 foreach (file, symbols; astAnalysis.symbolsToRecompile)
                 {
-                    Logger.debugLog("  " ~ baseName(file) ~ ": " ~ symbols);
+                    structuredLog.debug_("__").field("detail", "  " ~ baseName(file) ~ ": " ~ symbols).emit();
                 }
             }
             else
             {
-                Logger.warning("AST-level analysis failed, falling back to file-level: " ~
-                             astAnalysisResult.unwrapErr().message());
+                structuredLog.warning("astlevel_analysis_failed_falling_back_to").field("detail", "AST-level analysis failed, falling back to file-level: " ~
+                             astAnalysisResult.unwrapErr().message()).emit();
                 filesToCompile = changedFiles.dup;
             }
         }
@@ -321,9 +321,9 @@ class IncrementalCppBuilder : BaseCppBuilder
             
             filesToCompile = rebuildResult.filesToCompile.dup;
             
-            Logger.info("Incremental: " ~ rebuildResult.compiledFiles.to!string ~ 
+            structuredLog.info("incremental_").field("detail", "Incremental: " ~ rebuildResult.compiledFiles.to!string ~ 
                        " files to compile, " ~ rebuildResult.cachedFiles_.to!string ~ 
-                       " cached (" ~ rebuildResult.reductionRate.to!string[0..min(5, $)] ~ "%)");
+                       " cached (" ~ rebuildResult.reductionRate.to!string[0..min(5, $)] ~ "%)").emit();
         }
         
         // Compile only necessary files
@@ -356,7 +356,7 @@ class IncrementalCppBuilder : BaseCppBuilder
                 if (exists(objFile))
                 {
                     result.objects ~= objFile;
-                    Logger.debugLog("  [Using Cached] " ~ objFile);
+                    structuredLog.debug_("__using_cached_").field("detail", "  [Using Cached] " ~ objFile).emit();
                 }
             }
         }
@@ -384,8 +384,8 @@ class IncrementalCppBuilder : BaseCppBuilder
         if (depsResult.isOk)
         {
             dependencies = depsResult.unwrap();
-            Logger.debugLog("  Dependencies for " ~ source ~ ": " ~ 
-                          dependencies.length.to!string);
+            structuredLog.debug_("__dependencies_for_").field("detail", "  Dependencies for " ~ source ~ ": " ~ 
+                          dependencies.length.to!string).emit();
         }
         
         // Build compile command
@@ -394,8 +394,8 @@ class IncrementalCppBuilder : BaseCppBuilder
         cmd ~= ["-c", source];
         cmd ~= ["-o", objFile];
         
-        Logger.info("Compiling: " ~ source);
-        Logger.debugLog("  Command: " ~ cmd.join(" "));
+        structuredLog.info("compiling_").field("detail", "Compiling: " ~ source).emit();
+        structuredLog.debug_("__command_").field("detail", "  Command: " ~ cmd.join(" ")).emit();
         
         // Execute compilation
         auto res = execute(cmd);
@@ -472,8 +472,8 @@ class IncrementalCppBuilder : BaseCppBuilder
         cmd ~= objects;
         cmd ~= linkerFlags;
         
-        Logger.info("Linking: " ~ outputFile);
-        Logger.debugLog("  Command: " ~ cmd.join(" "));
+        structuredLog.info("linking_").field("detail", "Linking: " ~ outputFile).emit();
+        structuredLog.debug_("__command_").field("detail", "  Command: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         

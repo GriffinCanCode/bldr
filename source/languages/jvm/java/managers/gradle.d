@@ -8,7 +8,7 @@ import std.array;
 import std.process;
 import std.regex;
 import std.conv;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Gradle project metadata
 struct GradleMetadata
@@ -203,7 +203,7 @@ class GradleOps
     /// Build project
     static bool build(string projectDir, bool skipTests = false, bool useWrapper = false)
     {
-        Logger.info("Building Gradle project");
+        structuredLog.info("building_gradle_project").emit();
         
         string[] args = ["build"];
         if (skipTests)
@@ -215,8 +215,8 @@ class GradleOps
         
         if (result.status != 0)
         {
-            Logger.error("Gradle build failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("gradle_build_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
@@ -226,7 +226,7 @@ class GradleOps
     /// Clean build
     static bool clean(string projectDir, bool useWrapper = false)
     {
-        Logger.info("Cleaning Gradle project");
+        structuredLog.info("cleaning_gradle_project").emit();
         
         auto result = useWrapper
             ? executeGradleWrapper(["clean"], projectDir)
@@ -238,7 +238,7 @@ class GradleOps
     /// Compile sources
     static bool compile(string projectDir, bool useWrapper = false)
     {
-        Logger.info("Compiling Gradle project");
+        structuredLog.info("compiling_gradle_project").emit();
         
         auto result = useWrapper
             ? executeGradleWrapper(["compileJava"], projectDir)
@@ -246,8 +246,8 @@ class GradleOps
         
         if (result.status != 0)
         {
-            Logger.error("Gradle compilation failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("gradle_compilation_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
@@ -257,7 +257,7 @@ class GradleOps
     /// Run tests
     static bool test(string projectDir, bool useWrapper = false)
     {
-        Logger.info("Running Gradle tests");
+        structuredLog.info("running_gradle_tests").emit();
         
         auto result = useWrapper
             ? executeGradleWrapper(["test"], projectDir)
@@ -265,8 +265,8 @@ class GradleOps
         
         if (result.status != 0)
         {
-            Logger.error("Gradle tests failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("gradle_tests_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
@@ -276,7 +276,7 @@ class GradleOps
     /// Create JAR
     static bool jar(string projectDir, bool useWrapper = false)
     {
-        Logger.info("Creating JAR with Gradle");
+        structuredLog.info("creating_jar_with_gradle").emit();
         
         auto result = useWrapper
             ? executeGradleWrapper(["jar"], projectDir)
@@ -288,7 +288,7 @@ class GradleOps
     /// Install dependencies
     static bool installDependencies(string projectDir, bool useWrapper = false)
     {
-        Logger.info("Resolving Gradle dependencies");
+        structuredLog.info("resolving_gradle_dependencies").emit();
         
         auto result = useWrapper
             ? executeGradleWrapper(["dependencies"], projectDir)

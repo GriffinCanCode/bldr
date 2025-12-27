@@ -3,7 +3,7 @@ module languages.jvm.scala.tooling.checkers.wartremover;
 import std.stdio;
 import languages.jvm.scala.tooling.checkers.base;
 import languages.jvm.scala.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// WartRemover checker - functional purity linter
 class WartRemoverChecker : Checker
@@ -14,7 +14,7 @@ class WartRemoverChecker : Checker
         
         // WartRemover is typically integrated as a compiler plugin
         // Not a standalone tool - needs to be configured in build.sbt
-        Logger.warning("WartRemover requires sbt compiler plugin configuration");
+        structuredLog.warning("wartremover_requires_sbt_compiler_plugin").emit();
         
         result.success = true;
         return result;

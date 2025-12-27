@@ -8,7 +8,7 @@ import std.algorithm;
 import std.array;
 import std.string;
 import languages.scripting.ruby.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Format/lint result
 struct FormatResult
@@ -85,7 +85,7 @@ class FormatterFactory
         auto standard = new StandardFormatter();
         if (standard.isAvailable())
         {
-            Logger.debugLog("Detected StandardRB for formatting");
+            structuredLog.debug_("detected_standardrb_for_formatting").emit();
             return standard;
         }
         
@@ -93,18 +93,18 @@ class FormatterFactory
         auto rubocop = new RuboCopFormatter();
         if (rubocop.isAvailable())
         {
-            Logger.debugLog("Detected RuboCop for formatting");
+            structuredLog.debug_("detected_rubocop_for_formatting").emit();
             return rubocop;
         }
         
         auto reek = new ReekFormatter();
         if (reek.isAvailable())
         {
-            Logger.debugLog("Detected Reek for code smell detection");
+            structuredLog.debug_("detected_reek_for_code_smell_detection").emit();
             return reek;
         }
         
-        Logger.debugLog("No Ruby formatter available");
+        structuredLog.debug_("no_ruby_formatter_available").emit();
         return new NullFormatter();
     }
 }
@@ -129,7 +129,7 @@ class ReekFormatter : Formatter
         if (!sources.empty)
             cmd ~= sources;
         
-        Logger.info("Running Reek code smell detection");
+        structuredLog.info("running_reek_code_smell_detection").emit();
         
         auto res = execute(cmd);
         

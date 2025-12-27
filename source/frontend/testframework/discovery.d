@@ -7,7 +7,7 @@ import std.range : empty;
 import std.conv : to;
 import std.regex : regex, matchFirst;
 import infrastructure.config.schema.schema : Target, TargetType, WorkspaceConfig;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Discovers test targets from workspace configuration
 class TestDiscovery

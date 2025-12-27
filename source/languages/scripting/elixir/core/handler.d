@@ -17,7 +17,7 @@ import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
 
 /// Elixir build handler with action-level caching - comprehensive and modular
@@ -52,7 +52,7 @@ class ElixirHandler : BaseLanguageHandler
         
         LanguageBuildResult result;
         
-        Logger.debugLog("Building Elixir target: " ~ target.name);
+        structuredLog.debug_("building_elixir_target_").field("detail", "Building Elixir target: " ~ target.name).emit();
         
         // Parse Elixir configuration
         ElixirConfig elixirConfig = parseElixirConfig(target);
@@ -162,7 +162,7 @@ class ElixirHandler : BaseLanguageHandler
         // Auto-format if configured
         if (elixirConfig.format.enabled)
         {
-            Logger.info("Auto-formatting code");
+            structuredLog.info("autoformatting_code").emit();
             auto formatResult = Formatter.format(
                 elixirConfig.format,
                 target.sources,
@@ -180,7 +180,7 @@ class ElixirHandler : BaseLanguageHandler
             {
                 foreach (issue; formatResult.issues)
                 {
-                    Logger.warning("  " ~ issue);
+                    structuredLog.warning("__").field("detail", "  " ~ issue).emit();
                 }
             }
         }
@@ -188,7 +188,7 @@ class ElixirHandler : BaseLanguageHandler
         // Run Credo if configured
         if (elixirConfig.credo.enabled)
         {
-            Logger.info("Running Credo static analysis");
+            structuredLog.info("running_credo_static_analysis").emit();
             auto credoResult = CredoChecker.check(elixirConfig.credo, mixCmd);
             
             if (credoResult.hasErrors())
@@ -199,10 +199,10 @@ class ElixirHandler : BaseLanguageHandler
             
             if (credoResult.hasWarnings())
             {
-                Logger.warning("Credo warnings:");
+                structuredLog.warning("credo_warnings").emit();
                 foreach (warning; credoResult.warnings)
                 {
-                    Logger.warning("  " ~ warning);
+                    structuredLog.warning("__").field("detail", "  " ~ warning).emit();
                 }
             }
         }
@@ -216,7 +216,7 @@ class ElixirHandler : BaseLanguageHandler
             return result;
         }
         
-        Logger.debugLog("Using builder: " ~ builder.name());
+        structuredLog.debug_("using_builder_").field("detail", "Using builder: " ~ builder.name()).emit();
         
         auto buildResult = builder.build(target.sources, elixirConfig, target, config);
         
@@ -277,7 +277,7 @@ class ElixirHandler : BaseLanguageHandler
         // Run Dialyzer if configured
         if (elixirConfig.dialyzer.enabled)
         {
-            Logger.info("Running Dialyzer type analysis");
+            structuredLog.info("running_dialyzer_type_analysis").emit();
             auto dialyzerResult = DialyzerChecker.check(elixirConfig.dialyzer, mixCmd);
             
             if (dialyzerResult.hasErrors())
@@ -288,10 +288,10 @@ class ElixirHandler : BaseLanguageHandler
             
             if (dialyzerResult.hasWarnings())
             {
-                Logger.warning("Dialyzer warnings:");
+                structuredLog.warning("dialyzer_warnings").emit();
                 foreach (warning; dialyzerResult.warnings)
                 {
-                    Logger.warning("  " ~ warning);
+                    structuredLog.warning("__").field("detail", "  " ~ warning).emit();
                 }
             }
         }
@@ -308,14 +308,14 @@ class ElixirHandler : BaseLanguageHandler
         // Generate documentation if configured
         if (result.success && elixirConfig.documentation().enabled)
         {
-            Logger.info("Generating documentation");
+            structuredLog.info("generating_documentation").emit();
             DocGenerator.generate(elixirConfig.documentation(), mixCmd);
         }
         
         // Build Hex package if configured
         if (result.success && elixirConfig.hex.publish)
         {
-            Logger.info("Building Hex package");
+            structuredLog.info("building_hex_package").emit();
             HexManager.buildPackage(elixirConfig.hex, mixCmd);
         }
         
@@ -380,7 +380,7 @@ class ElixirHandler : BaseLanguageHandler
         if (!elixirConfig.exunit().testPaths.empty)
             cmd ~= elixirConfig.exunit().testPaths;
         
-        Logger.info("Running ExUnit tests: " ~ cmd.join(" "));
+        structuredLog.info("running_exunit_tests_").field("detail", "Running ExUnit tests: " ~ cmd.join(" ")).emit();
         
         // Run tests
         auto res = execute(cmd, env, Config.none, size_t.max, config.root);
@@ -397,7 +397,7 @@ class ElixirHandler : BaseLanguageHandler
         // Run coverage if configured
         if (elixirConfig.coveralls().enabled)
         {
-            Logger.info("Generating test coverage");
+            structuredLog.info("generating_test_coverage").emit();
             
             string[] covCmd = [mixCmd, "coveralls"];
             
@@ -408,7 +408,7 @@ class ElixirHandler : BaseLanguageHandler
             
             if (covRes.status != 0)
             {
-                Logger.warning("Coverage generation failed");
+                structuredLog.warning("coverage_generation_failed").emit();
             }
         }
         
@@ -450,7 +450,7 @@ class ElixirHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to parse Elixir config, using defaults: " ~ e.msg);
+                structuredLog.warning("failed_to_parse_elixir_config_using_defa").field("detail", "Failed to parse Elixir config, using defaults: " ~ e.msg).emit();
             }
         }
         
@@ -476,7 +476,7 @@ class ElixirHandler : BaseLanguageHandler
             if (detectedType != ElixirProjectType.MixProject)
             {
                 config.projectType = detectedType;
-                Logger.debugLog("Detected project type: " ~ detectedType.to!string);
+                structuredLog.debug_("detected_project_type_").field("detail", "Detected project type: " ~ detectedType.to!string).emit();
             }
         }
         
@@ -495,19 +495,19 @@ class ElixirHandler : BaseLanguageHandler
             if (config.project.version_.empty && !mixInfo.version_.empty)
                 config.project.version_ = mixInfo.version_;
             
-            Logger.debugLog("Parsed Mix project: " ~ mixInfo.app);
+            structuredLog.debug_("parsed_mix_project_").field("detail", "Parsed Mix project: " ~ mixInfo.app).emit();
         }
         
         // Check for Phoenix
         if (ProjectDetector.isPhoenixProject(sourceDir))
         {
             config.phoenix.enabled = true;
-            Logger.debugLog("Detected Phoenix application");
+            structuredLog.debug_("detected_phoenix_application").emit();
             
             if (ProjectDetector.hasLiveView(sourceDir))
             {
                 config.phoenix.liveView = true;
-                Logger.debugLog("Detected Phoenix LiveView");
+                structuredLog.debug_("detected_phoenix_liveview").emit();
             }
         }
         
@@ -519,7 +519,7 @@ class ElixirHandler : BaseLanguageHandler
             if (!apps.empty)
             {
                 config.umbrella.apps = apps;
-                Logger.debugLog("Detected umbrella apps: " ~ apps.join(", "));
+                structuredLog.debug_("detected_umbrella_apps_").field("detail", "Detected umbrella apps: " ~ apps.join(", ")).emit();
             }
         }
         
@@ -527,7 +527,7 @@ class ElixirHandler : BaseLanguageHandler
         if (ProjectDetector.isNervesProject(sourceDir))
         {
             // config.nerves.enabled = true;
-            Logger.debugLog("Detected Nerves project");
+            structuredLog.debug_("detected_nerves_project").emit();
         }
         
         // Check for .tool-versions (asdf)
@@ -537,7 +537,7 @@ class ElixirHandler : BaseLanguageHandler
             auto versions = VersionManager.parseToolVersions(toolVersionsPath);
             if ("elixir" in versions)
             {
-                Logger.debugLog("Found Elixir version in .tool-versions: " ~ versions["elixir"]);
+                structuredLog.debug_("found_elixir_version_in_toolversions_").field("detail", "Found Elixir version in .tool-versions: " ~ versions["elixir"]).emit();
             }
         }
     }
@@ -559,19 +559,19 @@ class ElixirHandler : BaseLanguageHandler
             if (vm.isAvailable())
             {
                 elixirCmd = vm.getElixirPath();
-                Logger.info("Using Elixir from asdf: " ~ vm.getCurrentVersion());
+                structuredLog.info("using_elixir_from_asdf_").field("detail", "Using Elixir from asdf: " ~ vm.getCurrentVersion()).emit();
             }
         }
         
         // Verify Elixir is available
         if (!ElixirTools.isElixirAvailable(elixirCmd))
         {
-            Logger.warning("Elixir not available at: " ~ elixirCmd ~ ", falling back to 'elixir'");
+            structuredLog.warning("elixir_not_available_at_").field("detail", "Elixir not available at: " ~ elixirCmd ~ ", falling back to 'elixir'").emit();
             elixirCmd = "elixir";
         }
         
         auto version_ = ElixirTools.getElixirVersion(elixirCmd);
-        Logger.debugLog("Using Elixir: " ~ elixirCmd ~ " (" ~ version_ ~ ")");
+        structuredLog.debug_("using_elixir_").field("detail", "Using Elixir: " ~ elixirCmd ~ " (" ~ version_ ~ ")").emit();
         
         return elixirCmd;
     }
@@ -590,7 +590,7 @@ class ElixirHandler : BaseLanguageHandler
         
         if (!ElixirTools.isMixAvailable(mixCmd))
         {
-            Logger.warning("Mix not available");
+            structuredLog.warning("mix_not_available").emit();
         }
         
         return mixCmd;
@@ -602,23 +602,23 @@ class ElixirHandler : BaseLanguageHandler
         // Clean if requested
         if (false) // config.clean
         {
-            Logger.info("Cleaning build artifacts");
+            structuredLog.info("cleaning_build_artifacts").emit();
             auto cleanRes = execute([mixCmd, "clean"], null, Config.none, size_t.max, projectRoot);
             if (cleanRes.status != 0)
             {
-                Logger.warning("Clean failed");
+                structuredLog.warning("clean_failed").emit();
             }
         }
         
         // Install/update dependencies
         if (false) // config.installDeps || config.depsGet
         {
-            Logger.info("Fetching dependencies");
+            structuredLog.info("fetching_dependencies").emit();
             auto depsRes = execute([mixCmd, "deps.get"], null, Config.none, size_t.max, projectRoot);
             if (depsRes.status != 0)
             {
-                Logger.error("Failed to fetch dependencies");
-                Logger.error("  Output: " ~ depsRes.output);
+                structuredLog.error("failed_to_fetch_dependencies").emit();
+                structuredLog.error("__output_").field("detail", "  Output: " ~ depsRes.output).emit();
                 return false;
             }
         }
@@ -626,23 +626,23 @@ class ElixirHandler : BaseLanguageHandler
         // Clean dependencies if requested
         if (false) // config.depsClean
         {
-            Logger.info("Cleaning dependencies");
+            structuredLog.info("cleaning_dependencies").emit();
             auto cleanRes = execute([mixCmd, "deps.clean", "--all"], null, Config.none, size_t.max, projectRoot);
             if (cleanRes.status != 0)
             {
-                Logger.warning("Deps clean failed");
+                structuredLog.warning("deps_clean_failed").emit();
             }
         }
         
         // Compile dependencies
         if (false) // config.depsCompile
         {
-            Logger.info("Compiling dependencies");
+            structuredLog.info("compiling_dependencies").emit();
             auto compRes = execute([mixCmd, "deps.compile"], null, Config.none, size_t.max, projectRoot);
             if (compRes.status != 0)
             {
-                Logger.error("Failed to compile dependencies");
-                Logger.error("  Output: " ~ compRes.output);
+                structuredLog.error("failed_to_compile_dependencies").emit();
+                structuredLog.error("__output_").field("detail", "  Output: " ~ compRes.output).emit();
                 return false;
             }
         }
@@ -661,7 +661,7 @@ class ElixirHandler : BaseLanguageHandler
         // Run Dialyzer with PLT caching (post-build for type checking)
         if (config.dialyzer.enabled)
         {
-            Logger.info("Running Dialyzer");
+            structuredLog.info("running_dialyzer").emit();
             
             // Cache Dialyzer PLT builds
             string pltPath = buildPath(projectRoot, config.dialyzer.pltFile);
@@ -694,7 +694,7 @@ class ElixirHandler : BaseLanguageHandler
             bool pltCached = false;
             if (actionCache.isCached(pltActionId, dialyzerInputs, pltMetadata) && exists(pltPath))
             {
-                Logger.info("  [Cached] Dialyzer PLT");
+                structuredLog.info("__cached_dialyzer_plt").emit();
                 pltCached = true;
             }
             
@@ -718,10 +718,10 @@ class ElixirHandler : BaseLanguageHandler
             
             if (dialyzerResult.hasWarnings())
             {
-                Logger.warning("Dialyzer warnings:");
+                structuredLog.warning("dialyzer_warnings").emit();
                 foreach (warning; dialyzerResult.warnings)
                 {
-                    Logger.warning("  " ~ warning);
+                    structuredLog.warning("__").field("detail", "  " ~ warning).emit();
                 }
             }
         }
@@ -729,7 +729,7 @@ class ElixirHandler : BaseLanguageHandler
         // Build release if configured
         if (config.release.type != ReleaseType.None)
         {
-            Logger.info("Building release");
+            structuredLog.info("building_release").emit();
             auto releaseBuilder = ReleaseManager.createBuilder(config.release.type);
             if (releaseBuilder.isAvailable())
             {
@@ -740,7 +740,7 @@ class ElixirHandler : BaseLanguageHandler
         // Generate documentation with caching
         if (config.documentation().enabled)
         {
-            Logger.info("Generating documentation");
+            structuredLog.info("generating_documentation").emit();
             
             // Gather source files for ExDoc cache
             string[] docInputs;
@@ -775,7 +775,7 @@ class ElixirHandler : BaseLanguageHandler
             // Check if ExDoc is cached
             if (actionCache.isCached(docActionId, docInputs, docMetadata) && exists(docOutputDir))
             {
-                Logger.info("  [Cached] ExDoc generation");
+                structuredLog.info("__cached_exdoc_generation").emit();
             }
             else
             {
@@ -829,7 +829,7 @@ class ElixirHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to analyze imports in " ~ source);
+                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source).emit();
             }
         }
         

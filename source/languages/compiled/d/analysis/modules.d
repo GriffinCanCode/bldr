@@ -7,7 +7,7 @@ import std.string;
 import std.algorithm;
 import std.array;
 import std.regex;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// D module information
 struct ModuleInfo
@@ -42,7 +42,7 @@ class ModuleAnalyzer
         
         if (!exists(filePath) || !isFile(filePath))
         {
-            Logger.warning("File not found: " ~ filePath);
+            structuredLog.warning("file_not_found_").field("detail", "File not found: " ~ filePath).emit();
             return info;
         }
         
@@ -67,7 +67,7 @@ class ModuleAnalyzer
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to analyze module " ~ filePath ~ ": " ~ e.msg);
+            structuredLog.warning("failed_to_analyze_module_").field("detail", "Failed to analyze module " ~ filePath ~ ": " ~ e.msg).emit();
         }
         
         return info;

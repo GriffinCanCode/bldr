@@ -10,7 +10,7 @@ import frontend.cli.display.format;
 import engine.graph.persistence.index;
 import engine.graph.persistence.queries;
 import engine.graph.core.graph : BuildStatus;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Explorer command - Interactive dependency graph exploration
@@ -80,7 +80,7 @@ struct ExplorerCommand
             terminal.writeln(e.msg);
             terminal.flush();
             
-            Logger.debugLog("Explorer error: " ~ e.toString());
+            structuredLog.debug_("explorer_error_").field("detail", "Explorer error: " ~ e.toString()).emit();
         }
     }
     

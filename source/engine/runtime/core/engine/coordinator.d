@@ -15,7 +15,7 @@ import engine.runtime.services : ISchedulingService, ICacheService, IObservabili
 import engine.runtime.services.scheduling : NodeBuildResult;
 import frontend.cli.events.events;
 import infrastructure.telemetry.distributed.tracing : Span, SpanKind, SpanStatus;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.simd.capabilities;
 import infrastructure.errors;
 import engine.runtime.core.engine.lifecycle;
@@ -54,7 +54,7 @@ struct EngineCoordinator
         // Mark discoverable targets
         DiscoveryMarker.markCodeGenTargets(dynamicGraph);
         
-        Logger.debugLog("Dynamic graph support enabled");
+        structuredLog.debug_("dynamic_graph_enabled").emit();
     }
     
     /// Execute the build
@@ -135,7 +135,9 @@ struct EngineCoordinator
         size_t built = 0;
         size_t cached = 0;
         
-        Logger.debugLog("Max parallelism: " ~ scheduling.workerCount().to!string ~ " jobs");
+        structuredLog.debug_("max_parallelism_set")
+            .field("jobs", scheduling.workerCount())
+            .emit();
         
         // Initialize pending dependency counters
         foreach (node; sorted)
@@ -206,7 +208,9 @@ struct EngineCoordinator
                 continue;
             }
             
-            Logger.debugLog("Building batch: " ~ batch.map!(n => n.idString).join(", "));
+            structuredLog.debug_("building_batch")
+                .field("targets", batch.map!(n => n.idString).join(","))
+                .emit();
             
             // Execute discovery for batch if using dynamic graphs
             if (dynamicGraph !is null)
@@ -276,7 +280,10 @@ struct EngineCoordinator
                 {
                     node.status = BuildStatus.Failed;
                     lifecycle.incrementFailedTasks();
-                    Logger.error("Failed to build " ~ node.idString ~ ": " ~ result.error);
+                    structuredLog.error("build_failed")
+                        .field("target", node.idString)
+                        .field("error", result.error)
+                        .emit();
                     
                     // Mark all dependents as failed (cascading failure)
                     foreach (dependentId; node.dependentIds)
@@ -402,40 +409,34 @@ struct EngineCoordinator
         auto cache = lifecycle.getCache();
         
         writeln();
-        Logger.info("Build Summary:");
-        Logger.info("  Built: " ~ built.to!string);
-        Logger.info("  Cached: " ~ cached.to!string);
-        Logger.info("  Failed: " ~ failed.to!string);
-        Logger.info("  Time: " ~ elapsed.total!"msecs".to!string ~ "ms");
+        structuredLog.info("build_summary")
+            .field("built", built)
+            .field("cached", cached)
+            .field("failed", failed)
+            .field("elapsed_ms", elapsed.total!"msecs")
+            .emit();
         
-        // Print cache performance (verbose mode only)
         auto cacheStats = cache.getStats();
         if (cacheStats.metadataHits + cacheStats.contentHashes > 0)
         {
-            Logger.debugLog("Cache Performance:");
-            Logger.debugLog("  Total entries: " ~ cacheStats.totalEntries.to!string);
-            Logger.debugLog("  Cache size: " ~ formatSize(cacheStats.totalSize));
-            Logger.debugLog("  Metadata hit rate: " ~ formatPercent(cacheStats.metadataHitRate));
-            
-            if (cacheStats.hashCacheHits + cacheStats.hashCacheMisses > 0)
-            {
-                Logger.debugLog("  Hash cache hit rate: " ~ formatPercent(cacheStats.hashCacheHitRate));
-                Logger.debugLog("  Hash cache saves: " ~ cacheStats.hashCacheHits.to!string ~ " duplicate hashes avoided");
-            }
+            structuredLog.debug_("cache_performance")
+                .field("total_entries", cacheStats.totalEntries)
+                .field("cache_size", formatSize(cacheStats.totalSize))
+                .field("metadata_hit_rate", cacheStats.metadataHitRate)
+                .field("hash_cache_hit_rate", cacheStats.hashCacheHitRate)
+                .field("hash_cache_saves", cacheStats.hashCacheHits)
+                .emit();
         }
         
-        // Print action cache stats (verbose mode only)
         if (cacheStats.actionEntries > 0)
         {
-            Logger.debugLog("Action-Level Cache:");
-            Logger.debugLog("  Total actions: " ~ cacheStats.actionEntries.to!string);
-            Logger.debugLog("  Cache size: " ~ formatSize(cacheStats.actionSize));
-            if (cacheStats.actionHits + cacheStats.actionMisses > 0)
-            {
-                Logger.debugLog("  Hit rate: " ~ formatPercent(cacheStats.actionHitRate));
-            }
-            Logger.debugLog("  Successful actions: " ~ cacheStats.successfulActions.to!string);
-            Logger.debugLog("  Failed actions: " ~ cacheStats.failedActions.to!string);
+            structuredLog.debug_("action_cache_stats")
+                .field("total_actions", cacheStats.actionEntries)
+                .field("cache_size", formatSize(cacheStats.actionSize))
+                .field("hit_rate", cacheStats.actionHitRate)
+                .field("successful_actions", cacheStats.successfulActions)
+                .field("failed_actions", cacheStats.failedActions)
+                .emit();
         }
     }
     

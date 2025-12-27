@@ -11,7 +11,7 @@ import engine.caching.actions.action;
 import infrastructure.analysis.ast.parser;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// AST-level incremental compilation engine
@@ -44,21 +44,21 @@ final class ASTIncrementalEngine
     {
         try
         {
-            Logger.info("Performing AST-level incremental analysis...");
+            structuredLog.info("ast_incremental_analysis_started").emit();
             
             // Phase 1: Parse changed files and update AST cache
             foreach (changedFile; changedFiles)
             {
                 if (!exists(changedFile))
                 {
-                    Logger.debugLog("File deleted: " ~ changedFile);
+                    structuredLog.debug_("file_deleted").field("file", changedFile).emit();
                     continue;
                 }
                 
                 auto parserResult = parserRegistry.getParser(changedFile);
                 if (parserResult.isErr)
                 {
-                    Logger.debugLog("No AST parser for: " ~ changedFile);
+                    structuredLog.debug_("no_ast_parser").field("file", changedFile).emit();
                     continue;
                 }
                 
@@ -69,13 +69,17 @@ final class ASTIncrementalEngine
                 {
                     auto ast = astResult.unwrap();
                     astCache.recordAST(ast);
-                    Logger.debugLog("Parsed AST: " ~ changedFile ~ " (" ~ 
-                                  ast.symbols.length.to!string ~ " symbols)");
+                    structuredLog.debug_("ast_parsed")
+                        .field("file", changedFile)
+                        .field("symbols", ast.symbols.length)
+                        .emit();
                 }
                 else
                 {
-                    Logger.warning("Failed to parse AST for " ~ changedFile ~ 
-                                 ": " ~ astResult.unwrapErr().message());
+                    structuredLog.warning("ast_parse_failed")
+                        .field("file", changedFile)
+                        .field("error", astResult.unwrapErr().message())
+                        .emit();
                 }
             }
             
@@ -110,9 +114,10 @@ final class ASTIncrementalEngine
             // Flush cache to disk
             astCache.flush();
             
-            Logger.info("AST analysis complete: " ~
-                       analysis.filesToRebuild.length.to!string ~ " files affected, " ~
-                       analysis.changedSymbolCount.to!string ~ " symbols changed");
+            structuredLog.info("ast_analysis_complete")
+                .field("files_affected", analysis.filesToRebuild.length)
+                .field("symbols_changed", analysis.changedSymbolCount)
+                .emit();
             
             return BuildResult!ASTChangeAnalysis.ok(analysis);
         }
@@ -168,7 +173,7 @@ final class ASTIncrementalEngine
     {
         // AST cache handles its own invalidation
         // We don't need to explicitly remove entries as they'll be reparsed on next build
-        Logger.debugLog("Invalidating AST cache for " ~ files.length.to!string ~ " files");
+        structuredLog.debug_("ast_cache_invalidating").field("files", files.length).emit();
     }
     
     /// Clear all AST caches
@@ -226,7 +231,7 @@ final class HybridIncrementalEngine
     {
         if (!useASTLevel || !astEngine.shouldUseASTLevel(sourceFiles))
         {
-            Logger.debugLog("AST-level not beneficial, using file-level tracking");
+            structuredLog.debug_("using_file_level_tracking").emit();
             
             // Return simple file-level analysis
             ASTChangeAnalysis analysis;
@@ -237,7 +242,7 @@ final class HybridIncrementalEngine
             return BuildResult!ASTChangeAnalysis.ok(analysis);
         }
         
-        Logger.debugLog("Using AST-level incremental compilation");
+        structuredLog.debug_("using_ast_level_incremental").emit();
         return astEngine.analyzeChanges(sourceFiles, changedFiles);
     }
     

@@ -11,7 +11,7 @@ import engine.caching.actions.action;
 import engine.caching.events;
 import frontend.cli.events.events : EventPublisher;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Reachability-based garbage collector for cache artifacts
 /// Removes orphaned blobs that are no longer referenced by any cache entry
@@ -52,8 +52,10 @@ final class CacheGarbageCollector
             emitEvent(CacheEventType.GCCompleted, sweepResult.blobsCollected, 
                      sweepResult.bytesFreed, sweepResult.orphansFound, gcTime);
             
-            Logger.debugLog("GC collected " ~ sweepResult.blobsCollected.to!string ~ 
-                          " blobs, freed " ~ formatBytes(sweepResult.bytesFreed));
+            structuredLog.debug_("gc_completed")
+                .field("blobs_collected", sweepResult.blobsCollected)
+                .field("bytes_freed", sweepResult.bytesFreed)
+                .emit();
             
             return Ok!(GCResult, BuildError)(sweepResult);
         }

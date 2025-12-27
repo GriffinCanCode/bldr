@@ -9,7 +9,7 @@ import engine.distributed.protocol.transport;
 import engine.distributed.protocol.messages;
 import infrastructure.utils.concurrency.deque : WorkStealingDeque;
 import engine.distributed.worker.peers;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 import infrastructure.errors.formatting.format : formatError = format;
 
@@ -26,21 +26,21 @@ struct WorkerCommunication
             
             if (sendResult.isErr)
             {
-                Logger.error("Heartbeat send failed");
-                Logger.error(formatError(sendResult.unwrapErr()));
+                structuredLog.error("heartbeat_send_failed").emit();
+                structuredLog.error("log_event").field("message", formatError(sendResult.unwrapErr())).emit();
                 if (auto http = cast(HttpTransport)coordinatorTransport)
                 {
                     http.close();
                     auto reconnectResult = http.connect();
                     if (reconnectResult.isErr)
-                        Logger.error("Failed to reconnect to coordinator");
+                        structuredLog.error("failed_to_reconnect_to_coordinator").emit();
                 }
             }
             else
-                Logger.debugLog("Heartbeat sent (queue: " ~ hb.metrics.queueDepth.to!string ~ 
-                              ", cpu: " ~ (hb.metrics.cpuUsage * 100).to!size_t.to!string ~ "%)");
+                structuredLog.debug_("heartbeat_sent_queue_").field("detail", "Heartbeat sent (queue: " ~ hb.metrics.queueDepth.to!string ~ 
+                              ", cpu: " ~ (hb.metrics.cpuUsage * 100).to!size_t.to!string ~ "%)").emit();
         }
-        catch (Exception e) { Logger.error("Heartbeat send exception: " ~ e.msg); }
+        catch (Exception e) { structuredLog.error("heartbeat_send_exception_").field("detail", "Heartbeat send exception: " ~ e.msg).emit(); }
     }
     
     /// Heartbeat loop
@@ -53,7 +53,7 @@ struct WorkerCommunication
             {
                 sendHeartbeat(id, getStateCallback(), getMetricsCallback(), coordinatorTransport);
             }
-            catch (Exception e) { Logger.error("Heartbeat failed: " ~ e.msg); }
+            catch (Exception e) { structuredLog.error("heartbeat_failed_").field("detail", "Heartbeat failed: " ~ e.msg).emit(); }
             
             // Sleep in short intervals to allow fast shutdown
             auto remaining = heartbeatInterval;
@@ -87,7 +87,7 @@ struct WorkerCommunication
             auto http = cast(HttpTransport)coordinatorTransport;
             if (http is null || !http.isConnected())
             {
-                Logger.error("Transport not connected");
+                structuredLog.error("transport_not_connected").emit();
                 return null;
             }
             
@@ -95,7 +95,7 @@ struct WorkerCommunication
             auto socket = http.getSocket();
             if (socket is null)
             {
-                Logger.error("Socket not available");
+                structuredLog.error("socket_not_available").emit();
                 return null;
             }
             
@@ -113,7 +113,7 @@ struct WorkerCommunication
             auto received = socket.receive(responseType);
             if (received != 1)
             {
-                Logger.debugLog("No work available");
+                structuredLog.debug_("no_work_available").emit();
                 return null;
             }
             
@@ -122,14 +122,14 @@ struct WorkerCommunication
             received = socket.receive(responseLengthBytes);
             if (received != 4)
             {
-                Logger.error("Failed to receive response length");
+                structuredLog.error("failed_to_receive_response_length").emit();
                 return null;
             }
             
             immutable responseLength = *cast(uint*)responseLengthBytes.ptr;
             if (responseLength == 0)
             {
-                Logger.debugLog("No work available (empty response)");
+                structuredLog.debug_("no_work_available_empty_response").emit();
                 return null;
             }
             
@@ -141,7 +141,7 @@ struct WorkerCommunication
                 auto chunk = socket.receive(responseData[totalReceived .. $]);
                 if (chunk <= 0)
                 {
-                    Logger.error("Connection closed while receiving work response");
+                    structuredLog.error("connection_closed_while_receiving_work_r").emit();
                     return null;
                 }
                 totalReceived += chunk;
@@ -151,7 +151,7 @@ struct WorkerCommunication
             auto workResponse = deserializeWorkResponse(responseData);
             if (workResponse.actions.length > 0)
             {
-                Logger.debugLog("Received work: " ~ workResponse.actions[0].id.toString());
+                structuredLog.debug_("received_work_").field("detail", "Received work: " ~ workResponse.actions[0].id.toString()).emit();
                 return workResponse.actions[0];
             }
             
@@ -159,7 +159,7 @@ struct WorkerCommunication
         }
         catch (Exception e)
         {
-            Logger.error("Work request failed: " ~ e.msg);
+            structuredLog.error("work_request_failed_").field("detail", "Work request failed: " ~ e.msg).emit();
             return null;
         }
     }
@@ -170,7 +170,7 @@ struct WorkerCommunication
         try
         {
             auto http = cast(HttpTransport)coordinatorTransport;
-            if (http is null) { Logger.error("Invalid transport for sending result"); return; }
+            if (http is null) { structuredLog.error("invalid_transport_for_sending_result").emit(); return; }
             
             auto msgData = http.serializeMessage(Envelope!ActionResult(id, WorkerId(0), result));
             ubyte[1] typeBytes = [cast(ubyte)MessageType.ActionResult];
@@ -180,31 +180,31 @@ struct WorkerCommunication
             auto socket = http.getSocket();
             if (socket is null || !socket.isAlive)
             {
-                Logger.error("Socket not available or disconnected");
+                structuredLog.error("socket_not_available_or_disconnected").emit();
                 auto reconnectResult = http.connect();
                 if (reconnectResult.isErr)
                 { 
-                    Logger.error("Failed to reconnect");
-                    Logger.error(formatError(reconnectResult.unwrapErr())); 
+                    structuredLog.error("failed_to_reconnect").emit();
+                    structuredLog.error("log_event").field("message", formatError(reconnectResult.unwrapErr())).emit(); 
                     return; 
                 }
                 socket = http.getSocket();
-                if (socket is null) { Logger.error("Socket still not available after reconnect"); return; }
+                if (socket is null) { structuredLog.error("socket_still_not_available_after_reconne").emit(); return; }
             }
             
-            if (socket.send(typeBytes) != typeBytes.length) { Logger.error("Failed to send message type"); return; }
-            if (socket.send(lengthBytes) != lengthBytes.length) { Logger.error("Failed to send message length"); return; }
+            if (socket.send(typeBytes) != typeBytes.length) { structuredLog.error("failed_to_send_message_type").emit(); return; }
+            if (socket.send(lengthBytes) != lengthBytes.length) { structuredLog.error("failed_to_send_message_length").emit(); return; }
             
             for (size_t totalSent = 0; totalSent < msgData.length;)
             {
                 auto chunk = socket.send(msgData[totalSent .. $]);
-                if (chunk <= 0) { Logger.error("Connection closed while sending result"); return; }
+                if (chunk <= 0) { structuredLog.error("connection_closed_while_sending_result").emit(); return; }
                 totalSent += chunk;
             }
             
-            Logger.debugLog("Result sent successfully: " ~ result.id.toString() ~ " (" ~ msgData.length.to!string ~ " bytes)");
+            structuredLog.debug_("result_sent_successfully_").field("detail", "Result sent successfully: " ~ result.id.toString() ~ " (" ~ msgData.length.to!string ~ " bytes)").emit();
         }
-        catch (Exception e) { Logger.error("Failed to send result: " ~ e.msg); }
+        catch (Exception e) { structuredLog.error("failed_to_send_result_").field("detail", "Failed to send result: " ~ e.msg).emit(); }
     }
     
     /// Send peer announce to coordinator
@@ -220,10 +220,10 @@ struct WorkerCommunication
             *cast(uint*)lengthBytes.ptr = cast(uint)announceData.length;
             
             auto http = cast(HttpTransport)coordinatorTransport;
-            if (http is null || !http.isConnected()) { Logger.error("Transport not connected for peer announce"); return; }
+            if (http is null || !http.isConnected()) { structuredLog.error("transport_not_connected_for_peer_announc").emit(); return; }
             
             auto socket = http.getSocket();
-            if (socket is null || !socket.isAlive) { Logger.error("Socket not available for peer announce"); return; }
+            if (socket is null || !socket.isAlive) { structuredLog.error("socket_not_available_for_peer_announce").emit(); return; }
             
             try
             {
@@ -232,15 +232,15 @@ struct WorkerCommunication
                 for (size_t totalSent = 0; totalSent < announceData.length;)
                 {
                     auto chunk = socket.send(announceData[totalSent .. $]);
-                    if (chunk <= 0) { Logger.error("Connection closed while sending peer announce"); return; }
+                    if (chunk <= 0) { structuredLog.error("connection_closed_while_sending_peer_ann").emit(); return; }
                     totalSent += chunk;
                 }
-                Logger.debugLog("Peer announce sent (queue: " ~ localQueue.size().to!string ~
-                              ", load: " ~ (loadFactor * 100).to!size_t.to!string ~ "%)");
+                structuredLog.debug_("peer_announce_sent_queue_").field("detail", "Peer announce sent (queue: " ~ localQueue.size().to!string ~
+                              ", load: " ~ (loadFactor * 100).to!size_t.to!string ~ "%)").emit();
             }
-            catch (Exception e) { Logger.warning("Socket error during peer announce: " ~ e.msg); }
+            catch (Exception e) { structuredLog.warning("socket_error_during_peer_announce_").field("detail", "Socket error during peer announce: " ~ e.msg).emit(); }
         }
-        catch (Exception e) { Logger.error("Failed to send peer announce: " ~ e.msg); }
+        catch (Exception e) { structuredLog.error("failed_to_send_peer_announce_").field("detail", "Failed to send peer announce: " ~ e.msg).emit(); }
     }
     
     /// Peer announce loop
@@ -255,7 +255,7 @@ struct WorkerCommunication
                 sendPeerAnnounce(id, listenAddress, localQueue, getLoadFactorCallback(), coordinatorTransport);
                 if (peerRegistry !is null) peerRegistry.pruneStale();
             }
-            catch (Exception e) { Logger.error("Peer announce failed: " ~ e.msg); }
+            catch (Exception e) { structuredLog.error("peer_announce_failed_").field("detail", "Peer announce failed: " ~ e.msg).emit(); }
             
             // Sleep in short intervals to allow fast shutdown
             auto remaining = peerAnnounceInterval;
@@ -303,10 +303,10 @@ struct WorkerCommunication
             
             if (peerRegistry !is null) peerRegistry.pruneStale();
             
-            Logger.debugLog("Peer announce sent (queue: " ~ queueSize.to!string ~
-                          ", load: " ~ (loadFactor * 100).to!size_t.to!string ~ "%)");
+            structuredLog.debug_("peer_announce_sent_queue_").field("detail", "Peer announce sent (queue: " ~ queueSize.to!string ~
+                          ", load: " ~ (loadFactor * 100).to!size_t.to!string ~ "%)").emit();
         }
-        catch (Exception e) { Logger.error("Failed to announce: " ~ e.msg); }
+        catch (Exception e) { structuredLog.error("failed_to_announce_").field("detail", "Failed to announce: " ~ e.msg).emit(); }
     }
 }
 

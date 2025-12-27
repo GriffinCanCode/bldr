@@ -14,7 +14,7 @@ import languages.base.base;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.security.validation;
 
 /// Script builder for Ruby scripts and simple applications
@@ -101,7 +101,7 @@ class ScriptBuilder : Builder
             }
             catch (Exception e)
             {
-                Logger.error("Failed to create output directory: " ~ e.msg);
+                structuredLog.error("failed_to_create_output_directory_").field("detail", "Failed to create output directory: " ~ e.msg).emit();
                 return false;
             }
         }
@@ -138,7 +138,7 @@ class ScriptBuilder : Builder
         }
         catch (Exception e)
         {
-            Logger.error("Failed to write wrapper: " ~ e.msg);
+            structuredLog.error("failed_to_write_wrapper_").field("detail", "Failed to write wrapper: " ~ e.msg).emit();
             return false;
         }
         
@@ -148,7 +148,7 @@ class ScriptBuilder : Builder
             // Validate path before using it with external command
             if (!SecurityValidator.isPathSafe(outputPath))
             {
-                Logger.error("Unsafe output path detected: " ~ outputPath);
+                structuredLog.error("unsafe_output_path_detected_").field("detail", "Unsafe output path detected: " ~ outputPath).emit();
                 return false;
             }
             
@@ -156,11 +156,11 @@ class ScriptBuilder : Builder
             auto res = execute(["chmod", "+x", outputPath]);
             if (res.status != 0)
             {
-                Logger.warning("Failed to make wrapper executable: " ~ res.output);
+                structuredLog.warning("failed_to_make_wrapper_executable_").field("detail", "Failed to make wrapper executable: " ~ res.output).emit();
             }
         }
         
-        Logger.info("Created executable wrapper: " ~ outputPath);
+        structuredLog.info("created_executable_wrapper_").field("detail", "Created executable wrapper: " ~ outputPath).emit();
         return true;
     }
 }

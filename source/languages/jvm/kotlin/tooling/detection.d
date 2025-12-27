@@ -4,7 +4,7 @@ import std.process;
 import std.string;
 import std.algorithm;
 import std.regex;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Kotlin compiler and tool detection
 class KotlinDetection
@@ -120,44 +120,44 @@ class KotlinDetection
     /// Check all available tools and log
     static void detectAll()
     {
-        Logger.info("Detecting Kotlin tools...");
+        structuredLog.info("detecting_kotlin_tools").emit();
         
         if (hasKotlinC())
-            Logger.info("  kotlinc: " ~ getKotlinVersion());
+            structuredLog.info("__kotlinc_").field("detail", "  kotlinc: " ~ getKotlinVersion()).emit();
         else
-            Logger.warning("  kotlinc: not found");
+            structuredLog.warning("__kotlinc_not_found").emit();
         
         if (hasKotlinNative())
-            Logger.info("  kotlin-native: available");
+            structuredLog.info("__kotlinnative_available").emit();
         else
-            Logger.debugLog("  kotlin-native: not found");
+            structuredLog.debug_("__kotlinnative_not_found").emit();
         
         if (hasKotlinJS())
-            Logger.info("  kotlin-js: available");
+            structuredLog.info("__kotlinjs_available").emit();
         else
-            Logger.debugLog("  kotlin-js: not found");
+            structuredLog.debug_("__kotlinjs_not_found").emit();
         
         if (hasGradle())
-            Logger.info("  Gradle: " ~ getGradleVersion());
+            structuredLog.info("__gradle_").field("detail", "  Gradle: " ~ getGradleVersion()).emit();
         else
-            Logger.debugLog("  Gradle: not found");
+            structuredLog.debug_("__gradle_not_found").emit();
         
         if (hasMaven())
-            Logger.info("  Maven: " ~ getMavenVersion());
+            structuredLog.info("__maven_").field("detail", "  Maven: " ~ getMavenVersion()).emit();
         else
-            Logger.debugLog("  Maven: not found");
+            structuredLog.debug_("__maven_not_found").emit();
         
         if (hasKtLint())
-            Logger.info("  ktlint: available");
+            structuredLog.info("__ktlint_available").emit();
         else
-            Logger.debugLog("  ktlint: not found");
+            structuredLog.debug_("__ktlint_not_found").emit();
         
         if (hasDetekt())
-            Logger.info("  detekt: available");
+            structuredLog.info("__detekt_available").emit();
         else
-            Logger.debugLog("  detekt: not found");
+            structuredLog.debug_("__detekt_not_found").emit();
         
-        Logger.info("  Java: " ~ getJavaVersion());
+        structuredLog.info("__java_").field("detail", "  Java: " ~ getJavaVersion()).emit();
     }
 }
 

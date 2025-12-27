@@ -7,7 +7,7 @@ import std.path;
 import std.regex;
 import std.string;
 import engine.compilation.incremental.analyzer;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Java incremental dependency analyzer
@@ -55,7 +55,7 @@ final class JavaDependencyAnalyzer : BaseDependencyAnalyzer
             {
                 if (isExternalDependency(importClass))
                 {
-                    Logger.debugLog("  [External] " ~ importClass);
+                    structuredLog.debug_("__external_").field("detail", "  [External] " ~ importClass).emit();
                     continue;
                 }
                 
@@ -64,7 +64,7 @@ final class JavaDependencyAnalyzer : BaseDependencyAnalyzer
                 if (!resolved.empty && exists(resolved))
                 {
                     resolvedDeps ~= buildNormalizedPath(resolved);
-                    Logger.debugLog("  [Resolved] " ~ importClass ~ " -> " ~ resolved);
+                    structuredLog.debug_("__resolved_").field("detail", "  [Resolved] " ~ importClass ~ " -> " ~ resolved).emit();
                 }
             }
             
@@ -195,7 +195,7 @@ struct JavaIncrementalHelper
             if (deps.canFind(normalizedChanged))
             {
                 affected ~= source;
-                Logger.debugLog("  " ~ source ~ " affected by " ~ changedFile);
+                structuredLog.debug_("__").field("detail", "  " ~ source ~ " affected by " ~ changedFile).emit();
             }
         }
         

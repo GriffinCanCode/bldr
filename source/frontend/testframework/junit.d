@@ -10,7 +10,7 @@ import std.datetime : Duration;
 import std.path : buildPath, dirName;
 import std.file : exists, mkdirRecurse;
 import frontend.testframework.results;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// JUnit XML test report generator
@@ -42,11 +42,11 @@ class JUnitExporter
             writeXmlHeader(file);
             writeTestSuites(file, results);
             
-            Logger.info("Exported JUnit XML report to: " ~ outputPath);
+            structuredLog.info("exported_junit_xml_report_to_").field("detail", "Exported JUnit XML report to: " ~ outputPath).emit();
         }
         catch (Exception e)
         {
-            Logger.error("Failed to export JUnit XML: " ~ e.msg);
+            structuredLog.error("failed_to_export_junit_xml_").field("detail", "Failed to export JUnit XML: " ~ e.msg).emit();
             throw e;
         }
     }

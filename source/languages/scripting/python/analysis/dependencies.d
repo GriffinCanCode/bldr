@@ -7,7 +7,7 @@ import std.array;
 import std.string;
 import std.regex;
 import std.json;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Python package dependency
 struct PythonDependency
@@ -106,7 +106,7 @@ class DependencyAnalyzer
     {
         if (!exists(filePath))
         {
-            Logger.warning("Dependency file not found: " ~ filePath);
+            structuredLog.warning("dependency_file_not_found_").field("detail", "Dependency file not found: " ~ filePath).emit();
             return [];
         }
         
@@ -155,7 +155,7 @@ class DependencyAnalyzer
         }
         catch (Exception e)
         {
-            Logger.error("Failed to parse requirements.txt: " ~ e.msg);
+            structuredLog.error("failed_to_parse_requirementstxt_").field("detail", "Failed to parse requirements.txt: " ~ e.msg).emit();
         }
         
         return deps;
@@ -263,7 +263,7 @@ class DependencyAnalyzer
         }
         catch (Exception e)
         {
-            Logger.error("Failed to parse pyproject.toml: " ~ e.msg);
+            structuredLog.error("failed_to_parse_pyprojecttoml_").field("detail", "Failed to parse pyproject.toml: " ~ e.msg).emit();
         }
         
         return deps;
@@ -299,7 +299,7 @@ class DependencyAnalyzer
         }
         catch (Exception e)
         {
-            Logger.error("Failed to parse setup.py: " ~ e.msg);
+            structuredLog.error("failed_to_parse_setuppy_").field("detail", "Failed to parse setup.py: " ~ e.msg).emit();
         }
         
         return deps;
@@ -354,7 +354,7 @@ class DependencyAnalyzer
         }
         catch (Exception e)
         {
-            Logger.error("Failed to parse Pipfile: " ~ e.msg);
+            structuredLog.error("failed_to_parse_pipfile_").field("detail", "Failed to parse Pipfile: " ~ e.msg).emit();
         }
         
         return deps;
@@ -401,7 +401,7 @@ class DependencyAnalyzer
         }
         catch (Exception e)
         {
-            Logger.error("Failed to parse conda environment.yml: " ~ e.msg);
+            structuredLog.error("failed_to_parse_conda_environmentyml_").field("detail", "Failed to parse conda environment.yml: " ~ e.msg).emit();
         }
         
         return deps;

@@ -8,7 +8,7 @@ import std.string : format;
 import frontend.lsp.core.protocol;
 import frontend.lsp.workspace.workspace;
 import frontend.lsp.providers.graph;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// CodeLens provider for inline dependency visualization
 /// Shows dependency counts and impact analysis above each target

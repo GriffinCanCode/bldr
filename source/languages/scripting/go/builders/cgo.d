@@ -7,7 +7,7 @@ import languages.scripting.go.builders.base;
 import languages.scripting.go.core.config;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.process : isCommandAvailable;
 import engine.caching.actions.action : ActionCache;
 
@@ -30,7 +30,7 @@ class CGoBuilder : StandardBuilder
         GoConfig mutableConfig = cast(GoConfig)config;
         if (!mutableConfig.cgo.enabled)
         {
-            Logger.info("Enabling CGO for C interop build");
+            structuredLog.info("enabling_cgo_for_c_interop_build").emit();
             mutableConfig.cgo.enabled = true;
         }
         
@@ -55,11 +55,11 @@ class CGoBuilder : StandardBuilder
             }
         }
         
-        Logger.info("Building with CGO enabled");
+        structuredLog.info("building_with_cgo_enabled").emit();
         if (!mutableConfig.cgo.cflags.empty)
-            Logger.debugLog("CGO_CFLAGS: " ~ mutableConfig.cgo.cflags.join(" "));
+            structuredLog.debug_("cgo_cflags_").field("detail", "CGO_CFLAGS: " ~ mutableConfig.cgo.cflags.join(" ")).emit();
         if (!mutableConfig.cgo.ldflags.empty)
-            Logger.debugLog("CGO_LDFLAGS: " ~ mutableConfig.cgo.ldflags.join(" "));
+            structuredLog.debug_("cgo_ldflags_").field("detail", "CGO_LDFLAGS: " ~ mutableConfig.cgo.ldflags.join(" ")).emit();
         
         // Use standard builder with CGO configuration
         return super.build(sources, mutableConfig, target, workspace);

@@ -5,7 +5,7 @@ import std.algorithm;
 import std.array;
 import std.json;
 import std.process;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Target information
 struct TargetInfo
@@ -85,7 +85,7 @@ class TargetManager
         auto res = execute(["zig", "targets"]);
         if (res.status != 0)
         {
-            Logger.warning("Failed to query zig targets");
+            structuredLog.warning("failed_to_query_zig_targets").emit();
             return targets;
         }
         
@@ -126,7 +126,7 @@ class TargetManager
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse zig targets output: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_zig_targets_output_").field("detail", "Failed to parse zig targets output: " ~ e.msg).emit();
         }
         
         return targets;
@@ -198,7 +198,7 @@ class TargetManager
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to get native target: " ~ e.msg);
+            structuredLog.warning("failed_to_get_native_target_").field("detail", "Failed to get native target: " ~ e.msg).emit();
         }
         
         return "";
@@ -280,7 +280,7 @@ class CpuFeatureManager
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to get CPU features: " ~ e.msg);
+            structuredLog.warning("failed_to_get_cpu_features_").field("detail", "Failed to get CPU features: " ~ e.msg).emit();
         }
         
         return features;

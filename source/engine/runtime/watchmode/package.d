@@ -6,3 +6,4 @@ module engine.runtime.watchmode;
 /// Monitors workspace for changes and automatically triggers rebuilds.
 
 public import engine.runtime.watchmode.watch;
+public import engine.runtime.watchmode.tracing;

@@ -12,7 +12,7 @@ import engine.workers.protocol;
 import engine.workers.pool.recycler;
 import engine.workers.pool.memory;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.concurrency.structured : TaskScope, VoidTask;
 
 /// Persistent Worker Pool Manager
@@ -147,7 +147,9 @@ final class PersistentWorker
             // Check if worker needs restart
             if (totalRequests >= config.maxRequests)
             {
-                Logger.info("Worker " ~ id.toString() ~ " reached max requests, marking for restart");
+                structuredLog.info("worker_max_requests")
+                    .field("worker", id.toString())
+                    .emit();
                 state = WorkerState.Terminating;
             }
             else
@@ -276,8 +278,10 @@ final class WorkerPool
         healthTask = taskScope.launchPeriodic("health-check", 
             config.healthCheckInterval, () @trusted => healthCheckBody());
         
-        Logger.info("Worker pool started (recycling=" ~ config.enableRecycling.to!string ~ 
-                   ", memory=" ~ config.enableMemoryMonitor.to!string ~ ")");
+        structuredLog.info("worker_pool_started")
+            .field("recycling", config.enableRecycling)
+            .field("memory_monitor", config.enableMemoryMonitor)
+            .emit();
     }
     
     /// Stop the worker pool - TaskScope guarantees cleanup
@@ -314,9 +318,11 @@ final class WorkerPool
         }
         
         if (recycler !is null)
-            Logger.info("Recycler stats: " ~ recycler.estimatedSpeedup().to!string ~ "x speedup");
+            structuredLog.info("recycler_stats")
+                .field("speedup", recycler.estimatedSpeedup())
+                .emit();
         
-        Logger.info("Worker pool stopped");
+        structuredLog.info("worker_pool_stopped").emit();
     }
     
     /// Acquire a worker for the given type (creates if needed)
@@ -350,7 +356,10 @@ final class WorkerPool
                     }
                     
                     auto warmth = recycler !is null ? recycler.getWarmth(selected.getId()) : WarmthLevel.Cold;
-                    Logger.debugLog("Reusing " ~ warmth.to!string ~ " worker: " ~ selected.getId().toString());
+                    structuredLog.debug_("worker_reused")
+                        .field("warmth", warmth.to!string)
+                        .field("worker", selected.getId().toString())
+                        .emit();
                     return Ok!(PersistentWorker, WorkerError)(selected);
                 }
             }
@@ -386,7 +395,9 @@ final class WorkerPool
                 memoryMonitor.register(workerId, config.maxHeapMB * 1024 * 1024);
             
             worker.markReady();
-            Logger.info("Started new worker: " ~ workerId.toString());
+            structuredLog.info("worker_started")
+                .field("worker", workerId.toString())
+                .emit();
             return Ok!(PersistentWorker, WorkerError)(worker);
         }
     }
@@ -422,7 +433,9 @@ final class WorkerPool
             if (needsOOMRestart)
             {
                 atomicOp!"+="(_oomRestarts, 1);
-                Logger.warning("Restarting worker due to OOM risk: " ~ worker.getId().toString());
+                structuredLog.warning("worker_oom_restart")
+                    .field("worker", worker.getId().toString())
+                    .emit();
             }
             restartWorker(worker);
         }
@@ -502,7 +515,9 @@ final class WorkerPool
                     // OOM risk - restart immediately
                     if (memoryAtRisk.canFind(id))
                     {
-                        Logger.warning("Restarting worker due to OOM: " ~ id.toString());
+                        structuredLog.warning("worker_oom_restart")
+                            .field("worker", id.toString())
+                            .emit();
                         atomicOp!"+="(_oomRestarts, 1);
                         worker.shutdown();
                         toRemove ~= worker;
@@ -513,7 +528,10 @@ final class WorkerPool
                     if (evictable.canFind(id))
                     {
                         auto warmth = recycler !is null ? recycler.getWarmth(id) : WarmthLevel.Cold;
-                        Logger.info("Evicting " ~ warmth.to!string ~ " worker: " ~ id.toString());
+                        structuredLog.info("worker_evicted")
+                            .field("warmth", warmth.to!string)
+                            .field("worker", id.toString())
+                            .emit();
                         worker.shutdown();
                         toRemove ~= worker;
                         continue;
@@ -523,7 +541,9 @@ final class WorkerPool
                     if (recycler is null && state == WorkerState.Idle && 
                         worker.idleDuration() > config.idleTimeout)
                     {
-                        Logger.info("Evicting idle worker: " ~ id.toString());
+                        structuredLog.info("worker_idle_evicted")
+                            .field("worker", id.toString())
+                            .emit();
                         worker.shutdown();
                         toRemove ~= worker;
                     }
@@ -588,7 +608,10 @@ final class WorkerPool
         {
             auto id = toEvict.getId();
             auto warmth = recycler !is null ? recycler.getWarmth(id) : WarmthLevel.Cold;
-            Logger.info("Evicting " ~ warmth.to!string ~ " worker to make room: " ~ id.toString());
+            structuredLog.info("worker_evicted_for_capacity")
+                .field("warmth", warmth.to!string)
+                .field("worker", id.toString())
+                .emit();
             
             if (recycler !is null) recycler.unregister(id);
             if (memoryMonitor !is null) memoryMonitor.unregister(id);
@@ -617,7 +640,9 @@ final class WorkerPool
             workers[type] = workers[type].filter!(w => w !is worker).array;
             atomicOp!"+="(_totalRestarts, 1);
             
-            Logger.info("Recycled worker: " ~ id.toString());
+            structuredLog.info("worker_recycled")
+                .field("worker", id.toString())
+                .emit();
         }
     }
     

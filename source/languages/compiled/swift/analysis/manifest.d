@@ -8,7 +8,7 @@ import std.array;
 import std.string;
 import std.regex;
 import languages.compiled.swift.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Package manifest parse result
 struct PackageManifestParseResult
@@ -159,7 +159,7 @@ class PackageManifestParser
         catch (Exception e)
         {
             result.error = "Failed to parse manifest: " ~ e.msg;
-            Logger.warning(result.error);
+            structuredLog.warning("log_event").field("message", result.error).emit();
         }
         
         return result;
@@ -285,7 +285,7 @@ class PackageResolvedParser
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse Package.resolved: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_packageresolved_").field("detail", "Failed to parse Package.resolved: " ~ e.msg).emit();
         }
         
         return packages;

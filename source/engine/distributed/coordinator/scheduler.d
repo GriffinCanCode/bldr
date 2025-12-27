@@ -15,7 +15,7 @@ import engine.distributed.coordinator.registry;
 import engine.distributed.coordinator.profile : ProfileGuidedScheduler, ActionProfile;
 import infrastructure.config.schema.schema : TargetId;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import Concurrency = infrastructure.utils.concurrency.priority;
 
 /// Action scheduling state
@@ -124,9 +124,10 @@ final class DistributedScheduler
         if (profileGuidedEnabled)
         {
             auto stats = scheduler.getStats();
-            Logger.info("Profile-guided scheduling enabled:");
-            Logger.info("  " ~ stats.totalActions.to!string ~ " actions profiled");
-            Logger.info("  Max critical path: " ~ stats.maxCriticalPathCost.to!string ~ "ms");
+            structuredLog.info("profile_guided_scheduling_enabled")
+                .field("actions_profiled", stats.totalActions)
+                .field("max_critical_path_ms", stats.maxCriticalPathCost)
+                .emit();
         }
     }
     
@@ -471,19 +472,29 @@ final class DistributedScheduler
             if (auto info = action in shard.actions)
             {
                 registry.markFailed(info.assignedWorker, action);
-                Logger.warning("Action failed: " ~ action.toString() ~ " (attempt " ~ (info.retries + 1).to!string ~ "/" ~ MAX_RETRIES.to!string ~ "): " ~ error);
+                structuredLog.warning("action_failed")
+                    .field("action", action.toString())
+                    .field("attempt", info.retries + 1)
+                    .field("max_retries", MAX_RETRIES)
+                    .field("error", error)
+                    .emit();
                 
                 if (info.retries < MAX_RETRIES)
                 {
                     info.retries++;
                     info.state = ActionState.Ready;
                     addReady(shard, *info);
-                    Logger.info("Action queued for retry: " ~ action.toString());
+                    structuredLog.info("action_queued_for_retry")
+                        .field("action", action.toString())
+                        .emit();
                 }
                 else
                 {
                     info.state = ActionState.Failed;
-                    Logger.error("Action failed permanently after " ~ MAX_RETRIES.to!string ~ " attempts: " ~ action.toString());
+                    structuredLog.error("action_failed_permanently")
+                        .field("action", action.toString())
+                        .field("attempts", MAX_RETRIES)
+                        .emit();
                     propagateFailure(action, shardIdx);
                 }
             }
@@ -557,7 +568,9 @@ final class DistributedScheduler
                     if (info.state != ActionState.Failed && info.state != ActionState.Completed)
                     {
                         info.state = ActionState.Failed;
-                        Logger.debugLog("Marked dependent as failed: " ~ dependentActionId.toString());
+                        structuredLog.debug_("dependent_marked_failed")
+                            .field("action", dependentActionId.toString())
+                            .emit();
                         
                         // Recurse
                         propagateFailure(dependentActionId, idx);
@@ -586,7 +599,10 @@ final class DistributedScheduler
                 }
             }
         }
-        Logger.info("Reassigned " ~ inProgress.length.to!string ~ " actions from failed worker " ~ worker.toString());
+        structuredLog.info("actions_reassigned")
+            .field("count", inProgress.length)
+            .field("worker", worker.toString())
+            .emit();
     }
     
     SchedulerStats getStats() @trusted

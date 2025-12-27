@@ -9,7 +9,7 @@ import std.string;
 import std.regex;
 import languages.dotnet.csharp.tooling.testers.base;
 import languages.dotnet.csharp.config.test;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.security : execute;
 
 /// MSTest test runner
@@ -28,7 +28,7 @@ class MSTestRunner : ITestRunner
     
     override TestResult runTests(in string[] testFiles, in TestConfig config, in string workingDir)
     {
-        Logger.info("Running MSTest tests");
+        structuredLog.info("running_mstest_tests").emit();
         
         if (isCommandAvailable("dotnet")) return runWithDotnetTest(testFiles, config, workingDir);
         if (isCommandAvailable("vstest.console")) return runWithVSTest(testFiles, config, workingDir);
@@ -56,7 +56,7 @@ class MSTestRunner : ITestRunner
         if (!result.success && result.error.empty) result.error = "MSTest tests failed";
         
         import std.format : format;
-        Logger.info(format!"MSTest results: %d passed, %d failed, %d skipped"(result.passed, result.failed, result.skipped));
+        structuredLog.info("log_event").field("message", format!"MSTest results: %d passed, %d failed, %d skipped"(result.passed, result.failed, result.skipped)).emit();
         return result;
     }
     
@@ -97,7 +97,7 @@ class MSTestRunner : ITestRunner
             if (!failedMatch.empty) result.failed = failedMatch[1].to!size_t;
             if (!skippedMatch.empty) result.skipped = skippedMatch[1].to!size_t;
         } catch (Exception e) {
-            Logger.debugLog("Failed to parse MSTest output: " ~ e.msg);
+            structuredLog.debug_("failed_to_parse_mstest_output_").field("detail", "Failed to parse MSTest output: " ~ e.msg).emit();
         }
     }
     
@@ -114,7 +114,7 @@ class MSTestRunner : ITestRunner
             if (!failedMatch.empty) result.failed = failedMatch[1].to!size_t;
             if (!skippedMatch.empty) result.skipped = skippedMatch[1].to!size_t;
         } catch (Exception e) {
-            Logger.debugLog("Failed to parse VSTest output: " ~ e.msg);
+            structuredLog.debug_("failed_to_parse_vstest_output_").field("detail", "Failed to parse VSTest output: " ~ e.msg).emit();
         }
     }
 }

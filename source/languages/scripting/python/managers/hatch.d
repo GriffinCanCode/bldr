@@ -7,7 +7,7 @@ import std.conv;
 import languages.scripting.python.managers.base;
 import languages.scripting.python.tooling.detection : ToolDetection;
 alias PyTools = ToolDetection;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Hatch package manager
 class HatchManager : PackageManager
@@ -25,7 +25,7 @@ class HatchManager : PackageManager
         
         InstallResult result;
         
-        Logger.info("Installing with Hatch");
+        structuredLog.info("installing_with_hatch").emit();
         
         StopWatch sw;
         sw.start();
@@ -42,7 +42,7 @@ class HatchManager : PackageManager
         }
         
         result.success = true;
-        Logger.info("Hatch environment created in %.2fs".format(result.timeSeconds));
+        structuredLog.info("hatch_environment_created_in_2fsformatre").emit();
         
         return result;
     }

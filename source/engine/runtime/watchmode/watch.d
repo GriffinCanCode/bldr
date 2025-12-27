@@ -16,7 +16,7 @@ import engine.caching.targets.cache;
 import infrastructure.config.schema.schema;
 import infrastructure.config.parsing.parser;
 import infrastructure.utils.files.watch;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import frontend.cli.events.events;
 import infrastructure.analysis.incremental.watcher;
 import infrastructure.errors;
@@ -108,9 +108,9 @@ final class WatchModeService
             
             auto watcherResult = _analysisWatcher.start(_workspaceRoot);
             if (watcherResult.isOk)
-                Logger.debugLog("Analysis watcher started for proactive cache invalidation");
+                structuredLog.debug_("analysis_watcher_started").emit();
             else
-                Logger.debugLog("Analysis watcher not available");
+                structuredLog.debug_("analysis_watcher_unavailable").emit();
         }
         
         // Create file watcher with config
@@ -126,21 +126,20 @@ final class WatchModeService
         
         if (tryMmapStartup(target))
         {
-            Logger.success("Instant startup from memory-mapped graph cache");
+            structuredLog.info("mmap_instant_startup").emit();
             _usedMmapStartup = true;
         }
         else
         {
-            Logger.info("Performing initial build...");
+            structuredLog.info("performing_initial_build").emit();
             writeln();
             performBuild(target);
         }
         
-        // Start watching
-        Logger.info("Watching for changes... (Press Ctrl+C to stop)");
-        Logger.info("Using watcher: " ~ _watcher.implName());
-        if (_watchConfig.useMmapPersistence)
-            Logger.debugLog("Memory-mapped graph persistence enabled");
+        structuredLog.info("watch_mode_started")
+            .field("watcher", _watcher.implName())
+            .field("mmap_persistence", _watchConfig.useMmapPersistence)
+            .emit();
         writeln();
         
         _isRunning = true;
@@ -177,7 +176,9 @@ final class WatchModeService
         auto graphResult = _mmapStorage.tryLoadForWatchMode(_lastConfigHash);
         if (graphResult.isErr)
         {
-            Logger.debugLog("Mmap startup failed: config changed or cache invalid");
+            structuredLog.debug_("mmap_startup_failed")
+            .field("reason", "config_changed_or_cache_invalid")
+            .emit();
             return false;
         }
         
@@ -188,7 +189,9 @@ final class WatchModeService
         
         sw.stop();
         auto elapsed = sw.peek();
-        Logger.debugLog("Graph loaded from mmap in " ~ elapsed.total!"usecs".to!string ~ "µs");
+        structuredLog.debug_("mmap_graph_loaded")
+            .field("elapsed_us", elapsed.total!"usecs")
+            .emit();
         
         return true;
     }
@@ -232,7 +235,7 @@ final class WatchModeService
         {
             auto persistResult = _mmapStorage.persist(_cachedGraph, _lastConfigHash);
             if (persistResult.isOk)
-                Logger.debugLog("Graph persisted for instant startup");
+                structuredLog.debug_("graph_persisted").emit();
         }
         
         if (_watcher !is null)
@@ -244,7 +247,7 @@ final class WatchModeService
         if (_services !is null)
             _services.shutdown();
         
-        Logger.info("Watch mode stopped");
+        structuredLog.info("watch_mode_stopped").emit();
     }
     
     /// Handle file changes and trigger rebuild
@@ -262,12 +265,10 @@ final class WatchModeService
         performBuild(target);
         
         writeln();
-        auto buildMsg = "Build #" ~ _buildNumber.to!string;
-        if (_lastBuildSuccess)
-            Logger.success(buildMsg ~ " completed successfully");
-        else
-            Logger.error(buildMsg ~ " failed");
-        Logger.info("Watching for changes...");
+        structuredLog.info("build_completed")
+            .field("build_number", _buildNumber)
+            .field("success", _lastBuildSuccess)
+            .emit();
         writeln();
     }
     
@@ -285,9 +286,9 @@ final class WatchModeService
             auto configResult = ConfigParser.parseWorkspace(_workspaceRoot);
             if (configResult.isErr)
             {
-                Logger.error("Failed to parse workspace configuration");
+                structuredLog.error("workspace_config_parse_failed").emit();
                 import infrastructure.errors.formatting.format : format;
-                Logger.error(format(configResult.unwrapErr()));
+                structuredLog.error("log_event").field("message", format(configResult.unwrapErr())).emit();
                 return;
             }
             
@@ -309,9 +310,9 @@ final class WatchModeService
             auto graphResult = _services.analyzer.analyze(target);
             if (graphResult.isErr)
             {
-                Logger.error("Failed to analyze dependencies");
+                structuredLog.error("dependency_analysis_failed").emit();
                 import infrastructure.errors.formatting.format : format;
-                Logger.error(format(graphResult.unwrapErr()));
+                structuredLog.error("log_event").field("message", format(graphResult.unwrapErr())).emit();
                 return;
             }
             auto graph = graphResult.unwrap();
@@ -325,12 +326,14 @@ final class WatchModeService
                 {
                     usedIncrementalOrder = true;
                     _incrementalHits++;
-                    Logger.debugLog("Using incremental topological order (version " ~ currentVersion.to!string ~ ")");
+                    structuredLog.debug_("incremental_topo_order")
+                        .field("version", currentVersion)
+                        .emit();
                 }
                 else
                 {
                     _fullRebuilds++;
-                    Logger.debugLog("Full topological recomputation needed");
+                    structuredLog.debug_("full_topo_recomputation").emit();
                 }
                 _lastTopoVersion = currentVersion;
             }
@@ -348,17 +351,17 @@ final class WatchModeService
             
             if (_watchConfig.showGraph)
             {
-                Logger.info("\nDependency Graph:");
                 graph.print();
                 
-                // Show incremental stats in verbose mode
                 if (_watchConfig.verbose)
                 {
                     auto stats = graph.incrementalStats;
-                    Logger.debugLog("Incremental topo stats: cache_hits=" ~ stats.cacheHits.to!string ~
-                        ", incremental=" ~ stats.incrementalUpdates.to!string ~
-                        ", full=" ~ stats.fullRecomputations.to!string ~
-                        ", effectiveness=" ~ (stats.effectiveness * 100).to!string ~ "%");
+                    structuredLog.debug_("incremental_topo_stats")
+                        .field("cache_hits", stats.cacheHits)
+                        .field("incremental", stats.incrementalUpdates)
+                        .field("full", stats.fullRecomputations)
+                        .field("effectiveness_pct", stats.effectiveness * 100)
+                        .emit();
                 }
             }
             
@@ -375,19 +378,23 @@ final class WatchModeService
             {
                 auto persistResult = _mmapStorage.persist(graph, _lastConfigHash);
                 if (persistResult.isErr && _watchConfig.verbose)
-                    Logger.debugLog("Graph persistence failed: " ~ persistResult.unwrapErr().message);
+                    structuredLog.debug_("graph_persistence_failed")
+                        .field("error", persistResult.unwrapErr().message)
+                        .emit();
             }
             
             // Print timing with incremental info
             auto elapsed = sw.peek();
-            auto timingMsg = "Build time: " ~ elapsed.total!"msecs".to!string ~ "ms";
-            if (usedIncrementalOrder)
-                timingMsg ~= " (incremental order)";
-            Logger.info(timingMsg);
+            structuredLog.info("build_time")
+                .field("elapsed_ms", elapsed.total!"msecs")
+                .field("incremental_order", usedIncrementalOrder)
+                .emit();
         }
         catch (Exception e)
         {
-            Logger.error("Build failed with exception: " ~ e.msg);
+            structuredLog.error("build_exception")
+                .field("error", e.msg)
+                .emit();
             _lastBuildSuccess = false;
         }
     }

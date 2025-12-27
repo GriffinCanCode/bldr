@@ -4,7 +4,7 @@ import std.file;
 import std.path;
 import std.string : replace;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Plugin template language
 enum TemplateLanguage {
@@ -53,12 +53,12 @@ class TemplateGenerator {
                     break;
             }
             
-            Logger.info("Plugin template created: " ~ pluginDir);
-            Logger.info("Next steps:");
-            Logger.info("  cd " ~ pluginDir);
-            Logger.info("  # Implement your plugin logic");
-            Logger.info("  # Build and test");
-            Logger.info("  # Create Homebrew formula");
+            structuredLog.info("plugin_template_created_").field("detail", "Plugin template created: " ~ pluginDir).emit();
+            structuredLog.info("next_steps").emit();
+            structuredLog.info("__cd_").field("detail", "  cd " ~ pluginDir).emit();
+            structuredLog.info("___implement_your_plugin_logic").emit();
+            structuredLog.info("___build_and_test").emit();
+            structuredLog.info("___create_homebrew_formula").emit();
             
             return Ok!BuildError();
         } catch (Exception e) {

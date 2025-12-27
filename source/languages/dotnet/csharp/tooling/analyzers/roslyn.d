@@ -11,7 +11,7 @@ import std.conv;
 import languages.dotnet.csharp.tooling.analyzers.base;
 import languages.dotnet.csharp.tooling.detection;
 import languages.dotnet.csharp.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.security.validation;
 
 /// Roslyn analyzer (built-in to .NET SDK)
@@ -25,7 +25,7 @@ class RoslynAnalyzer : CSharpAnalyzer_
     {
         AnalysisResult result;
         
-        Logger.info("Running Roslyn static analysis");
+        structuredLog.info("running_roslyn_static_analysis").emit();
         
         string[] cmd = ["dotnet", "build"];
         
@@ -68,12 +68,12 @@ class RoslynAnalyzer : CSharpAnalyzer_
         
         if (result.hasErrors())
         {
-            Logger.warning("Analysis found " ~ result.errors.length.to!string ~ " error(s)");
+            structuredLog.warning("analysis_found_").field("detail", "Analysis found " ~ result.errors.length.to!string ~ " error(s)").emit();
         }
         
         if (result.hasWarnings())
         {
-            Logger.info("Analysis found " ~ result.warnings.length.to!string ~ " warning(s)");
+            structuredLog.info("analysis_found_").field("detail", "Analysis found " ~ result.warnings.length.to!string ~ " warning(s)").emit();
         }
         
         result.success = true;

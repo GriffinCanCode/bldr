@@ -4,7 +4,7 @@ import std.stdio;
 import std.conv : to;
 import std.string : strip;
 import engine.distributed.worker : Worker, WorkerConfig;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Start distributed build worker
@@ -43,7 +43,7 @@ int workerCommand(string[] args)
     // Validate coordinator URL
     if (config.coordinatorUrl.length == 0)
     {
-        Logger.error("Coordinator URL is required (use --coordinator)");
+        structuredLog.error("coordinator_url_is_required_use_coordina").emit();
         return 1;
     }
     
@@ -54,7 +54,7 @@ int workerCommand(string[] args)
     auto startResult = worker.start();
     if (startResult.isErr)
     {
-        Logger.error("Failed to start worker: " ~ format(startResult.unwrapErr()));
+        structuredLog.error("failed_to_start_worker_").field("detail", "Failed to start worker: " ~ format(startResult.unwrapErr())).emit();
         return 1;
     }
     

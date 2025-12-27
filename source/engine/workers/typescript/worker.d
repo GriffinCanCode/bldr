@@ -13,7 +13,7 @@ import engine.workers.protocol;
 import engine.workers.pool;
 import engine.workers.base;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// TypeScript Persistent Worker Factory
 /// 
@@ -210,7 +210,7 @@ final class TypeScriptWorkerFactory : BasePersistentWorkerFactory
         if (!exists(scriptPath))
         {
             std.file.write(scriptPath, generateWorkerScript());
-            Logger.debugLog("Created TypeScript worker script: " ~ scriptPath);
+            structuredLog.debug_("created_typescript_worker_script_").field("detail", "Created TypeScript worker script: " ~ scriptPath).emit();
         }
         
         return scriptPath;

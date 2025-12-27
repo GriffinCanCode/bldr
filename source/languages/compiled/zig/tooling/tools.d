@@ -6,7 +6,7 @@ import std.path;
 import std.algorithm;
 import std.array;
 import std.string;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.process : isCommandAvailable;
 
 /// Result of running a Zig tool
@@ -176,7 +176,7 @@ class ZigTools
         // Add steps to execute
         cmd ~= steps;
         
-        Logger.debugLog("Running zig build: " ~ cmd.join(" "));
+        structuredLog.debug_("running_zig_build_").field("detail", "Running zig build: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, workDir);
         
@@ -237,7 +237,7 @@ class ZigTools
         // Add input file
         cmd ~= cFile;
         
-        Logger.info("Translating C to Zig: " ~ cFile);
+        structuredLog.info("translating_c_to_zig_").field("detail", "Translating C to Zig: " ~ cFile).emit();
         
         auto res = execute(cmd);
         
@@ -257,7 +257,7 @@ class ZigTools
                 try
                 {
                     std.file.write(outputFile, res.output);
-                    Logger.info("Translation written to: " ~ outputFile);
+                    structuredLog.info("translation_written_to_").field("detail", "Translation written to: " ~ outputFile).emit();
                 }
                 catch (Exception e)
                 {
@@ -295,7 +295,7 @@ class ZigTools
         
         string[] cmd = ["zig", "init"];
         
-        Logger.info("Initializing Zig project in: " ~ path);
+        structuredLog.info("initializing_zig_project_in_").field("detail", "Initializing Zig project in: " ~ path).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, path);
         
@@ -336,7 +336,7 @@ class ZigTools
         
         cmd ~= url;
         
-        Logger.info("Fetching Zig dependency: " ~ url);
+        structuredLog.info("fetching_zig_dependency_").field("detail", "Fetching Zig dependency: " ~ url).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, workDir);
         
@@ -380,7 +380,7 @@ class ZigTools
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse zig env output: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_zig_env_output_").field("detail", "Failed to parse zig env output: " ~ e.msg).emit();
         }
         
         return env;

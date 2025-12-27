@@ -8,7 +8,7 @@ import std.algorithm;
 import std.array;
 import std.string;
 import std.regex;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Parse .tool-versions file (asdf format)
 string[string] parseToolVersions(string filePath)
@@ -36,7 +36,7 @@ string[string] parseToolVersions(string filePath)
     }
     catch (Exception e)
     {
-        Logger.warning("Failed to parse .tool-versions: " ~ e.msg);
+        structuredLog.warning("failed_to_parse_toolversions_").field("detail", "Failed to parse .tool-versions: " ~ e.msg).emit();
     }
     
     return versions;

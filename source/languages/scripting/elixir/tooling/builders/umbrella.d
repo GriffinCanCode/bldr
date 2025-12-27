@@ -11,7 +11,7 @@ import languages.scripting.elixir.tooling.builders.mix;
 import languages.scripting.elixir.config;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Umbrella builder - multi-app projects
 class UmbrellaBuilder : MixProjectBuilder
@@ -25,7 +25,7 @@ class UmbrellaBuilder : MixProjectBuilder
     {
         ElixirBuildResult result;
         
-        Logger.debugLog("Building Umbrella project");
+        structuredLog.debug_("building_umbrella_project").emit();
         
         string workDir = workspace.root;
         if (!sources.empty)
@@ -40,7 +40,7 @@ class UmbrellaBuilder : MixProjectBuilder
         // Build individual apps if specified
         if (!config.umbrella.buildAll)
         {
-            Logger.info("Building individual umbrella apps");
+            structuredLog.info("building_individual_umbrella_apps").emit();
             
             string appsDir = buildPath(workDir, config.umbrella.appsDir);
             
@@ -48,11 +48,11 @@ class UmbrellaBuilder : MixProjectBuilder
             {
                 if (config.umbrella.excludeApps.canFind(app))
                 {
-                    Logger.debugLog("Skipping excluded app: " ~ app);
+                    structuredLog.debug_("skipping_excluded_app_").field("detail", "Skipping excluded app: " ~ app).emit();
                     continue;
                 }
                 
-                Logger.info("Building app: " ~ app);
+                structuredLog.info("building_app_").field("detail", "Building app: " ~ app).emit();
                 
                 string appDir = buildPath(appsDir, app);
                 if (!exists(appDir))

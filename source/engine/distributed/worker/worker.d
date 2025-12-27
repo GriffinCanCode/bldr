@@ -18,7 +18,7 @@ import engine.distributed.worker.steal;
 import engine.distributed.memory;
 import engine.distributed.metrics.steal : StealTelemetry;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 // Import split modules
 public import engine.distributed.worker.lifecycle;

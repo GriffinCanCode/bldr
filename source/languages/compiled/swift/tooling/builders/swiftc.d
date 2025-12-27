@@ -14,7 +14,7 @@ import languages.compiled.swift.managers.spm;
 import languages.compiled.swift.managers.toolchain;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action;
 
 /// Direct swiftc compiler builder with action-level caching
@@ -96,7 +96,7 @@ class SwiftcBuilder : SwiftBuilder
         // Check if compilation is cached
         if (actionCache.isCached(actionId, sources, metadata) && exists(outputPath))
         {
-            Logger.debugLog("  [Cached] Swift compilation: " ~ outputPath);
+            structuredLog.debug_("__cached_swift_compilation_").field("detail", "  [Cached] Swift compilation: " ~ outputPath).emit();
             result.success = true;
             result.outputs = [outputPath];
             result.outputHash = FastHash.hashFile(outputPath);
@@ -279,7 +279,7 @@ class SwiftcBuilder : SwiftBuilder
         cmd ~= sources;
         
         // Run compiler
-        Logger.debugLog("Running: " ~ cmd.join(" "));
+        structuredLog.debug_("running_").field("detail", "Running: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, config.env);
         
@@ -403,7 +403,7 @@ class SwiftcBuilder : SwiftBuilder
         // Check if compilation is cached
         if (actionCache.isCached(actionId, [source], metadata) && exists(objPath))
         {
-            Logger.debugLog("  [Cached] " ~ source);
+            structuredLog.debug_("__cached_").field("detail", "  [Cached] " ~ source).emit();
             result.success = true;
             result.outputs = [objPath];
             return result;
@@ -455,7 +455,7 @@ class SwiftcBuilder : SwiftBuilder
         // Custom Swift flags
         cmd ~= config.buildSettings.swiftFlags;
         
-        Logger.debugLog("Compiling: " ~ source);
+        structuredLog.debug_("compiling_").field("detail", "Compiling: " ~ source).emit();
         
         auto res = execute(cmd, config.env);
         
@@ -523,7 +523,7 @@ class SwiftcBuilder : SwiftBuilder
         // Check if linking is cached
         if (actionCache.isCached(actionId, objectFiles, metadata) && exists(outputPath))
         {
-            Logger.debugLog("  [Cached] Linking: " ~ outputPath);
+            structuredLog.debug_("__cached_linking_").field("detail", "  [Cached] Linking: " ~ outputPath).emit();
             result.success = true;
             return result;
         }
@@ -562,7 +562,7 @@ class SwiftcBuilder : SwiftBuilder
             cmd ~= ["-Xlinker", flag];
         }
         
-        Logger.debugLog("Linking: " ~ outputPath);
+        structuredLog.debug_("linking_").field("detail", "Linking: " ~ outputPath).emit();
         
         auto res = execute(cmd, config.env);
         

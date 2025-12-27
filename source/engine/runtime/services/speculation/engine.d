@@ -13,7 +13,7 @@ import core.thread : Thread;
 import infrastructure.utils.concurrency.structured : TaskScope, VoidTask;
 import engine.graph : BuildGraph, BuildNode, BuildStatus;
 import infrastructure.config.schema.schema : TargetId, Target;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.files.hash : FastHash;
 import infrastructure.errors;
 
@@ -125,8 +125,9 @@ final class SpeculativeEngine
                     () @trusted => workerLoopBody());
             }
             
-            Logger.info("Speculation engine started with " ~ 
-                       _config.workerCount.to!string ~ " workers");
+            structuredLog.info("speculation_engine_started")
+                .field("workers", _config.workerCount)
+                .emit();
         }
     }
     
@@ -152,7 +153,7 @@ final class SpeculativeEngine
             }
         }
         
-        Logger.info("Speculation engine stopped");
+        structuredLog.info("speculation_engine_stopped").emit();
     }
     
     /// Begin speculative execution based on predictions
@@ -161,7 +162,7 @@ final class SpeculativeEngine
     {
         if (_executor is null)
         {
-            Logger.warning("Speculation: no executor set, skipping");
+            structuredLog.warning("speculation_no_executor").emit();
             return 0;
         }
         
@@ -178,7 +179,7 @@ final class SpeculativeEngine
             
             if (candidates.length == 0)
             {
-                Logger.debugLog("Speculation: no candidates above threshold");
+                structuredLog.debug_("speculation_no_candidates").emit();
                 return 0;
             }
             
@@ -194,8 +195,9 @@ final class SpeculativeEngine
             
             if (queued > 0)
             {
-                Logger.info("Speculation: queued " ~ queued.to!string ~ 
-                           " tasks based on predictions");
+                structuredLog.info("speculation_tasks_queued")
+                    .field("count", queued)
+                    .emit();
                 _workAvailable.notifyAll();
             }
             
@@ -243,7 +245,10 @@ final class SpeculativeEngine
             // Sort by priority (highest first)
             _taskQueue.sort!((a, b) => a.priority > b.priority);
             
-            Logger.debugLog("Speculation: queued " ~ key ~ " (priority=" ~ priority.to!string ~ ")");
+            structuredLog.debug_("speculation_queued")
+                .field("target", key)
+                .field("priority", priority)
+                .emit();
             
             return true;
         }
@@ -278,7 +283,10 @@ final class SpeculativeEngine
                 {
                     toInvalidate ~= key;
                     atomicOp!"+="(_tasksAborted, 1);
-                    Logger.debugLog("Speculation: invalidated " ~ key ~ " (input changed: " ~ path ~ ")");
+                    structuredLog.debug_("speculation_invalidated")
+                        .field("target", key)
+                        .field("changed_input", path)
+                        .emit();
                 }
             }
             
@@ -336,8 +344,10 @@ final class SpeculativeEngine
             _history.recordChange(targetId, ChangeType.SourceModified,
                                  result.producedArtifacts, result.executionTime, true, true);
             
-            Logger.success("Speculation: hit for " ~ key ~ 
-                          " (saved " ~ result.executionTime.total!"msecs".to!string ~ "ms)");
+            structuredLog.info("speculation_hit")
+                .field("target", key)
+                .field("saved_ms", result.executionTime.total!"msecs")
+                .emit();
             
             return nullable(result);
         }
@@ -423,16 +433,19 @@ private:
         
         try
         {
-            // Check if still valid before executing
             if (inputsChanged(task.node))
             {
-                Logger.debugLog("Speculation: skipping " ~ key ~ " (inputs changed)");
+                structuredLog.debug_("speculation_skipped")
+                    .field("target", key)
+                    .field("reason", "inputs_changed")
+                    .emit();
                 atomicOp!"+="(_tasksAborted, 1);
                 return;
             }
             
-            // Execute the build
-            Logger.debugLog("Speculation: executing " ~ key);
+            structuredLog.debug_("speculation_executing")
+                .field("target", key)
+                .emit();
             
             string outputHash;
             if (_executor !is null)
@@ -470,20 +483,26 @@ private:
                 
                 if (isValid)
                 {
-                    Logger.debugLog("Speculation: completed " ~ key ~ 
-                                   " in " ~ elapsed.total!"msecs".to!string ~ "ms");
+                    structuredLog.debug_("speculation_completed")
+                        .field("target", key)
+                        .field("elapsed_ms", elapsed.total!"msecs")
+                        .emit();
                 }
                 else
                 {
-                    Logger.debugLog("Speculation: completed " ~ key ~ 
-                                   " but invalidated during execution");
+                    structuredLog.debug_("speculation_completed_invalid")
+                        .field("target", key)
+                        .emit();
                     atomicOp!"+="(_tasksAborted, 1);
                 }
             }
         }
         catch (Exception e)
         {
-            Logger.debugLog("Speculation: failed " ~ key ~ ": " ~ e.msg);
+            structuredLog.debug_("speculation_failed")
+                .field("target", key)
+                .field("error", e.msg)
+                .emit();
             atomicOp!"+="(_tasksAborted, 1);
         }
     }

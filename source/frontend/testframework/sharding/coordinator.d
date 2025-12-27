@@ -7,7 +7,7 @@ import std.datetime : MonoTime, Duration;
 import core.atomic;
 import core.sync.mutex : Mutex;
 import frontend.testframework.sharding.strategy;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Shard execution state
 enum ShardState
@@ -73,7 +73,7 @@ final class ShardCoordinator
             }
         }
         
-        Logger.debugLog("Initialized " ~ testShards.length.to!string ~ " shards");
+        structuredLog.debug_("initialized_").field("detail", "Initialized " ~ testShards.length.to!string ~ " shards").emit();
     }
     
     /// Claim next available shard for worker
@@ -207,8 +207,8 @@ final class ShardCoordinator
             if (candidate !is null)
             {
                 candidate.state = ShardState.Stolen;
-                Logger.debugLog("Worker " ~ thiefWorkerId.to!string ~ 
-                    " stole shard from worker " ~ candidate.workerId.to!string);
+                structuredLog.debug_("worker_").field("detail", "Worker " ~ thiefWorkerId.to!string ~ 
+                    " stole shard from worker " ~ candidate.workerId.to!string).emit();
             }
             
             return candidate;

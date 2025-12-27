@@ -16,7 +16,7 @@ import engine.caching.index : CacheIndex;
 import engine.caching.events;
 import frontend.cli.events.events : EventPublisher;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.files.directories : ensureDirectoryWithGitignore;
 import infrastructure.utils.simd.bloom : BloomFilter;
 
@@ -460,11 +460,11 @@ final class CacheCoordinator
             
             emitEvent!RemoteCacheEvent(CacheEventType.RemotePush, targetId, metadata.length, timer.peek(), pushResult.isOk);
             
-            if (pushResult.isErr) Logger.debugLog("Remote push failed: " ~ pushResult.unwrapErr().message);
+            if (pushResult.isErr) structuredLog.debug_("remote_push_failed_").field("detail", "Remote push failed: " ~ pushResult.unwrapErr().message).emit();
         }
         catch (Exception e)
         {
-            try { Logger.debugLog("Remote push exception: " ~ e.msg); } catch (Exception) {}
+            try { structuredLog.debug_("remote_push_exception_").field("detail", "Remote push exception: " ~ e.msg).emit(); } catch (Exception) {}
         }
     }
     

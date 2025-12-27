@@ -13,7 +13,7 @@ import languages.base.base;
 import engine.runtime.services;
 import frontend.cli.events.events;
 import infrastructure.telemetry.distributed.tracing : Span, SpanKind, SpanStatus;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.di : IServiceContainer;
 import infrastructure.errors;
 
@@ -59,7 +59,7 @@ final class ExecutionEngine
         if (enableDynamicGraph)
         {
             this.dynamicGraph = new DynamicBuildGraph(graph);
-            Logger.debugLog("Dynamic graph support enabled");
+            structuredLog.debug_("dynamic_graph_support_enabled").emit();
         }
         
         // Initialize lifecycle
@@ -111,9 +111,9 @@ final class ExecutionEngine
             auto stats = dynamicGraph.getDiscoveryStats();
             if (stats.targetsDiscovered > 0)
             {
-                Logger.debugLog("Dynamic Discovery Summary:");
-                Logger.debugLog("  Targets discovered: " ~ stats.targetsDiscovered.to!string);
-                Logger.debugLog("  Total discoveries: " ~ stats.totalDiscoveries.to!string);
+                structuredLog.debug_("dynamic_discovery_summary").emit();
+                structuredLog.debug_("__targets_discovered_").field("detail", "  Targets discovered: " ~ stats.targetsDiscovered.to!string).emit();
+                structuredLog.debug_("__total_discoveries_").field("detail", "  Total discoveries: " ~ stats.totalDiscoveries.to!string).emit();
             }
         }
         

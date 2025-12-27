@@ -7,7 +7,7 @@ import std.path;
 import std.algorithm;
 import std.array;
 import languages.scripting.elixir.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Documentation generator (ExDoc)
 class DocGenerator
@@ -17,11 +17,11 @@ class DocGenerator
     {
         if (!isExDocAvailable(mixCmd))
         {
-            Logger.warning("ExDoc not available (add {:ex_doc, \"~> 0.31\", only: :dev} to deps)");
+            structuredLog.warning("exdoc_not_available_add_ex_doc_").field("detail", "ExDoc not available (add {:ex_doc, \"~> 0.31\", only: :dev} to deps)").emit();
             return false;
         }
         
-        Logger.info("Generating documentation");
+        structuredLog.info("generating_documentation").emit();
         
         string[] cmd = [mixCmd, "docs"];
         
@@ -32,15 +32,15 @@ class DocGenerator
         
         if (res.status != 0)
         {
-            Logger.error("Documentation generation failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("documentation_generation_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
         string docPath = config.output.empty ? "doc" : config.output;
         if (exists(docPath))
         {
-            Logger.info("Documentation generated at: " ~ docPath);
+            structuredLog.info("documentation_generated_at_").field("detail", "Documentation generated at: " ~ docPath).emit();
         }
         
         return true;
@@ -56,14 +56,14 @@ class DocGenerator
     /// Generate documentation for Hex package
     static bool generateForHex(DocConfig config, string mixCmd = "mix")
     {
-        Logger.info("Building documentation for Hex");
+        structuredLog.info("building_documentation_for_hex").emit();
         
         auto res = execute([mixCmd, "hex.build", "docs"]);
         
         if (res.status != 0)
         {
-            Logger.error("Hex docs build failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("hex_docs_build_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         

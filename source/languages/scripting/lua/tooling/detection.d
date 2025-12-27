@@ -215,7 +215,7 @@ string getLuaRocksVersion()
     catch (Exception e)
     {
         import infrastructure.utils.logging.logger : Logger;
-        Logger.debugLog("Failed to detect Lua info: " ~ e.msg);
+        structuredLog.debug_("failed_to_detect_lua_info_").field("detail", "Failed to detect Lua info: " ~ e.msg).emit();
     }
     
     return "";

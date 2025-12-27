@@ -13,7 +13,7 @@ import frontend.testframework.caching.storage : TestCacheStorage, StorageEntry =
 import engine.caching.policies.eviction : EvictionPolicy;
 import engine.caching.incremental.dependency : DependencyCache;
 import frontend.testframework.incremental.selector : IncrementalTestSelector;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Test cache configuration
 struct TestCacheConfig
@@ -107,7 +107,7 @@ final class TestCache
             {
                 if (entryPtr.envHash != envHash)
                 {
-                    Logger.debugLog("Test cache miss: environment changed for " ~ testId);
+                    structuredLog.debug_("test_cache_miss_environment_changed_for_").field("detail", "Test cache miss: environment changed for " ~ testId).emit();
                     misses++;
                     return false;
                 }
@@ -118,7 +118,7 @@ final class TestCache
             immutable age = now - entryPtr.timestamp;
             if (age > config.maxAge)
             {
-                Logger.debugLog("Test cache miss: entry too old for " ~ testId);
+                structuredLog.debug_("test_cache_miss_entry_too_old_for_").field("detail", "Test cache miss: entry too old for " ~ testId).emit();
                 misses++;
                 return false;
             }
@@ -244,11 +244,11 @@ final class TestCache
                 
                 TestCacheStorage.save(cacheFile, storageEntries);
                 dirty = false;
-                Logger.debugLog("Flushed test cache: " ~ entries.length.to!string ~ " entries");
+                structuredLog.debug_("flushed_test_cache_").field("detail", "Flushed test cache: " ~ entries.length.to!string ~ " entries").emit();
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to flush test cache: " ~ e.msg);
+                structuredLog.warning("failed_to_flush_test_cache_").field("detail", "Failed to flush test cache: " ~ e.msg).emit();
             }
         }
     }
@@ -276,11 +276,11 @@ final class TestCache
                 entry.failCount = se.result.passed ? 0 : 1;
                 entries[key] = entry;
             }
-            Logger.debugLog("Loaded test cache: " ~ entries.length.to!string ~ " entries");
+            structuredLog.debug_("loaded_test_cache_").field("detail", "Loaded test cache: " ~ entries.length.to!string ~ " entries").emit();
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to load test cache: " ~ e.msg);
+            structuredLog.warning("failed_to_load_test_cache_").field("detail", "Failed to load test cache: " ~ e.msg).emit();
             entries.clear();
         }
     }
@@ -309,7 +309,7 @@ final class TestCache
         
         if (toEvict.length > 0)
         {
-            Logger.debugLog("Test cache evicted " ~ toEvict.length.to!string ~ " entries");
+            structuredLog.debug_("test_cache_evicted_").field("detail", "Test cache evicted " ~ toEvict.length.to!string ~ " entries").emit();
         }
     }
     

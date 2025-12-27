@@ -16,7 +16,7 @@ import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.process.checker : isCommandAvailable;
 // SECURITY: Use secure execute with automatic path validation
 import infrastructure.utils.security : execute;
@@ -38,7 +38,7 @@ class JavaScriptHandler : BaseLanguageHandler
             
             LanguageBuildResult result;
             
-            Logger.debugLog("Building JavaScript target: " ~ target.name);
+            structuredLog.debug_("building_javascript_target_").field("detail", "Building JavaScript target: " ~ target.name).emit();
             
             // Parse JavaScript configuration
             JSConfig jsConfig = parseJSConfig(target);
@@ -57,7 +57,7 @@ class JavaScriptHandler : BaseLanguageHandler
             bool hasJSX = target.sources.any!(s => s.endsWith(".jsx"));
             if (hasJSX && !jsConfig.jsx)
             {
-                Logger.debugLog("Detected JSX sources, enabling JSX support");
+                structuredLog.debug_("detected_jsx_sources_enabling_jsx_suppor").emit();
                 jsConfig.jsx = true;
             }
             
@@ -221,7 +221,7 @@ class JavaScriptHandler : BaseLanguageHandler
                 cmd = ["npm", "test"];
         }
         
-        Logger.debugLog("Running tests: " ~ cmd.join(" "));
+        structuredLog.debug_("running_tests_").field("detail", "Running tests: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         
@@ -266,7 +266,7 @@ class JavaScriptHandler : BaseLanguageHandler
             return result;
         }
         
-        Logger.debugLog("Using bundler: " ~ bundler.name() ~ " (" ~ bundler.getVersion() ~ ")");
+        structuredLog.debug_("using_bundler_").field("detail", "Using bundler: " ~ bundler.name() ~ " (" ~ bundler.getVersion() ~ ")").emit();
         
         // Prepare inputs: sources + config files
         string[] inputFiles = target.sources.dup;
@@ -342,7 +342,7 @@ class JavaScriptHandler : BaseLanguageHandler
             bool allOutputsExist = expectedOutputs.all!(o => exists(o));
             if (allOutputsExist)
             {
-                Logger.debugLog("  [Cached] JavaScript bundle: " ~ target.name);
+                structuredLog.debug_("__cached_javascript_bundle_").field("detail", "  [Cached] JavaScript bundle: " ~ target.name).emit();
                 result.success = true;
                 result.outputs = expectedOutputs;
                 result.outputHash = FastHash.hashStrings(expectedOutputs);
@@ -432,7 +432,7 @@ class JavaScriptHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to parse JavaScript config, using defaults: " ~ e.msg);
+                structuredLog.warning("failed_to_parse_javascript_config_using_").field("detail", "Failed to parse JavaScript config, using defaults: " ~ e.msg).emit();
             }
         }
         
@@ -471,7 +471,7 @@ class JavaScriptHandler : BaseLanguageHandler
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse package.json: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_packagejson_").field("detail", "Failed to parse package.json: " ~ e.msg).emit();
         }
         
         return JSBuildMode.Node;
@@ -499,7 +499,7 @@ class JavaScriptHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to analyze imports in " ~ source);
+                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source).emit();
             }
         }
         

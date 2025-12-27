@@ -8,7 +8,7 @@ import std.array;
 import std.range;
 import std.json;
 import std.conv;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.security.validation;
 
 /// Cargo.toml dependency information
@@ -131,7 +131,7 @@ class CargoParser
         
         if (!exists(manifestPath))
         {
-            Logger.warning("Cargo.toml not found: " ~ manifestPath);
+            structuredLog.warning("cargotoml_not_found_").field("detail", "Cargo.toml not found: " ~ manifestPath).emit();
             return manifest;
         }
         
@@ -140,11 +140,11 @@ class CargoParser
             auto content = readText(manifestPath);
             manifest = parseTOML(content);
             
-            Logger.debugLog("Parsed Cargo.toml: " ~ manifest.package_.name);
+            structuredLog.debug_("parsed_cargotoml_").field("detail", "Parsed Cargo.toml: " ~ manifest.package_.name).emit();
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse Cargo.toml: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_cargotoml_").field("detail", "Failed to parse Cargo.toml: " ~ e.msg).emit();
         }
         
         return manifest;
@@ -432,11 +432,11 @@ class CargoLockParser
         {
             auto content = readText(lockPath);
             // Simplified parsing - in production use proper TOML parser
-            Logger.debugLog("Parsed Cargo.lock");
+            structuredLog.debug_("parsed_cargolock").emit();
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse Cargo.lock: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_cargolock_").field("detail", "Failed to parse Cargo.lock: " ~ e.msg).emit();
         }
         
         return entries;

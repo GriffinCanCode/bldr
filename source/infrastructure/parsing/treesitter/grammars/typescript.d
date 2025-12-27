@@ -5,7 +5,7 @@ import infrastructure.parsing.treesitter.config;
 import infrastructure.parsing.treesitter.registry;
 import infrastructure.parsing.treesitter.parser;
 import infrastructure.analysis.ast.parser;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Typescript grammar loader for tree-sitter
 /// Dynamically loads grammar from system libraries if available
@@ -20,13 +20,13 @@ shared static this() @system {
         // Try to load grammar dynamically
         auto grammar = ts_load_typescript();
         if (!grammar) {
-            Logger.debugLog("Typescript grammar not available (will use file-level tracking)");
+            structuredLog.debug_("typescript_grammar_not_available_will_us").emit();
             return;
         }
         
         auto config = LanguageConfigs.get("typescript");
         if (!config) {
-            Logger.warning("Typescript config not found");
+            structuredLog.warning("typescript_config_not_found").emit();
             return;
         }
         
@@ -42,9 +42,9 @@ shared static this() @system {
         ASTParserRegistry.instance().registerParser(parser);
         
         grammarLoaded = true;
-        Logger.info("✓ Typescript tree-sitter grammar loaded");
+        structuredLog.info("_typescript_treesitter_grammar_loaded").emit();
     } catch (Exception e) {
-        Logger.debugLog("Typescript grammar not loaded: " ~ e.msg);
+        structuredLog.debug_("typescript_grammar_not_loaded_").field("detail", "Typescript grammar not loaded: " ~ e.msg).emit();
     }
 }
 

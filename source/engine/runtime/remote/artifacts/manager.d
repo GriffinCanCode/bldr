@@ -8,7 +8,7 @@ import engine.caching.distributed.remote.client : RemoteCacheClient;
 import infrastructure.utils.files.chunking : ChunkTransfer, TransferStats;
 import infrastructure.utils.memory.mmap : MmapRegion, MapMode;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Size threshold for mmap reads (>1MB uses mmap)
 private enum size_t ARTIFACT_MMAP_THRESHOLD = 1_048_576;
@@ -69,9 +69,9 @@ final class ArtifactManager
                 auto upload = chunkResult.unwrap();
                 if (upload.useChunking)
                 {
-                    Logger.debugLog("Uploaded large input using chunks: " ~ inputPath ~ 
+                    structuredLog.debug_("uploaded_large_input_using_chunks_").field("detail", "Uploaded large input using chunks: " ~ inputPath ~ 
                                   " (" ~ upload.stats.chunksTransferred.to!string ~ " chunks, " ~
-                                  upload.stats.bytesTransferred.to!string ~ " bytes)");
+                                  upload.stats.bytesTransferred.to!string ~ " bytes)").emit();
                 }
             }
             else
@@ -89,8 +89,8 @@ final class ArtifactManager
             
             inputs ~= InputSpec(artifactId, inputPath, executable);
             
-            Logger.debugLog("Uploaded input: " ~ inputPath ~ 
-                          " -> " ~ artifactHash);
+            structuredLog.debug_("uploaded_input_").field("detail", "Uploaded input: " ~ inputPath ~ 
+                          " -> " ~ artifactHash).emit();
         }
         
         return Ok!(InputSpec[], BuildError)(inputs);
@@ -146,9 +146,9 @@ final class ArtifactManager
         
         auto stats = updateResult.unwrap();
         
-        Logger.debugLog("Incremental upload: " ~ inputPath ~ 
+        structuredLog.debug_("incremental_upload_").field("detail", "Incremental upload: " ~ inputPath ~ 
                       " (saved " ~ stats.bytesSaved.to!string ~ " bytes, " ~
-                      stats.savingsPercent().to!string ~ "%)");
+                      stats.savingsPercent().to!string ~ "%)").emit();
         
         return Ok!(TransferStats, BuildError)(stats);
     }
@@ -176,13 +176,13 @@ final class ArtifactManager
             auto stats = downloadResult.unwrap();
             if (stats.totalChunks > 1)
             {
-                Logger.debugLog("Downloaded output using chunks: " ~ artifactHash ~ 
+                structuredLog.debug_("downloaded_output_using_chunks_").field("detail", "Downloaded output using chunks: " ~ artifactHash ~ 
                               " (" ~ stats.chunksTransferred.to!string ~ " chunks, " ~
-                              stats.bytesTransferred.to!string ~ " bytes)");
+                              stats.bytesTransferred.to!string ~ " bytes)").emit();
             }
             else
             {
-                Logger.debugLog("Downloaded output: " ~ artifactHash);
+                structuredLog.debug_("downloaded_output_").field("detail", "Downloaded output: " ~ artifactHash).emit();
             }
         }
         
@@ -201,7 +201,7 @@ final class ArtifactManager
                 return VoidBuildResult.err(downloadResult.unwrapErr());
             }
             
-            Logger.debugLog("Downloaded output: " ~ artifactId.toString());
+            structuredLog.debug_("downloaded_output_").field("detail", "Downloaded output: " ~ artifactId.toString()).emit();
         }
         
         return Ok!BuildError();

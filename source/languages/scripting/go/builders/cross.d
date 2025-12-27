@@ -8,7 +8,7 @@ import languages.scripting.go.builders.base;
 import languages.scripting.go.core.config;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache;
 
 /// Cross-compilation builder - handles GOOS/GOARCH compilation
@@ -27,9 +27,9 @@ class CrossBuilder : StandardBuilder
     )
     {
         if (!config.cross.goos.empty)
-            Logger.info("Cross-compiling for GOOS=" ~ config.cross.goos);
+            structuredLog.info("crosscompiling_for_goos").field("detail", "Cross-compiling for GOOS=" ~ config.cross.goos).emit();
         if (!config.cross.goarch.empty)
-            Logger.info("Cross-compiling for GOARCH=" ~ config.cross.goarch);
+            structuredLog.info("crosscompiling_for_goarch").field("detail", "Cross-compiling for GOARCH=" ~ config.cross.goarch).emit();
         
         // Validate target combination
         if (!isValidTarget(config.cross))
@@ -43,8 +43,8 @@ class CrossBuilder : StandardBuilder
         // CGO is typically disabled for cross-compilation
         if (config.cgo.enabled)
         {
-            Logger.warning("CGO is enabled for cross-compilation. " ~
-                          "This requires appropriate C cross-compiler setup.");
+            structuredLog.warning("cgo_is_enabled_for_crosscompilation_").field("detail", "CGO is enabled for cross-compilation. " ~
+                          "This requires appropriate C cross-compiler setup.").emit();
         }
         else
         {

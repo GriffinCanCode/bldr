@@ -6,7 +6,7 @@ import std.file : exists, isFile, readText;
 import std.path : baseName, buildPath, dirName, extension;
 import std.regex : matchAll, matchFirst, regex;
 import std.string : strip, toLower;
-import infrastructure.utils.logging.logger : Logger;
+import infrastructure.utils.logging : Logger, structuredLog;
 
 /// C++20 module information extracted from source
 struct ModuleInfo
@@ -71,7 +71,7 @@ ModuleInfo analyzeModuleSource(string sourcePath) @system
     }
     catch (Exception e)
     {
-        Logger.warning("Failed to analyze module source " ~ sourcePath ~ ": " ~ e.msg);
+        structuredLog.warning("failed_to_analyze_module_source_").field("detail", "Failed to analyze module source " ~ sourcePath ~ ": " ~ e.msg).emit();
     }
     
     return info;
@@ -192,7 +192,7 @@ string[] sortModulesByDependency(ModuleInfo[] modules) @system
         if (name in visited) return;
         if (name in inStack)
         {
-            Logger.warning("Circular module dependency detected: " ~ name);
+            structuredLog.warning("circular_module_dependency_detected_").field("detail", "Circular module dependency detected: " ~ name).emit();
             return;
         }
         

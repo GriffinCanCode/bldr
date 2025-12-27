@@ -8,7 +8,7 @@ import std.file;
 import std.path;
 import core.sync.mutex;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// File-level dependency relationship
@@ -98,8 +98,10 @@ final class DependencyCache
             this.dependencies[buildNormalizedPath(sourceFile)] = dep;
             dirty = true;
             
-            Logger.debugLog("Recorded " ~ dependencies.length.to!string ~ 
-                          " dependencies for " ~ sourceFile);
+            structuredLog.debug_("dependencies_recorded")
+                .field("count", dependencies.length)
+                .field("file", sourceFile)
+                .emit();
         }
     }
     
@@ -203,7 +205,7 @@ final class DependencyCache
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to flush dependency cache: " ~ e.msg);
+                structuredLog.warning("dependency_cache_flush_failed").field("error", e.msg).emit();
             }
         }
     }
@@ -255,13 +257,12 @@ final class DependencyCache
                     dependencies[key] = dep;
                 }
                 
-                Logger.debugLog("Loaded " ~ dependencies.length.to!string ~ 
-                              " dependency entries from cache");
+                structuredLog.debug_("dependency_cache_loaded").field("entries", dependencies.length).emit();
             }
         }
         catch (Exception e)
         {
-            Logger.debugLog("Failed to load dependency cache: " ~ e.msg);
+            structuredLog.debug_("dependency_cache_load_failed").field("error", e.msg).emit();
         }
     }
     
@@ -275,13 +276,13 @@ final class DependencyCache
         auto result = storage.save(entries);
         if (result.isErr)
         {
-            Logger.warning("Failed to save dependency cache: " ~ 
-                         result.unwrapErr().message());
+            structuredLog.warning("dependency_cache_save_failed")
+                .field("error", result.unwrapErr().message())
+                .emit();
         }
         else
         {
-            Logger.debugLog("Saved " ~ entries.length.to!string ~ 
-                          " dependency entries to cache");
+            structuredLog.debug_("dependency_cache_saved").field("entries", entries.length).emit();
         }
     }
     

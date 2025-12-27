@@ -10,14 +10,14 @@ import std.json;
 import std.regex;
 import std.conv;
 import languages.scripting.r.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Parse dependencies from DESCRIPTION file
 RPackageDep[] parseDESCRIPTION(string descPath)
 {
     if (!exists(descPath))
     {
-        Logger.warning("DESCRIPTION file not found: " ~ descPath);
+        structuredLog.warning("description_file_not_found_").field("detail", "DESCRIPTION file not found: " ~ descPath).emit();
         return [];
     }
     
@@ -30,7 +30,7 @@ RPackageDep[] parseDESCRIPTION(string descPath)
     deps ~= parseDependencySection(content, "Suggests", RRepository.CRAN);
     deps ~= parseDependencySection(content, "LinkingTo", RRepository.CRAN);
     
-    Logger.debugLog("Parsed " ~ deps.length.to!string ~ " dependencies from DESCRIPTION");
+    structuredLog.debug_("parsed_").field("detail", "Parsed " ~ deps.length.to!string ~ " dependencies from DESCRIPTION").emit();
     return deps;
 }
 
@@ -98,7 +98,7 @@ RPackageDep[] parseRenvLock(string lockPath)
 {
     if (!exists(lockPath))
     {
-        Logger.warning("renv.lock file not found: " ~ lockPath);
+        structuredLog.warning("renvlock_file_not_found_").field("detail", "renv.lock file not found: " ~ lockPath).emit();
         return [];
     }
     
@@ -154,11 +154,11 @@ RPackageDep[] parseRenvLock(string lockPath)
             }
         }
         
-        Logger.debugLog("Parsed " ~ deps.length.to!string ~ " dependencies from renv.lock");
+        structuredLog.debug_("parsed_").field("detail", "Parsed " ~ deps.length.to!string ~ " dependencies from renv.lock").emit();
     }
     catch (Exception e)
     {
-        Logger.error("Failed to parse renv.lock: " ~ e.msg);
+        structuredLog.error("failed_to_parse_renvlock_").field("detail", "Failed to parse renv.lock: " ~ e.msg).emit();
     }
     
     return deps;
@@ -169,7 +169,7 @@ RPackageDep[] parsePackratLock(string lockPath)
 {
     if (!exists(lockPath))
     {
-        Logger.warning("packrat.lock file not found: " ~ lockPath);
+        structuredLog.warning("packratlock_file_not_found_").field("detail", "packrat.lock file not found: " ~ lockPath).emit();
         return [];
     }
     
@@ -236,11 +236,11 @@ RPackageDep[] parsePackratLock(string lockPath)
             }
         }
         
-        Logger.debugLog("Parsed " ~ deps.length.to!string ~ " dependencies from packrat.lock");
+        structuredLog.debug_("parsed_").field("detail", "Parsed " ~ deps.length.to!string ~ " dependencies from packrat.lock").emit();
     }
     catch (Exception e)
     {
-        Logger.error("Failed to parse packrat.lock: " ~ e.msg);
+        structuredLog.error("failed_to_parse_packratlock_").field("detail", "Failed to parse packrat.lock: " ~ e.msg).emit();
     }
     
     return deps;
@@ -249,13 +249,13 @@ RPackageDep[] parsePackratLock(string lockPath)
 /// Detect and parse dependencies from project
 RPackageDep[] detectDependencies(string projectDir)
 {
-    Logger.debugLog("Detecting dependencies in: " ~ projectDir);
+    structuredLog.debug_("detecting_dependencies_in_").field("detail", "Detecting dependencies in: " ~ projectDir).emit();
     
     // Try renv.lock first (most specific)
     string renvLock = buildPath(projectDir, "renv.lock");
     if (exists(renvLock))
     {
-        Logger.debugLog("Found renv.lock, parsing...");
+        structuredLog.debug_("found_renvlock_parsing").emit();
         return parseRenvLock(renvLock);
     }
     
@@ -263,7 +263,7 @@ RPackageDep[] detectDependencies(string projectDir)
     string packratLock = buildPath(projectDir, "packrat", "packrat.lock");
     if (exists(packratLock))
     {
-        Logger.debugLog("Found packrat.lock, parsing...");
+        structuredLog.debug_("found_packratlock_parsing").emit();
         return parsePackratLock(packratLock);
     }
     
@@ -271,12 +271,12 @@ RPackageDep[] detectDependencies(string projectDir)
     string descPath = buildPath(projectDir, "DESCRIPTION");
     if (exists(descPath))
     {
-        Logger.debugLog("Found DESCRIPTION, parsing...");
+        structuredLog.debug_("found_description_parsing").emit();
         return parseDESCRIPTION(descPath);
     }
     
     // Scan R files for library() calls
-    Logger.debugLog("No lock files or DESCRIPTION found, scanning R files...");
+    structuredLog.debug_("no_lock_files_or_description_found_scann").emit();
     return scanRFilesForDependencies(projectDir);
 }
 
@@ -308,11 +308,11 @@ RPackageDep[] scanRFilesForDependencies(string projectDir)
     }
     catch (Exception e)
     {
-        Logger.warning("Error scanning R files: " ~ e.msg);
+        structuredLog.warning("error_scanning_r_files_").field("detail", "Error scanning R files: " ~ e.msg).emit();
     }
     
     auto deps = depsMap.values;
-    Logger.debugLog("Scanned R files, found " ~ deps.length.to!string ~ " unique dependencies");
+    structuredLog.debug_("scanned_r_files_found_").field("detail", "Scanned R files, found " ~ deps.length.to!string ~ " unique dependencies").emit();
     return deps;
 }
 
@@ -339,7 +339,7 @@ RPackageDep[] scanRFile(string filePath)
     }
     catch (Exception e)
     {
-        Logger.warning("Error scanning file " ~ filePath ~ ": " ~ e.msg);
+        structuredLog.warning("error_scanning_file_").field("detail", "Error scanning file " ~ filePath ~ ": " ~ e.msg).emit();
     }
     
     return deps;
@@ -407,7 +407,7 @@ string getMinimumRVersion(string descPath)
     }
     catch (Exception e)
     {
-        Logger.warning("Error parsing R version from DESCRIPTION: " ~ e.msg);
+        structuredLog.warning("error_parsing_r_version_from_description").field("detail", "Error parsing R version from DESCRIPTION: " ~ e.msg).emit();
     }
     
     return "";
@@ -434,7 +434,7 @@ string getPackageVersion(string descPath)
     }
     catch (Exception e)
     {
-        Logger.warning("Error parsing package version from DESCRIPTION: " ~ e.msg);
+        structuredLog.warning("error_parsing_package_version_from_descr").field("detail", "Error parsing package version from DESCRIPTION: " ~ e.msg).emit();
     }
     
     return "";
@@ -461,7 +461,7 @@ string getPackageName(string descPath)
     }
     catch (Exception e)
     {
-        Logger.warning("Error parsing package name from DESCRIPTION: " ~ e.msg);
+        structuredLog.warning("error_parsing_package_name_from_descript").field("detail", "Error parsing package name from DESCRIPTION: " ~ e.msg).emit();
     }
     
     return "";
@@ -531,11 +531,11 @@ PackageMetadata getPackageMetadata(string descPath)
         metadata.suggests = parseDependencySection(content, "Suggests", RRepository.CRAN);
         metadata.linkingTo = parseDependencySection(content, "LinkingTo", RRepository.CRAN);
         
-        Logger.debugLog("Parsed package metadata: " ~ metadata.name ~ " " ~ metadata.version_);
+        structuredLog.debug_("parsed_package_metadata_").field("detail", "Parsed package metadata: " ~ metadata.name ~ " " ~ metadata.version_).emit();
     }
     catch (Exception e)
     {
-        Logger.error("Failed to parse DESCRIPTION metadata: " ~ e.msg);
+        structuredLog.error("failed_to_parse_description_metadata_").field("detail", "Failed to parse DESCRIPTION metadata: " ~ e.msg).emit();
     }
     
     return metadata;
@@ -591,7 +591,7 @@ void generateDESCRIPTION(string outputPath, const ref RPackageConfig config)
     }
     
     std.file.write(outputPath, desc);
-    Logger.info("Generated DESCRIPTION file at: " ~ outputPath);
+    structuredLog.info("generated_description_file_at_").field("detail", "Generated DESCRIPTION file at: " ~ outputPath).emit();
 }
 
 /// Format dependency list for DESCRIPTION file

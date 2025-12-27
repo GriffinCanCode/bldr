@@ -11,7 +11,7 @@ import std.json;
 import std.conv;
 import languages.scripting.r.core.config;
 import languages.scripting.r.tooling.info;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Environment management result
 struct EnvResult
@@ -39,7 +39,7 @@ EnvResult initializeEnvironment(
         return EnvResult(true, "", "");
     }
     
-    Logger.info("Initializing R environment with " ~ manager.to!string);
+    structuredLog.info("initializing_r_environment_with_").field("detail", "Initializing R environment with " ~ manager.to!string).emit();
     
     final switch (manager)
     {
@@ -66,7 +66,7 @@ private EnvResult initRenv(string workDir, string rCmd, const ref RConfig config
     // Check if already initialized
     if (exists(renvDir) && isDir(renvDir))
     {
-        Logger.debugLog("renv environment already exists at: " ~ renvDir);
+        structuredLog.debug_("renv_environment_already_exists_at_").field("detail", "renv environment already exists at: " ~ renvDir).emit();
         return EnvResult(true, "", renvDir);
     }
     
@@ -81,7 +81,7 @@ private EnvResult initRenv(string workDir, string rCmd, const ref RConfig config
         return EnvResult(false, "Failed to initialize renv: " ~ res.output, "");
     }
     
-    Logger.info("Created renv environment at: " ~ renvDir);
+    structuredLog.info("created_renv_environment_at_").field("detail", "Created renv environment at: " ~ renvDir).emit();
     return EnvResult(true, "", renvDir);
 }
 
@@ -93,7 +93,7 @@ private EnvResult initPackrat(string workDir, string rCmd, const ref RConfig con
     // Check if already initialized
     if (exists(packratDir) && isDir(packratDir))
     {
-        Logger.debugLog("packrat environment already exists at: " ~ packratDir);
+        structuredLog.debug_("packrat_environment_already_exists_at_").field("detail", "packrat environment already exists at: " ~ packratDir).emit();
         return EnvResult(true, "", packratDir);
     }
     
@@ -108,7 +108,7 @@ private EnvResult initPackrat(string workDir, string rCmd, const ref RConfig con
         return EnvResult(false, "Failed to initialize packrat: " ~ res.output, "");
     }
     
-    Logger.info("Created packrat environment at: " ~ packratDir);
+    structuredLog.info("created_packrat_environment_at_").field("detail", "Created packrat environment at: " ~ packratDir).emit();
     return EnvResult(true, "", packratDir);
 }
 
@@ -130,7 +130,7 @@ EnvResult restoreEnvironment(
         return EnvResult(true, "", "");
     }
     
-    Logger.info("Restoring R environment from lockfile");
+    structuredLog.info("restoring_r_environment_from_lockfile").emit();
     
     final switch (manager)
     {
@@ -168,7 +168,7 @@ private EnvResult restoreRenv(string workDir, string rCmd, const ref RConfig con
         return EnvResult(false, "Failed to restore renv: " ~ res.output, "");
     }
     
-    Logger.info("Restored renv environment from renv.lock");
+    structuredLog.info("restored_renv_environment_from_renvlock").emit();
     return EnvResult(true, "", buildPath(workDir, "renv"));
 }
 
@@ -192,7 +192,7 @@ private EnvResult restorePackrat(string workDir, string rCmd, const ref RConfig 
         return EnvResult(false, "Failed to restore packrat: " ~ res.output, "");
     }
     
-    Logger.info("Restored packrat environment from packrat.lock");
+    structuredLog.info("restored_packrat_environment_from_packra").emit();
     return EnvResult(true, "", buildPath(workDir, "packrat"));
 }
 
@@ -214,7 +214,7 @@ EnvResult snapshotEnvironment(
         return EnvResult(true, "", "");
     }
     
-    Logger.info("Creating environment snapshot");
+    structuredLog.info("creating_environment_snapshot").emit();
     
     final switch (manager)
     {
@@ -246,7 +246,7 @@ private EnvResult snapshotRenv(string workDir, string rCmd, const ref RConfig co
     }
     
     string lockPath = buildPath(workDir, "renv.lock");
-    Logger.info("Created renv snapshot: " ~ lockPath);
+    structuredLog.info("created_renv_snapshot_").field("detail", "Created renv snapshot: " ~ lockPath).emit();
     return EnvResult(true, "", lockPath);
 }
 
@@ -264,7 +264,7 @@ private EnvResult snapshotPackrat(string workDir, string rCmd, const ref RConfig
     }
     
     string lockPath = buildPath(workDir, "packrat", "packrat.lock");
-    Logger.info("Created packrat snapshot: " ~ lockPath);
+    structuredLog.info("created_packrat_snapshot_").field("detail", "Created packrat snapshot: " ~ lockPath).emit();
     return EnvResult(true, "", lockPath);
 }
 
@@ -286,7 +286,7 @@ EnvResult cleanEnvironment(
         return EnvResult(true, "", "");
     }
     
-    Logger.info("Cleaning R environment");
+    structuredLog.info("cleaning_r_environment").emit();
     
     final switch (manager)
     {
@@ -317,7 +317,7 @@ private EnvResult cleanRenv(string workDir, string rCmd, const ref RConfig confi
         return EnvResult(false, "Failed to clean renv: " ~ res.output, "");
     }
     
-    Logger.info("Cleaned renv environment");
+    structuredLog.info("cleaned_renv_environment").emit();
     return EnvResult(true, "", "");
 }
 
@@ -334,7 +334,7 @@ private EnvResult cleanPackrat(string workDir, string rCmd, const ref RConfig co
         return EnvResult(false, "Failed to clean packrat: " ~ res.output, "");
     }
     
-    Logger.info("Cleaned packrat environment");
+    structuredLog.info("cleaned_packrat_environment").emit();
     return EnvResult(true, "", "");
 }
 
@@ -529,7 +529,7 @@ EnvResult updateEnvironment(
         return EnvResult(true, "", "");
     }
     
-    Logger.info("Updating R environment packages");
+    structuredLog.info("updating_r_environment_packages").emit();
     
     final switch (manager)
     {
@@ -546,7 +546,7 @@ EnvResult updateEnvironment(
                 return EnvResult(false, "Failed to update renv: " ~ res.output, "");
             }
             
-            Logger.info("Updated renv environment");
+            structuredLog.info("updated_renv_environment").emit();
             return EnvResult(true, "", buildPath(workDir, "renv"));
             
         case REnvManager.Packrat:

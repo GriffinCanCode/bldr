@@ -14,7 +14,7 @@ import std.string;
 import std.json;
 import core.time : MonoTime;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.workers.integration : TypeScriptWorkerIntegration, TSWorkerCompileOptions, shouldUsePersistentWorker;
 
 /// SWC - ultra-fast Rust-based TypeScript compiler
@@ -41,7 +41,7 @@ class SWCBundler : TSBundler
             auto checkResult = TypeChecker.check(sources, config, workspace.root);
             if (!checkResult.success)
             {
-                Logger.warning("Type checking failed, but continuing with SWC compilation");
+                structuredLog.warning("type_checking_failed_but_continuing_with").emit();
                 result.hadTypeErrors = true;
                 result.typeErrors = checkResult.errors;
             }
@@ -72,9 +72,9 @@ class SWCBundler : TSBundler
                 auto r = workerResult.unwrap();
                 if (r.success)
                 {
-                    Logger.info("  [Warm SWC worker] Compiled " ~ sources.length.to!string ~ 
+                    structuredLog.info("__warm_swc_worker_compiled_").field("detail", "  [Warm SWC worker] Compiled " ~ sources.length.to!string ~ 
                                " files in " ~ r.executionTimeMs.to!string ~ "ms" ~
-                               " (speedup: " ~ r.estimatedSpeedup().to!string ~ "x)");
+                               " (speedup: " ~ r.estimatedSpeedup().to!string ~ "x)").emit();
                     
                     result.success = true;
                     result.outputs = collectOutputs(sources, outputDir);
@@ -88,7 +88,7 @@ class SWCBundler : TSBundler
                 result.error = r.output;
                 return result;
             }
-            Logger.debugLog("SWC persistent worker unavailable, using direct compilation");
+            structuredLog.debug_("swc_persistent_worker_unavailable_using_").emit();
         }
         
         // Fallback: Direct compilation
@@ -197,15 +197,15 @@ class SWCBundler : TSBundler
             cmd ~= config.inlineSourceMap ? "inline" : "true";
         }
         
-        Logger.debugLog("Compiling with SWC: " ~ cmd.join(" "));
+        structuredLog.debug_("compiling_with_swc_").field("detail", "Compiling with SWC: " ~ cmd.join(" ")).emit();
         
         // Execute swc
         auto res = execute(cmd, null, Config.none, size_t.max, workspaceRoot);
         
         if (res.status != 0)
         {
-            Logger.error("SWC compilation failed for " ~ source);
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("swc_compilation_failed_for_").field("detail", "SWC compilation failed for " ~ source).emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return "";
         }
         
@@ -293,7 +293,7 @@ class SWCBundler : TSBundler
     {
         if (!TypeChecker.isTSCAvailable())
         {
-            Logger.warning("tsc not available, cannot generate declaration files");
+            structuredLog.warning("tsc_not_available_cannot_generate_declar").emit();
             return [];
         }
         
@@ -310,13 +310,13 @@ class SWCBundler : TSBundler
         
         cmd ~= sources;
         
-        Logger.debugLog("Generating declarations with tsc: " ~ cmd.join(" "));
+        structuredLog.debug_("generating_declarations_with_tsc_").field("detail", "Generating declarations with tsc: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, workspaceRoot);
         
         if (res.status != 0)
         {
-            Logger.warning("Failed to generate declaration files: " ~ res.output);
+            structuredLog.warning("failed_to_generate_declaration_files_").field("detail", "Failed to generate declaration files: " ~ res.output).emit();
             return [];
         }
         

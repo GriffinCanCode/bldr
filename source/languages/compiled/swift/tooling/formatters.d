@@ -7,7 +7,7 @@ import std.path;
 import std.algorithm;
 import std.array;
 import std.string;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// SwiftFormat runner
 class SwiftFormatRunner
@@ -53,7 +53,7 @@ class SwiftFormatRunner
         // Add files/directories
         cmd ~= files;
         
-        Logger.debugLog("Running: " ~ cmd.join(" "));
+        structuredLog.debug_("running_").field("detail", "Running: " ~ cmd.join(" ")).emit();
         
         return execute(cmd);
     }
@@ -105,7 +105,7 @@ class AppleSwiftFormatRunner
         // Add files
         cmd ~= files;
         
-        Logger.debugLog("Running: " ~ cmd.join(" "));
+        structuredLog.debug_("running_").field("detail", "Running: " ~ cmd.join(" ")).emit();
         
         return execute(cmd);
     }

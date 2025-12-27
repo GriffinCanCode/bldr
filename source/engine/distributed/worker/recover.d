@@ -9,7 +9,7 @@ import engine.distributed.protocol.protocol;
 import engine.distributed.worker.peers;
 import engine.runtime.recovery.retry;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Worker-side failure recovery
 /// Integrates distributed failures with local retry orchestrator
@@ -68,7 +68,7 @@ final class WorkerRecovery
         {
             if (auto entry = peer in blacklist)
             {
-                if (entry.shouldRetry(Clock.currTime)) { blacklist.remove(peer); Logger.info("Peer removed from blacklist: " ~ peer.toString()); return false; }
+                if (entry.shouldRetry(Clock.currTime)) { blacklist.remove(peer); structuredLog.info("peer_removed_from_blacklist_").field("detail", "Peer removed from blacklist: " ~ peer.toString()).emit(); return false; }
                 return true;
             }
             return false;
@@ -184,15 +184,15 @@ final class WorkerRecovery
         immutable category = error.category();
         immutable recoverable = error.recoverable();
         
-        Logger.warning("Action failed: " ~ error.message() ~ 
+        structuredLog.warning("action_failed_").field("detail", "Action failed: " ~ error.message() ~ 
                       " (category: " ~ category.to!string ~ 
-                      ", recoverable: " ~ recoverable.to!string ~ ")");
+                      ", recoverable: " ~ recoverable.to!string ~ ")").emit();
         
         // If network-related, may need to blacklist peers
         if (category == ErrorCategory.System && !recoverable)
         {
             // This might indicate a more serious distributed system issue
-            Logger.error("Non-recoverable system error: " ~ error.message());
+            structuredLog.error("nonrecoverable_system_error_").field("detail", "Non-recoverable system error: " ~ error.message()).emit();
         }
     }
     
@@ -217,9 +217,9 @@ final class WorkerRecovery
                 );
                 entry.nextRetryTime = Clock.currTime + seconds(backoffSeconds);
                 
-                Logger.warning("Peer blacklist extended: " ~ peer.toString() ~ 
+                structuredLog.warning("peer_blacklist_extended_").field("detail", "Peer blacklist extended: " ~ peer.toString() ~ 
                              " (failures: " ~ entry.failureCount.to!string ~
-                             ", next retry: " ~ backoffSeconds.to!string ~ "s)");
+                             ", next retry: " ~ backoffSeconds.to!string ~ "s)").emit();
             }
             else
             {
@@ -231,7 +231,7 @@ final class WorkerRecovery
                     1
                 );
                 
-                Logger.info("Peer blacklisted: " ~ peer.toString() ~ " (reason: " ~ error.message() ~ ")");
+                structuredLog.info("peer_blacklisted_").field("detail", "Peer blacklisted: " ~ peer.toString() ~ " (reason: " ~ error.message() ~ ")").emit();
             }
             
             // Update connection health
@@ -257,8 +257,8 @@ final class WorkerRecovery
                 else
                 {
                     updateConnectionHealth(peer, ConnectionState.Degraded);
-                    Logger.warning("Peer connection degraded: " ~ peer.toString() ~ 
-                                 " (timeouts: " ~ health.timeouts.to!string ~ ")");
+                    structuredLog.warning("peer_connection_degraded_").field("detail", "Peer connection degraded: " ~ peer.toString() ~ 
+                                 " (timeouts: " ~ health.timeouts.to!string ~ ")").emit();
                 }
             }
             else

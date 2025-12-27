@@ -11,7 +11,7 @@ import std.algorithm;
 import std.array;
 import std.regex;
 import std.conv;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// PHPStan static analyzer
 class PHPStanAnalyzer : Analyzer
@@ -73,12 +73,12 @@ class PHPStanAnalyzer : Analyzer
             string[] baselineCmd = cmd.dup;
             baselineCmd ~= ["--generate-baseline", config.baseline];
             
-            Logger.info("Generating PHPStan baseline: " ~ config.baseline);
+            structuredLog.info("generating_phpstan_baseline_").field("detail", "Generating PHPStan baseline: " ~ config.baseline).emit();
             auto baselineRes = execute(baselineCmd, null, Config.none, size_t.max, projectRoot);
             
             if (baselineRes.status == 0)
             {
-                Logger.info("Baseline generated successfully");
+                structuredLog.info("baseline_generated_successfully").emit();
                 cmd ~= ["--baseline", config.baseline];
             }
         }
@@ -89,7 +89,7 @@ class PHPStanAnalyzer : Analyzer
         else
             cmd ~= sources;
         
-        Logger.info("Running PHPStan: " ~ cmd.join(" "));
+        structuredLog.info("running_phpstan_").field("detail", "Running PHPStan: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, projectRoot);
         result.output = res.output;
@@ -102,7 +102,7 @@ class PHPStanAnalyzer : Analyzer
         if (res.status == 0)
         {
             result.success = true;
-            Logger.info("PHPStan analysis passed with no errors");
+            structuredLog.info("phpstan_analysis_passed_with_no_errors").emit();
         }
         else if (res.status == 1)
         {

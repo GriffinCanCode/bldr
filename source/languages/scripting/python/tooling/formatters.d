@@ -8,7 +8,7 @@ import std.string;
 import languages.scripting.python.core.config;
 import languages.scripting.python.tooling.results;
 import languages.scripting.python.tooling.detection;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Code formatter utilities
 class PyFormatters
@@ -30,7 +30,7 @@ class PyFormatters
             cmd ~= "--check";
         cmd ~= sources;
         
-        Logger.debugLog("Running ruff format: " ~ cmd.join(" "));
+        structuredLog.debug_("running_ruff_format_").field("detail", "Running ruff format: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         result.output = res.output;
@@ -75,7 +75,7 @@ class PyFormatters
             cmd ~= "--check";
         cmd ~= sources;
         
-        Logger.debugLog("Running black: " ~ cmd.join(" "));
+        structuredLog.debug_("running_black_").field("detail", "Running black: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         result.output = res.output;
@@ -144,20 +144,20 @@ class Formatter
         
         if (ToolDetection.isRuffAvailable())
         {
-            Logger.debugLog("Using ruff for formatting");
+            structuredLog.debug_("using_ruff_for_formatting").emit();
             return formatRuff(sources, check);
         }
         
         if (ToolDetection.isBlackAvailable(pythonCmd))
         {
-            Logger.debugLog("Using black for formatting");
+            structuredLog.debug_("using_black_for_formatting").emit();
             return formatBlack(sources, pythonCmd, check);
         }
         
         // No formatter available
         FormatResult result;
         result.success = true;
-        Logger.info("No formatter available (install ruff or black)");
+        structuredLog.info("no_formatter_available_install_ruff_or_b").emit();
         
         return result;
     }
@@ -183,11 +183,11 @@ class Formatter
         if (!check && result.success)
         {
             result.formattedFiles = sources.dup;
-            Logger.info("Code formatted with ruff");
+            structuredLog.info("code_formatted_with_ruff").emit();
         }
         else if (check && !result.hadChanges)
         {
-            Logger.info("Code formatting check passed (ruff)");
+            structuredLog.info("code_formatting_check_passed_ruff").emit();
         }
         
         return result;
@@ -214,11 +214,11 @@ class Formatter
         if (!check && result.success)
         {
             result.formattedFiles = sources.dup;
-            Logger.info("Code formatted with black");
+            structuredLog.info("code_formatted_with_black").emit();
         }
         else if (check && !result.hadChanges)
         {
-            Logger.info("Code formatting check passed (black)");
+            structuredLog.info("code_formatting_check_passed_black").emit();
         }
         
         return result;
@@ -234,7 +234,7 @@ class Formatter
             cmd ~= "--check";
         cmd ~= sources;
         
-        Logger.info("Formatting with blue");
+        structuredLog.info("formatting_with_blue").emit();
         
         auto res = execute(cmd);
         
@@ -260,7 +260,7 @@ class Formatter
             cmd ~= "--diff";
         cmd ~= sources;
         
-        Logger.info("Formatting with yapf");
+        structuredLog.info("formatting_with_yapf").emit();
         
         auto res = execute(cmd);
         
@@ -287,7 +287,7 @@ class Formatter
             cmd ~= "--diff";
         cmd ~= sources;
         
-        Logger.info("Formatting with autopep8");
+        structuredLog.info("formatting_with_autopep8").emit();
         
         auto res = execute(cmd);
         

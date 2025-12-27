@@ -11,7 +11,7 @@ import languages.base.base;
 import engine.runtime.services;
 import frontend.cli.events.events;
 import infrastructure.telemetry.distributed.tracing : Span, SpanKind, SpanStatus;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.di : IServiceContainer;
 import infrastructure.errors;
 import engine.runtime.hermetic.determinism;
@@ -128,7 +128,7 @@ struct EngineExecutor
                 cache.recordAction(actionId, inputs, outputs, metadata, success);
             };
             buildContext.depRecorder = (sourceFile, dependencies) {
-                Logger.debugLog("Dependencies recorded for " ~ sourceFile);
+                structuredLog.debug_("dependencies_recorded_for_").field("detail", "Dependencies recorded for " ~ sourceFile).emit();
             };
             
             // Execute with retry logic
@@ -212,7 +212,7 @@ struct EngineExecutor
         try
         {
             auto cfg = buildContext.services.config;
-            Logger.info("Performing automatic determinism verification for " ~ target.name);
+            structuredLog.info("performing_automatic_determinism_verific").field("detail", "Performing automatic determinism verification for " ~ target.name).emit();
             observability.logInfo("Starting automatic determinism verification", [
                 "target.name": target.name,
                 "iterations": cfg.options.determinism.verifyIterations.to!string
@@ -246,8 +246,8 @@ struct EngineExecutor
             auto integrationResult = DeterminismIntegration.create(verifyConfig);
             if (integrationResult.isErr)
             {
-                Logger.warning("Failed to create determinism integration: " ~ 
-                             integrationResult.unwrapErr().message());
+                structuredLog.warning("failed_to_create_determinism_integration").field("detail", "Failed to create determinism integration: " ~ 
+                             integrationResult.unwrapErr().message()).emit();
                 observability.logInfo("Determinism verification skipped", [
                     "reason": "integration_failed"
                 ]);
@@ -267,7 +267,7 @@ struct EngineExecutor
             
             if (detections.length > 0)
             {
-                Logger.warning("Potential non-determinism detected in " ~ target.name);
+                structuredLog.warning("potential_nondeterminism_detected_in_").field("detail", "Potential non-determinism detected in " ~ target.name).emit();
                 observability.logInfo("Non-determinism potential detected", [
                     "target.name": target.name,
                     "detection_count": detections.length.to!string
@@ -279,9 +279,9 @@ struct EngineExecutor
                 {
                     if (suggestion.priority <= 2) // Critical and high priority only
                     {
-                        Logger.warning("  " ~ suggestion.title ~ ": " ~ suggestion.description);
+                        structuredLog.warning("__").field("detail", "  " ~ suggestion.title ~ ": " ~ suggestion.description).emit();
                         if (suggestion.compilerFlags.length > 0)
-                            Logger.info("    Suggested flag: " ~ suggestion.compilerFlags[0]);
+                            structuredLog.info("____suggested_flag_").field("detail", "    Suggested flag: " ~ suggestion.compilerFlags[0]).emit();
                     }
                 }
                 
@@ -291,15 +291,15 @@ struct EngineExecutor
                 // Fail build if strict mode
                 if (cfg.options.determinism.strictMode)
                 {
-                    Logger.error("Build failed due to potential non-determinism (strict mode)");
-                    Logger.info("Run 'bldr verify " ~ target.name ~ "' for full verification");
+                    structuredLog.error("build_failed_due_to_potential_nondetermi").emit();
+                    structuredLog.info("run_bldr_verify_").field("detail", "Run 'bldr verify " ~ target.name ~ "' for full verification").emit();
                     observability.setSpanStatus(verifySpan, SpanStatus.Error, 
                         "Non-determinism detected in strict mode");
                 }
             }
             else
             {
-                Logger.info("No obvious non-determinism detected in " ~ target.name);
+                structuredLog.info("no_obvious_nondeterminism_detected_in_").field("detail", "No obvious non-determinism detected in " ~ target.name).emit();
                 observability.logInfo("Determinism check passed", [
                     "target.name": target.name
                 ]);
@@ -307,11 +307,11 @@ struct EngineExecutor
                 observability.setSpanAttribute(verifySpan, "determinism.verified", "true");
             }
             
-            Logger.info("For full verification, run: bldr verify " ~ target.name);
+            structuredLog.info("for_full_verification_run_bldr_verify_").field("detail", "For full verification, run: bldr verify " ~ target.name).emit();
         }
         catch (Exception e)
         {
-            Logger.warning("Determinism verification failed: " ~ e.msg);
+            structuredLog.warning("determinism_verification_failed_").field("detail", "Determinism verification failed: " ~ e.msg).emit();
             observability.logException(e, "Determinism verification error");
             observability.setSpanStatus(verifySpan, SpanStatus.Error, e.msg);
         }

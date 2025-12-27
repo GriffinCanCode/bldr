@@ -14,7 +14,7 @@ import frontend.cli.control.terminal;
 import frontend.cli.display.format;
 import infrastructure.migration;
 import infrastructure.migration.core.common;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Interactive Migration Wizard for converting build configurations
 /// Provides guided conversion with explanations, edge case handling, and validation
@@ -56,9 +56,9 @@ struct MigrationWizard
         {
             if (!isatty(STDIN_FILENO))
             {
-                Logger.error("Migration wizard requires interactive terminal.");
-                Logger.info("Use non-interactive mode instead: bldr migrate --auto <file>");
-                Logger.info("Or specify build system: bldr migrate --no-wizard --from=<system> <file>");
+                structuredLog.error("migration_wizard_requires_interactive_te").emit();
+                structuredLog.info("use_noninteractive_mode_instead_bldr_mig").emit();
+                structuredLog.info("or_specify_build_system_bldr_migrate_now").emit();
                 return 1;
             }
         }

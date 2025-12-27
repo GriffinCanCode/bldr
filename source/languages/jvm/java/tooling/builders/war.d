@@ -13,7 +13,7 @@ import languages.jvm.java.core.config;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.security.validation;
 import engine.caching.actions.action : ActionCache;
 
@@ -44,7 +44,7 @@ class WARBuilder : JARBuilder
     {
         JavaBuildResult result;
         
-        Logger.debugLog("Building WAR: " ~ target.name);
+        structuredLog.debug_("building_war_").field("detail", "Building WAR: " ~ target.name).emit();
         
         // Determine output path
         string outputPath = getOutputPath(target, workspace, config);
@@ -136,7 +136,7 @@ class WARBuilder : JARBuilder
         {
             if (exists(webDir) && isDir(webDir))
             {
-                Logger.info("Copying web resources from: " ~ webDir);
+                structuredLog.info("copying_web_resources_from_").field("detail", "Copying web resources from: " ~ webDir).emit();
                 copyRecursive(webDir, warDir);
                 break;
             }
@@ -199,7 +199,7 @@ class WARBuilder : JARBuilder
     
     private bool createWAR(string warDir, string outputPath, ref JavaBuildResult result)
     {
-        Logger.info("Creating WAR: " ~ outputPath);
+        structuredLog.info("creating_war_").field("detail", "Creating WAR: " ~ outputPath).emit();
         
         string[] cmd = ["jar", "cf", outputPath, "-C", warDir, "."];
         

@@ -14,7 +14,7 @@ import languages.compiled.cpp.builders.base;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Bazel build system builder
 class BazelBuilder : BaseCppBuilder
@@ -39,7 +39,7 @@ class BazelBuilder : BaseCppBuilder
             return result;
         }
         
-        Logger.info("Building with Bazel");
+        structuredLog.info("building_with_bazel").emit();
         
         // Find WORKSPACE or BUILD file
         string buildFile = findBuildFile(workspace.root);
@@ -67,7 +67,7 @@ class BazelBuilder : BaseCppBuilder
         
         cmd ~= [bazelTarget];
         
-        Logger.debugLog("Running: " ~ cmd.join(" "));
+        structuredLog.debug_("running_").field("detail", "Running: " ~ cmd.join(" ")).emit();
         
         // Execute build
         auto res = execute(cmd, null, Config.none, size_t.max, projectDir);
@@ -88,7 +88,7 @@ class BazelBuilder : BaseCppBuilder
         
         result.success = true;
         
-        Logger.info("Bazel build completed successfully");
+        structuredLog.info("bazel_build_completed_successfully").emit();
         
         return result;
     }

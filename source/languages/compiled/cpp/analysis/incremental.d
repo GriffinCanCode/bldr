@@ -8,7 +8,7 @@ import std.regex;
 import std.string;
 import engine.compilation.incremental.analyzer;
 import languages.compiled.cpp.analysis.analysis;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// C++ incremental dependency analyzer
@@ -71,7 +71,7 @@ final class CppDependencyAnalyzer : BaseDependencyAnalyzer
                 // Skip external/system dependencies
                 if (isExternalDependency(include))
                 {
-                    Logger.debugLog("  [External] " ~ include);
+                    structuredLog.debug_("__external_").field("detail", "  [External] " ~ include).emit();
                     continue;
                 }
                 
@@ -85,11 +85,11 @@ final class CppDependencyAnalyzer : BaseDependencyAnalyzer
                 if (!resolved.empty && exists(resolved))
                 {
                     resolvedDeps ~= buildNormalizedPath(resolved);
-                    Logger.debugLog("  [Resolved] " ~ include ~ " -> " ~ resolved);
+                    structuredLog.debug_("__resolved_").field("detail", "  [Resolved] " ~ include ~ " -> " ~ resolved).emit();
                 }
                 else
                 {
-                    Logger.debugLog("  [Not Found] " ~ include);
+                    structuredLog.debug_("__not_found_").field("detail", "  [Not Found] " ~ include).emit();
                 }
             }
             
@@ -174,7 +174,7 @@ struct CppIncrementalHelper
             if (deps.canFind(normalizedHeader))
             {
                 affected ~= source;
-                Logger.debugLog("  " ~ source ~ " affected by " ~ changedHeader);
+                structuredLog.debug_("__").field("detail", "  " ~ source ~ " affected by " ~ changedHeader).emit();
             }
         }
         

@@ -3,7 +3,7 @@ module languages.scripting.perl.services.documentation;
 import languages.scripting.perl.core.config;
 import engine.caching.actions.action;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Documentation generation service interface
 interface IPerlDocumentationService
@@ -95,7 +95,7 @@ final class PerlDocumentationService : IPerlDocumentationService
         // Check cache
         if (cache.isCached(actionId, [source], metadata) && exists(htmlOutput))
         {
-            Logger.debugLog("  [Cached] POD HTML: " ~ baseName);
+            structuredLog.debug_("__cached_pod_html_").field("detail", "  [Cached] POD HTML: " ~ baseName).emit();
             return;
         }
         
@@ -111,7 +111,7 @@ final class PerlDocumentationService : IPerlDocumentationService
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to generate HTML docs for " ~ source);
+            structuredLog.warning("failed_to_generate_html_docs_for_").field("detail", "Failed to generate HTML docs for " ~ source).emit();
             cache.update(actionId, [source], [], metadata, false);
         }
     }
@@ -148,7 +148,7 @@ final class PerlDocumentationService : IPerlDocumentationService
         // Check cache
         if (cache.isCached(actionId, [source], metadata) && exists(manOutput))
         {
-            Logger.debugLog("  [Cached] POD man: " ~ baseName);
+            structuredLog.debug_("__cached_pod_man_").field("detail", "  [Cached] POD man: " ~ baseName).emit();
             return;
         }
         
@@ -162,7 +162,7 @@ final class PerlDocumentationService : IPerlDocumentationService
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to generate man page for " ~ source);
+            structuredLog.warning("failed_to_generate_man_page_for_").field("detail", "Failed to generate man page for " ~ source).emit();
             cache.update(actionId, [source], [], metadata, false);
         }
     }

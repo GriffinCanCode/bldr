@@ -7,7 +7,7 @@ import std.array;
 import std.string;
 import std.regex;
 import std.conv;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Represents a Go module (parsed from go.mod)
 struct GoModule
@@ -105,7 +105,7 @@ class ModuleAnalyzer
         
         if (!exists(goModPath))
         {
-            Logger.warning("go.mod not found: " ~ goModPath);
+            structuredLog.warning("gomod_not_found_").field("detail", "go.mod not found: " ~ goModPath).emit();
             return mod;
         }
         
@@ -116,7 +116,7 @@ class ModuleAnalyzer
         }
         catch (Exception e)
         {
-            Logger.error("Failed to parse go.mod: " ~ e.msg);
+            structuredLog.error("failed_to_parse_gomod_").field("detail", "Failed to parse go.mod: " ~ e.msg).emit();
             return mod;
         }
     }
@@ -230,7 +230,7 @@ class ModuleAnalyzer
         
         if (!exists(goWorkPath))
         {
-            Logger.debugLog("go.work not found: " ~ goWorkPath);
+            structuredLog.debug_("gowork_not_found_").field("detail", "go.work not found: " ~ goWorkPath).emit();
             return workspace;
         }
         
@@ -241,7 +241,7 @@ class ModuleAnalyzer
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse go.work: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_gowork_").field("detail", "Failed to parse go.work: " ~ e.msg).emit();
             return workspace;
         }
     }

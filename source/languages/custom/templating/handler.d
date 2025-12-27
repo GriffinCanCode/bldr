@@ -11,7 +11,7 @@ import languages.base.base;
 import infrastructure.config.schema.schema;
 import engine.graph;
 import infrastructure.analysis.targets.types;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.files.hash;
 
 /// Template expansion handler with dynamic discovery
@@ -53,7 +53,7 @@ class TemplateHandler : BaseLanguageHandler, DiscoverableAction
         result.success = false;
         result.hasDiscovery = false;
         
-        Logger.info("Executing template expansion for " ~ target.name);
+        structuredLog.info("executing_template_expansion_for_").field("detail", "Executing template expansion for " ~ target.name).emit();
         
         // Parse template configuration
         auto templateConfig = parseTemplateConfig(target);
@@ -126,8 +126,8 @@ class TemplateHandler : BaseLanguageHandler, DiscoverableAction
             builder = builder.addTargets(compileTargets);
             builder = builder.addDependents(compileIds);
             
-            Logger.success("Discovered " ~ compileTargets.length.to!string ~ 
-                         " compile targets from template expansion");
+            structuredLog.info("discovered_").field("detail", "Discovered " ~ compileTargets.length.to!string ~ 
+                         " compile targets from template expansion").emit();
         }
         
         result.discovery = builder.build();
@@ -160,7 +160,7 @@ class TemplateHandler : BaseLanguageHandler, DiscoverableAction
         // Write expanded template
         write(outputFile, expanded);
         
-        Logger.debugLog("Expanded template: " ~ templateFile ~ " → " ~ outputFile);
+        structuredLog.debug_("expanded_template_").field("detail", "Expanded template: " ~ templateFile ~ " → " ~ outputFile).emit();
         
         return outputFile;
     }
@@ -193,7 +193,7 @@ class TemplateHandler : BaseLanguageHandler, DiscoverableAction
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to parse template config: " ~ e.msg);
+                structuredLog.warning("failed_to_parse_template_config_").field("detail", "Failed to parse template config: " ~ e.msg).emit();
             }
         }
         

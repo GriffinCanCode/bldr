@@ -7,7 +7,6 @@ import engine.caching.actions.action : ActionCache, ActionCacheConfig;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash : FastHash;
-import infrastructure.utils.logging.logger : Logger;
 
 /// Generates ActionCache field, constructor, and destructor for a language handler
 /// Usage: mixin CachingHandlerMixin!"python";
@@ -46,8 +45,9 @@ mixin template CachingHandlerMixin(string languageName)
 mixin template ConfigParsingMixin(TConfig, string methodName, string[] configKeys)
 {
     import std.json : parseJSON;
+    import infrastructure.utils.logging : getStructuredLogger;
     
-    mixin("private TConfig " ~ methodName ~ "(in Target target)
+    mixin("private TConfig " ~ methodName ~ `(in Target target)
     {
         TConfig config;
         
@@ -64,13 +64,13 @@ mixin template ConfigParsingMixin(TConfig, string methodName, string[] configKey
                 }
                 catch (Exception e)
                 {
-                    Logger.warning(\"Failed to parse \" ~ key ~ \" config, trying next or using defaults: \" ~ e.msg);
+                    getStructuredLogger().warning("config_parse_fallback").field("key", key).emit();
                 }
             }
         }
         
         return config;
-    }");
+    }`);
 }
 
 /// Generates standardized output path resolution
@@ -114,7 +114,7 @@ mixin template BuildOrchestrationMixin(TConfig, string configParserName, Context
             
             LanguageBuildResult result;
             
-            Logger.debugLog("Building " ~ target.language.to!string ~ " target: " ~ target.name);
+            structuredLog.debug_("building_").field("detail", "Building " ~ target.language.to!string ~ " target: " ~ target.name).emit();
             
             auto langConfig = mixin(configParserName ~ "(target)");
             enhanceConfigFromProject(langConfig, target, config);
@@ -161,7 +161,7 @@ mixin template BuildOrchestrationMixin(TConfig, string configParserName, Context
             
             LanguageBuildResult result;
             
-            Logger.debugLog("Building " ~ target.language.to!string ~ " target: " ~ target.name);
+            structuredLog.debug_("building_").field("detail", "Building " ~ target.language.to!string ~ " target: " ~ target.name).emit();
             
             auto langConfig = mixin(configParserName ~ "(target)");
             enhanceConfigFromProject(langConfig, target, config);
@@ -214,7 +214,7 @@ mixin template SimpleBuildOrchestrationMixin(TConfig, string configParserName)
         
         LanguageBuildResult result;
         
-        Logger.debugLog("Building " ~ target.language.to!string ~ " target: " ~ target.name);
+        structuredLog.debug_("building_").field("detail", "Building " ~ target.language.to!string ~ " target: " ~ target.name).emit();
         
         auto langConfig = mixin(configParserName ~ "(target)");
         enhanceConfigFromProject(langConfig, target, config);

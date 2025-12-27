@@ -13,7 +13,7 @@ import languages.compiled.swift.tooling.builders.base;
 import languages.compiled.swift.managers.spm;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action;
 
 /// Swift Package Manager builder with action-level caching
@@ -225,7 +225,7 @@ class SPMBuilder : SwiftBuilder
             actionCache.isCached(actionId, inputFiles, metadata) && 
             !outputs.empty && exists(outputs[0]))
         {
-            Logger.debugLog("  [Cached] SPM build: " ~ packagePath);
+            structuredLog.debug_("__cached_spm_build_").field("detail", "  [Cached] SPM build: " ~ packagePath).emit();
             result.success = true;
             result.outputs = outputs;
             result.outputHash = FastHash.hashFile(outputs[0]);

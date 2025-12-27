@@ -7,7 +7,7 @@ import std.path;
 import std.algorithm;
 import std.array;
 import std.string;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.process : isCommandAvailable;
 
 /// Result of running a Go tool
@@ -101,7 +101,7 @@ class GoTools
         else
             cmd ~= packages;
         
-        Logger.debugLog("Running go vet: " ~ cmd.join(" "));
+        structuredLog.debug_("running_go_vet_").field("detail", "Running go vet: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, workDir);
         
@@ -140,7 +140,7 @@ class GoTools
         
         string[] cmd = ["golangci-lint", "run", "./..."] ~ extraArgs;
         
-        Logger.debugLog("Running golangci-lint: " ~ cmd.join(" "));
+        structuredLog.debug_("running_golangcilint_").field("detail", "Running golangci-lint: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, workDir);
         
@@ -176,7 +176,7 @@ class GoTools
         
         string[] cmd = ["staticcheck", "./..."];
         
-        Logger.debugLog("Running staticcheck: " ~ cmd.join(" "));
+        structuredLog.debug_("running_staticcheck_").field("detail", "Running staticcheck: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, workDir);
         
@@ -215,7 +215,7 @@ class GoTools
         else
             cmd ~= packages;
         
-        Logger.debugLog("Running golint: " ~ cmd.join(" "));
+        structuredLog.debug_("running_golint_").field("detail", "Running golint: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, workDir);
         
@@ -251,7 +251,7 @@ class GoTools
         else
             cmd ~= packages;
         
-        Logger.info("Running go generate: " ~ cmd.join(" "));
+        structuredLog.info("running_go_generate_").field("detail", "Running go generate: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, workDir);
         
@@ -284,7 +284,7 @@ class GoTools
         
         string[] cmd = ["go", "mod", "tidy"];
         
-        Logger.info("Running go mod tidy");
+        structuredLog.info("running_go_mod_tidy").emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, workDir);
         
@@ -317,7 +317,7 @@ class GoTools
         
         string[] cmd = ["go", "mod", "download"];
         
-        Logger.info("Downloading Go modules");
+        structuredLog.info("downloading_go_modules").emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, workDir);
         
@@ -350,7 +350,7 @@ class GoTools
         
         string[] cmd = ["go", "mod", "vendor"];
         
-        Logger.info("Vendoring dependencies");
+        structuredLog.info("vendoring_dependencies").emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, workDir);
         

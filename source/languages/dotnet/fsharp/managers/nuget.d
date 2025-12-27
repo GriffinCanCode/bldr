@@ -9,7 +9,7 @@ import std.algorithm;
 import std.json;
 import std.conv;
 import infrastructure.utils.files.xml;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// NuGet package manager operations
 struct NuGetOps
@@ -29,8 +29,8 @@ struct NuGetOps
         
         if (res.status != 0)
         {
-            Logger.error("NuGet restore failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("nuget_restore_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -52,8 +52,8 @@ struct NuGetOps
         
         if (res.status != 0)
         {
-            Logger.error("NuGet install failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("nuget_install_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -67,8 +67,8 @@ struct NuGetOps
         
         if (res.status != 0)
         {
-            Logger.error("NuGet remove failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("nuget_remove_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -128,7 +128,7 @@ struct NuGetOps
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse packages.config: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_packagesconfig_").field("detail", "Failed to parse packages.config: " ~ e.msg).emit();
         }
         
         return packages;

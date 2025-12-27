@@ -10,7 +10,7 @@ import std.conv;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.detection.detector;
 import infrastructure.analysis.targets.types;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Zero-config target inference
 /// Automatically generates build targets from project structure
@@ -27,7 +27,7 @@ class TargetInference
     /// Returns array of targets that can be used directly without Builderfile
     Target[] inferTargets()
     {
-        Logger.debugLog("No Builderfile found - inferring targets from project structure...");
+        structuredLog.debug_("no_builderfile_found__inferring_targets_").emit();
         
         // Run project detector
         auto detector = new ProjectDetector(workspaceRoot);
@@ -35,21 +35,21 @@ class TargetInference
         
         if (metadata.languages.empty)
         {
-            Logger.warning("No supported languages detected in workspace");
+            structuredLog.warning("no_supported_languages_detected_in_works").emit();
             return [];
         }
         
-        Logger.debugLog(format("Detected %d language(s):", metadata.languages.length));
+        structuredLog.debug_("log_event").field("message", format("Detected %d language(s):", metadata.languages.length)).emit();
         foreach (lang; metadata.languages)
         {
             string frameworkInfo = lang.framework != ProjectFramework.None ?
                 format(" [%s]", lang.framework) : "";
-            Logger.debugLog(format("  • %s (%d files, %.0f%% confidence)%s",
+            structuredLog.debug_("log_event").field("message", format("  • %s (%d files, %.0f%% confidence)%s",
                 lang.language,
                 lang.sourceFiles.length,
                 lang.confidence * 100,
                 frameworkInfo
-            ));
+            )).emit();
         }
         
         // Generate targets for each detected language
@@ -63,7 +63,7 @@ class TargetInference
             }
         }
         
-        Logger.success(format("Inferred %d target(s)", targets.length));
+        structuredLog.info("log_event").field("message", format("Inferred %d target(s)", targets.length)).emit();
         
         return targets;
     }

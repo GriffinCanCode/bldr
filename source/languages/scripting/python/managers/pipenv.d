@@ -6,7 +6,7 @@ import std.conv;
 import languages.scripting.python.managers.base;
 import languages.scripting.python.tooling.detection : ToolDetection;
 alias PyTools = ToolDetection;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Pipenv package manager
 class PipenvManager : PackageManager
@@ -24,7 +24,7 @@ class PipenvManager : PackageManager
         
         InstallResult result;
         
-        Logger.info("Installing with pipenv");
+        structuredLog.info("installing_with_pipenv").emit();
         
         StopWatch sw;
         sw.start();
@@ -41,7 +41,7 @@ class PipenvManager : PackageManager
         }
         
         result.success = true;
-        Logger.info("Pipenv installation completed in %.2fs".format(result.timeSeconds));
+        structuredLog.info("pipenv_installation_completed_in_2fsform").emit();
         
         return result;
     }

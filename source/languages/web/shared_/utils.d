@@ -5,7 +5,7 @@ import std.file;
 import std.path;
 import std.json;
 import std.string;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.process : isCommandAvailable;
 
 /// Find package.json in source tree
@@ -47,7 +47,7 @@ string[] detectTestCommand(string packageJsonPath)
     }
     catch (Exception e)
     {
-        Logger.warning("Failed to parse package.json: " ~ e.msg);
+        structuredLog.warning("failed_to_parse_packagejson_").field("detail", "Failed to parse package.json: " ~ e.msg).emit();
     }
     
     return [];
@@ -69,7 +69,7 @@ void installDependencies(const(string[]) sources, string packageManager)
     
     if (packageJsonPath.empty || !exists(packageJsonPath))
     {
-        Logger.warning("No package.json found, skipping dependency installation");
+        structuredLog.warning("no_packagejson_found_skipping_dependency").emit();
         return;
     }
     
@@ -79,22 +79,22 @@ void installDependencies(const(string[]) sources, string packageManager)
     string nodeModulesPath = buildPath(packageDir, "node_modules");
     if (exists(nodeModulesPath) && isDir(nodeModulesPath))
     {
-        Logger.debugLog("Dependencies already installed, skipping");
+        structuredLog.debug_("dependencies_already_installed_skipping").emit();
         return;
     }
     
-    Logger.info("Installing dependencies with " ~ packageManager ~ "...");
+    structuredLog.info("installing_dependencies_with_").field("detail", "Installing dependencies with " ~ packageManager ~ "...").emit();
     
     string[] cmd = [packageManager, "install"];
     auto res = execute(cmd, null, std.process.Config.none, size_t.max, packageDir);
     
     if (res.status != 0)
     {
-        Logger.warning("Failed to install dependencies: " ~ res.output);
+        structuredLog.warning("failed_to_install_dependencies_").field("detail", "Failed to install dependencies: " ~ res.output).emit();
     }
     else
     {
-        Logger.info("Dependencies installed successfully");
+        structuredLog.info("dependencies_installed_successfully").emit();
     }
 }
 

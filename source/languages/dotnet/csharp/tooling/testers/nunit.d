@@ -9,7 +9,7 @@ import std.string;
 import std.regex;
 import languages.dotnet.csharp.tooling.testers.base;
 import languages.dotnet.csharp.config.test;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.security : execute;
 
 /// NUnit test runner
@@ -28,7 +28,7 @@ class NUnitRunner : ITestRunner
     
     override TestResult runTests(in string[] testFiles, in TestConfig config, in string workingDir)
     {
-        Logger.info("Running NUnit tests");
+        structuredLog.info("running_nunit_tests").emit();
         
         if (isCommandAvailable("dotnet")) return runWithDotnetTest(testFiles, config, workingDir);
         if (isCommandAvailable("nunit-console")) return runWithNUnitConsole(testFiles, config, workingDir);
@@ -56,7 +56,7 @@ class NUnitRunner : ITestRunner
         if (!result.success && result.error.empty) result.error = "NUnit tests failed";
         
         import std.format : format;
-        Logger.info(format!"NUnit results: %d passed, %d failed, %d skipped"(result.passed, result.failed, result.skipped));
+        structuredLog.info("log_event").field("message", format!"NUnit results: %d passed, %d failed, %d skipped"(result.passed, result.failed, result.skipped)).emit();
         return result;
     }
     
@@ -96,7 +96,7 @@ class NUnitRunner : ITestRunner
             if (!failedMatch.empty) result.failed = failedMatch[1].to!size_t;
             if (!skippedMatch.empty) result.skipped = skippedMatch[1].to!size_t;
         } catch (Exception e) {
-            Logger.debugLog("Failed to parse NUnit output: " ~ e.msg);
+            structuredLog.debug_("failed_to_parse_nunit_output_").field("detail", "Failed to parse NUnit output: " ~ e.msg).emit();
         }
     }
     
@@ -113,7 +113,7 @@ class NUnitRunner : ITestRunner
             if (!failedMatch.empty) result.failed = failedMatch[1].to!size_t;
             if (!skippedMatch.empty) result.skipped = skippedMatch[1].to!size_t;
         } catch (Exception e) {
-            Logger.debugLog("Failed to parse NUnit console output: " ~ e.msg);
+            structuredLog.debug_("failed_to_parse_nunit_console_output_").field("detail", "Failed to parse NUnit console output: " ~ e.msg).emit();
         }
     }
 }

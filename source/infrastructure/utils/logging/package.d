@@ -12,23 +12,37 @@ module infrastructure.utils.logging;
 /// ```d
 /// import infrastructure.utils.logging;
 /// 
-/// // Simple logging (backward compatible)
-/// Logger.info("Build started");
-/// Logger.error("Failed to compile");
+/// // Structured logging with fluent API (preferred)
+/// structuredLog.info("build_started")
+///     .field("targets", 42)
+///     .field("parallelism", 8)
+///     .emit();
 /// 
-/// // Structured logging with fields
-/// Logger.info("Cache hit", LogFields.of("target", "myapp", "hash", "abc123"));
+/// structuredLog.warning("slow_build")
+///     .field("target", "mylib")
+///     .field("duration_ms", 5200)
+///     .emit();
 /// 
-/// // Convenience KV methods
-/// Logger.infoKV("Build complete", "target", "myapp", "duration_ms", 1234);
-/// 
-/// // Using the F alias for concise field building
-/// Logger.warning("Slow build", F("target", "lib", "time", "5.2s"));
-/// 
-/// // Change output format for log aggregation
-/// Logger.setFormat(LogFormat.Json);    // JSON lines output
-/// Logger.setFormat(LogFormat.Logfmt);  // key=value format
+/// // Legacy Logger API (backward compatible)
+/// structuredLog.info("build_started").emit();
+/// structuredLog.error("failed_to_compile").emit();
 /// ```
 
 public import infrastructure.utils.logging.logger;
 public import infrastructure.utils.logging.structured;
+
+/// Global structured logger instance for convenient access
+/// Use structuredLog.info("event").field("key", val).emit()
+__gshared StructuredLogger structuredLog;
+
+/// Initialize the global structured logger
+shared static this() @trusted
+{
+    structuredLog = new StructuredLogger(LogLevel.Debug);
+}
+
+/// Convenience alias for shorter access
+alias slog = structuredLog;
+
+/// Get global structured logger (for use in templates/mixins)
+StructuredLogger getStructuredLogger() @trusted => structuredLog;

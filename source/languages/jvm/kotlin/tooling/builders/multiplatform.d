@@ -12,7 +12,7 @@ import languages.jvm.kotlin.core.config;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.security.validation;
 import engine.caching.actions.action : ActionCache;
 
@@ -30,7 +30,7 @@ class MultiplatformBuilder : KotlinBuilder
     {
         KotlinBuildResult result;
         
-        Logger.debugLog("Building Kotlin Multiplatform project");
+        structuredLog.debug_("building_kotlin_multiplatform_project").emit();
         
         // Multiplatform builds require Gradle
         if (config.buildTool != KotlinBuildTool.Gradle)

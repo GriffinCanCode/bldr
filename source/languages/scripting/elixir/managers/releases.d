@@ -8,7 +8,7 @@ import std.algorithm;
 import std.array;
 import std.conv;
 import languages.scripting.elixir.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Base interface for release builders
 interface ReleaseBuilder
@@ -28,7 +28,7 @@ class MixReleaseBuilder : ReleaseBuilder
 {
     override bool buildRelease(ReleaseConfig config, string mixCmd)
     {
-        Logger.info("Building Mix release: " ~ config.name);
+        structuredLog.info("building_mix_release_").field("detail", "Building Mix release: " ~ config.name).emit();
         
         string[] cmd = [mixCmd, "release"];
         
@@ -41,12 +41,12 @@ class MixReleaseBuilder : ReleaseBuilder
         auto res = execute(cmd);
         if (res.status != 0)
         {
-            Logger.error("Release build failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("release_build_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
-        Logger.info("Release built successfully");
+        structuredLog.info("release_built_successfully").emit();
         return true;
     }
     
@@ -67,15 +67,15 @@ class DistilleryBuilder : ReleaseBuilder
 {
     override bool buildRelease(ReleaseConfig config, string mixCmd)
     {
-        Logger.info("Building Distillery release");
+        structuredLog.info("building_distillery_release").emit();
         
         string[] cmd = [mixCmd, "distillery.release"];
         
         auto res = execute(cmd);
         if (res.status != 0)
         {
-            Logger.error("Distillery release failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("distillery_release_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -99,13 +99,13 @@ class BurritoBuilder : ReleaseBuilder
 {
     override bool buildRelease(ReleaseConfig config, string mixCmd)
     {
-        Logger.info("Building Burrito release");
+        structuredLog.info("building_burrito_release").emit();
         
         auto res = execute([mixCmd, "release"]);
         if (res.status != 0)
         {
-            Logger.error("Burrito release failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("burrito_release_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -134,13 +134,13 @@ class BakewareBuilder : ReleaseBuilder
 {
     override bool buildRelease(ReleaseConfig config, string mixCmd)
     {
-        Logger.info("Building Bakeware executable");
+        structuredLog.info("building_bakeware_executable").emit();
         
         auto res = execute([mixCmd, "release"]);
         if (res.status != 0)
         {
-            Logger.error("Bakeware build failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("bakeware_build_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         

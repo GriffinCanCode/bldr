@@ -8,7 +8,7 @@ import std.array;
 import std.process;
 import std.regex;
 import std.conv;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import languages.jvm.scala.core.config;
 
 /// sbt build.sbt metadata
@@ -69,7 +69,7 @@ struct SbtMetadata
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse build.sbt: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_buildsbt_").field("detail", "Failed to parse build.sbt: " ~ e.msg).emit();
         }
         
         return meta;
@@ -140,7 +140,7 @@ class SbtOps
     /// Compile project
     static bool compile(string projectDir, bool skipTests = false)
     {
-        Logger.info("Compiling sbt project");
+        structuredLog.info("compiling_sbt_project").emit();
         
         string[] args = ["compile"];
         if (skipTests)
@@ -150,8 +150,8 @@ class SbtOps
         
         if (result.status != 0)
         {
-            Logger.error("sbt compilation failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("sbt_compilation_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
@@ -161,7 +161,7 @@ class SbtOps
     /// Package project
     static bool packageProject(string projectDir, bool skipTests = false)
     {
-        Logger.info("Packaging sbt project");
+        structuredLog.info("packaging_sbt_project").emit();
         
         string[] args = ["package"];
         if (skipTests)
@@ -171,8 +171,8 @@ class SbtOps
         
         if (result.status != 0)
         {
-            Logger.error("sbt packaging failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("sbt_packaging_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
@@ -182,14 +182,14 @@ class SbtOps
     /// Run tests
     static bool test(string projectDir)
     {
-        Logger.info("Running sbt tests");
+        structuredLog.info("running_sbt_tests").emit();
         
         auto result = executeSbt(["test"], projectDir);
         
         if (result.status != 0)
         {
-            Logger.error("sbt tests failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("sbt_tests_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
@@ -199,7 +199,7 @@ class SbtOps
     /// Clean build
     static bool clean(string projectDir)
     {
-        Logger.info("Cleaning sbt project");
+        structuredLog.info("cleaning_sbt_project").emit();
         
         auto result = executeSbt(["clean"], projectDir);
         
@@ -209,14 +209,14 @@ class SbtOps
     /// Update dependencies
     static bool update(string projectDir)
     {
-        Logger.info("Updating sbt dependencies");
+        structuredLog.info("updating_sbt_dependencies").emit();
         
         auto result = executeSbt(["update"], projectDir);
         
         if (result.status != 0)
         {
-            Logger.error("sbt update failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("sbt_update_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
@@ -226,14 +226,14 @@ class SbtOps
     /// Run sbt assembly (fat JAR)
     static bool assembly(string projectDir)
     {
-        Logger.info("Creating assembly JAR");
+        structuredLog.info("creating_assembly_jar").emit();
         
         auto result = executeSbt(["assembly"], projectDir);
         
         if (result.status != 0)
         {
-            Logger.error("sbt assembly failed");
-            Logger.error("  Output: " ~ result.output);
+            structuredLog.error("sbt_assembly_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ result.output).emit();
             return false;
         }
         
@@ -275,7 +275,7 @@ class SbtOps
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to parse plugins.sbt: " ~ e.msg);
+            structuredLog.warning("failed_to_parse_pluginssbt_").field("detail", "Failed to parse plugins.sbt: " ~ e.msg).emit();
         }
         
         return plugins;

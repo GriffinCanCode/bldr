@@ -9,7 +9,7 @@ import engine.caching.incremental.dependency;
 import engine.caching.actions.action;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Incremental compilation strategy
@@ -90,13 +90,13 @@ final class IncrementalEngine
             if (actionCache.isCached(actionId, [sourceFile], metadata))
             {
                 isCached[sourceFile] = true;
-                Logger.debugLog("  [ActionCache Hit] " ~ sourceFile);
+                structuredLog.debug_("action_cache_hit").field("file", sourceFile).emit();
             }
             else
             {
                 needsCompile[sourceFile] = true;
                 result.reasons[sourceFile] = "action cache miss";
-                Logger.debugLog("  [ActionCache Miss] " ~ sourceFile);
+                structuredLog.debug_("action_cache_miss").field("file", sourceFile).emit();
             }
         }
         
@@ -110,7 +110,10 @@ final class IncrementalEngine
                 needsCompile[file] = true;
                 auto reason = file in changes.changeReasons;
                 result.reasons[file] = reason ? *reason : "dependency changed";
-                Logger.debugLog("  [Dependency Change] " ~ file ~ ": " ~ result.reasons[file]);
+                structuredLog.debug_("dependency_change")
+                    .field("file", file)
+                    .field("reason", result.reasons[file])
+                    .emit();
             }
         }
         
@@ -132,10 +135,11 @@ final class IncrementalEngine
         result.reductionRate = result.totalFiles > 0 
             ? (cast(float)result.cachedFiles.length / result.totalFiles) * 100.0 : 0.0;
         
-        Logger.info("Incremental analysis: " ~
-                   result.compiledFiles.to!string ~ " to compile, " ~
-                   result.cachedFiles_.to!string ~ " cached (" ~
-                   result.reductionRate.to!string[0..min(5, $)] ~ "% reduction)");
+        structuredLog.info("incremental_analysis")
+            .field("to_compile", result.compiledFiles)
+            .field("cached", result.cachedFiles_)
+            .field("reduction_pct", result.reductionRate)
+            .emit();
         
         return result;
     }

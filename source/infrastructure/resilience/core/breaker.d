@@ -6,7 +6,7 @@ import std.array : array;
 import core.atomic;
 import core.sync.mutex;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Circuit breaker state
 enum BreakerState : ubyte
@@ -361,9 +361,9 @@ final class CircuitBreaker
             event.timestamp = Clock.currTime();
             event.reason = reason;
             
-            Logger.info("Circuit breaker state change: " ~ endpoint ~ 
+            structuredLog.info("circuit_breaker_state_change_").field("detail", "Circuit breaker state change: " ~ endpoint ~ 
                 " " ~ oldState.to!string ~ " → " ~ newState.to!string ~ 
-                " (" ~ reason ~ ")");
+                " (" ~ reason ~ ")").emit();
             
             if (onStateChange !is null)
             {
@@ -373,7 +373,7 @@ final class CircuitBreaker
                 }
                 catch (Exception e)
                 {
-                    Logger.error("Error in circuit breaker callback: " ~ e.msg);
+                    structuredLog.error("error_in_circuit_breaker_callback_").field("detail", "Error in circuit breaker callback: " ~ e.msg).emit();
                 }
             }
         }

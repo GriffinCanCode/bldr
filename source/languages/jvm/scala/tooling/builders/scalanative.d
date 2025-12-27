@@ -14,7 +14,7 @@ import languages.jvm.scala.tooling.detection;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Scala Native builder - compiles Scala to native binary via LLVM
 class ScalaNativeBuilder : ScalaBuilder
@@ -31,7 +31,7 @@ class ScalaNativeBuilder : ScalaBuilder
     {
         ScalaBuildResult result;
         
-        Logger.debugLog("Building Scala Native target: " ~ target.name);
+        structuredLog.debug_("building_scala_native_target_").field("detail", "Building Scala Native target: " ~ target.name).emit();
         
         // Detect build tool
         ScalaBuildTool buildTool = config.buildTool;
@@ -82,8 +82,8 @@ class ScalaNativeBuilder : ScalaBuilder
         // Scala Native link task
         cmd ~= "nativeLink";
         
-        Logger.info("Running sbt nativeLink...");
-        Logger.debugLog("Command: " ~ cmd.join(" "));
+        structuredLog.info("running_sbt_nativelink").emit();
+        structuredLog.debug_("command_").field("detail", "Command: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, workspace.root);
         
@@ -137,8 +137,8 @@ class ScalaNativeBuilder : ScalaBuilder
         // Mill Scala Native task
         cmd ~= target.name ~ ".nativeLink";
         
-        Logger.info("Running Mill nativeLink...");
-        Logger.debugLog("Command: " ~ cmd.join(" "));
+        structuredLog.info("running_mill_nativelink").emit();
+        structuredLog.debug_("command_").field("detail", "Command: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, workspace.root);
         
@@ -210,7 +210,7 @@ class ScalaNativeBuilder : ScalaBuilder
         }
         catch (Exception e)
         {
-            Logger.warning("Error searching for native binary: " ~ e.msg);
+            structuredLog.warning("error_searching_for_native_binary_").field("detail", "Error searching for native binary: " ~ e.msg).emit();
         }
         
         return "";

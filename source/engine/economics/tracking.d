@@ -7,7 +7,7 @@ import std.path : buildPath;
 import engine.economics.pricing;
 import engine.economics.estimator;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Cost tracking for builds
 /// Records actual costs and compares to estimates
@@ -29,8 +29,12 @@ final class CostTracker
     {
         history.record(targetId, duration, usage, cacheHit);
         costs ~= ActualCost(targetId, Clock.currTime, duration, actualCost, cacheHit);
-        Logger.debugLog("Tracked execution: " ~ targetId ~ " (" ~ formatDuration(duration) ~ 
-                       ", " ~ formatCost(actualCost) ~ ")");
+        structuredLog.debug_("execution_tracked")
+            .field("target", targetId)
+            .field("duration", formatDuration(duration))
+            .field("cost", formatCost(actualCost))
+            .field("cache_hit", cacheHit)
+            .emit();
     }
     
     /// Get total costs for current session
@@ -55,7 +59,9 @@ final class CostTracker
             immutable historyPath = buildPath(cacheDir, "execution-history.json");
             immutable json = history.toJson();
             write(historyPath, json);
-            Logger.debugLog("Saved execution history to " ~ historyPath);
+            structuredLog.debug_("execution_history_saved")
+                .field("path", historyPath)
+                .emit();
             return Ok!BuildError();
         }
         catch (Exception e)
@@ -74,23 +80,26 @@ final class CostTracker
             
             if (!exists(historyPath))
             {
-                Logger.debugLog("No execution history found");
+                structuredLog.debug_("no_execution_history_found").emit();
                 return Ok!BuildError();
             }
             
             immutable json = readText(historyPath);
             
-            // Deserialize execution history from JSON
             import engine.economics.estimator : ExecutionHistory;
             this.history = ExecutionHistory.fromJson(json);
             
-            Logger.debugLog("Loaded execution history from " ~ historyPath);
+            structuredLog.debug_("execution_history_loaded")
+                .field("path", historyPath)
+                .emit();
             return Ok!BuildError();
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to load history: " ~ e.msg);
-            return Ok!BuildError();  // Non-fatal
+            structuredLog.warning("execution_history_load_failed")
+                .field("error", e.msg)
+                .emit();
+            return Ok!BuildError();
         }
     }
 }

@@ -13,7 +13,7 @@ import engine.workers.protocol;
 import engine.workers.pool;
 import engine.workers.base;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Python Persistent Worker Factory
 /// 
@@ -228,7 +228,7 @@ final class PythonWorkerFactory : BasePersistentWorkerFactory
         {
             std.file.write(scriptPath, generateWorkerScript());
             execute(["chmod", "+x", scriptPath]);
-            Logger.debugLog("Created Python worker script: " ~ scriptPath);
+            structuredLog.debug_("created_python_worker_script_").field("detail", "Created Python worker script: " ~ scriptPath).emit();
         }
         
         return scriptPath;

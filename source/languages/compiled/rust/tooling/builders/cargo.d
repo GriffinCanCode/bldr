@@ -13,7 +13,7 @@ import languages.compiled.rust.analysis.manifest;
 import languages.compiled.rust.managers.toolchain;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action;
 
 /// Cargo builder - uses cargo for compilation with action-level caching
@@ -55,11 +55,11 @@ class CargoBuilder : RustBuilder
         }
         
         string projectDir = dirName(manifestPath);
-        Logger.debugLog("Building Rust project in: " ~ projectDir);
+        structuredLog.debug_("building_rust_project_in_").field("detail", "Building Rust project in: " ~ projectDir).emit();
         
         // Parse manifest for metadata
         auto manifest = CargoParser.parse(manifestPath);
-        Logger.debugLog("Package: " ~ manifest.package_.name ~ " v" ~ manifest.package_.version_);
+        structuredLog.debug_("package_").field("detail", "Package: " ~ manifest.package_.name ~ " v" ~ manifest.package_.version_).emit();
         
         // Build command based on mode
         final switch (config.mode)
@@ -168,7 +168,7 @@ class CargoBuilder : RustBuilder
             
             if (!result.outputs.empty)
             {
-                Logger.debugLog("  [Cached] Cargo build: " ~ projectDir);
+                structuredLog.debug_("__cached_cargo_build_").field("detail", "  [Cached] Cargo build: " ~ projectDir).emit();
                 result.success = true;
                 result.outputHash = FastHash.hashFile(result.outputs[0]);
                 return result;
@@ -245,7 +245,7 @@ class CargoBuilder : RustBuilder
         // Add additional cargo flags
         cmd ~= config.cargoFlags;
         
-        Logger.debugLog("Cargo command: " ~ cmd.join(" "));
+        structuredLog.debug_("cargo_command_").field("detail", "Cargo command: " ~ cmd.join(" ")).emit();
         
         // Set environment variables
         string[string] env = null;
@@ -332,7 +332,7 @@ class CargoBuilder : RustBuilder
         // Similar flags as build but no output generation
         addCommonFlags(cmd, config);
         
-        Logger.debugLog("Cargo check: " ~ cmd.join(" "));
+        structuredLog.debug_("cargo_check_").field("detail", "Cargo check: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, projectDir);
         
@@ -364,7 +364,7 @@ class CargoBuilder : RustBuilder
         
         cmd ~= config.testFlags;
         
-        Logger.debugLog("Cargo test: " ~ cmd.join(" "));
+        structuredLog.debug_("cargo_test_").field("detail", "Cargo test: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, projectDir);
         
@@ -394,7 +394,7 @@ class CargoBuilder : RustBuilder
         if (config.docOpen)
             cmd ~= ["--open"];
         
-        Logger.debugLog("Cargo doc: " ~ cmd.join(" "));
+        structuredLog.debug_("cargo_doc_").field("detail", "Cargo doc: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, projectDir);
         
@@ -428,7 +428,7 @@ class CargoBuilder : RustBuilder
         
         cmd ~= config.benchFlags;
         
-        Logger.debugLog("Cargo bench: " ~ cmd.join(" "));
+        structuredLog.debug_("cargo_bench_").field("detail", "Cargo bench: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, projectDir);
         
@@ -459,7 +459,7 @@ class CargoBuilder : RustBuilder
         cmd ~= ["--example", config.example];
         addCommonFlags(cmd, config);
         
-        Logger.debugLog("Cargo example: " ~ cmd.join(" "));
+        structuredLog.debug_("cargo_example_").field("detail", "Cargo example: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, projectDir);
         

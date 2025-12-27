@@ -9,6 +9,7 @@ import std.range : empty;
 import engine.runtime.hermetic.core.spec;
 import engine.runtime.hermetic.core.executor;
 import infrastructure.errors;
+import infrastructure.utils.logging : Logger, structuredLog;
 
 /// Determinism configuration for reproducible builds
 struct DeterminismConfig
@@ -90,8 +91,8 @@ struct DeterminismEnforcer
         {
             // Shim not available - log warning but continue
             import infrastructure.utils.logging.logger : Logger;
-            Logger.warning("Determinism shim library not available: " ~ shimResult.unwrapErr());
-            Logger.warning("Determinism enforcement will be limited");
+            structuredLog.warning("determinism_shim_library_not_available_").field("detail", "Determinism shim library not available: " ~ shimResult.unwrapErr()).emit();
+            structuredLog.warning("determinism_enforcement_will_be_limited").emit();
         }
         else
         {
@@ -169,7 +170,7 @@ struct DeterminismEnforcer
         if (iterations < 2)
             iterations = 2;
         
-        Logger.info("Verifying determinism across " ~ iterations.to!string ~ " builds...");
+        structuredLog.info("verifying_determinism_across_").field("detail", "Verifying determinism across " ~ iterations.to!string ~ " builds...").emit();
         
         DeterminismResult[] results;
         results.length = iterations;
@@ -177,7 +178,7 @@ struct DeterminismEnforcer
         // Execute multiple times
         foreach (i; 0 .. iterations)
         {
-            Logger.debugLog("Determinism verification build " ~ (i + 1).to!string);
+            structuredLog.debug_("determinism_verification_build_").field("detail", "Determinism verification build " ~ (i + 1).to!string).emit();
             
             auto result = execute(command, workingDir);
             if (result.isErr)
@@ -202,11 +203,11 @@ struct DeterminismEnforcer
             violation.suggestion = "Check compiler flags, timestamps, and randomness sources";
             finalResult.violations ~= violation;
             
-            Logger.warning("Build is non-deterministic: outputs differ across runs");
+            structuredLog.warning("build_is_nondeterministic_outputs_differ").emit();
         }
         else
         {
-            Logger.info("✓ Build is deterministic: all outputs match");
+            structuredLog.info("_build_is_deterministic_all_outputs_matc").emit();
         }
         
         return Ok!(DeterminismResult, BuildError)(finalResult);

@@ -8,7 +8,7 @@ import std.array;
 import std.string;
 import std.regex;
 import std.conv;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.process : isCommandAvailable;
 
 /// Result of running a PHP tool
@@ -490,7 +490,7 @@ class PHPTools
         
         string[] cmd = [phpCmd, scriptPath] ~ args;
         
-        Logger.debugLog("Running: " ~ cmd.join(" "));
+        structuredLog.debug_("running_").field("detail", "Running: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd);
         result.output = res.output;

@@ -18,7 +18,7 @@ import languages.compiled.haskell.analysis.cabal : parseCabalFile;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig;
 
 /// Haskell build handler with GHC, Cabal, and Stack support and action-level caching
@@ -34,7 +34,7 @@ class HaskellHandler : BaseLanguageHandler
         
         LanguageBuildResult result;
         
-        Logger.debugLog("Building Haskell target: " ~ target.name);
+        structuredLog.debug_("building_haskell_target_").field("detail", "Building Haskell target: " ~ target.name).emit();
         
         // Parse Haskell configuration
         HaskellConfig hsConfig = parseHaskellConfig(target, config);
@@ -55,14 +55,14 @@ class HaskellHandler : BaseLanguageHandler
         // Run HLint if requested
         if (hsConfig.hlint && GHCWrapper.isHLintAvailable())
         {
-            Logger.debugLog("Running HLint...");
+            structuredLog.debug_("running_hlint").emit();
             auto lintResult = runHLint(target, hsConfig);
             if (lintResult.hadHLintIssues)
             {
-                Logger.warning("HLint found issues:");
+                structuredLog.warning("hlint_found_issues").emit();
                 foreach (issue; lintResult.hlintIssues)
                 {
-                    Logger.warning("  " ~ issue);
+                    structuredLog.warning("__").field("detail", "  " ~ issue).emit();
                 }
             }
         }
@@ -70,12 +70,12 @@ class HaskellHandler : BaseLanguageHandler
         // Run formatter if requested
         if (hsConfig.ormolu && GHCWrapper.isOroluAvailable())
         {
-            Logger.debugLog("Running Ormolu...");
+            structuredLog.debug_("running_ormolu").emit();
             runOrmolu(target, hsConfig);
         }
         else if (hsConfig.fourmolu && GHCWrapper.isFourmoluAvailable())
         {
-            Logger.debugLog("Running Fourmolu...");
+            structuredLog.debug_("running_fourmolu").emit();
             runFourmolu(target, hsConfig);
         }
         
@@ -136,7 +136,7 @@ class HaskellHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to analyze imports in " ~ source ~ ": " ~ e.msg);
+                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source ~ ": " ~ e.msg).emit();
             }
         }
         
@@ -189,7 +189,7 @@ class HaskellHandler : BaseLanguageHandler
         // Libraries typically use Cabal or Stack
         if (hsConfig.buildTool == HaskellBuildTool.GHC)
         {
-            Logger.warning("Direct GHC compilation for libraries is limited. Consider using Cabal or Stack.");
+            structuredLog.warning("direct_ghc_compilation_for_libraries_is_").emit();
         }
         
         final switch (hsConfig.buildTool)
@@ -281,7 +281,7 @@ class HaskellHandler : BaseLanguageHandler
             return result;
         }
         
-        Logger.debugLog("Using GHC: " ~ GHCWrapper.getVersion());
+        structuredLog.debug_("using_ghc_").field("detail", "Using GHC: " ~ GHCWrapper.getVersion()).emit();
         return GHCWrapper.compile(target, config, hsConfig, actionCache);
     }
     
@@ -298,7 +298,7 @@ class HaskellHandler : BaseLanguageHandler
             return result;
         }
         
-        Logger.debugLog("Using Cabal: " ~ CabalWrapper.getVersion());
+        structuredLog.debug_("using_cabal_").field("detail", "Using Cabal: " ~ CabalWrapper.getVersion()).emit();
         return CabalWrapper.build(target, config, hsConfig, actionCache);
     }
     
@@ -315,7 +315,7 @@ class HaskellHandler : BaseLanguageHandler
             return result;
         }
         
-        Logger.debugLog("Using Stack: " ~ StackWrapper.getVersion());
+        structuredLog.debug_("using_stack_").field("detail", "Using Stack: " ~ StackWrapper.getVersion()).emit();
         return StackWrapper.build(target, config, hsConfig, actionCache);
     }
     
@@ -339,7 +339,7 @@ class HaskellHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to parse Haskell config, using defaults: " ~ e.msg);
+                structuredLog.warning("failed_to_parse_haskell_config_using_def").field("detail", "Failed to parse Haskell config, using defaults: " ~ e.msg).emit();
             }
         }
         
@@ -357,19 +357,19 @@ class HaskellHandler : BaseLanguageHandler
         // Check for stack.yaml
         if (exists(buildPath(projectRoot, "stack.yaml")))
         {
-            Logger.debugLog("Detected Stack project (stack.yaml found)");
+            structuredLog.debug_("detected_stack_project_stackyaml_found").emit();
             return HaskellBuildTool.Stack;
         }
         
         // Check for *.cabal files
         if (!dirEntries(projectRoot, "*.cabal", SpanMode.shallow).empty)
         {
-            Logger.debugLog("Detected Cabal project (*.cabal file found)");
+            structuredLog.debug_("detected_cabal_project_cabal_file_found").emit();
             return HaskellBuildTool.Cabal;
         }
         
         // Default to GHC for simple projects
-        Logger.debugLog("No build tool detected, using GHC directly");
+        structuredLog.debug_("no_build_tool_detected_using_ghc_directl").emit();
         return HaskellBuildTool.GHC;
     }
     

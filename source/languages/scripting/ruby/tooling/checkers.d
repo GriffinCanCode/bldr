@@ -8,7 +8,7 @@ import std.algorithm;
 import std.array;
 import std.string;
 import languages.scripting.ruby.core.config;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Type check result
 struct TypeCheckResult
@@ -74,25 +74,25 @@ class TypeCheckerFactory
         auto sorbet = new SorbetChecker();
         if (sorbet.isAvailable())
         {
-            Logger.debugLog("Detected Sorbet for type checking");
+            structuredLog.debug_("detected_sorbet_for_type_checking").emit();
             return sorbet;
         }
         
         auto steep = new SteepChecker();
         if (steep.isAvailable())
         {
-            Logger.debugLog("Detected Steep for type checking");
+            structuredLog.debug_("detected_steep_for_type_checking").emit();
             return steep;
         }
         
         auto rbs = new RBSChecker();
         if (rbs.isAvailable())
         {
-            Logger.debugLog("Detected RBS for type checking");
+            structuredLog.debug_("detected_rbs_for_type_checking").emit();
             return rbs;
         }
         
-        Logger.debugLog("No type checker available");
+        structuredLog.debug_("no_type_checker_available").emit();
         return new NullTypeChecker();
     }
 }
@@ -145,7 +145,7 @@ class SorbetChecker : TypeChecker
             cmd ~= "."; // Check entire project
         }
         
-        Logger.info("Running Sorbet type checker");
+        structuredLog.info("running_sorbet_type_checker").emit();
         
         auto res = execute(cmd);
         
@@ -185,7 +185,7 @@ class SorbetChecker : TypeChecker
     /// Initialize Sorbet in project
     static bool initialize(string projectRoot)
     {
-        Logger.info("Initializing Sorbet");
+        structuredLog.info("initializing_sorbet").emit();
         
         // Create sorbet directory structure
         auto sorbetDir = buildPath(projectRoot, "sorbet");
@@ -197,24 +197,24 @@ class SorbetChecker : TypeChecker
         
         if (res.status != 0)
         {
-            Logger.error("Failed to initialize Sorbet: " ~ res.output);
+            structuredLog.error("failed_to_initialize_sorbet_").field("detail", "Failed to initialize Sorbet: " ~ res.output).emit();
             return false;
         }
         
-        Logger.info("Sorbet initialized successfully");
+        structuredLog.info("sorbet_initialized_successfully").emit();
         return true;
     }
     
     /// Generate RBI files
     static bool generateRBI(string projectRoot)
     {
-        Logger.info("Generating Sorbet RBI files");
+        structuredLog.info("generating_sorbet_rbi_files").emit();
         
         auto res = execute(["srb", "rbi", "gems"], null, Config.none, size_t.max, projectRoot);
         
         if (res.status != 0)
         {
-            Logger.warning("Failed to generate RBI files: " ~ res.output);
+            structuredLog.warning("failed_to_generate_rbi_files_").field("detail", "Failed to generate RBI files: " ~ res.output).emit();
             return false;
         }
         
@@ -253,7 +253,7 @@ class RBSChecker : TypeChecker
             cmd ~= ["--dir", config.rbs.dir];
         }
         
-        Logger.info("Validating RBS type signatures");
+        structuredLog.info("validating_rbs_type_signatures").emit();
         
         auto res = execute(cmd);
         
@@ -292,7 +292,7 @@ class RBSChecker : TypeChecker
     /// Generate RBS signatures from Ruby code
     static bool generate(string[] sources, string outputDir)
     {
-        Logger.info("Generating RBS signatures");
+        structuredLog.info("generating_rbs_signatures").emit();
         
         if (!exists(outputDir))
             mkdirRecurse(outputDir);
@@ -313,11 +313,11 @@ class RBSChecker : TypeChecker
                 try
                 {
                     std.file.write(rbsFile, res.output);
-                    Logger.debugLog("Generated " ~ rbsFile);
+                    structuredLog.debug_("generated_").field("detail", "Generated " ~ rbsFile).emit();
                 }
                 catch (Exception e)
                 {
-                    Logger.warning("Failed to write " ~ rbsFile ~ ": " ~ e.msg);
+                    structuredLog.warning("failed_to_write_").field("detail", "Failed to write " ~ rbsFile ~ ": " ~ e.msg).emit();
                 }
             }
         }
@@ -353,7 +353,7 @@ class SteepChecker : TypeChecker
         // Steep uses Steepfile for configuration
         if (!config.steep.configFile.empty && !exists(config.steep.configFile))
         {
-            Logger.warning("Steepfile not found: " ~ config.steep.configFile);
+            structuredLog.warning("steepfile_not_found_").field("detail", "Steepfile not found: " ~ config.steep.configFile).emit();
         }
         
         // Add source paths
@@ -362,7 +362,7 @@ class SteepChecker : TypeChecker
             cmd ~= sources;
         }
         
-        Logger.info("Running Steep type checker");
+        structuredLog.info("running_steep_type_checker").emit();
         
         auto res = execute(cmd);
         
@@ -401,13 +401,13 @@ class SteepChecker : TypeChecker
     /// Initialize Steep in project
     static bool initialize(string projectRoot)
     {
-        Logger.info("Initializing Steep");
+        structuredLog.info("initializing_steep").emit();
         
         // Create Steepfile
         auto steepfile = buildPath(projectRoot, "Steepfile");
         if (exists(steepfile))
         {
-            Logger.info("Steepfile already exists");
+            structuredLog.info("steepfile_already_exists").emit();
             return true;
         }
         
@@ -427,12 +427,12 @@ end
         try
         {
             std.file.write(steepfile, content);
-            Logger.info("Created Steepfile");
+            structuredLog.info("created_steepfile").emit();
             return true;
         }
         catch (Exception e)
         {
-            Logger.error("Failed to create Steepfile: " ~ e.msg);
+            structuredLog.error("failed_to_create_steepfile_").field("detail", "Failed to create Steepfile: " ~ e.msg).emit();
             return false;
         }
     }

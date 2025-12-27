@@ -21,7 +21,7 @@ import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.utils.security.validation;
 import engine.caching.actions.action;
 
@@ -55,7 +55,7 @@ class PHPHandler : BaseLanguageHandler
             if (!composerPath.empty)
             {
                 config.composer.composerJson = composerPath;
-                Logger.debugLog("Found composer.json: " ~ composerPath);
+                structuredLog.debug_("found_composerjson_").field("detail", "Found composer.json: " ~ composerPath).emit();
             }
         }
         
@@ -134,13 +134,13 @@ class PHPHandler : BaseLanguageHandler
         // Run formatter if configured
         if (phpConfig.formatter.enabled && phpConfig.formatter.formatter != PHPFormatter.None)
         {
-            Logger.info("Running code formatter");
+            structuredLog.info("running_code_formatter").emit();
             auto formatter = FormatterFactory.create(phpConfig.formatter.formatter, config.root);
             auto formatResult = formatter.format(target.sources, phpConfig.formatter, config.root, false);
             
             if (!formatResult.success)
             {
-                Logger.warning("Formatting had issues, continuing anyway");
+                structuredLog.warning("formatting_had_issues_continuing_anyway").emit();
             }
         }
         
@@ -157,10 +157,10 @@ class PHPHandler : BaseLanguageHandler
             
             if (analysisResult.hasIssues())
             {
-                Logger.warning("Static analysis warnings:");
+                structuredLog.warning("static_analysis_warnings").emit();
                 foreach (warning; analysisResult.warnings)
                 {
-                    Logger.warning("  " ~ warning);
+                    structuredLog.warning("__").field("detail", "  " ~ warning).emit();
                 }
             }
         }
@@ -262,7 +262,7 @@ class PHPHandler : BaseLanguageHandler
                 // Validate path before using it with external command
                 if (!SecurityValidator.isPathSafe(outputPath))
                 {
-                    Logger.error("Unsafe output path detected: " ~ outputPath);
+                    structuredLog.error("unsafe_output_path_detected_").field("detail", "Unsafe output path detected: " ~ outputPath).emit();
                 }
                 else
                 {
@@ -270,7 +270,7 @@ class PHPHandler : BaseLanguageHandler
                     auto chmodResult = execute(["chmod", "+x", outputPath]);
                     if (chmodResult.status != 0)
                     {
-                        Logger.warning("Failed to make wrapper executable: " ~ chmodResult.output);
+                        structuredLog.warning("failed_to_make_wrapper_executable_").field("detail", "Failed to make wrapper executable: " ~ chmodResult.output).emit();
                     }
                 }
             }
@@ -295,7 +295,7 @@ class PHPHandler : BaseLanguageHandler
         
         if (result.success && phpConfig.composer.optimizeAutoloader)
         {
-            Logger.info("Optimizing Composer autoloader");
+            structuredLog.info("optimizing_composer_autoloader").emit();
             auto composer = new ComposerTool(phpConfig.composer.composerPath, config.root);
             composer.dumpAutoload(true, phpConfig.composer.authoritative, phpConfig.composer.apcu);
         }
@@ -323,7 +323,7 @@ class PHPHandler : BaseLanguageHandler
         // Static analysis is important for libraries
         if (phpConfig.analysis.enabled)
         {
-            Logger.info("Running static analysis");
+            structuredLog.info("running_static_analysis").emit();
             auto analyzer = AnalyzerFactory.create(phpConfig.analysis.analyzer, config.root);
             auto analysisResult = analyzer.analyze(target.sources, phpConfig.analysis, config.root);
             
@@ -356,7 +356,7 @@ class PHPHandler : BaseLanguageHandler
     {
         LanguageBuildResult result;
         
-        Logger.info("Creating PHAR archive");
+        structuredLog.info("creating_phar_archive").emit();
         
         // Create packager
         auto packager = PackagerFactory.create(phpConfig.phar.tool);
@@ -367,7 +367,7 @@ class PHPHandler : BaseLanguageHandler
             return result;
         }
         
-        Logger.debugLog("Using packager: " ~ packager.name() ~ " (" ~ packager.getVersion() ~ ")");
+        structuredLog.debug_("using_packager_").field("detail", "Using packager: " ~ packager.name() ~ " (" ~ packager.getVersion() ~ ")").emit();
         
         // Build metadata for cache validation
         string[string] metadata;
@@ -393,7 +393,7 @@ class PHPHandler : BaseLanguageHandler
         // Check if packaging is cached
         if (getCache().isCached(actionId, target.sources, metadata) && exists(fullOutputPath))
         {
-            Logger.debugLog("  [Cached] PHAR packaging: " ~ outputFile);
+            structuredLog.debug_("__cached_phar_packaging_").field("detail", "  [Cached] PHAR packaging: " ~ outputFile).emit();
             result.success = true;
             result.outputs = [fullOutputPath];
             result.outputHash = FastHash.hashFile(fullOutputPath);
@@ -441,7 +441,7 @@ class PHPHandler : BaseLanguageHandler
         
         if (!composer.validate())
         {
-            Logger.warning("composer.json validation failed");
+            structuredLog.warning("composerjson_validation_failed").emit();
         }
         
         // Build library first
@@ -465,7 +465,7 @@ class PHPHandler : BaseLanguageHandler
             return result;
         }
         
-        Logger.info("Building FrankenPHP standalone binary");
+        structuredLog.info("building_frankenphp_standalone_binary").emit();
         
         // First create PHAR if embed is enabled
         string[] pharFiles;
@@ -475,7 +475,7 @@ class PHPHandler : BaseLanguageHandler
             if (!pharResult.success)
                 return pharResult;
             pharFiles = pharResult.outputs;
-            Logger.info("PHAR created: " ~ pharFiles.join(", "));
+            structuredLog.info("phar_created_").field("detail", "PHAR created: " ~ pharFiles.join(", ")).emit();
         }
         
         // Build FrankenPHP static binary with embedded PHAR
@@ -598,9 +598,9 @@ class PHPHandler : BaseLanguageHandler
             // Add any additional server args
             buildCmd ~= phpConfig.frankenphp.serverArgs;
             
-            Logger.info("Creating FrankenPHP binary: " ~ buildCmd.join(" "));
-            Logger.info("Note: FrankenPHP static builds require 'frankenphp-builder' or custom Go build");
-            Logger.info("Creating wrapper script with embedded references");
+            structuredLog.info("creating_frankenphp_binary_").field("detail", "Creating FrankenPHP binary: " ~ buildCmd.join(" ")).emit();
+            structuredLog.info("note_frankenphp_static_builds_require_fr").emit();
+            structuredLog.info("creating_wrapper_script_with_embedded_re").emit();
             
             // Since actual static binary building requires frankenphp-builder or Go toolchain,
             // create a wrapper script that uses the installed FrankenPHP with the PHAR
@@ -710,12 +710,12 @@ class PHPHandler : BaseLanguageHandler
                 auto chmodResult = execute(["chmod", "+x", outputPath]);
                 if (chmodResult.status != 0)
                 {
-                    Logger.warning("Failed to make wrapper executable: " ~ chmodResult.output);
+                    structuredLog.warning("failed_to_make_wrapper_executable_").field("detail", "Failed to make wrapper executable: " ~ chmodResult.output).emit();
                 }
             }
         }
         
-        Logger.info("Created FrankenPHP wrapper: " ~ outputPath);
+        structuredLog.info("created_frankenphp_wrapper_").field("detail", "Created FrankenPHP wrapper: " ~ outputPath).emit();
     }
     
     private LanguageBuildResult runTests(
@@ -793,11 +793,11 @@ class PHPHandler : BaseLanguageHandler
         // Verify PHP is available
         if (!PHPTools.isPHPAvailable(phpCmd))
         {
-            Logger.warning("PHP not available at: " ~ phpCmd ~ ", falling back to 'php'");
+            structuredLog.warning("php_not_available_at_").field("detail", "PHP not available at: " ~ phpCmd ~ ", falling back to 'php'").emit();
             phpCmd = "php";
         }
         
-        Logger.debugLog("Using PHP: " ~ phpCmd ~ " (" ~ PHPTools.getPHPVersion(phpCmd) ~ ")");
+        structuredLog.debug_("using_php_").field("detail", "Using PHP: " ~ phpCmd ~ " (" ~ PHPTools.getPHPVersion(phpCmd) ~ ")").emit();
         
         return phpCmd;
     }
@@ -807,13 +807,13 @@ class PHPHandler : BaseLanguageHandler
     {
         if (!ComposerTool.isAvailable(config.composer.composerPath))
         {
-            Logger.error("Composer not available");
+            structuredLog.error("composer_not_available").emit();
             return false;
         }
         
         auto composer = new ComposerTool(config.composer.composerPath, projectRoot);
         
-        Logger.info("Installing Composer dependencies");
+        structuredLog.info("installing_composer_dependencies").emit();
         bool success = composer.install(
             config.composer.noDev,
             config.composer.optimizeAutoloader
@@ -837,13 +837,13 @@ class PHPHandler : BaseLanguageHandler
                 string fullPath = buildPath(projectRoot, dir);
                 if (!exists(fullPath))
                 {
-                    Logger.warning("PSR-4 directory not found: " ~ fullPath ~ " for namespace " ~ ns);
+                    structuredLog.warning("psr4_directory_not_found_").field("detail", "PSR-4 directory not found: " ~ fullPath ~ " for namespace " ~ ns).emit();
                 }
             }
         }
         catch (Exception e)
         {
-            Logger.warning("Failed to validate PSR-4 autoload: " ~ e.msg);
+            structuredLog.warning("failed_to_validate_psr4_autoload_").field("detail", "Failed to validate PSR-4 autoload: " ~ e.msg).emit();
         }
     }
     
@@ -914,7 +914,7 @@ class PHPHandler : BaseLanguageHandler
         else if (!target.sources.empty)
             cmd ~= target.sources;
         
-        Logger.info("Running PHPUnit: " ~ cmd.join(" "));
+        structuredLog.info("running_phpunit_").field("detail", "Running PHPUnit: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, config.root);
         
@@ -949,7 +949,7 @@ class PHPHandler : BaseLanguageHandler
         if (phpConfig.test.coverage)
             cmd ~= "--coverage";
         
-        Logger.info("Running Pest: " ~ cmd.join(" "));
+        structuredLog.info("running_pest_").field("detail", "Running Pest: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, config.root);
         
@@ -1016,7 +1016,7 @@ class PHPHandler : BaseLanguageHandler
             // Check if validation is cached
             if (getCache().isCached(actionId, [source], metadata))
             {
-                Logger.debugLog("  [Cached] Syntax validation: " ~ source);
+                structuredLog.debug_("__cached_syntax_validation_").field("detail", "  [Cached] Syntax validation: " ~ source).emit();
                 continue;
             }
             
@@ -1051,7 +1051,7 @@ class PHPHandler : BaseLanguageHandler
     /// Run static analysis with action-level caching
     private auto runStaticAnalysisWithCache(in Target target, PHPConfig phpConfig, string projectRoot)
     {
-        Logger.info("Running static analysis");
+        structuredLog.info("running_static_analysis").emit();
         auto analyzer = AnalyzerFactory.create(phpConfig.analysis.analyzer, projectRoot);
         
         // Build metadata for cache validation
@@ -1070,7 +1070,7 @@ class PHPHandler : BaseLanguageHandler
         // Check if analysis is cached (we don't have outputs, only validation)
         if (getCache().isCached(actionId, target.sources, metadata))
         {
-            Logger.debugLog("  [Cached] Static analysis for: " ~ target.name);
+            structuredLog.debug_("__cached_static_analysis_for_").field("detail", "  [Cached] Static analysis for: " ~ target.name).emit();
             
             // Return a fake successful result
             import languages.scripting.php.analysis : AnalysisResult;
@@ -1118,7 +1118,7 @@ class PHPHandler : BaseLanguageHandler
             }
             catch (Exception e)
             {
-                Logger.warning("Failed to analyze imports in " ~ source);
+                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source).emit();
             }
         }
         

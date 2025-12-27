@@ -16,7 +16,7 @@ import languages.jvm.java.tooling.detection;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionId, ActionType;
 import engine.workers.integration : JavaWorkerIntegration, shouldUsePersistentWorker;
 
@@ -39,7 +39,7 @@ class JARBuilder : JavaBuilder
     {
         JavaBuildResult result;
         
-        Logger.debugLog("Building JAR: " ~ target.name);
+        structuredLog.debug_("building_jar_").field("detail", "Building JAR: " ~ target.name).emit();
         
         // Determine output path
         string outputPath = getOutputPath(target, workspace, config);
@@ -114,7 +114,7 @@ class JARBuilder : JavaBuilder
         ref JavaBuildResult result
     )
     {
-        Logger.info("Compiling Java sources");
+        structuredLog.info("compiling_java_sources").emit();
         
         string javacCmd = JavaToolDetection.getJavacCommand();
         
@@ -157,9 +157,9 @@ class JARBuilder : JavaBuilder
                 auto r = workerResult.unwrap();
                 if (r.success)
                 {
-                    Logger.info("  [Warm worker] Compiled " ~ sources.length.to!string ~ 
+                    structuredLog.info("__warm_worker_compiled_").field("detail", "  [Warm worker] Compiled " ~ sources.length.to!string ~ 
                                " files in " ~ r.executionTimeMs.to!string ~ "ms" ~
-                               " (speedup: " ~ r.estimatedSpeedup().to!string ~ "x)");
+                               " (speedup: " ~ r.estimatedSpeedup().to!string ~ "x)").emit();
                     return true;
                 }
                 // Worker compiled but failed - report error
@@ -167,7 +167,7 @@ class JARBuilder : JavaBuilder
                 return false;
             }
             // Worker unavailable, fall through to direct compilation
-            Logger.debugLog("Persistent worker unavailable, using direct javac");
+            structuredLog.debug_("persistent_worker_unavailable_using_dire").emit();
         }
         
         // Fallback: Compile per-file with action caching
@@ -189,7 +189,7 @@ class JARBuilder : JavaBuilder
             {
                 if (exists(expectedClass))
                 {
-                    Logger.debugLog("  [Cached] " ~ source);
+                    structuredLog.debug_("__cached_").field("detail", "  [Cached] " ~ source).emit();
                     continue;
                 }
             }
@@ -197,7 +197,7 @@ class JARBuilder : JavaBuilder
             // Direct compilation
             string[] cmd = [javacCmd, "-d", outputDir] ~ options ~ [source];
             
-            Logger.debugLog("Compiling: " ~ source);
+            structuredLog.debug_("compiling_").field("detail", "Compiling: " ~ source).emit();
             
             auto compileRes = execute(cmd);
             bool success = compileRes.status == 0;
@@ -275,7 +275,7 @@ class JARBuilder : JavaBuilder
         ref JavaBuildResult result
     )
     {
-        Logger.info("Creating JAR: " ~ outputPath);
+        structuredLog.info("creating_jar_").field("detail", "Creating JAR: " ~ outputPath).emit();
         
         string jarCmd = JavaToolDetection.getJarCommand();
         string[] cmd = [jarCmd];
@@ -287,7 +287,7 @@ class JARBuilder : JavaBuilder
             mainClass = detectMainClass(classDir);
             if (!mainClass.empty)
             {
-                Logger.debugLog("Auto-detected main class: " ~ mainClass);
+                structuredLog.debug_("autodetected_main_class_").field("detail", "Auto-detected main class: " ~ mainClass).emit();
             }
         }
         
@@ -322,7 +322,7 @@ class JARBuilder : JavaBuilder
         // Add classes
         cmd ~= ["-C", classDir, "."];
         
-        Logger.debugLog("JAR command: " ~ cmd.join(" "));
+        structuredLog.debug_("jar_command_").field("detail", "JAR command: " ~ cmd.join(" ")).emit();
         
         auto jarRes = execute(cmd);
         
@@ -335,14 +335,14 @@ class JARBuilder : JavaBuilder
         // Add index if requested (must be done after JAR creation)
         if (config.packaging.createIndex)
         {
-            Logger.debugLog("Adding index to JAR");
+            structuredLog.debug_("adding_index_to_jar").emit();
             string[] indexCmd = [jarCmd, "i", outputPath];
             auto indexRes = execute(indexCmd);
             
             if (indexRes.status != 0)
             {
                 // Index creation is not critical, just log warning
-                Logger.warning("Failed to create JAR index: " ~ indexRes.output);
+                structuredLog.warning("failed_to_create_jar_index_").field("detail", "Failed to create JAR index: " ~ indexRes.output).emit();
             }
         }
         

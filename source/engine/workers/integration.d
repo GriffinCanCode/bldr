@@ -16,7 +16,7 @@ import engine.workers.go;
 import engine.workers.python;
 import engine.workers.service;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Integration layer for language handlers
 /// 
@@ -54,7 +54,9 @@ struct JavaWorkerIntegration
                     findJavaOutputFiles(sources, outputDir)
                 ));
             }
-            Logger.warning("Persistent worker failed, falling back: " ~ result.unwrapErr().message());
+            structuredLog.warning("persistent_worker_fallback")
+                .field("error", result.unwrapErr().message())
+                .emit();
         }
         return compileJavaDirect(sources, outputDir, classpath, options);
     }
@@ -127,7 +129,9 @@ struct KotlinWorkerIntegration
                     r.success, r.output, r.executionTimeMs, true, []
                 ));
             }
-            Logger.warning("Persistent worker failed, falling back: " ~ result.unwrapErr().message());
+            structuredLog.warning("persistent_worker_fallback")
+                .field("error", result.unwrapErr().message())
+                .emit();
         }
         return compileKotlinDirect(sources, outputDir, classpath, options);
     }
@@ -202,7 +206,9 @@ struct TypeScriptWorkerIntegration
                     r.diagnostics.map!(d => TSWorkerDiagnostic(d.file, d.line, d.column, d.message, d.severity)).array
                 ));
             }
-            Logger.warning("Persistent worker failed, falling back: " ~ result.unwrapErr().message());
+            structuredLog.warning("persistent_worker_fallback")
+                .field("error", result.unwrapErr().message())
+                .emit();
         }
         return compileTypeScriptDirect(sources, outDir, options);
     }
@@ -318,7 +324,9 @@ struct RustWorkerIntegration
                     r.diagnostics.map!(d => RustWorkerDiagnostic(d.file, d.line, d.column, d.message, d.level)).array
                 ));
             }
-            Logger.warning("Persistent worker failed, falling back: " ~ result.unwrapErr().message());
+            structuredLog.warning("persistent_worker_fallback")
+                .field("error", result.unwrapErr().message())
+                .emit();
         }
         return buildRustDirect(manifestPath, options);
     }
@@ -458,7 +466,9 @@ struct GoWorkerIntegration
                     r.diagnostics.map!(d => GoWorkerDiagnostic(d.file, d.line, d.column, d.message, d.level)).array
                 ));
             }
-            Logger.warning("Persistent worker failed, falling back: " ~ result.unwrapErr().message());
+            structuredLog.warning("persistent_worker_fallback")
+                .field("error", result.unwrapErr().message())
+                .emit();
         }
         return buildGoDirect(packages, outputPath, options);
     }
@@ -592,7 +602,9 @@ struct PythonWorkerIntegration
                     r.diagnostics.map!(d => PythonWorkerDiagnostic(d.file, d.line, d.column, d.message, d.code, d.level)).array
                 ));
             }
-            Logger.warning("Persistent worker failed, falling back: " ~ result.unwrapErr().message());
+            structuredLog.warning("persistent_worker_fallback")
+                .field("error", result.unwrapErr().message())
+                .emit();
         }
         return typecheckPythonDirect(paths, options);
     }
@@ -699,7 +711,9 @@ struct PythonWorkerDiagnostic
 void initializePersistentWorkers(WorkerServiceConfig config = WorkerServiceConfig.init) @trusted
 {
     initWorkerService(config);
-    Logger.info("Persistent workers initialized - expect 3-50x speedup for multi-language compilation");
+    structuredLog.info("persistent_workers_initialized")
+        .field("expected_speedup", "3-50x")
+        .emit();
 }
 
 /// Shutdown persistent workers - call at build system shutdown

@@ -6,7 +6,7 @@ import core.atomic;
 import core.sync.mutex;
 import core.sync.semaphore;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Rate limit configuration
 struct LimiterConfig
@@ -322,8 +322,8 @@ final class RateLimiter
     /// Emit rate limit hit event
     private void emitRateLimitHit(Priority priority) @trusted
     {
-        Logger.debugLog("Rate limit hit: " ~ endpoint ~ 
-            " (priority: " ~ priority.to!string ~ ")");
+        structuredLog.debug_("rate_limit_hit_").field("detail", "Rate limit hit: " ~ endpoint ~ 
+            " (priority: " ~ priority.to!string ~ ")").emit();
         
         if (onRateLimitHit !is null)
         {
@@ -333,7 +333,7 @@ final class RateLimiter
             }
             catch (Exception e)
             {
-                Logger.error("Error in rate limiter callback: " ~ e.msg);
+                structuredLog.error("error_in_rate_limiter_callback_").field("detail", "Error in rate limiter callback: " ~ e.msg).emit();
             }
         }
     }

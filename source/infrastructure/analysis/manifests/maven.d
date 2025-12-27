@@ -10,7 +10,7 @@ import infrastructure.analysis.manifests.types;
 import infrastructure.config.schema.schema : TargetType, TargetLanguage;
 import infrastructure.errors;
 import infrastructure.errors.types.types : ParseError, ioError;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Maven project information extracted from pom.xml
 private struct MavenProject
@@ -90,7 +90,7 @@ final class MavenManifestParser : IManifestParser
             else
                 info.metadata["buildDir"] = "target";  // Maven default
             
-            Logger.info("Parsed Maven project: " ~ info.name ~ " v" ~ info.version_);
+            structuredLog.info("parsed_maven_project_").field("detail", "Parsed Maven project: " ~ info.name ~ " v" ~ info.version_).emit();
             
             return BuildResult!ManifestInfo.ok(info);
         }

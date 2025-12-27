@@ -11,7 +11,7 @@ import std.conv;
 import languages.compiled.cpp.core.config;
 // import languages.compiled.cpp.tooling.toolchain; // Replaced by unified toolchain system
 import infrastructure.toolchain.core.spec;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Convert CppStandard enum to compiler flag
 private string cppStandardToFlag(CppStandard std)
@@ -83,7 +83,7 @@ class ClangTidy
             return result;
         }
         
-        Logger.info("Running clang-tidy...");
+        structuredLog.info("running_clangtidy").emit();
         
         // Build checks list
         string[] checks = [
@@ -125,7 +125,7 @@ class ClangTidy
             // Add standard
             cmd ~= ["--", "-std=" ~ cppStandardToFlag(config.cppStandard)];
             
-            Logger.debugLog("Analyzing: " ~ source);
+            structuredLog.debug_("analyzing_").field("detail", "Analyzing: " ~ source).emit();
             
             auto res = execute(cmd);
             
@@ -192,7 +192,7 @@ class CppCheck
             return result;
         }
         
-        Logger.info("Running cppcheck...");
+        structuredLog.info("running_cppcheck").emit();
         
         string[] cmd = [
             "cppcheck",
@@ -275,11 +275,11 @@ class ClangFormat
     {
         if (!isAvailable())
         {
-            Logger.warning("clang-format not available");
+            structuredLog.warning("clangformat_not_available").emit();
             return false;
         }
         
-        Logger.info("Formatting code with clang-format...");
+        structuredLog.info("formatting_code_with_clangformat").emit();
         
         foreach (source; sources)
         {
@@ -298,19 +298,19 @@ class ClangFormat
             
             cmd ~= source;
             
-            Logger.debugLog("Formatting: " ~ source);
+            structuredLog.debug_("formatting_").field("detail", "Formatting: " ~ source).emit();
             
             auto res = execute(cmd);
             
             if (res.status != 0)
             {
-                Logger.error("Failed to format " ~ source);
-                Logger.error("  Output: " ~ res.output);
+                structuredLog.error("failed_to_format_").field("detail", "Failed to format " ~ source).emit();
+                structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
                 return false;
             }
         }
         
-        Logger.info("Code formatted successfully");
+        structuredLog.info("code_formatted_successfully").emit();
         return true;
     }
     
@@ -344,7 +344,7 @@ class ClangFormat
             
             if (res.status != 0)
             {
-                Logger.warning("File not properly formatted: " ~ source);
+                structuredLog.warning("file_not_properly_formatted_").field("detail", "File not properly formatted: " ~ source).emit();
                 allFormatted = false;
             }
         }
@@ -380,7 +380,7 @@ class SanitizerRunner
             return result;
         }
         
-        Logger.info("Running with sanitizers: " ~ sanitizers.to!string);
+        structuredLog.info("running_with_sanitizers_").field("detail", "Running with sanitizers: " ~ sanitizers.to!string).emit();
         
         // Build environment with sanitizer options
         string[string] env;
@@ -481,13 +481,13 @@ class CoverageTool
             return generateGcovReport(gcdaFiles, outputDir);
         }
         
-        Logger.warning("No coverage tool available");
+        structuredLog.warning("no_coverage_tool_available").emit();
         return false;
     }
     
     private static bool generateGcovReport(string[] gcdaFiles, string outputDir)
     {
-        Logger.info("Generating coverage report with gcov...");
+        structuredLog.info("generating_coverage_report_with_gcov").emit();
         
         if (!exists(outputDir))
             mkdirRecurse(outputDir);
@@ -497,8 +497,8 @@ class CoverageTool
             auto res = execute(["gcov", gcda]);
             if (res.status != 0)
             {
-                Logger.error("gcov failed");
-                Logger.error("  Output: " ~ res.output);
+                structuredLog.error("gcov_failed").emit();
+                structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
                 return false;
             }
         }
@@ -508,7 +508,7 @@ class CoverageTool
     
     private static bool generateLcovReport(string[] gcdaFiles, string outputDir)
     {
-        Logger.info("Generating coverage report with lcov...");
+        structuredLog.info("generating_coverage_report_with_lcov").emit();
         
         if (!exists(outputDir))
             mkdirRecurse(outputDir);
@@ -520,8 +520,8 @@ class CoverageTool
         auto res = execute(["lcov", "--capture", "--directory", ".", "--output-file", infoFile]);
         if (res.status != 0)
         {
-            Logger.error("lcov failed");
-            Logger.error("  Output: " ~ res.output);
+            structuredLog.error("lcov_failed").emit();
+            structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
             return false;
         }
         
@@ -533,12 +533,12 @@ class CoverageTool
             res = execute(["genhtml", infoFile, "--output-directory", htmlDir]);
             if (res.status != 0)
             {
-                Logger.error("genhtml failed");
-                Logger.error("  Output: " ~ res.output);
+                structuredLog.error("genhtml_failed").emit();
+                structuredLog.error("__output_").field("detail", "  Output: " ~ res.output).emit();
                 return false;
             }
             
-            Logger.info("Coverage report generated: " ~ htmlDir);
+            structuredLog.info("coverage_report_generated_").field("detail", "Coverage report generated: " ~ htmlDir).emit();
         }
         
         return true;

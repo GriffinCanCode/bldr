@@ -10,7 +10,7 @@ import languages.scripting.python.managers.base;
 import languages.scripting.python.managers.environments;
 import languages.scripting.python.tooling.detection : ToolDetection;
 alias PyTools = ToolDetection;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// UV package manager (ultra-fast, Rust-based)
 class UvManager : PackageManager
@@ -40,7 +40,7 @@ class UvManager : PackageManager
         if (upgrade)
             cmd ~= "--upgrade";
         
-        Logger.info("Installing dependencies from " ~ file ~ " using uv (fast!)");
+        structuredLog.info("installing_dependencies_from_").field("detail", "Installing dependencies from " ~ file ~ " using uv (fast!)").emit();
         
         StopWatch sw;
         sw.start();
@@ -58,7 +58,7 @@ class UvManager : PackageManager
         }
         
         result.success = true;
-        Logger.info("Dependencies installed in %.2fs (uv is ~10-100x faster!)".format(result.timeSeconds));
+        structuredLog.info("log_event").field("message", "Dependencies installed in %.2fs (uv is ~10-100x faster!)".format(result.timeSeconds)).emit();
         
         return result;
     }
@@ -76,7 +76,7 @@ class UvManager : PackageManager
             cmd ~= "-e";
         cmd ~= packages;
         
-        Logger.info("Installing packages with uv: " ~ packages.join(", "));
+        structuredLog.info("installing_packages_with_uv_").field("detail", "Installing packages with uv: " ~ packages.join(", ")).emit();
         
         StopWatch sw;
         sw.start();
@@ -95,7 +95,7 @@ class UvManager : PackageManager
         
         result.success = true;
         result.installedPackages = packages;
-        Logger.info("Packages installed in %.2fs".format(result.timeSeconds));
+        structuredLog.info("packages_installed_in_2fsformatresulttim").emit();
         
         return result;
     }

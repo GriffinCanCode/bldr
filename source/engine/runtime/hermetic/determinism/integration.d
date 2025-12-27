@@ -14,7 +14,7 @@ import engine.runtime.hermetic.determinism.repair;
 import engine.runtime.hermetic.core.executor;
 import engine.runtime.hermetic.core.spec;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger : Logger;
+import infrastructure.utils.logging : Logger, structuredLog;
 
 /// Verification mode
 enum VerificationMode
@@ -141,8 +141,8 @@ struct DeterminismIntegration
         auto sw = StopWatch();
         sw.start();
         
-        Logger.info("Starting determinism verification with " ~ 
-                   config.iterations.to!string ~ " builds...");
+        structuredLog.info("starting_determinism_verification_with_").field("detail", "Starting determinism verification with " ~ 
+                   config.iterations.to!string ~ " builds...").emit();
         
         // Create hermetic executor
         auto executorResult = HermeticExecutor.create(spec, workingDir);
@@ -167,7 +167,7 @@ struct DeterminismIntegration
         
         foreach (i; 0 .. config.iterations)
         {
-            Logger.info("Build " ~ (i + 1).to!string ~ "/" ~ config.iterations.to!string);
+            structuredLog.info("build_").field("detail", "Build " ~ (i + 1).to!string ~ "/" ~ config.iterations.to!string).emit();
             
             // Create unique output directory for this iteration
             immutable iterDir = buildPath(config.outputDir, "build-" ~ i.to!string);
@@ -181,7 +181,7 @@ struct DeterminismIntegration
         }
         
         // Compare outputs from all builds
-        Logger.info("Comparing build outputs...");
+        structuredLog.info("comparing_build_outputs").emit();
         
         auto compareResult = verifier.verifyDirectory(outputDirs[0], outputDirs[1]);
         if (compareResult.isErr)
@@ -196,7 +196,7 @@ struct DeterminismIntegration
         RepairPlan repairPlan;
         if (!verifyResult.isDeterministic)
         {
-            Logger.warning("Non-determinism detected, generating repair plan...");
+            structuredLog.warning("nondeterminism_detected_generating_repai").emit();
             
             DeterminismViolation[] violations;
             foreach (v; verifyResult.violations)
@@ -225,13 +225,13 @@ struct DeterminismIntegration
         immutable reportPath = buildPath(config.outputDir, "report.json");
         report.save(reportPath);
         
-        Logger.info(report.summary());
-        Logger.info("Report saved to: " ~ reportPath);
+        structuredLog.info("log_event").field("message", report.summary()).emit();
+        structuredLog.info("report_saved_to_").field("detail", "Report saved to: " ~ reportPath).emit();
         
         // Apply auto-repair if enabled
         if (!report.isDeterministic && config.autoRepair)
         {
-            Logger.info("Auto-repair enabled, applying fixes...");
+            structuredLog.info("autorepair_enabled_applying_fixes").emit();
             applyAutoRepair(detections);
         }
         
@@ -260,7 +260,7 @@ struct DeterminismIntegration
         auto sw = StopWatch();
         sw.start();
         
-        Logger.info("Running quick determinism check...");
+        structuredLog.info("running_quick_determinism_check").emit();
         
         // Analyze command for potential issues
         auto detections = NonDeterminismDetector.analyzeCompilerCommand(command);
@@ -276,15 +276,15 @@ struct DeterminismIntegration
         
         if (detections.length > 0)
         {
-            Logger.warning("Found " ~ detections.length.to!string ~ 
-                         " potential determinism issues");
+            structuredLog.warning("found_").field("detail", "Found " ~ detections.length.to!string ~ 
+                         " potential determinism issues").emit();
             
             DeterminismViolation[] violations;
             report.repairPlan = RepairEngine.generateRepairPlan(detections, violations);
         }
         else
         {
-            Logger.info("No determinism issues detected in command");
+            structuredLog.info("no_determinism_issues_detected_in_comman").emit();
         }
         
         return Ok!(VerificationReport, BuildError)(report);
@@ -301,22 +301,22 @@ struct DeterminismIntegration
     /// Apply automatic repairs
     void applyAutoRepair(Detection[] detections) @system
     {
-        Logger.info("Applying automatic repairs...");
+        structuredLog.info("applying_automatic_repairs").emit();
         
         auto flags = RepairEngine.generateConsolidatedFlags(detections);
         auto envVars = RepairEngine.generateConsolidatedEnvVars(detections);
         
         // Log what would be applied
-        Logger.info("Would add compiler flags:");
+        structuredLog.info("would_add_compiler_flags").emit();
         foreach (flag; flags)
-            Logger.info("  " ~ flag);
+            structuredLog.info("__").field("detail", "  " ~ flag).emit();
         
-        Logger.info("Would set environment variables:");
+        structuredLog.info("would_set_environment_variables").emit();
         foreach (key, value; envVars)
-            Logger.info("  " ~ key ~ "=" ~ value);
+            structuredLog.info("__").field("detail", "  " ~ key ~ "=" ~ value).emit();
         
         // TODO: Actually apply these to the build configuration
-        Logger.warning("Auto-repair not fully implemented yet");
+        structuredLog.warning("autorepair_not_fully_implemented_yet").emit();
     }
 }
 

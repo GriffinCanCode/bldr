@@ -12,7 +12,7 @@ import languages.dotnet.fsharp.config;
 import infrastructure.analysis.targets.types;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Builder for F# scripts (.fsx)
 class ScriptBuilder : FSharpBuilder
@@ -71,8 +71,8 @@ class ScriptBuilder : FSharpBuilder
         // Scripts don't produce output files, use source hash
         result.outputHash = FastHash.hashStrings(sources);
         
-        Logger.info("Script executed successfully");
-        Logger.debugLog("Output: " ~ res.output);
+        structuredLog.info("script_executed_successfully").emit();
+        structuredLog.debug_("output_").field("detail", "Output: " ~ res.output).emit();
         
         return result;
     }

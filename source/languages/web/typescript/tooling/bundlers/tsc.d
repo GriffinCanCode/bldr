@@ -13,7 +13,7 @@ import std.conv;
 import std.string;
 import core.time : MonoTime;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
 import engine.workers.integration : TypeScriptWorkerIntegration, TSWorkerCompileOptions, shouldUsePersistentWorker;
 
@@ -90,9 +90,9 @@ class TSCBundler : TSBundler
                 auto r = workerResult.unwrap();
                 if (r.success)
                 {
-                    Logger.info("  [Warm worker] Compiled " ~ sources.length.to!string ~ 
+                    structuredLog.info("__warm_worker_compiled_").field("detail", "  [Warm worker] Compiled " ~ sources.length.to!string ~ 
                                " files in " ~ r.executionTimeMs.to!string ~ "ms" ~
-                               " (speedup: " ~ r.estimatedSpeedup().to!string ~ "x)");
+                               " (speedup: " ~ r.estimatedSpeedup().to!string ~ "x)").emit();
                     
                     result.success = true;
                     result.outputs = collectOutputs(sources, config, outputDir);
@@ -106,7 +106,7 @@ class TSCBundler : TSBundler
                 result.hadTypeErrors = r.hasErrors();
                 return result;
             }
-            Logger.debugLog("Persistent worker unavailable, using direct tsc");
+            structuredLog.debug_("persistent_worker_unavailable_using_dire").emit();
         }
         
         // Fallback: Direct compilation with caching
@@ -137,7 +137,7 @@ class TSCBundler : TSBundler
         
         if (!typeCheckCached)
         {
-            Logger.debugLog("  [Type checking] " ~ target.name);
+            structuredLog.debug_("__type_checking_").field("detail", "  [Type checking] " ~ target.name).emit();
             
             string[] checkCmd = ["tsc", "--noEmit"];
             if (!config.tsconfig.empty && exists(config.tsconfig))
@@ -162,7 +162,7 @@ class TSCBundler : TSBundler
             actionCache.update(typeCheckId, inputFiles, [], metadata, typeCheckSuccess);
         }
         else
-            Logger.debugLog("  [Cached] Type checking: " ~ target.name);
+            structuredLog.debug_("__cached_type_checking_").field("detail", "  [Cached] Type checking: " ~ target.name).emit();
         
         // Step 2: Compilation action
         ActionId compileId;
@@ -180,7 +180,7 @@ class TSCBundler : TSBundler
             bool allExist = expectedOutputs.all!(o => exists(o));
             if (allExist)
             {
-                Logger.debugLog("  [Cached] TSC compilation: " ~ target.name);
+                structuredLog.debug_("__cached_tsc_compilation_").field("detail", "  [Cached] TSC compilation: " ~ target.name).emit();
                 result.success = true;
                 result.outputs = collectOutputs(sources, config, outputDir);
                 if (config.declaration)
@@ -204,7 +204,7 @@ class TSCBundler : TSBundler
             cmd ~= sources;
         }
         
-        Logger.debugLog("Compiling with tsc: " ~ cmd.join(" "));
+        structuredLog.debug_("compiling_with_tsc_").field("detail", "Compiling with tsc: " ~ cmd.join(" ")).emit();
         
         auto res = execute(cmd, null, Config.none, size_t.max, workspace.root);
         bool success = (res.status == 0);
@@ -222,7 +222,7 @@ class TSCBundler : TSBundler
             return result;
         }
         
-        Logger.debugLog("TypeScript compilation successful");
+        structuredLog.debug_("typescript_compilation_successful").emit();
         
         result.outputs = collectOutputs(sources, config, outputDir);
         if (config.declaration)

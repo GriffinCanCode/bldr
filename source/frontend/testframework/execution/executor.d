@@ -15,7 +15,7 @@ import frontend.testframework.sharding;
 import frontend.testframework.caching;
 import frontend.testframework.flaky;
 import infrastructure.utils.concurrency.scheduler;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Test execution mode
 enum TestExecutionMode
@@ -113,13 +113,13 @@ final class TestExecutor
     {
         auto sw = StopWatch(AutoStart.yes);
         
-        Logger.info("Executing " ~ testTargets.length.to!string ~ " test targets");
+        structuredLog.info("executing_").field("detail", "Executing " ~ testTargets.length.to!string ~ " test targets").emit();
         
         // Filter quarantined tests
         if (config.skipQuarantined && detector !is null)
         {
             testTargets = testTargets.filter!(t => !detector.isQuarantined(t.name)).array;
-            Logger.info("Filtered quarantined tests, " ~ testTargets.length.to!string ~ " remaining");
+            structuredLog.info("filtered_quarantined_tests_").field("detail", "Filtered quarantined tests, " ~ testTargets.length.to!string ~ " remaining").emit();
         }
         
         TestResult[] results;
@@ -146,7 +146,7 @@ final class TestExecutor
         
         sw.stop();
         
-        Logger.info("Test execution completed in " ~ sw.peek().total!"msecs".to!string ~ "ms");
+        structuredLog.info("test_execution_completed_in_").field("detail", "Test execution completed in " ~ sw.peek().total!"msecs".to!string ~ "ms").emit();
         logStatistics();
         
         return results;
@@ -181,7 +181,7 @@ final class TestExecutor
         import std.parallelism : TaskPool, totalCPUs;
         
         immutable parallelism = config.maxParallelism == 0 ? totalCPUs : config.maxParallelism;
-        Logger.info("Running tests with parallelism: " ~ parallelism.to!string);
+        structuredLog.info("running_tests_with_parallelism_").field("detail", "Running tests with parallelism: " ~ parallelism.to!string).emit();
         
         TestResult[] results;
         results.length = testTargets.length;
@@ -205,11 +205,11 @@ final class TestExecutor
         string[] testIds = testTargets.map!(t => t.name).array;
         auto shards = shardEngine.computeShards(testIds);
         
-        Logger.info("Created " ~ shards.length.to!string ~ " test shards");
+        structuredLog.info("created_").field("detail", "Created " ~ shards.length.to!string ~ " test shards").emit();
         
         // Log sharding statistics
         auto stats = shardEngine.computeStats(shards);
-        Logger.info("Shard balance: " ~ stats.loadBalance.to!string);
+        structuredLog.info("shard_balance_").field("detail", "Shard balance: " ~ stats.loadBalance.to!string).emit();
         
         // Initialize coordinator
         shardCoord.initialize(shards);
@@ -299,7 +299,7 @@ final class TestExecutor
                 atomicOp!"+="(testsRun, 1);
                 
                 auto result = cache.get(target.name);
-                Logger.debugLog("Test result from cache: " ~ target.name);
+                structuredLog.debug_("test_result_from_cache_").field("detail", "Test result from cache: " ~ target.name).emit();
                 return result;
             }
         }
@@ -418,24 +418,24 @@ final class TestExecutor
     /// Log execution statistics
     private void logStatistics() @system
     {
-        Logger.info("═══ Test Execution Statistics ═══");
-        Logger.info("  Total tests:    " ~ atomicLoad(testsRun).to!string);
-        Logger.info("  Passed:         " ~ atomicLoad(testsPassed).to!string);
-        Logger.info("  Failed:         " ~ atomicLoad(testsFailed).to!string);
-        Logger.info("  Skipped:        " ~ atomicLoad(testsSkipped).to!string);
-        Logger.info("  Cached:         " ~ atomicLoad(testsCached).to!string);
+        structuredLog.info("_test_execution_statistics_").emit();
+        structuredLog.info("__total_tests____").field("detail", "  Total tests:    " ~ atomicLoad(testsRun).to!string).emit();
+        structuredLog.info("__passed_________").field("detail", "  Passed:         " ~ atomicLoad(testsPassed).to!string).emit();
+        structuredLog.info("__failed_________").field("detail", "  Failed:         " ~ atomicLoad(testsFailed).to!string).emit();
+        structuredLog.info("__skipped________").field("detail", "  Skipped:        " ~ atomicLoad(testsSkipped).to!string).emit();
+        structuredLog.info("__cached_________").field("detail", "  Cached:         " ~ atomicLoad(testsCached).to!string).emit();
         
         if (cache !is null)
         {
             auto cacheStats = cache.getStats();
-            Logger.info("  Cache hit rate: " ~ (cacheStats.hitRate * 100).to!string ~ "%");
+            structuredLog.info("__cache_hit_rate_").field("detail", "  Cache hit rate: " ~ (cacheStats.hitRate * 100).to!string ~ "%").emit();
         }
         
         if (detector !is null)
         {
             auto detectorStats = detector.getStats();
-            Logger.info("  Flaky tests:    " ~ detectorStats.flakyTests.to!string);
-            Logger.info("  Quarantined:    " ~ detectorStats.quarantinedTests.to!string);
+            structuredLog.info("__flaky_tests____").field("detail", "  Flaky tests:    " ~ detectorStats.flakyTests.to!string).emit();
+            structuredLog.info("__quarantined____").field("detail", "  Quarantined:    " ~ detectorStats.quarantinedTests.to!string).emit();
         }
     }
     

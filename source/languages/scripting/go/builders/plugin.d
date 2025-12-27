@@ -5,7 +5,7 @@ import languages.scripting.go.builders.base;
 import languages.scripting.go.core.config;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache;
 
 /// Plugin builder - builds Go plugins (deprecated but still supported)
@@ -23,7 +23,7 @@ class PluginBuilder : StandardBuilder
         in WorkspaceConfig workspace
     )
     {
-        Logger.info("Building Go plugin (Note: Go plugins are deprecated in Go 1.16+)");
+        structuredLog.info("building_go_plugin_note_go_plugins_are_d").emit();
         
         // Force plugin mode
         GoConfig mutableConfig = cast(GoConfig)config;
