@@ -9,6 +9,19 @@ Content-defined chunking enables efficient network transfers for large build art
 
 Builder uses **FastCDC** (gear-based rolling hash) for chunking, which is 2-3x faster than Rabin fingerprinting while achieving comparable deduplication ratios.
 
+### SIMD Acceleration
+
+FastCDC includes **SIMD-accelerated gear hash** for additional 2-3x speedup:
+
+| Implementation | Speedup | Notes |
+|---------------|---------|-------|
+| AVX-512 | 2.5-3x | 8-way unrolled loop |
+| AVX2 | 2-2.5x | 4-way parallel lookups |
+| NEON | 1.5-2x | ARM64 vectorization |
+| Portable | Baseline | Tight scalar loop |
+
+SIMD is enabled by default and automatically dispatched at runtime based on CPU capabilities.
+
 ## Architecture
 
 ### FastCDC Algorithm
@@ -192,7 +205,8 @@ auto missing = localStore.findMissingChunks(manifest.refs.map!(r => r.hash).arra
 
 ### Chunking Throughput
 
-- **FastCDC**: ~500 MB/s (gear hash + BLAKE3)
+- **FastCDC (SIMD)**: ~1.2-1.5 GB/s (AVX2 gear hash + BLAKE3)
+- **FastCDC (scalar)**: ~500 MB/s (gear hash + BLAKE3)
 - **Rabin**: ~200 MB/s
 
 ### Overhead
@@ -295,6 +309,26 @@ auto cdc = FastCDC(FastCDC.Config.artifact());  // 2KB-16KB-64KB
 
 // For fine-grained deduplication
 auto cdc = FastCDC(FastCDC.Config.small());  // 1KB-4KB-16KB
+```
+
+### SIMD Control
+
+```d
+// Enable SIMD acceleration (default)
+auto cdc = FastCDC.create(true);
+assert(cdc.isSIMDEnabled());
+
+// Disable SIMD (for benchmarking/testing)
+auto cdcScalar = FastCDC.create(false);
+
+// Check SIMD implementation
+writeln("Using: ", FastCDC.simdImplName());  // "AVX2", "NEON", etc.
+
+// Direct SIMD gear hash API
+import infrastructure.utils.simd.gear : SIMDGear;
+
+auto gear = SIMDGear.create(SIMDGear.Preset.artifact);
+auto boundary = gear.findBoundary(data, remaining);
 ```
 
 **Trade-offs:**

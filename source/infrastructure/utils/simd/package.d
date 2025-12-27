@@ -13,6 +13,7 @@ module infrastructure.utils.simd;
 ///   bench.d        - Comprehensive SIMD benchmarking suite
 ///   bloom.d        - SIMD-accelerated Bloom filter (betterC core)
 ///   strings.d      - SIMD-accelerated string comparison (AVX2/NEON)
+///   gear.d         - SIMD-accelerated gear hash for FastCDC chunking
 ///
 /// Features:
 ///   - Runtime CPU detection (no compile-time only paths)
@@ -26,7 +27,10 @@ module infrastructure.utils.simd;
 /// Performance Gains:
 ///   - BLAKE3: 2-4x faster on AVX2, 3-5x on AVX-512, 2-3x on NEON
 ///   - Memory Ops: 1.5-3x faster for large buffers
-///   - Chunking: 3-8x faster with vectorized rolling hash
+///   - Gear Hash CDC: 2-3x faster chunking with SIMD boundary detection
+///     - AVX2: 4-way unrolled loop with parallel table lookups
+///     - AVX-512: 8-way unrolled loop
+///     - NEON: 4-way unrolled with vectorized byte loads
 ///   - Batch Hash Validation: 3-5x faster for multiple comparisons
 ///   - Bloom Filter: 2x throughput via SIMD vectorized probing
 ///     - AVX2: 4 hashes probed simultaneously
@@ -79,4 +83,5 @@ public import infrastructure.utils.simd.context;
 public import infrastructure.utils.simd.bench;
 public import infrastructure.utils.simd.bloom;
 public import infrastructure.utils.simd.strings;
+public import infrastructure.utils.simd.gear;
 

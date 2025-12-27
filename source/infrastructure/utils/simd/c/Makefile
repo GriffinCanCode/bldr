@@ -37,7 +37,7 @@ else ifeq ($(UNAME_M),aarch64)
 endif
 
 # Source files
-SOURCES = cpu_detect.c blake3_dispatch.c simd_ops.c bloom.c bloom_simd.c strings.c
+SOURCES = cpu_detect.c blake3_dispatch.c simd_ops.c bloom.c bloom_simd.c strings.c gear_simd.c
 
 # x86/x64 SIMD sources
 ifeq ($(ARCH_X86),1)
@@ -109,6 +109,15 @@ bloom_simd.o: bloom_simd.c bloom_simd.h bloom.h cpu_detect.h
 	$(CC) $(CFLAGS) $(SIMD_FLAGS_AVX2) -mavx512f -mavx512vl -c $< -o $@
 else
 bloom_simd.o: bloom_simd.c bloom_simd.h bloom.h cpu_detect.h
+	$(CC) $(CFLAGS) -c $< -o $@
+endif
+
+# gear_simd.c needs SIMD flags for vectorized gear hash
+ifeq ($(ARCH_X86),1)
+gear_simd.o: gear_simd.c gear_simd.h cpu_detect.h
+	$(CC) $(CFLAGS) $(SIMD_FLAGS_AVX2) -mavx512f -mavx512vl -c $< -o $@
+else
+gear_simd.o: gear_simd.c gear_simd.h cpu_detect.h
 	$(CC) $(CFLAGS) -c $< -o $@
 endif
 

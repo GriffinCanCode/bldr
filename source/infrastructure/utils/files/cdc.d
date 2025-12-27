@@ -8,6 +8,7 @@ import std.stdio : File;
 import infrastructure.utils.crypto.blake3 : Blake3, toHexString;
 import infrastructure.utils.crypto.merkle : MerkleTree, MerkleProof, StreamingMerkleTree;
 import infrastructure.errors : Result, Ok, Err, BuildResult, BuildError, VoidBuildResult;
+import infrastructure.utils.simd.gear : SIMDGear;
 
 /// FastCDC - Content-Defined Chunking using Gear rolling hash
 /// 2-3x faster than Rabin fingerprinting with comparable deduplication
@@ -124,9 +125,13 @@ struct FastCDC
     private ulong maskS;  // Small mask for minimum boundary
     private ulong maskL;  // Large mask for normalized chunking
     
+    // SIMD acceleration
+    private SIMDGear* _simdGear;
+    private bool _useSIMD;
+    
     /// Initialize with configuration
     @system
-    this(Config cfg)
+    this(Config cfg, bool enableSIMD = true)
     {
         config = cfg;
         gearTable = buildGearTable();
@@ -136,11 +141,23 @@ struct FastCDC
         mask = (1UL << bits) - 1;
         maskS = (1UL << (bits + 2)) - 1;  // Stricter for small chunks
         maskL = (1UL << (bits - 2)) - 1;  // Relaxed for large chunks
+        
+        // Initialize SIMD gear hash if enabled and available
+        _useSIMD = enableSIMD && SIMDGear.isAccelerated();
+        if (_useSIMD) {
+            _simdGear = new SIMDGear(SIMDGear.Config(cfg.minSize, cfg.avgSize, cfg.maxSize));
+        }
     }
     
-    /// Default constructor with artifact config
+    /// Default constructor with artifact config (SIMD enabled by default)
     @system
-    static FastCDC create() => FastCDC(Config.artifact());
+    static FastCDC create(bool enableSIMD = true) => FastCDC(Config.artifact(), enableSIMD);
+    
+    /// Check if SIMD acceleration is active
+    bool isSIMDEnabled() const pure @safe nothrow @nogc => _useSIMD;
+    
+    /// Get SIMD implementation name
+    static string simdImplName() => SIMDGear.implName();
     
     /// Chunk file using FastCDC algorithm with Merkle tree construction
     @system
@@ -263,9 +280,20 @@ struct FastCDC
         return result;
     }
     
-    /// Find chunk boundary using normalized chunking
+    /// Find chunk boundary using normalized chunking (with SIMD acceleration)
     /// Returns chunk length
-    private size_t findBoundary(const(ubyte)[] data, size_t remaining) const pure @safe nothrow @nogc
+    @system
+    private size_t findBoundary(const(ubyte)[] data, size_t remaining) const
+    {
+        // Use SIMD-accelerated gear hash if available (2-3x faster)
+        if (_useSIMD && _simdGear !is null)
+            return _simdGear.findBoundary(data, remaining);
+        
+        return findBoundaryScalar(data, remaining);
+    }
+    
+    /// Scalar fallback for boundary detection
+    private size_t findBoundaryScalar(const(ubyte)[] data, size_t remaining) const pure @safe nothrow @nogc
     {
         immutable dataLen = data.length;
         
@@ -274,7 +302,6 @@ struct FastCDC
         if (remaining <= config.maxSize) return min(dataLen, remaining);
         
         // Normalized chunking: use different masks based on position
-        // This improves chunk size distribution
         immutable center = config.avgSize;
         
         ulong fingerprint = 0;
@@ -582,4 +609,64 @@ enum size_t LARGE_ARTIFACT_THRESHOLD = 100 * 1024 * 1024;
 
 /// Check if data should use chunked storage
 bool shouldChunk(size_t size) pure @safe nothrow @nogc => size >= LARGE_ARTIFACT_THRESHOLD;
+
+// Unit tests for SIMD-accelerated chunking
+version(unittest) @system:
+
+unittest
+{
+    import std.stdio : writefln;
+    
+    // Test SIMD-enabled FastCDC
+    auto cdcSimd = FastCDC.create(true);
+    auto cdcScalar = FastCDC.create(false);
+    
+    writefln("FastCDC SIMD: %s (enabled: %s)", 
+             FastCDC.simdImplName(), cdcSimd.isSIMDEnabled());
+    
+    // Generate test data
+    ubyte[] data = new ubyte[256 * 1024];  // 256KB
+    foreach (i, ref b; data) b = cast(ubyte)((i * 17 + 31) ^ (i >> 8));
+    
+    // Chunk with both methods
+    auto resultSimd = cdcSimd.chunkData(data, false);
+    auto resultScalar = cdcScalar.chunkData(data, false);
+    
+    // Results should be identical (SIMD is deterministic)
+    assert(resultSimd.chunks.length == resultScalar.chunks.length,
+           "SIMD and scalar chunk counts differ");
+    
+    foreach (i; 0 .. resultSimd.chunks.length)
+    {
+        assert(resultSimd.chunks[i].offset == resultScalar.chunks[i].offset,
+               "Chunk offset mismatch");
+        assert(resultSimd.chunks[i].length == resultScalar.chunks[i].length,
+               "Chunk length mismatch");
+        assert(resultSimd.chunks[i].hash == resultScalar.chunks[i].hash,
+               "Chunk hash mismatch");
+    }
+    
+    writefln("FastCDC SIMD test passed: %d chunks from %d KB",
+             resultSimd.chunks.length, data.length / 1024);
+}
+
+unittest
+{
+    import std.stdio : writeln;
+    
+    // Test edge cases with SIMD
+    auto cdc = FastCDC.create(true);
+    
+    // Empty data
+    auto emptyResult = cdc.chunkData([], false);
+    assert(emptyResult.chunks.length == 0);
+    
+    // Small data (below minSize)
+    ubyte[] small = new ubyte[1024];
+    auto smallResult = cdc.chunkData(small, false);
+    assert(smallResult.chunks.length == 1);
+    assert(smallResult.chunks[0].length == 1024);
+    
+    writeln("FastCDC SIMD edge case tests passed");
+}
 
