@@ -44,7 +44,7 @@ class NativePharPackager : Packager
         }
         catch (Exception e)
         {
-            import infrastructure.utils.logging.logger : Logger;
+            import infrastructure.utils.logging : Logger;
             structuredLog.debug_("failed_to_cleanup_script_file_").field("detail", "Failed to cleanup script file: " ~ e.msg).emit();
         }
         

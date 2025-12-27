@@ -33,7 +33,12 @@ struct WorkerExecutor
         import engine.distributed.worker.sandbox;
         
         immutable startTime = MonoTime.currTime;
-        structuredLog.debug_("executing_action_").field("detail", "Executing action: " ~ request.id.toString()).emit();
+        slog.debug_("action_execution_start")
+            .field("action_id", request.id.toString())
+            .field("inputs", request.inputs.length)
+            .field("outputs", request.outputs.length)
+            .field("sandboxed", enableSandboxing)
+            .emit();
         
         try
         {
@@ -44,21 +49,32 @@ struct WorkerExecutor
                 auto fetchResult = artifactStore.fetch(inputSpec);
                 if (fetchResult.isErr)
                 {
-                    structuredLog.error("failed_to_fetch_input_artifact_").field("detail", "Failed to fetch input artifact " ~ inputSpec.id.toString()).emit();
-                    structuredLog.error("log_event").field("message", formatError(fetchResult.unwrapErr())).emit();
+                    slog.error("action_input_fetch_failed")
+                        .field("action_id", request.id.toString())
+                        .field("artifact_id", inputSpec.id.toString())
+                        .field("path", inputSpec.path)
+                        .field("error", formatError(fetchResult.unwrapErr()))
+                        .field("hint", "Check if artifact exists in cache or remote store")
+                        .emit();
                     reportFailure(request.id, "Input artifact fetch failed: " ~ inputSpec.path, startTime, sendResultCallback);
                     return;
                 }
                 inputs ~= fetchResult.unwrap();
-                structuredLog.debug_("fetched_input_artifact_").field("detail", "Fetched input artifact: " ~ inputSpec.id.toString() ~ " (" ~ inputs[$-1].data.length.to!string ~ " bytes)").emit();
+                slog.trace("action_input_fetched")
+                    .field("artifact_id", inputSpec.id.toString())
+                    .field("size_bytes", inputs[$-1].data.length)
+                    .emit();
             }
             
             // 2. Prepare sandbox
             auto envResult = createSandbox(enableSandboxing).prepare(request, inputs);
             if (envResult.isErr)
             {
-                structuredLog.error("sandbox_preparation_failed").emit();
-                structuredLog.error("log_event").field("message", formatError(envResult.unwrapErr())).emit();
+                slog.error("action_sandbox_failed")
+                    .field("action_id", request.id.toString())
+                    .field("error", formatError(envResult.unwrapErr()))
+                    .field("hint", "Check sandbox permissions and available disk space")
+                    .emit();
                 reportFailure(request.id, "Sandbox preparation failed", startTime, sendResultCallback);
                 return;
             }
@@ -70,8 +86,12 @@ struct WorkerExecutor
             auto execResult = sandboxEnv.execute(request.command, request.env, request.timeout);
             if (execResult.isErr)
             {
-                structuredLog.error("execution_failed").emit();
-                structuredLog.error("log_event").field("message", formatError(execResult.unwrapErr())).emit();
+                slog.error("action_command_failed")
+                    .field("action_id", request.id.toString())
+                    .field("command", request.command.length > 0 ? request.command[0] : "")
+                    .field("error", formatError(execResult.unwrapErr()))
+                    .field("hint", "Check command syntax and that required tools are installed")
+                    .emit();
                 reportFailure(request.id, "Execution failed", startTime, sendResultCallback);
                 return;
             }
@@ -85,8 +105,14 @@ struct WorkerExecutor
             {
                 foreach (violation; monitor.violations())
                 {
-                    structuredLog.warning("resource_violation_").field("detail", "Resource violation: " ~ violation.message).emit();
-                    structuredLog.debug_("__type_").field("detail", "  Type: " ~ violation.type.to!string ~ ", Actual: " ~ violation.actual.to!string ~ ", Limit: " ~ violation.limit.to!string).emit();
+                    slog.warning("action_resource_violation")
+                        .field("action_id", request.id.toString())
+                        .field("violation", violation.message)
+                        .field("type", violation.type.to!string)
+                        .field("actual", violation.actual)
+                        .field("limit", violation.limit)
+                        .field("hint", "Consider increasing resource limits in Builderfile or optimizing the build")
+                        .emit();
                 }
                 reportFailure(request.id, "Resource limit violations", startTime, sendResultCallback);
                 return;
@@ -101,11 +127,17 @@ struct WorkerExecutor
                 {
                     if (!outputSpec.optional)
                     {
-                        structuredLog.error("required_output_not_found_").field("detail", "Required output not found: " ~ outputPath).emit();
+                        slog.error("action_output_missing")
+                            .field("action_id", request.id.toString())
+                            .field("path", outputPath)
+                            .field("hint", "Build command succeeded but expected output file was not created")
+                            .emit();
                         reportFailure(request.id, "Missing required output: " ~ outputSpec.path, startTime, sendResultCallback);
                         return;
                     }
-                    structuredLog.debug_("optional_output_not_found_").field("detail", "Optional output not found: " ~ outputPath).emit();
+                    slog.debug_("action_output_optional_skipped")
+                        .field("path", outputPath)
+                        .emit();
                     continue;
                 }
                 
@@ -113,7 +145,12 @@ struct WorkerExecutor
                 try { outputData = cast(ubyte[])read(outputPath); }
                 catch (Exception e)
                 {
-                    structuredLog.error("failed_to_read_output_file_").field("detail", "Failed to read output file " ~ outputPath ~ ": " ~ e.msg).emit();
+                    slog.error("action_output_read_failed")
+                        .field("action_id", request.id.toString())
+                        .field("path", outputPath)
+                        .field("error", e.msg)
+                        .field("hint", "Check file permissions and disk space")
+                        .emit();
                     reportFailure(request.id, "Failed to read output: " ~ outputSpec.path, startTime, sendResultCallback);
                     return;
                 }

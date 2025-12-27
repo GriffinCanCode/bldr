@@ -14,7 +14,7 @@ import std.algorithm : canFind;
 import std.array : array;
 import std.process : execute;
 import core.stdc.stdio : fopen, fclose, FILE;
-import infrastructure.utils.logging.logger : Logger;
+import infrastructure.utils.logging : Logger;
 
 /// Linux resource monitor using cgroups v2
 /// 

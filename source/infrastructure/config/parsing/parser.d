@@ -66,7 +66,11 @@ class ConfigParser
             auto cachedConfig = tryLoadFromCache(workspacePath, buildFiles, cacheDir);
             if (cachedConfig !is null)
             {
-                structuredLog.info("loaded_configuration_from_cache_1ms").emit();
+                slog.info("config_cache_hit")
+                    .field("workspace", workspacePath)
+                    .field("files", buildFiles.length)
+                    .field("hint", "Config loaded from cache - no parsing needed")
+                    .emit();
                 return Ok!(WorkspaceConfig, BuildError)(*cachedConfig);
             }
         }
@@ -74,10 +78,10 @@ class ConfigParser
         // Zero-config mode: infer targets if no Builderfiles found
         if (buildFiles.empty)
         {
-            structuredLog.info("log_event").emit();
-            structuredLog.info("__mode_zeroconfig_no_builderfile_found").emit();
-            structuredLog.info("log_event").emit();
-            structuredLog.info("attempting_automatic_target_inference").emit();
+            slog.info("config_zeroconfig_mode")
+                .field("workspace", root)
+                .field("hint", "No Builderfile found - attempting automatic target inference")
+                .emit();
             
             try
             {
@@ -86,6 +90,11 @@ class ConfigParser
                 
                 if (config.targets.empty)
                 {
+                    slog.warning("config_inference_failed")
+                        .field("workspace", root)
+                        .field("hint", "No recognizable project structure found. Run 'bldr init' to create a Builderfile")
+                        .emit();
+                    
                     auto error = createParseError(
                         root,
                         "No Builderfile found and no build targets could be automatically inferred",
@@ -96,11 +105,20 @@ class ConfigParser
                     return Err!(WorkspaceConfig, BuildError)(error);
                 }
                 
-                structuredLog.info("zeroconfig_mode_inferred_").field("detail", "Zero-config mode: inferred " ~ 
-                    config.targets.length.to!string ~ " target(s)").emit();
+                slog.success("config_inference_complete")
+                    .field("workspace", root)
+                    .field("targets", config.targets.length)
+                    .field("hint", "Auto-detected targets. Create a Builderfile for more control")
+                    .emit();
             }
             catch (Exception e)
             {
+                slog.error("config_inference_error")
+                    .field("workspace", root)
+                    .field("error", e.msg)
+                    .field("hint", "Run 'bldr init' to create a Builderfile manually")
+                    .emit();
+                
                 auto error = createParseError(
                     root,
                     "Failed to automatically infer build targets: " ~ e.msg,
@@ -114,9 +132,10 @@ class ConfigParser
         }
         else
         {
-            structuredLog.info("log_event").emit();
-            structuredLog.info("__mode_builderfile_").field("detail", "  MODE: Builderfile (" ~ buildFiles.length.to!string ~ " file(s) found)").emit();
-            structuredLog.info("log_event").emit();
+            slog.info("config_parsing_start")
+                .field("workspace", root)
+                .field("files", buildFiles.length)
+                .emit();
             
             // Create parse cache
             auto cache = new ParseCache(true, buildPath(root, ".builder-cache/parse"));
@@ -131,15 +150,15 @@ class ConfigParser
             // Log results
             if (aggregated.hasErrors)
             {
-                structuredLog.warning("log_event").field("message", 
-                    "Failed to parse " ~ aggregated.errors.length.to!string ~
-                    " Builderfile file(s)"
-                ).emit();
+                slog.warning("config_parse_errors")
+                    .field("failed_files", aggregated.errors.length)
+                    .field("hint", "Check Builderfile syntax. Run 'bldr explain <error_code>' for help")
+                    .emit();
                 
                 import infrastructure.errors.formatting.format : format;
                 foreach (error; aggregated.errors)
                 {
-                    structuredLog.error("log_event").field("message", format(error)).emit();
+                    slog.error("config_parse_error").field("details", format(error)).emit();
                 }
             }
             

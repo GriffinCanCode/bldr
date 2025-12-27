@@ -838,7 +838,7 @@ class LuaHandler : BaseLanguageHandler
                 }
                 catch (Exception e)
                 {
-                    import infrastructure.utils.logging.logger : Logger;
+                    import infrastructure.utils.logging : Logger;
                     structuredLog.debug_("failed_to_detect_lua_test_framework_").field("detail", "Failed to detect Lua test framework: " ~ e.msg).emit();
                 }
             }

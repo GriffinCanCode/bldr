@@ -135,7 +135,7 @@ final class HandlerRegistry : IHandlerRegistry
         
         if (result.isOk)
         {
-            import infrastructure.utils.logging.logger : Logger;
+            import infrastructure.utils.logging : Logger;
             auto count = result.unwrap();
             if (count > 0)
                 structuredLog.debug_("loaded_").field("detail", "Loaded " ~ count.to!string ~ " dynamic language specs").emit();

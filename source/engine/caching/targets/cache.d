@@ -13,6 +13,7 @@ import infrastructure.utils.files.hash;
 import infrastructure.utils.simd.hash;
 import infrastructure.utils.memory.mmap : MmapRegion, MapMode;
 import infrastructure.utils.io : BatchHasher;
+import infrastructure.utils.logging;
 import engine.caching.targets.storage;
 import engine.caching.policies.eviction;
 import engine.caching.index : CacheIndex, TargetIndexEntry;
@@ -149,13 +150,16 @@ final class BuildCache
             if (entryPtr is null)
             {
                 index.recordTargetMiss();
+                slog.debug_("cache_miss")
+                    .field("target", targetId)
+                    .field("reason", "not_in_cache")
+                    .field("hint", "Target has never been built or cache was cleared")
+                    .emit();
                 return false;
             }
             
             entryPtr.lastAccess = Clock.currTime();
             dirty = true;
-            
-            // Update index LRU tracking
             index.touchTarget(targetId);
             
             // Check if any source files changed (two-tier strategy)
@@ -164,30 +168,54 @@ final class BuildCache
                 if (!exists(source))
                 {
                     index.recordTargetMiss();
+                    slog.debug_("cache_miss")
+                        .field("target", targetId)
+                        .field("reason", "source_missing")
+                        .field("source", source)
+                        .field("hint", "Source file was deleted or moved")
+                        .emit();
                     return false;
                 }
                 
                 const hashResult = FastHash.hashFileTwoTier(source, entryPtr.sourceMetadata.get(source, ""));
-                
                 hashResult.contentHashed ? contentHashCount++ : metadataHitCount++;
                 
                 if (hashResult.contentHashed && 
                     !SIMDHash.equals(hashResult.contentHash, entryPtr.sourceHashes.get(source, "")))
                 {
                     index.recordTargetMiss();
+                    slog.debug_("cache_miss")
+                        .field("target", targetId)
+                        .field("reason", "source_changed")
+                        .field("source", source)
+                        .field("hint", "Source file content has changed since last build")
+                        .emit();
                     return false;
                 }
             }
             
             // Check if any dependencies changed
-            if (deps.any!(dep => dep !in entries || 
-                !SIMDHash.equals(entries[dep].buildHash, entryPtr.depHashes.get(dep, ""))))
+            foreach (dep; deps)
             {
-                index.recordTargetMiss();
-                return false;
+                if (dep !in entries || !SIMDHash.equals(entries[dep].buildHash, entryPtr.depHashes.get(dep, "")))
+                {
+                    index.recordTargetMiss();
+                    slog.debug_("cache_miss")
+                        .field("target", targetId)
+                        .field("reason", "dep_changed")
+                        .field("dependency", dep)
+                        .field("hint", "Dependency was rebuilt or its output changed")
+                        .emit();
+                    return false;
+                }
             }
             
             index.recordTargetHit();
+            slog.trace("cache_hit")
+                .field("target", targetId)
+                .field("sources", sources.length)
+                .field("deps", deps.length)
+                .emit();
             return true;
         }
     }

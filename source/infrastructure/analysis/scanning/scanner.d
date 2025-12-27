@@ -37,7 +37,7 @@ class FileScanner
         catch (Exception e)
         {
             // File read error, log for debugging
-            import infrastructure.utils.logging.logger : Logger;
+            import infrastructure.utils.logging : Logger;
             structuredLog.debug_("failed_to_scan_file_for_imports_").field("detail", "Failed to scan file for imports: " ~ path ~ ": " ~ e.msg).emit();
         }
         

@@ -852,7 +852,7 @@ class Workspace
         }
         catch (Exception ex)
         {
-            import infrastructure.utils.logging.logger : Logger;
+            import infrastructure.utils.logging : Logger;
             structuredLog.warning("failed_to_find_builderfiles_in_").field("detail", "Failed to find Builderfiles in " ~ _rootPath ~ ": " ~ ex.msg).emit();
             return [];
         }

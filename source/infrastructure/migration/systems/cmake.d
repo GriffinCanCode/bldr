@@ -5,9 +5,11 @@ import std.string;
 import std.array;
 import std.algorithm;
 import std.uni : toLower;
+import std.conv : to;
 import infrastructure.migration.core.base;
 import infrastructure.migration.core.common;
 import infrastructure.config.schema.schema : TargetType, TargetLanguage;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 import infrastructure.utils.simd.strings : SIMDStrings;
 
@@ -57,14 +59,22 @@ final class CMakeMigrator : BaseMigrator
     
     override BuildResult!MigrationResult migrate(string inputPath) @system
     {
+        slog.info("cmake_migration_start")
+            .field("path", inputPath)
+            .field("hint", "Converting CMakeLists.txt to Builderfile format")
+            .emit();
+        
         auto contentResult = readInputFile(inputPath);
         if (contentResult.isErr)
+        {
+            slog.error("cmake_migration_read_failed").field("path", inputPath).emit();
             return BuildResult!MigrationResult.err(contentResult.unwrapErr());
+        }
         
         auto content = contentResult.unwrap();
         MigrationTarget[] targets;
         MigrationWarning[] warnings;
-        string[string] targetData;  // Store target info for multi-line commands
+        string[string] targetData;
         
         // Parse add_executable
         auto execPattern = regex(`add_executable\s*\(\s*(\w+)\s+([^)]+)\)`, "gi");
@@ -74,6 +84,11 @@ final class CMakeMigrator : BaseMigrator
                 parseSources(match[2]));
             targets ~= target;
             targetData[target.name] = "executable";
+            slog.debug_("cmake_target_found")
+                .field("name", target.name)
+                .field("type", "executable")
+                .field("sources", target.sources.length)
+                .emit();
         }
         
         // Parse add_library
@@ -84,6 +99,11 @@ final class CMakeMigrator : BaseMigrator
                 parseSources(match[2]));
             targets ~= target;
             targetData[target.name] = "library";
+            slog.debug_("cmake_target_found")
+                .field("name", target.name)
+                .field("type", "library")
+                .field("sources", target.sources.length)
+                .emit();
         }
         
         // Parse target_link_libraries for dependencies

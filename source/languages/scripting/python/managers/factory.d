@@ -89,7 +89,7 @@ class PackageManagerFactory
             }
             catch (Exception e)
             {
-                import infrastructure.utils.logging.logger : Logger;
+                import infrastructure.utils.logging : Logger;
                 structuredLog.debug_("failed_to_detect_python_package_manager_").field("detail", "Failed to detect Python package manager: " ~ e.msg).emit();
             }
         }

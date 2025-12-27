@@ -186,7 +186,7 @@ struct AtomicTempDir
                 // Best effort cleanup - log but don't throw in destructor
                 try
                 {
-                    import infrastructure.utils.logging.logger : Logger;
+                    import infrastructure.utils.logging : Logger;
                     structuredLog.warning("failed_to_clean_up_temp_directory_").field("detail", "Failed to clean up temp directory: " ~ path ~ " - " ~ e.msg).emit();
                 }
                 catch (Exception)

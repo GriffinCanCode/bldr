@@ -181,7 +181,7 @@ class BustedTester : Tester
         }
         catch (Exception e)
         {
-            import infrastructure.utils.logging.logger : Logger;
+            import infrastructure.utils.logging : Logger;
             structuredLog.debug_("failed_to_get_busted_version_").field("detail", "Failed to get Busted version: " ~ e.msg).emit();
         }
         

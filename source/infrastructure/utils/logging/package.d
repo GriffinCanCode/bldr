@@ -28,7 +28,6 @@ module infrastructure.utils.logging;
 /// structuredLog.error("failed_to_compile").emit();
 /// ```
 
-public import infrastructure.utils.logging.logger;
 public import infrastructure.utils.logging.structured;
 
 /// Global structured logger instance for convenient access

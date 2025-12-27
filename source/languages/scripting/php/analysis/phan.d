@@ -94,7 +94,7 @@ class PhanAnalyzer : Analyzer
             }
             catch (Exception e)
             {
-                import infrastructure.utils.logging.logger : Logger;
+                import infrastructure.utils.logging : Logger;
                 structuredLog.debug_("failed_to_cleanup_file_list_").field("detail", "Failed to cleanup file list: " ~ e.msg).emit();
             }
         }

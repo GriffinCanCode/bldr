@@ -68,7 +68,16 @@ final class WorkerRecovery
         {
             if (auto entry = peer in blacklist)
             {
-                if (entry.shouldRetry(Clock.currTime)) { blacklist.remove(peer); structuredLog.info("peer_removed_from_blacklist_").field("detail", "Peer removed from blacklist: " ~ peer.toString()).emit(); return false; }
+                if (entry.shouldRetry(Clock.currTime))
+                {
+                    blacklist.remove(peer);
+                    slog.info("peer_blacklist_expired")
+                        .field("peer_id", peer.value)
+                        .field("failures", entry.failureCount)
+                        .field("hint", "Peer is being given another chance after backoff period")
+                        .emit();
+                    return false;
+                }
                 return true;
             }
             return false;
@@ -180,19 +189,24 @@ final class WorkerRecovery
     /// Handle generic action failure
     void handleFailure(BuildError error) @trusted
     {
-        // Classify and log error
         immutable category = error.category();
         immutable recoverable = error.recoverable();
         
-        structuredLog.warning("action_failed_").field("detail", "Action failed: " ~ error.message() ~ 
-                      " (category: " ~ category.to!string ~ 
-                      ", recoverable: " ~ recoverable.to!string ~ ")").emit();
+        slog.warning("action_execution_failed")
+            .field("error", error.message())
+            .field("category", category.to!string)
+            .field("recoverable", recoverable)
+            .field("hint", recoverable 
+                ? "Action will be retried automatically with exponential backoff"
+                : "Non-recoverable error - check worker logs and system resources")
+            .emit();
         
-        // If network-related, may need to blacklist peers
         if (category == ErrorCategory.System && !recoverable)
         {
-            // This might indicate a more serious distributed system issue
-            structuredLog.error("nonrecoverable_system_error_").field("detail", "Non-recoverable system error: " ~ error.message()).emit();
+            slog.error("system_error_nonrecoverable")
+                .field("error", error.message())
+                .field("hint", "Check disk space, memory, and network connectivity. Consider restarting workers")
+                .emit();
         }
     }
     
@@ -217,9 +231,12 @@ final class WorkerRecovery
                 );
                 entry.nextRetryTime = Clock.currTime + seconds(backoffSeconds);
                 
-                structuredLog.warning("peer_blacklist_extended_").field("detail", "Peer blacklist extended: " ~ peer.toString() ~ 
-                             " (failures: " ~ entry.failureCount.to!string ~
-                             ", next retry: " ~ backoffSeconds.to!string ~ "s)").emit();
+                slog.warning("peer_blacklist_extended")
+                    .field("peer_id", peer.value)
+                    .field("failures", entry.failureCount)
+                    .field("next_retry_seconds", backoffSeconds)
+                    .field("hint", "Peer failing repeatedly - check network connectivity and worker health")
+                    .emit();
             }
             else
             {
@@ -231,7 +248,12 @@ final class WorkerRecovery
                     1
                 );
                 
-                structuredLog.info("peer_blacklisted_").field("detail", "Peer blacklisted: " ~ peer.toString() ~ " (reason: " ~ error.message() ~ ")").emit();
+                slog.warning("peer_blacklisted")
+                    .field("peer_id", peer.value)
+                    .field("reason", error.message())
+                    .field("initial_backoff_seconds", 2)
+                    .field("hint", "First failure - peer will be retried after 2 seconds")
+                    .emit();
             }
             
             // Update connection health
@@ -257,8 +279,13 @@ final class WorkerRecovery
                 else
                 {
                     updateConnectionHealth(peer, ConnectionState.Degraded);
-                    structuredLog.warning("peer_connection_degraded_").field("detail", "Peer connection degraded: " ~ peer.toString() ~ 
-                                 " (timeouts: " ~ health.timeouts.to!string ~ ")").emit();
+                    slog.warning("peer_connection_degraded")
+                        .field("peer_id", peer.value)
+                        .field("timeouts", health.timeouts)
+                        .field("hint", health.timeouts >= 2 
+                            ? "Multiple timeouts - peer may be overloaded or network is slow"
+                            : "Occasional timeout - monitoring connection health")
+                        .emit();
                 }
             }
             else
