@@ -13,11 +13,15 @@ import infrastructure.errors : Result, BuildResult, BuildError, ParseError, Erro
 /// - workspace: Optional workspace name (empty for current workspace)
 /// - path: Optional relative path within workspace
 /// - name: Required target name
+/// 
+/// Performance: String representation is cached at construction to avoid
+/// repeated allocations in hot paths (e.g., topologicalSort, graph lookups).
 struct TargetId
 {
     string workspace;  // Empty for current workspace
     string path;       // Relative path within workspace
     string name;       // Target name (required)
+    private string _cachedString;  // Precomputed toString result
     
     /// Create simple target ID with just a name
     this(string name) pure nothrow @system
@@ -31,6 +35,16 @@ struct TargetId
         this.workspace = workspace;
         this.path = path;
         this.name = name;
+        this._cachedString = computeString(workspace, path, name);
+    }
+    
+    /// Compute string representation (called once at construction)
+    private static string computeString(string ws, string p, string n) pure nothrow @system
+    {
+        if (ws.empty && p.empty) return n;
+        if (ws.empty) return "//" ~ p ~ ":" ~ n;
+        if (p.empty) return ws ~ "//:" ~ n;
+        return ws ~ "//" ~ p ~ ":" ~ n;
     }
     
     /// Parse qualified target ID from string
@@ -89,17 +103,9 @@ struct TargetId
         return BuildResult!TargetId.ok(TargetId(workspace, path, name));
     }
     
-    /// Convert to fully-qualified string representation
-    string toString() const pure nothrow @system
-    {
-        if (workspace.empty && path.empty)
-            return name;
-        if (workspace.empty)
-            return "//" ~ path ~ ":" ~ name;
-        if (path.empty)
-            return workspace ~ "//:" ~ name;
-        return workspace ~ "//" ~ path ~ ":" ~ name;
-    }
+    /// Convert to fully-qualified string representation (O(1), returns cached value)
+    /// Returns empty string for TargetId.init (sentinel/uninitialized state)
+    string toString() const pure nothrow @system @nogc => _cachedString is null ? "" : _cachedString;
     
     /// Get simple name (without workspace/path)
     string simpleName() const pure nothrow @system
@@ -198,6 +204,29 @@ struct TargetId
             // Fallback to simple name if parsing throws
             return TargetId(str);
         }
+    }
+    
+    // =========================================================================
+    // Compact Reference Support
+    // =========================================================================
+    
+    /// Convert to compact 8-byte reference (for hot paths)
+    /// 
+    /// CompactRef provides O(1) equality/hashing in 8 bytes vs ~100+ bytes.
+    /// Use when storing many TargetIds or in performance-critical code.
+    /// Full TargetId recoverable via toRef().resolve() → TargetIdData.
+    auto toRef() const @system
+    {
+        import infrastructure.utils.memory.refs : TargetRef, TargetIdData;
+        return TargetRef.from(TargetIdData(workspace, path, name));
+    }
+    
+    /// Create TargetId from compact reference
+    static TargetId fromRef(T)(T ref_) @system
+        if (__traits(hasMember, T, "resolve"))
+    {
+        auto data = ref_.resolve();
+        return TargetId(data.workspace.toString(), data.path.toString(), data.name.toString());
     }
 }
 
