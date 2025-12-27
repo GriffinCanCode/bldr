@@ -13,6 +13,7 @@ module infrastructure.analysis;
 ///   detection/  - Project detection and init templates
 ///   manifests/  - Package manifest parsing (npm, cargo, etc.)
 ///   lockfile/   - Deterministic lockfile generation
+///   semver/     - Semantic versioning constraint solver (PubGrub)
 ///
 /// Usage:
 ///   import analysis;
@@ -32,4 +33,5 @@ public import infrastructure.analysis.metadata.metagen;
 public import infrastructure.analysis.detection;
 public import infrastructure.analysis.manifests;
 public import infrastructure.analysis.lockfile;
+public import infrastructure.analysis.semver;
 

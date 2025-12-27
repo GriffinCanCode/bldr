@@ -111,4 +111,5 @@ module infrastructure.analysis.lockfile;
 public import infrastructure.analysis.lockfile.types;
 public import infrastructure.analysis.lockfile.cache;
 public import infrastructure.analysis.lockfile.generators;
+public import infrastructure.analysis.lockfile.resolver;
 

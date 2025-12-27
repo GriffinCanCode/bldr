@@ -84,6 +84,7 @@ struct HelpCommand
         printCommand("init", "", "Initialize Builderfile with auto-detection");
         printCommand("infer", "", "Preview auto-detected targets (dry-run)");
         printCommand("migrate", "", "Interactive migration wizard (default)");
+        printCommand("resolve", "[path]", "Resolve package dependencies (PubGrub)");
         terminal.writeln();
         
         // Monitoring & tools
@@ -326,6 +327,9 @@ struct HelpCommand
                 break;
             case "infer":
                 showInferHelp();
+                break;
+            case "resolve":
+                showResolveHelp();
                 break;
             case "migrate":
                 showMigrateHelp();
@@ -942,6 +946,57 @@ struct HelpCommand
         printSeeAlso("bldr wizard", "Interactive setup wizard");
         printSeeAlso("bldr init", "Generate Builderfile from detection");
         printSeeAlso("bldr build", "Build using zero-config");
+        terminal.writeln();
+    }
+    
+    private static void showResolveHelp()
+    {
+        terminal.writeln();
+        
+        string[] description = [
+            "Resolve package dependencies to exact versions using the PubGrub",
+            "constraint satisfaction algorithm. Supports npm, Cargo, and pip."
+        ];
+        terminal.writeln(formatter.formatBox("bldr resolve [path] [options]", description));
+        terminal.writeln();
+        
+        printSectionHeader("USAGE");
+        terminal.writeColored("  bldr resolve", Color.Cyan, Style.Bold);
+        terminal.write("                    ");
+        terminal.writeColored("Resolve deps in current directory", Color.BrightBlack);
+        terminal.writeln();
+        terminal.writeColored("  bldr resolve", Color.Cyan, Style.Bold);
+        terminal.write(" ");
+        terminal.writeColored("./frontend", Color.Yellow);
+        terminal.write("        ");
+        terminal.writeColored("Resolve deps in subdirectory", Color.BrightBlack);
+        terminal.writeln();
+        terminal.writeln();
+        
+        printSectionHeader("OPTIONS");
+        printOption("--dry-run", "Show resolution without writing lockfile");
+        printOption("--update", "Update all dependencies to latest versions");
+        printOption("--production", "Exclude development dependencies");
+        printOption("--format=<fmt>", "Output format: pretty, json");
+        terminal.writeln();
+        
+        printSectionHeader("SUPPORTED MANIFESTS");
+        printFeature("package.json (npm/yarn/pnpm)");
+        printFeature("Cargo.toml (Rust)");
+        printFeature("pyproject.toml, requirements.txt (Python)");
+        printFeature("go.mod (Go)");
+        terminal.writeln();
+        
+        printSectionHeader("EXAMPLES");
+        printExample("bldr resolve", "Resolve in current directory");
+        printExample("bldr resolve --dry-run", "Preview without writing lockfile");
+        printExample("bldr resolve --format=json", "JSON output for tooling");
+        printExample("bldr resolve --production", "Skip dev dependencies");
+        terminal.writeln();
+        
+        printSectionHeader("SEE ALSO");
+        printSeeAlso("bldr build", "Build the project");
+        printSeeAlso("bldr init", "Initialize Builderfile");
         terminal.writeln();
     }
     

@@ -10,6 +10,7 @@ import std.conv : to;
 import std.datetime : Clock;
 import infrastructure.analysis.lockfile.types;
 import infrastructure.analysis.lockfile.cache;
+import infrastructure.analysis.lockfile.resolver;
 import infrastructure.analysis.manifests.npm : NpmManifestParser;
 import infrastructure.analysis.manifests.types : Dependency, DependencyType;
 import infrastructure.utils.files.hash : FastHash;
@@ -28,6 +29,7 @@ final class NpmLockfileGenerator : ILockfileGenerator
 {
     private LockfileCache cache;
     private NpmFlavor flavor;
+    private DependencyResolver resolver;
     
     enum NpmFlavor { Npm, Yarn, Pnpm }
     
@@ -35,6 +37,13 @@ final class NpmLockfileGenerator : ILockfileGenerator
     {
         this.cache = cache;
         this.flavor = flavor;
+        this.resolver = ResolverFactory.offline();  // Use offline resolver by default
+    }
+    
+    /// Set custom resolver (for registry integration)
+    void setResolver(DependencyResolver resolver) @safe
+    {
+        this.resolver = resolver;
     }
     
     override BuildResult!Lockfile generate(string manifestPath, GenerateOptions options) @system
@@ -72,10 +81,19 @@ final class NpmLockfileGenerator : ILockfileGenerator
         
         auto manifest = parseResult.unwrap();
         
-        // Resolve dependencies
-        auto resolveResult = resolveDependencies(manifest.dependencies, dirName(manifestPath), options);
+        // Resolve dependencies using PubGrub solver
+        auto resolveOpts = ResolveOptions(
+            options.production,
+            options.frozen,
+            options.update,
+            options.exclude
+        );
+        auto resolveResult = resolver.resolve(manifest.dependencies, "npm", resolveOpts);
         if (resolveResult.isErr)
             return Err!(Lockfile, BuildError)(resolveResult.unwrapErr());
+        
+        // Enrich with registry metadata
+        auto enriched = enrichDependencies(resolveResult.unwrap(), dirName(manifestPath));
         
         // Build lockfile
         Lockfile lockfile;
@@ -84,7 +102,7 @@ final class NpmLockfileGenerator : ILockfileGenerator
         lockfile.meta.timestamp = Clock.currTime.stdTime;
         lockfile.meta.manifestHash = manifestHash;
         lockfile.meta.engine = "builder";
-        lockfile.dependencies = resolveResult.unwrap();
+        lockfile.dependencies = enriched;
         
         // Sort dependencies deterministically
         lockfile.dependencies = lockfile.dependencies.sort!((a, b) => a.name < b.name).array;
@@ -175,49 +193,16 @@ private:
         }
     }
     
-    BuildResult!(ResolvedDependency[]) resolveDependencies(
-        in Dependency[] deps,
-        string projectDir,
-        in GenerateOptions options
-    ) @system
+    /// Enrich resolved dependencies with registry metadata
+    ResolvedDependency[] enrichDependencies(ResolvedDependency[] deps, string projectDir) @system
     {
-        ResolvedDependency[] resolved;
-        resolved.reserve(deps.length);
-        
         foreach (ref dep; deps)
         {
-            // Skip dev deps in production mode
-            if (options.production && dep.type == DependencyType.Development)
-                continue;
-            
-            // Skip excluded packages
-            if (options.exclude.canFind(dep.name))
-                continue;
-            
-            ResolvedDependency r;
-            r.name = dep.name;
-            r.version_ = resolveVersion(dep.name, dep.version_);
-            r.resolved = buildRegistryUrl(dep.name, r.version_);
-            r.integrity = computeIntegrity(dep.name, r.version_);
-            r.dev = dep.type == DependencyType.Development;
-            r.optional = dep.optional;
-            r.registry = "https://registry.npmjs.org";
-            
-            resolved ~= r;
+            dep.resolved = buildRegistryUrl(dep.name, dep.version_);
+            dep.integrity = computeIntegrity(dep.name, dep.version_);
+            dep.registry = "https://registry.npmjs.org";
         }
-        
-        return Ok!(ResolvedDependency[], BuildError)(resolved);
-    }
-    
-    /// Resolve version range to exact version (SIMD-accelerated)
-    /// For now, strips range operators - full resolution requires registry query
-    string resolveVersion(string name, string versionSpec) const @trusted
-    {
-        if (SIMDStrings.startsWith(versionSpec, "^") || SIMDStrings.startsWith(versionSpec, "~"))
-            return versionSpec[1 .. $];
-        if (SIMDStrings.startsWith(versionSpec, ">=") || SIMDStrings.startsWith(versionSpec, "<="))
-            return versionSpec[2 .. $].split(" ")[0];
-        return versionSpec;
+        return deps;
     }
     
     string buildRegistryUrl(string name, string version_) const @trusted

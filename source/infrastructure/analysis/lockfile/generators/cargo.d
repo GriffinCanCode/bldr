@@ -9,6 +9,7 @@ import std.conv : to;
 import std.datetime : Clock;
 import infrastructure.analysis.lockfile.types;
 import infrastructure.analysis.lockfile.cache;
+import infrastructure.analysis.lockfile.resolver;
 import infrastructure.analysis.manifests.cargo : CargoManifestParser;
 import infrastructure.analysis.manifests.types : Dependency, DependencyType;
 import infrastructure.utils.files.hash : FastHash;
@@ -21,10 +22,18 @@ import infrastructure.utils.simd.strings : SIMDStrings;
 final class CargoLockfileGenerator : ILockfileGenerator
 {
     private LockfileCache cache;
+    private DependencyResolver resolver;
     
     this(LockfileCache cache = null) @system
     {
         this.cache = cache;
+        this.resolver = ResolverFactory.offline();
+    }
+    
+    /// Set custom resolver
+    void setResolver(DependencyResolver resolver) @safe
+    {
+        this.resolver = resolver;
     }
     
     override BuildResult!Lockfile generate(string manifestPath, GenerateOptions options) @system
@@ -55,10 +64,19 @@ final class CargoLockfileGenerator : ILockfileGenerator
         
         auto manifest = parseResult.unwrap();
         
-        // Resolve dependencies
-        auto resolveResult = resolveDependencies(manifest.dependencies, dirName(manifestPath), options);
+        // Resolve dependencies using PubGrub solver
+        auto resolveOpts = ResolveOptions(
+            options.production,
+            options.frozen,
+            options.update,
+            options.exclude
+        );
+        auto resolveResult = resolver.resolve(manifest.dependencies, "cargo", resolveOpts);
         if (resolveResult.isErr)
             return Err!(Lockfile, BuildError)(resolveResult.unwrapErr());
+        
+        // Enrich with registry metadata
+        auto enriched = enrichDependencies(resolveResult.unwrap());
         
         // Build lockfile
         Lockfile lockfile;
@@ -67,7 +85,7 @@ final class CargoLockfileGenerator : ILockfileGenerator
         lockfile.meta.timestamp = Clock.currTime.stdTime;
         lockfile.meta.manifestHash = manifestHash;
         lockfile.meta.engine = "builder";
-        lockfile.dependencies = resolveResult.unwrap();
+        lockfile.dependencies = enriched;
         
         // Sort deterministically
         lockfile.dependencies = lockfile.dependencies.sort!((a, b) => a.name < b.name).array;
@@ -136,55 +154,17 @@ final class CargoLockfileGenerator : ILockfileGenerator
     override PackageManagerType type() const pure @safe => PackageManagerType.Cargo;
     
 private:
-    BuildResult!(ResolvedDependency[]) resolveDependencies(
-        in Dependency[] deps,
-        string projectDir,
-        in GenerateOptions options
-    ) @system
+    /// Enrich resolved dependencies with crates.io metadata
+    ResolvedDependency[] enrichDependencies(ResolvedDependency[] deps) @system
     {
-        import infrastructure.analysis.manifests.types : Dependency, DependencyType;
-        
-        ResolvedDependency[] resolved;
-        resolved.reserve(deps.length);
-        
         foreach (ref dep; deps)
         {
-            if (options.production && dep.type == DependencyType.Development)
-                continue;
-            
-            if (options.exclude.canFind(dep.name))
-                continue;
-            
-            ResolvedDependency r;
-            r.name = dep.name;
-            r.version_ = resolveVersion(dep.version_);
-            r.resolved = buildCratesUrl(dep.name, r.version_);
-            r.integrity = computeChecksum(dep.name, r.version_);
-            r.dev = dep.type == DependencyType.Development;
-            r.optional = dep.optional;
-            r.registry = "https://crates.io";
-            
-            resolved ~= r;
+            dep.resolved = "https://crates.io/api/v1/crates/" ~ dep.name ~ "/" ~ dep.version_ ~ "/download";
+            dep.integrity = FastHash.hashStrings([dep.name, dep.version_]);
+            dep.registry = "https://crates.io";
         }
-        
-        return Ok!(ResolvedDependency[], BuildError)(resolved);
+        return deps;
     }
-    
-    string resolveVersion(string spec) const @safe
-    {
-        // Strip semver operators
-        if (spec.startsWith("^") || spec.startsWith("~") || spec.startsWith("="))
-            return spec[1 .. $];
-        if (spec.startsWith(">=") || spec.startsWith("<="))
-            return spec[2 .. $].split(",")[0].strip;
-        return spec;
-    }
-    
-    string buildCratesUrl(string name, string version_) const @safe
-        => "https://crates.io/api/v1/crates/" ~ name ~ "/" ~ version_ ~ "/download";
-    
-    string computeChecksum(string name, string version_) const @system
-        => FastHash.hashStrings([name, version_]);
     
     BuildResult!Lockfile parseCargoLock(string content) @system
     {

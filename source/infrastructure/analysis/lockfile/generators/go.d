@@ -9,6 +9,7 @@ import std.conv : to;
 import std.datetime : Clock;
 import infrastructure.analysis.lockfile.types;
 import infrastructure.analysis.lockfile.cache;
+import infrastructure.analysis.lockfile.resolver;
 import infrastructure.analysis.manifests.go : GoManifestParser;
 import infrastructure.analysis.manifests.types : Dependency, DependencyType;
 import infrastructure.utils.files.hash : FastHash;
@@ -20,10 +21,18 @@ import infrastructure.errors;
 final class GoLockfileGenerator : ILockfileGenerator
 {
     private LockfileCache cache;
+    private DependencyResolver resolver;
     
     this(LockfileCache cache = null) @system
     {
         this.cache = cache;
+        this.resolver = ResolverFactory.offline();
+    }
+    
+    /// Set custom resolver
+    void setResolver(DependencyResolver resolver) @safe
+    {
+        this.resolver = resolver;
     }
     
     override BuildResult!Lockfile generate(string manifestPath, GenerateOptions options) @system
@@ -54,10 +63,19 @@ final class GoLockfileGenerator : ILockfileGenerator
         
         auto manifest = parseResult.unwrap();
         
-        // Resolve dependencies
-        auto resolveResult = resolveDependencies(manifest.dependencies, options);
+        // Resolve dependencies using PubGrub solver
+        auto resolveOpts = ResolveOptions(
+            options.production,
+            options.frozen,
+            options.update,
+            options.exclude
+        );
+        auto resolveResult = resolver.resolve(manifest.dependencies, "go", resolveOpts);
         if (resolveResult.isErr)
             return Err!(Lockfile, BuildError)(resolveResult.unwrapErr());
+        
+        // Enrich with Go module metadata
+        auto enriched = enrichDependencies(resolveResult.unwrap());
         
         // Build lockfile
         Lockfile lockfile;
@@ -66,7 +84,7 @@ final class GoLockfileGenerator : ILockfileGenerator
         lockfile.meta.timestamp = Clock.currTime.stdTime;
         lockfile.meta.manifestHash = manifestHash;
         lockfile.meta.engine = "builder";
-        lockfile.dependencies = resolveResult.unwrap();
+        lockfile.dependencies = enriched;
         
         // Sort deterministically
         lockfile.dependencies = lockfile.dependencies.sort!((a, b) => a.name < b.name).array;
@@ -134,41 +152,28 @@ final class GoLockfileGenerator : ILockfileGenerator
     override PackageManagerType type() const pure @safe => PackageManagerType.Go;
     
 private:
-    BuildResult!(ResolvedDependency[]) resolveDependencies(
-        in Dependency[] deps,
-        in GenerateOptions options
-    ) @system
+    /// Enrich resolved dependencies with Go module metadata
+    ResolvedDependency[] enrichDependencies(ResolvedDependency[] deps) @system
     {
-        import infrastructure.analysis.manifests.types : Dependency, DependencyType;
-        
-        ResolvedDependency[] resolved;
-        resolved.reserve(deps.length * 2);  // Each module may have /go.mod entry
+        ResolvedDependency[] result;
+        result.reserve(deps.length * 2);  // Each module may have /go.mod entry
         
         foreach (ref dep; deps)
         {
-            if (options.exclude.canFind(dep.name))
-                continue;
-            
-            // Module checksum
-            ResolvedDependency r;
-            r.name = dep.name;
-            r.version_ = dep.version_;
-            r.resolved = "https://proxy.golang.org/" ~ dep.name ~ "/@v/" ~ dep.version_ ~ ".mod";
-            r.integrity = computeGoChecksum(dep.name, dep.version_);
-            r.registry = "https://proxy.golang.org";
-            
-            resolved ~= r;
+            dep.resolved = "https://proxy.golang.org/" ~ dep.name ~ "/@v/" ~ dep.version_ ~ ".mod";
+            dep.integrity = computeGoChecksum(dep.name, dep.version_);
+            dep.registry = "https://proxy.golang.org";
+            result ~= dep;
             
             // go.mod checksum (separate entry)
             ResolvedDependency modEntry;
             modEntry.name = dep.name ~ "/go.mod";
             modEntry.version_ = dep.version_;
             modEntry.integrity = computeGoModChecksum(dep.name, dep.version_);
-            
-            resolved ~= modEntry;
+            result ~= modEntry;
         }
         
-        return Ok!(ResolvedDependency[], BuildError)(resolved);
+        return result;
     }
     
     string computeGoChecksum(string module_, string version_) const @system

@@ -235,6 +235,25 @@ int runBuilder(string[] args)
             case "explore":
                 exploreCommand(args[2 .. $]);
                 break;
+            case "resolve":
+                // Parse flags
+                string resolvePath = ".";
+                string resolveFormat = "pretty";
+                bool dryRun = false;
+                bool updateDeps = false;
+                bool prodOnly = false;
+                
+                foreach (i, arg; args[2 .. $])
+                {
+                    if (arg == "--dry-run") dryRun = true;
+                    else if (arg == "--update") updateDeps = true;
+                    else if (arg == "--production") prodOnly = true;
+                    else if (arg.startsWith("--format=")) resolveFormat = arg[9 .. $];
+                    else if (!arg.startsWith("-")) resolvePath = arg;
+                }
+                
+                ResolveCommand.execute(resolvePath, resolveFormat, dryRun, updateDeps, prodOnly);
+                break;
             case "help":
                 auto helpCommand = args.length > 2 ? args[2] : "";
                 HelpCommand.execute(helpCommand);
