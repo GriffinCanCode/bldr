@@ -10,6 +10,7 @@ import std.json;
 import std.conv;
 import infrastructure.utils.logging;
 import infrastructure.utils.security.validation;
+import infrastructure.utils.simd.strings : SIMDStrings;
 
 /// Cargo.toml dependency information
 struct CargoDependency
@@ -263,11 +264,11 @@ class CargoParser
             line = line.strip;
             
             // Skip comments and empty lines
-            if (line.empty || line.startsWith("#"))
+            if (line.empty || (() @trusted => SIMDStrings.startsWith(line, "#"))())
                 continue;
             
-            // Section headers
-            if (line.startsWith("[") && line.endsWith("]"))
+            // Section headers (SIMD-accelerated)
+            if ((() @trusted => SIMDStrings.startsWith(line, "[") && SIMDStrings.endsWith(line, "]"))())
             {
                 currentSection = line[1 .. $ - 1].strip;
                 
@@ -286,10 +287,10 @@ class CargoParser
             string key = line[0 .. equalPos].strip;
             string value = line[equalPos + 1 .. $].strip;
             
-            // Remove quotes
-            if (value.startsWith("\"") && value.endsWith("\""))
+            // Remove quotes (SIMD-accelerated)
+            if ((() @trusted => SIMDStrings.startsWith(value, "\"") && SIMDStrings.endsWith(value, "\""))())
                 value = value[1 .. $ - 1];
-            else if (value.startsWith("'") && value.endsWith("'"))
+            else if ((() @trusted => SIMDStrings.startsWith(value, "'") && SIMDStrings.endsWith(value, "'"))())
                 value = value[1 .. $ - 1];
             
             // Parse based on section
@@ -301,10 +302,10 @@ class CargoParser
             {
                 parseLibField(manifest.lib, key, value);
             }
-            else if (currentSection.startsWith("dependencies"))
+            else if ((() @trusted => SIMDStrings.startsWith(currentSection, "dependencies"))())
             {
                 // Simplified dependency parsing
-                if (!value.empty && !value.startsWith("{"))
+                if (!value.empty && !(() @trusted => SIMDStrings.startsWith(value, "{"))())
                 {
                     CargoDependency dep;
                     dep.name = key;
@@ -312,9 +313,9 @@ class CargoParser
                     manifest.dependencies[key] = dep;
                 }
             }
-            else if (currentSection.startsWith("dev-dependencies"))
+            else if ((() @trusted => SIMDStrings.startsWith(currentSection, "dev-dependencies"))())
             {
-                if (!value.empty && !value.startsWith("{"))
+                if (!value.empty && !(() @trusted => SIMDStrings.startsWith(value, "{"))())
                 {
                     CargoDependency dep;
                     dep.name = key;
@@ -322,9 +323,9 @@ class CargoParser
                     manifest.devDependencies[key] = dep;
                 }
             }
-            else if (currentSection.startsWith("build-dependencies"))
+            else if ((() @trusted => SIMDStrings.startsWith(currentSection, "build-dependencies"))())
             {
-                if (!value.empty && !value.startsWith("{"))
+                if (!value.empty && !(() @trusted => SIMDStrings.startsWith(value, "{"))())
                 {
                     CargoDependency dep;
                     dep.name = key;
@@ -332,7 +333,7 @@ class CargoParser
                     manifest.buildDependencies[key] = dep;
                 }
             }
-            else if (currentSection.startsWith("workspace"))
+            else if ((() @trusted => SIMDStrings.startsWith(currentSection, "workspace"))())
             {
                 parseWorkspaceField(manifest.workspace, key, value);
             }
@@ -371,19 +372,19 @@ class CargoParser
         }
     }
     
-    private static void parseWorkspaceField(ref CargoWorkspace workspace, string key, string value)
+    private static void parseWorkspaceField(ref CargoWorkspace workspace, string key, string value) @trusted
     {
         if (key == "members")
         {
-            // Parse array
-            if (value.startsWith("[") && value.endsWith("]"))
+            // Parse array (SIMD-accelerated)
+            if (SIMDStrings.startsWith(value, "[") && SIMDStrings.endsWith(value, "]"))
             {
                 value = value[1 .. $ - 1];
                 auto members = value.split(",");
                 foreach (member; members)
                 {
                     member = member.strip;
-                    if (member.startsWith("\""))
+                    if (SIMDStrings.startsWith(member, "\""))
                         member = member[1 .. $ - 1];
                     if (!member.empty)
                         workspace.members ~= member;
@@ -392,14 +393,14 @@ class CargoParser
         }
         else if (key == "exclude")
         {
-            if (value.startsWith("[") && value.endsWith("]"))
+            if (SIMDStrings.startsWith(value, "[") && SIMDStrings.endsWith(value, "]"))
             {
                 value = value[1 .. $ - 1];
                 auto excluded = value.split(",");
                 foreach (ex; excluded)
                 {
                     ex = ex.strip;
-                    if (ex.startsWith("\""))
+                    if (SIMDStrings.startsWith(ex, "\""))
                         ex = ex[1 .. $ - 1];
                     if (!ex.empty)
                         workspace.exclude ~= ex;

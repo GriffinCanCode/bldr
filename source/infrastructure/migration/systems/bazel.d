@@ -8,6 +8,7 @@ import std.conv;
 import infrastructure.migration.core.base;
 import infrastructure.migration.core.common;
 import infrastructure.config.schema.schema : TargetType, TargetLanguage;
+import infrastructure.utils.simd.strings : SIMDStrings;
 import infrastructure.errors;
 
 /// Migrator for Bazel BUILD files
@@ -105,28 +106,28 @@ final class BazelMigrator : BaseMigrator
         MigrationTarget target;
         target.name = name;
         
-        // Determine target type and language from rule type
-        if (ruleType.endsWith("_binary"))
+        // Determine target type and language from rule type (SIMD-accelerated)
+        if ((() @trusted => SIMDStrings.endsWith(ruleType, "_binary"))())
             target.type = TargetType.Executable;
-        else if (ruleType.endsWith("_library"))
+        else if ((() @trusted => SIMDStrings.endsWith(ruleType, "_library"))())
             target.type = TargetType.Library;
-        else if (ruleType.endsWith("_test"))
+        else if ((() @trusted => SIMDStrings.endsWith(ruleType, "_test"))())
             target.type = TargetType.Test;
         else
             target.type = TargetType.Custom;
         
-        // Determine language
-        if (ruleType.startsWith("cc_"))
+        // Determine language (SIMD-accelerated)
+        if ((() @trusted => SIMDStrings.startsWith(ruleType, "cc_"))())
             target.language = TargetLanguage.Cpp;
-        else if (ruleType.startsWith("py_"))
+        else if ((() @trusted => SIMDStrings.startsWith(ruleType, "py_"))())
             target.language = TargetLanguage.Python;
-        else if (ruleType.startsWith("go_"))
+        else if ((() @trusted => SIMDStrings.startsWith(ruleType, "go_"))())
             target.language = TargetLanguage.Go;
-        else if (ruleType.startsWith("java_"))
+        else if ((() @trusted => SIMDStrings.startsWith(ruleType, "java_"))())
             target.language = TargetLanguage.Java;
-        else if (ruleType.startsWith("rust_"))
+        else if ((() @trusted => SIMDStrings.startsWith(ruleType, "rust_"))())
             target.language = TargetLanguage.Rust;
-        else if (ruleType.startsWith("ts_"))
+        else if ((() @trusted => SIMDStrings.startsWith(ruleType, "ts_"))())
             target.language = TargetLanguage.TypeScript;
         else
             target.language = TargetLanguage.Generic;
@@ -167,8 +168,8 @@ final class BazelMigrator : BaseMigrator
         foreach (itemMatch; matchAll(items, itemPattern))
         {
             string item = itemMatch[1];
-            // Convert Bazel target references to Builder format
-            if (item.startsWith("//") || item.startsWith(":"))
+            // Convert Bazel target references to Builder format (SIMD-accelerated)
+            if ((() @trusted => SIMDStrings.startsWith(item, "//") || SIMDStrings.startsWith(item, ":"))())
                 item = item.replace("//", "");  // Simplified conversion
             result ~= item;
         }

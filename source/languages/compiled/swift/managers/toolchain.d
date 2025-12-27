@@ -9,6 +9,7 @@ import std.path;
 import std.conv;
 import std.regex;
 import infrastructure.utils.logging;
+import infrastructure.utils.simd.strings : SIMDStrings;
 
 /// Swift toolchain information
 struct Toolchain
@@ -259,7 +260,7 @@ class SwiftToolchainManager
             {
                 foreach (entry; dirEntries(toolchainsDir, SpanMode.shallow))
                 {
-                    if (entry.isDir && entry.name.endsWith(".xctoolchain"))
+                    if (entry.isDir && SIMDStrings.endsWith(entry.name, ".xctoolchain"))
                     {
                         Toolchain tc;
                         tc.name = baseName(entry.name, ".xctoolchain");
@@ -371,19 +372,19 @@ class SDKManager
                     sdk.name = match[2];
                     
                     // Extract platform
-                    if (sdk.name.startsWith("macosx"))
+                    if (SIMDStrings.startsWith(sdk.name, "macosx"))
                         sdk.platform = "macOS";
-                    else if (sdk.name.startsWith("iphoneos"))
+                    else if (SIMDStrings.startsWith(sdk.name, "iphoneos"))
                         sdk.platform = "iOS";
-                    else if (sdk.name.startsWith("iphonesimulator"))
+                    else if (SIMDStrings.startsWith(sdk.name, "iphonesimulator"))
                         sdk.platform = "iOS Simulator";
-                    else if (sdk.name.startsWith("appletvos"))
+                    else if (SIMDStrings.startsWith(sdk.name, "appletvos"))
                         sdk.platform = "tvOS";
-                    else if (sdk.name.startsWith("appletvsimulator"))
+                    else if (SIMDStrings.startsWith(sdk.name, "appletvsimulator"))
                         sdk.platform = "tvOS Simulator";
-                    else if (sdk.name.startsWith("watchos"))
+                    else if (SIMDStrings.startsWith(sdk.name, "watchos"))
                         sdk.platform = "watchOS";
-                    else if (sdk.name.startsWith("watchsimulator"))
+                    else if (SIMDStrings.startsWith(sdk.name, "watchsimulator"))
                         sdk.platform = "watchOS Simulator";
                     
                     // Get path

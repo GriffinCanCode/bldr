@@ -8,6 +8,7 @@ import std.json;
 import std.file : readText, exists;
 import frontend.lsp.core.protocol;
 import frontend.lsp.workspace.workspace;
+import infrastructure.utils.simd.strings : SIMDStrings;
 
 /// Document formatting provider for Builderfiles
 struct FormattingProvider
@@ -38,7 +39,7 @@ struct FormattingProvider
         if (auto doc = workspace.getDocument(uri))
             return doc.text;
         
-        string path = uri.startsWith("file://") ? uri[7 .. $] : uri;
+        string path = SIMDStrings.startsWith(uri, "file://") ? uri[7 .. $] : uri;
         if (!exists(path)) return "";
         try { return readText(path); } catch (Exception) { return ""; }
     }
@@ -89,7 +90,7 @@ struct FormattingProvider
             }
             
             result ~= formatted;
-            prevComment = trimmed.startsWith("//") || trimmed.startsWith("#");
+            prevComment = SIMDStrings.startsWith(trimmed, "//") || SIMDStrings.startsWith(trimmed, "#");
             
             // Indent after opening braces/brackets
             if ((trimmed.endsWith("{") || trimmed.endsWith("[")) && 
@@ -117,13 +118,13 @@ struct FormattingProvider
     private string formatLine(string line, int indent, FormattingOptions opts)
     {
         // Comment pass-through
-        if (line.startsWith("//") || line.startsWith("#"))
+        if (SIMDStrings.startsWith(line, "//") || SIMDStrings.startsWith(line, "#"))
             return line;
         
         // Field assignment: normalize to "field: value;"
         auto colonIdx = line.indexOf(':');
-        if (colonIdx > 0 && !line.startsWith("target") && !line.startsWith("workspace") && 
-            !line.startsWith("repository") && !line.endsWith("{"))
+        if (colonIdx > 0 && !SIMDStrings.startsWith(line, "target") && !SIMDStrings.startsWith(line, "workspace") && 
+            !SIMDStrings.startsWith(line, "repository") && !SIMDStrings.endsWith(line, "{"))
         {
             string field = line[0 .. colonIdx].strip();
             string rest = line[colonIdx + 1 .. $].strip();
@@ -137,10 +138,10 @@ struct FormattingProvider
     
     private bool isTargetDecl(string line)
     {
-        return (line.startsWith("target(") || 
-                line.startsWith("workspace(") || 
-                line.startsWith("repository(")) && 
-               line.endsWith("{");
+        return (SIMDStrings.startsWith(line, "target(") || 
+                SIMDStrings.startsWith(line, "workspace(") || 
+                SIMDStrings.startsWith(line, "repository(")) && 
+               SIMDStrings.endsWith(line, "{");
     }
 }
 

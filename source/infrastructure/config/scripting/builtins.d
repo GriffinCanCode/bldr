@@ -10,6 +10,7 @@ import std.process : environment;
 import std.range;
 import infrastructure.config.scripting.types;
 import infrastructure.utils.files.glob;
+import infrastructure.utils.simd.strings : SIMDStrings;
 import infrastructure.errors;
 
 /// Closure invoker delegate for higher-order functions
@@ -209,7 +210,8 @@ private BuildResult!Value builtinStartsWith(Value[] args) @system
     if (args.length != 2 || !args[0].isString() || !args[1].isString())
         return err("startsWith() expects 2 string arguments");
     
-    auto result = args[0].asString().startsWith(args[1].asString());
+    // SIMD-accelerated string prefix matching
+    auto result = SIMDStrings.startsWith(args[0].asString(), args[1].asString());
     return ok(Value.makeBool(result));
 }
 
@@ -218,7 +220,8 @@ private BuildResult!Value builtinEndsWith(Value[] args) @system
     if (args.length != 2 || !args[0].isString() || !args[1].isString())
         return err("endsWith() expects 2 string arguments");
     
-    auto result = args[0].asString().endsWith(args[1].asString());
+    // SIMD-accelerated string suffix matching
+    auto result = SIMDStrings.endsWith(args[0].asString(), args[1].asString());
     return ok(Value.makeBool(result));
 }
 

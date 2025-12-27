@@ -8,6 +8,7 @@ import std.string;
 import std.algorithm;
 import std.array;
 import infrastructure.utils.logging;
+import infrastructure.utils.simd.strings : SIMDStrings;
 import infrastructure.errors;
 
 /// DUB package manifest information
@@ -239,52 +240,52 @@ class DubManifest
             {
                 string trimmed = line.strip();
                 
-                // Skip comments and empty lines
-                if (trimmed.empty || trimmed.startsWith("//") || trimmed.startsWith("#"))
+                // Skip comments and empty lines (SIMD-accelerated)
+                if (trimmed.empty || (() @trusted => SIMDStrings.startsWith(trimmed, "//") || SIMDStrings.startsWith(trimmed, "#"))())
                     continue;
                 
-                // Simple key-value parsing
-                if (trimmed.startsWith("name "))
+                // Simple key-value parsing (SIMD-accelerated)
+                if ((() @trusted => SIMDStrings.startsWith(trimmed, "name "))())
                 {
                     manifest.name = parseSDLValue(trimmed);
                 }
-                else if (trimmed.startsWith("version "))
+                else if ((() @trusted => SIMDStrings.startsWith(trimmed, "version "))())
                 {
                     manifest.version_ = parseSDLValue(trimmed);
                 }
-                else if (trimmed.startsWith("description "))
+                else if ((() @trusted => SIMDStrings.startsWith(trimmed, "description "))())
                 {
                     manifest.description = parseSDLValue(trimmed);
                 }
-                else if (trimmed.startsWith("license "))
+                else if ((() @trusted => SIMDStrings.startsWith(trimmed, "license "))())
                 {
                     manifest.license = parseSDLValue(trimmed);
                 }
-                else if (trimmed.startsWith("copyright "))
+                else if ((() @trusted => SIMDStrings.startsWith(trimmed, "copyright "))())
                 {
                     manifest.copyright = parseSDLValue(trimmed);
                 }
-                else if (trimmed.startsWith("homepage "))
+                else if ((() @trusted => SIMDStrings.startsWith(trimmed, "homepage "))())
                 {
                     manifest.homepage = parseSDLValue(trimmed);
                 }
-                else if (trimmed.startsWith("targetType "))
+                else if ((() @trusted => SIMDStrings.startsWith(trimmed, "targetType "))())
                 {
                     manifest.targetType = parseSDLValue(trimmed);
                 }
-                else if (trimmed.startsWith("targetName "))
+                else if ((() @trusted => SIMDStrings.startsWith(trimmed, "targetName "))())
                 {
                     manifest.targetName = parseSDLValue(trimmed);
                 }
-                else if (trimmed.startsWith("targetPath "))
+                else if ((() @trusted => SIMDStrings.startsWith(trimmed, "targetPath "))())
                 {
                     manifest.targetPath = parseSDLValue(trimmed);
                 }
-                else if (trimmed.startsWith("mainSourceFile "))
+                else if ((() @trusted => SIMDStrings.startsWith(trimmed, "mainSourceFile "))())
                 {
                     manifest.mainSourceFile = parseSDLValue(trimmed);
                 }
-                else if (trimmed.startsWith("dependency "))
+                else if ((() @trusted => SIMDStrings.startsWith(trimmed, "dependency "))())
                 {
                     auto parts = parseSDLDependency(trimmed);
                     if (parts.length >= 2)
@@ -305,8 +306,8 @@ class DubManifest
         return Ok!(PackageManifest, BuildError)(manifest);
     }
     
-    /// Parse value from SDL line
-    private static string parseSDLValue(string line)
+    /// Parse value from SDL line (SIMD-accelerated)
+    private static string parseSDLValue(string line) @trusted
     {
         auto parts = line.split();
         if (parts.length < 2)
@@ -315,7 +316,7 @@ class DubManifest
         string value = parts[1..$].join(" ");
         
         // Remove quotes
-        if (value.startsWith("\"") && value.endsWith("\""))
+        if (SIMDStrings.startsWith(value, "\"") && SIMDStrings.endsWith(value, "\""))
         {
             value = value[1..$-1];
         }
@@ -323,8 +324,8 @@ class DubManifest
         return value;
     }
     
-    /// Parse dependency from SDL line
-    private static string[] parseSDLDependency(string line)
+    /// Parse dependency from SDL line (SIMD-accelerated)
+    private static string[] parseSDLDependency(string line) @trusted
     {
         // dependency "name" version="version"
         auto parts = line.split();
@@ -334,7 +335,7 @@ class DubManifest
         string name = parts[1].strip("\"");
         string ver = "";
         
-        if (parts.length >= 3 && parts[2].startsWith("version="))
+        if (parts.length >= 3 && SIMDStrings.startsWith(parts[2], "version="))
         {
             ver = parts[2]["version=".length..$].strip("\"");
         }

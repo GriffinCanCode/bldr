@@ -3,9 +3,10 @@ module engine.runtime.hermetic.tracing.analyzer;
 import std.algorithm : filter, map, sort, uniq, canFind, any;
 import std.array : array, Appender;
 import std.range : walkLength;
-import std.string : indexOf, startsWith;
+import std.string : indexOf;
 import std.conv : to;
 import engine.runtime.hermetic.tracing.tracer;
+import infrastructure.utils.simd.strings : SIMDStrings;
 
 /// Severity of hermeticity violation
 enum ViolationSeverity
@@ -437,64 +438,64 @@ struct SyscallAnalyzer
     
     private:
     
-    /// Check if path is allowed
-    bool isPathAllowed(string path) const @safe pure nothrow
+    /// Check if path is allowed (SIMD-accelerated prefix matching)
+    bool isPathAllowed(string path) const @trusted pure nothrow
     {
         foreach (allowed; config.allowedPaths)
-            if (path.length >= allowed.length && path[0 .. allowed.length] == allowed)
+            if (SIMDStrings.startsWith(path, allowed))
                 return true;
         return false;
     }
     
-    /// Check if path is in workspace
-    bool isInWorkspace(string path) const @safe pure nothrow
+    /// Check if path is in workspace (SIMD-accelerated prefix matching)
+    bool isInWorkspace(string path) const @trusted pure nothrow
     {
         foreach (ws; config.workspacePaths)
-            if (path.length >= ws.length && path[0 .. ws.length] == ws)
+            if (SIMDStrings.startsWith(path, ws))
                 return true;
         return false;
     }
     
-    /// Check if path is toolchain path
-    bool isToolchainPath(string path) const @safe pure nothrow
+    /// Check if path is toolchain path (SIMD-accelerated prefix matching)
+    bool isToolchainPath(string path) const @trusted pure nothrow
     {
         foreach (tc; config.toolchainPaths)
-            if (path.length >= tc.length && path[0 .. tc.length] == tc)
+            if (SIMDStrings.startsWith(path, tc))
                 return true;
         return false;
     }
     
-    /// Check if path is user directory
-    static bool isUserPath(string path) @safe pure nothrow
+    /// Check if path is user directory (SIMD-accelerated)
+    static bool isUserPath(string path) @trusted pure nothrow
     {
-        return path.startsWith("/home/") || 
-               path.startsWith("/Users/") ||
-               path.startsWith("~");
+        return SIMDStrings.startsWith(path, "/home/") || 
+               SIMDStrings.startsWith(path, "/Users/") ||
+               SIMDStrings.startsWith(path, "~");
     }
     
-    /// Check if path is system config
-    static bool isSystemConfigPath(string path) @safe pure nothrow
+    /// Check if path is system config (SIMD-accelerated)
+    static bool isSystemConfigPath(string path) @trusted pure nothrow
     {
-        return path.startsWith("/etc/") ||
-               path.startsWith("/var/") ||
+        return SIMDStrings.startsWith(path, "/etc/") ||
+               SIMDStrings.startsWith(path, "/var/") ||
                path.indexOf(".config") >= 0 ||
                path.indexOf(".local") >= 0;
     }
     
-    /// Check if path is temp directory
-    static bool isTempPath(string path) @safe pure nothrow
+    /// Check if path is temp directory (SIMD-accelerated)
+    static bool isTempPath(string path) @trusted pure nothrow
     {
-        return path.startsWith("/tmp/") ||
-               path.startsWith("/private/tmp/") ||
-               path.startsWith("/var/tmp/");
+        return SIMDStrings.startsWith(path, "/tmp/") ||
+               SIMDStrings.startsWith(path, "/private/tmp/") ||
+               SIMDStrings.startsWith(path, "/var/tmp/");
     }
     
-    /// Check if path is random source
-    static bool isRandomSource(string path) @safe pure nothrow
+    /// Check if path is random source (SIMD-accelerated equality)
+    static bool isRandomSource(string path) @trusted pure nothrow
     {
-        return path == "/dev/random" || 
-               path == "/dev/urandom" ||
-               path == "/dev/arandom";
+        return SIMDStrings.equal(path, "/dev/random") || 
+               SIMDStrings.equal(path, "/dev/urandom") ||
+               SIMDStrings.equal(path, "/dev/arandom");
     }
     
     /// Check if syscall is time-related

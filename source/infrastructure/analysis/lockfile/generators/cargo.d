@@ -14,6 +14,7 @@ import infrastructure.analysis.manifests.types : Dependency, DependencyType;
 import infrastructure.utils.files.hash : FastHash;
 import infrastructure.utils.logging;
 import infrastructure.errors;
+import infrastructure.utils.simd.strings : SIMDStrings;
 
 /// Cargo.lock generator for Rust projects
 /// Generates deterministic lockfiles from Cargo.toml
@@ -199,11 +200,11 @@ private:
         {
             line = line.strip;
             
-            if (line.length == 0 || line.startsWith("#"))
+            if (line.length == 0 || SIMDStrings.startsWith(line, "#"))
                 continue;
             
             // Section header
-            if (line.startsWith("[") && line.endsWith("]"))
+            if (SIMDStrings.startsWith(line, "[") && SIMDStrings.endsWith(line, "]"))
             {
                 // Save previous package
                 if (inPackage && currentDep.isValid())
@@ -229,7 +230,7 @@ private:
                 auto value = line[eqIdx + 1 .. $].strip;
                 
                 // Remove quotes
-                if (value.startsWith("\"") && value.endsWith("\""))
+                if (SIMDStrings.startsWith(value, "\"") && SIMDStrings.endsWith(value, "\""))
                     value = value[1 .. $ - 1];
                 
                 switch (key)

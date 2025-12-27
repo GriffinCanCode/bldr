@@ -1,7 +1,7 @@
 module infrastructure.analysis.lockfile.generators.npm;
 
 import std.json;
-import std.string : strip, startsWith, endsWith, split;
+import std.string : strip, split;
 import std.array : array, appender;
 import std.algorithm : map, filter, sort, canFind;
 import std.path : buildPath, dirName, baseName;
@@ -14,6 +14,7 @@ import infrastructure.analysis.manifests.npm : NpmManifestParser;
 import infrastructure.analysis.manifests.types : Dependency, DependencyType;
 import infrastructure.utils.files.hash : FastHash;
 import infrastructure.utils.logging;
+import infrastructure.utils.simd.strings : SIMDStrings;
 import infrastructure.errors;
 
 /// NPM/Yarn/PNPM lockfile generator
@@ -208,20 +209,20 @@ private:
         return Ok!(ResolvedDependency[], BuildError)(resolved);
     }
     
-    /// Resolve version range to exact version
+    /// Resolve version range to exact version (SIMD-accelerated)
     /// For now, strips range operators - full resolution requires registry query
-    string resolveVersion(string name, string versionSpec) const @safe
+    string resolveVersion(string name, string versionSpec) const @trusted
     {
-        if (versionSpec.startsWith("^") || versionSpec.startsWith("~"))
+        if (SIMDStrings.startsWith(versionSpec, "^") || SIMDStrings.startsWith(versionSpec, "~"))
             return versionSpec[1 .. $];
-        if (versionSpec.startsWith(">=") || versionSpec.startsWith("<="))
+        if (SIMDStrings.startsWith(versionSpec, ">=") || SIMDStrings.startsWith(versionSpec, "<="))
             return versionSpec[2 .. $].split(" ")[0];
         return versionSpec;
     }
     
-    string buildRegistryUrl(string name, string version_) const @safe
+    string buildRegistryUrl(string name, string version_) const @trusted
     {
-        if (name.startsWith("@"))
+        if (SIMDStrings.startsWith(name, "@"))
         {
             // Scoped package
             auto parts = name[1 .. $].split("/");
@@ -272,9 +273,9 @@ private:
                     if (pkgPath.length == 0)
                         continue;  // Root package
                     
-                    // Extract package name from path
+                    // Extract package name from path (SIMD-accelerated)
                     string name = pkgPath;
-                    if (name.startsWith("node_modules/"))
+                    if ((() @trusted => SIMDStrings.startsWith(name, "node_modules/"))())
                         name = name[13 .. $];
                     
                     ResolvedDependency dep;
@@ -348,11 +349,11 @@ private:
             foreach (line; content.split("\n"))
             {
                 line = line.strip;
-                if (line.length == 0 || line.startsWith("#"))
+                if (line.length == 0 || (() @trusted => SIMDStrings.startsWith(line, "#"))())
                     continue;
                 
-                // Package header: "name@version:"
-                if (line.endsWith(":") && !line.startsWith(" "))
+                // Package header: "name@version:" (SIMD-accelerated)
+                if ((() @trusted => SIMDStrings.endsWith(line, ":") && !SIMDStrings.startsWith(line, " "))())
                 {
                     if (currentPkg.length > 0 && currentDep.isValid())
                         lockfile.dependencies ~= currentDep;
@@ -361,23 +362,23 @@ private:
                     currentDep = ResolvedDependency.init;
                     
                     // Parse name from "name@version"
-                    auto atIdx = currentPkg.indexOf("@", currentPkg.startsWith("@") ? 1 : 0);
+                    auto atIdx = currentPkg.indexOf("@", (() @trusted => SIMDStrings.startsWith(currentPkg, "@"))() ? 1 : 0);
                     if (atIdx > 0)
                         currentDep.name = currentPkg[0 .. atIdx];
                 }
-                else if (line.startsWith("  version"))
+                else if ((() @trusted => SIMDStrings.startsWith(line, "  version"))())
                 {
                     auto val = extractYarnValue(line);
                     if (val.length > 0)
                         currentDep.version_ = val;
                 }
-                else if (line.startsWith("  resolved"))
+                else if ((() @trusted => SIMDStrings.startsWith(line, "  resolved"))())
                 {
                     auto val = extractYarnValue(line);
                     if (val.length > 0)
                         currentDep.resolved = val;
                 }
-                else if (line.startsWith("  integrity"))
+                else if ((() @trusted => SIMDStrings.startsWith(line, "  integrity"))())
                 {
                     auto val = extractYarnValue(line);
                     if (val.length > 0)
@@ -398,14 +399,14 @@ private:
         }
     }
     
-    string extractYarnValue(string line) const @safe
+    string extractYarnValue(string line) const @trusted
     {
         auto idx = line.indexOf(" ");
         if (idx < 0)
             return "";
         
         auto val = line[idx + 1 .. $].strip;
-        if (val.startsWith("\"") && val.endsWith("\""))
+        if (SIMDStrings.startsWith(val, "\"") && SIMDStrings.endsWith(val, "\""))
             return val[1 .. $ - 1];
         return val;
     }
@@ -425,7 +426,7 @@ private:
             
             foreach (line; content.split("\n"))
             {
-                if (line.startsWith("packages:"))
+                if ((() @trusted => SIMDStrings.startsWith(line, "packages:"))())
                 {
                     inPackages = true;
                     continue;
@@ -434,22 +435,22 @@ private:
                 if (!inPackages)
                     continue;
                 
-                // New package entry
-                if (line.startsWith("  /") || line.startsWith("  '"))
+                // New package entry (SIMD-accelerated)
+                if ((() @trusted => SIMDStrings.startsWith(line, "  /") || SIMDStrings.startsWith(line, "  '"))())
                 {
                     if (currentPkg.length > 0 && currentDep.isValid())
                         lockfile.dependencies ~= currentDep;
                     
                     currentPkg = line.strip;
-                    if (currentPkg.startsWith("'"))
+                    if ((() @trusted => SIMDStrings.startsWith(currentPkg, "'"))())
                         currentPkg = currentPkg[1 .. $ - 2];
-                    else if (currentPkg.endsWith(":"))
+                    else if ((() @trusted => SIMDStrings.endsWith(currentPkg, ":"))())
                         currentPkg = currentPkg[0 .. $ - 1];
                     
                     currentDep = ResolvedDependency.init;
                     parsePnpmPackagePath(currentPkg, currentDep);
                 }
-                else if (line.startsWith("    resolution:"))
+                else if ((() @trusted => SIMDStrings.startsWith(line, "    resolution:"))())
                 {
                     auto val = extractYamlValue(line);
                     if (val.canFind("integrity"))
@@ -459,7 +460,7 @@ private:
                             currentDep.integrity = parts[1].split(",")[0].strip;
                     }
                 }
-                else if (line.startsWith("    dev:"))
+                else if ((() @trusted => SIMDStrings.startsWith(line, "    dev:"))())
                 {
                     currentDep.dev = line.canFind("true");
                 }
@@ -477,10 +478,10 @@ private:
         }
     }
     
-    void parsePnpmPackagePath(string path, ref ResolvedDependency dep) const @safe
+    void parsePnpmPackagePath(string path, ref ResolvedDependency dep) const @trusted
     {
-        // Format: /name@version or /@scope/name@version
-        if (!path.startsWith("/"))
+        // Format: /name@version or /@scope/name@version (SIMD-accelerated)
+        if (!SIMDStrings.startsWith(path, "/"))
             return;
         
         path = path[1 .. $];

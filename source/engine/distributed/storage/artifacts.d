@@ -14,6 +14,7 @@ import infrastructure.utils.logging;
 import infrastructure.utils.crypto.blake3 : Blake3;
 import infrastructure.utils.memory.mmap : MmapRegion, MapMode;
 import infrastructure.utils.files.cdc : FastCDC, ChunkManifest, shouldChunk, LARGE_ARTIFACT_THRESHOLD;
+import infrastructure.utils.simd.strings : SIMDStrings;
 
 /// Size threshold for mmap artifact reads (>256KB uses mmap)
 private enum size_t ARTIFACT_MMAP_THRESHOLD = 256 * 1024;
@@ -249,8 +250,8 @@ final class ArtifactStore
         string path;
         
         string remaining = url;
-        if (remaining.startsWith("http://")) remaining = remaining[7 .. $];
-        else if (remaining.startsWith("https://")) { remaining = remaining[8 .. $]; port = 443; }
+        if (SIMDStrings.startsWith(remaining, "http://")) remaining = remaining[7 .. $];
+        else if (SIMDStrings.startsWith(remaining, "https://")) { remaining = remaining[8 .. $]; port = 443; }
         
         immutable slashPos = remaining.indexOf('/');
         if (slashPos >= 0) { host = remaining[0 .. slashPos]; path = remaining[slashPos .. $]; }
@@ -400,9 +401,9 @@ final class ArtifactStore
         string path;
         
         string remaining = url;
-        if (remaining.startsWith("http://"))
+        if (SIMDStrings.startsWith(remaining, "http://"))
             remaining = remaining[7 .. $];
-        else if (remaining.startsWith("https://"))
+        else if (SIMDStrings.startsWith(remaining, "https://"))
         {
             remaining = remaining[8 .. $];
             port = 443;
@@ -511,9 +512,9 @@ final class ArtifactStore
         string path;
         
         string remaining = url;
-        if (remaining.startsWith("http://"))
+        if (SIMDStrings.startsWith(remaining, "http://"))
             remaining = remaining[7 .. $];
-        else if (remaining.startsWith("https://"))
+        else if (SIMDStrings.startsWith(remaining, "https://"))
         {
             remaining = remaining[8 .. $];
             port = 443;

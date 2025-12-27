@@ -7,6 +7,7 @@ import core.sync.rwmutex : ReadWriteMutex;
 import engine.distributed.protocol.protocol : WorkerId;
 import infrastructure.errors;
 import infrastructure.utils.crypto.blake3 : Blake3;
+import infrastructure.utils.simd.strings : SIMDStrings;
 
 /// Affinity key for consistent hashing (language + toolchain)
 struct AffinityKey
@@ -472,10 +473,9 @@ final class AffinitySelector
 }
 
 /// Helper: Extract affinity key from command/environment
-AffinityKey extractAffinity(string command, string[string] env) @safe
+AffinityKey extractAffinity(string command, string[string] env) @trusted
 {
     import std.string : indexOf;
-    import std.algorithm : startsWith;
     
     // Check environment for explicit affinity
     if (auto lang = "BLDR_LANGUAGE" in env)
@@ -488,30 +488,30 @@ AffinityKey extractAffinity(string command, string[string] env) @safe
     if (command.length > 0)
     {
         // Common compiler/toolchain patterns
-        if (command.startsWith("dmd") || command.startsWith("ldc2") || command.startsWith("gdc"))
+        if (SIMDStrings.startsWith(command, "dmd") || SIMDStrings.startsWith(command, "ldc2") || SIMDStrings.startsWith(command, "gdc"))
         {
             auto spaceIdx = command.indexOf(' ');
             return AffinityKey("D", command[0 .. spaceIdx > 0 ? spaceIdx : command.length]);
         }
-        if (command.startsWith("rustc") || command.startsWith("cargo"))
+        if (SIMDStrings.startsWith(command, "rustc") || SIMDStrings.startsWith(command, "cargo"))
             return AffinityKey("Rust", "");
-        if (command.startsWith("tsc") || command.startsWith("esbuild") || command.startsWith("swc"))
+        if (SIMDStrings.startsWith(command, "tsc") || SIMDStrings.startsWith(command, "esbuild") || SIMDStrings.startsWith(command, "swc"))
             return AffinityKey("TypeScript", "");
-        if (command.startsWith("node") || command.startsWith("npm") || command.startsWith("npx"))
+        if (SIMDStrings.startsWith(command, "node") || SIMDStrings.startsWith(command, "npm") || SIMDStrings.startsWith(command, "npx"))
             return AffinityKey("JavaScript", "");
-        if (command.startsWith("go "))
+        if (SIMDStrings.startsWith(command, "go "))
             return AffinityKey("Go", "");
-        if (command.startsWith("javac") || command.startsWith("java"))
+        if (SIMDStrings.startsWith(command, "javac") || SIMDStrings.startsWith(command, "java"))
             return AffinityKey("Java", "");
-        if (command.startsWith("kotlinc"))
+        if (SIMDStrings.startsWith(command, "kotlinc"))
             return AffinityKey("Kotlin", "");
-        if (command.startsWith("gcc") || command.startsWith("clang") || command.startsWith("g++") || command.startsWith("clang++"))
+        if (SIMDStrings.startsWith(command, "gcc") || SIMDStrings.startsWith(command, "clang") || SIMDStrings.startsWith(command, "g++") || SIMDStrings.startsWith(command, "clang++"))
             return AffinityKey("Cpp", "");
-        if (command.startsWith("python") || command.startsWith("pip"))
+        if (SIMDStrings.startsWith(command, "python") || SIMDStrings.startsWith(command, "pip"))
             return AffinityKey("Python", "");
-        if (command.startsWith("zig"))
+        if (SIMDStrings.startsWith(command, "zig"))
             return AffinityKey("Zig", "");
-        if (command.startsWith("swift"))
+        if (SIMDStrings.startsWith(command, "swift"))
             return AffinityKey("Swift", "");
     }
     

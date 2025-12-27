@@ -1,12 +1,13 @@
 module infrastructure.plugins.discovery.validator;
 
-import std.algorithm : startsWith, canFind, splitter;
+import std.algorithm : canFind, splitter, startsWith;
 import std.string : strip;
 import std.range : empty;
 import std.conv : to;
 import std.file : exists, isFile;
 import std.array : array;
 import infrastructure.plugins.protocol;
+import infrastructure.utils.simd.strings : SIMDStrings;
 import infrastructure.errors;
 
 /// Semantic version structure
@@ -27,9 +28,9 @@ struct SemanticVersion {
         
         try {
             auto cleaned = ver.strip();
-            // Strip leading operators for parsing
+            // Strip leading operators for parsing (SIMD-accelerated)
             foreach (prefix; [">=", "<=", ">", "<", "=", "^", "~"])
-                if (cleaned.startsWith(prefix))
+                if (SIMDStrings.startsWith(cleaned, prefix))
                     cleaned = cleaned[prefix.length .. $].strip();
             
             auto parts = cleaned.split(".");
@@ -85,8 +86,8 @@ struct VersionRange {
             return Ok!(VersionRange, BuildError)(result);
         }
         
-        // Handle caret (^) - compatible with version (same major)
-        if (trimmed.startsWith("^")) {
+        // Handle caret (^) - compatible with version (same major) (SIMD-accelerated)
+        if (SIMDStrings.startsWith(trimmed, "^")) {
             auto verResult = SemanticVersion.parse(trimmed[1 .. $]);
             if (verResult.isErr) return Err!(VersionRange, BuildError)(verResult.unwrapErr());
             auto ver = verResult.unwrap();
@@ -98,8 +99,8 @@ struct VersionRange {
             return Ok!(VersionRange, BuildError)(result);
         }
         
-        // Handle tilde (~) - compatible with minor version
-        if (trimmed.startsWith("~")) {
+        // Handle tilde (~) - compatible with minor version (SIMD-accelerated)
+        if (SIMDStrings.startsWith(trimmed, "~")) {
             auto verResult = SemanticVersion.parse(trimmed[1 .. $]);
             if (verResult.isErr) return Err!(VersionRange, BuildError)(verResult.unwrapErr());
             auto ver = verResult.unwrap();
@@ -116,31 +117,31 @@ struct VersionRange {
             auto p = part.strip();
             if (p.empty) continue;
             
-            if (p.startsWith(">=")) {
+            if (SIMDStrings.startsWith(p, ">=")) {
                 auto verResult = SemanticVersion.parse(p[2 .. $]);
                 if (verResult.isErr) return Err!(VersionRange, BuildError)(verResult.unwrapErr());
                 result.minVersion = verResult.unwrap();
                 result.hasMin = true;
                 result.minInclusive = true;
-            } else if (p.startsWith(">")) {
+            } else if (SIMDStrings.startsWith(p, ">")) {
                 auto verResult = SemanticVersion.parse(p[1 .. $]);
                 if (verResult.isErr) return Err!(VersionRange, BuildError)(verResult.unwrapErr());
                 result.minVersion = verResult.unwrap();
                 result.hasMin = true;
                 result.minInclusive = false;
-            } else if (p.startsWith("<=")) {
+            } else if (SIMDStrings.startsWith(p, "<=")) {
                 auto verResult = SemanticVersion.parse(p[2 .. $]);
                 if (verResult.isErr) return Err!(VersionRange, BuildError)(verResult.unwrapErr());
                 result.maxVersion = verResult.unwrap();
                 result.hasMax = true;
                 result.maxInclusive = true;
-            } else if (p.startsWith("<")) {
+            } else if (SIMDStrings.startsWith(p, "<")) {
                 auto verResult = SemanticVersion.parse(p[1 .. $]);
                 if (verResult.isErr) return Err!(VersionRange, BuildError)(verResult.unwrapErr());
                 result.maxVersion = verResult.unwrap();
                 result.hasMax = true;
                 result.maxInclusive = false;
-            } else if (p.startsWith("=")) {
+            } else if (SIMDStrings.startsWith(p, "=")) {
                 auto verResult = SemanticVersion.parse(p[1 .. $]);
                 if (verResult.isErr) return Err!(VersionRange, BuildError)(verResult.unwrapErr());
                 result.minVersion = result.maxVersion = verResult.unwrap();
@@ -305,7 +306,7 @@ class PluginValidator {
         
         bool valid = false;
         foreach (validCap; validCapabilities) {
-            if (capability == validCap || capability.startsWith(validCap ~ ".")) {
+            if (capability == validCap || SIMDStrings.startsWith(capability, validCap ~ ".")) {
                 valid = true;
                 break;
             }

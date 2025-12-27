@@ -8,6 +8,7 @@ import std.file;
 import std.path;
 import std.conv;
 import infrastructure.utils.logging;
+import infrastructure.utils.simd.strings : SIMDStrings;
 
 /// Rust toolchain information
 struct Toolchain
@@ -100,7 +101,7 @@ class Rustup
             tc.isInstalled = true;
             
             // Check if default
-            if (line.endsWith("(default)"))
+            if (SIMDStrings.endsWith(line, "(default)"))
             {
                 tc.isDefault = true;
                 line = line[0 .. $ - 9].strip;
@@ -109,11 +110,11 @@ class Rustup
             tc.name = line;
             
             // Parse channel
-            if (line.startsWith("stable"))
+            if (SIMDStrings.startsWith(line, "stable"))
                 tc.channel = "stable";
-            else if (line.startsWith("beta"))
+            else if (SIMDStrings.startsWith(line, "beta"))
                 tc.channel = "beta";
-            else if (line.startsWith("nightly"))
+            else if (SIMDStrings.startsWith(line, "nightly"))
                 tc.channel = "nightly";
             
             toolchains ~= tc;
@@ -164,7 +165,7 @@ class Rustup
             TargetTriple target;
             
             // Check if installed
-            if (line.endsWith("(installed)"))
+            if (SIMDStrings.endsWith(line, "(installed)"))
             {
                 target.isInstalled = true;
                 line = line[0 .. $ - 11].strip;
@@ -225,7 +226,7 @@ class Rustup
             Component comp;
             
             // Check status
-            if (line.endsWith("(installed)"))
+            if (SIMDStrings.endsWith(line, "(installed)"))
             {
                 comp.isInstalled = true;
                 comp.isAvailable = true;
@@ -339,7 +340,7 @@ class Rustc
         
         foreach (line; res.output.split("\n"))
         {
-            if (line.startsWith("host:"))
+            if (SIMDStrings.startsWith(line, "host:"))
             {
                 auto parts = line.split(":");
                 if (parts.length >= 2)
@@ -359,7 +360,7 @@ class Rustc
         
         foreach (line; res.output.split("\n"))
         {
-            if (line.startsWith("LLVM version:"))
+            if (SIMDStrings.startsWith(line, "LLVM version:"))
             {
                 auto parts = line.split(":");
                 if (parts.length >= 2)

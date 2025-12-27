@@ -8,6 +8,7 @@ import std.string;
 import std.regex;
 import std.json;
 import infrastructure.utils.logging;
+import infrastructure.utils.simd.strings : SIMDStrings;
 
 /// Python package dependency
 struct PythonDependency
@@ -88,7 +89,7 @@ class DependencyAnalyzer
         
         if (basename == "pyproject.toml")
             return DependencyFileType.Pyproject;
-        else if (basename.startsWith("requirements") || basename.endsWith("requirements.txt"))
+        else if ((() @trusted => SIMDStrings.startsWith(basename, "requirements") || SIMDStrings.endsWith(basename, "requirements.txt"))())
             return DependencyFileType.Requirements;
         else if (basename == "setup.py")
             return DependencyFileType.Setup;
@@ -140,12 +141,12 @@ class DependencyAnalyzer
             {
                 auto trimmed = line.strip;
                 
-                // Skip empty lines and comments
-                if (trimmed.empty || trimmed.startsWith("#"))
+                // Skip empty lines and comments (SIMD-accelerated)
+                if (trimmed.empty || (() @trusted => SIMDStrings.startsWith(trimmed, "#"))())
                     continue;
                 
-                // Skip flags like -r, -e, --index-url
-                if (trimmed.startsWith("-"))
+                // Skip flags like -r, -e, --index-url (SIMD-accelerated)
+                if ((() @trusted => SIMDStrings.startsWith(trimmed, "-"))())
                     continue;
                 
                 auto dep = parseRequirementLine(trimmed);
@@ -223,7 +224,7 @@ class DependencyAnalyzer
                     inProjectDeps = false;
                     continue;
                 }
-                else if (trimmed.startsWith("[") && trimmed.endsWith("]"))
+                else if ((() @trusted => SIMDStrings.startsWith(trimmed, "[") && SIMDStrings.endsWith(trimmed, "]"))())
                 {
                     inProjectDeps = false;
                     inPoetryDeps = false;
@@ -231,7 +232,7 @@ class DependencyAnalyzer
                     continue;
                 }
                 
-                if (trimmed.startsWith("dependencies = ["))
+                if ((() @trusted => SIMDStrings.startsWith(trimmed, "dependencies = ["))())
                 {
                     inArray = true;
                     continue;
@@ -245,8 +246,8 @@ class DependencyAnalyzer
                 
                 if ((inProjectDeps && inArray) || inPoetryDeps)
                 {
-                    // Parse dependency line
-                    if (trimmed.empty || trimmed.startsWith("#"))
+                    // Parse dependency line (SIMD-accelerated)
+                    if (trimmed.empty || (() @trusted => SIMDStrings.startsWith(trimmed, "#"))())
                         continue;
                     
                     // Remove quotes and commas
@@ -325,13 +326,13 @@ class DependencyAnalyzer
                     inPackages = true;
                     continue;
                 }
-                else if (trimmed.startsWith("["))
+                else if ((() @trusted => SIMDStrings.startsWith(trimmed, "["))())
                 {
                     inPackages = false;
                     continue;
                 }
                 
-                if (inPackages && !trimmed.empty && !trimmed.startsWith("#"))
+                if (inPackages && !trimmed.empty && !(() @trusted => SIMDStrings.startsWith(trimmed, "#"))())
                 {
                     // Parse: package = "version" or package = "*"
                     auto parts = trimmed.split("=");
@@ -375,17 +376,17 @@ class DependencyAnalyzer
             {
                 auto trimmed = line.strip;
                 
-                if (trimmed.startsWith("dependencies:"))
+                if ((() @trusted => SIMDStrings.startsWith(trimmed, "dependencies:"))())
                 {
                     inDeps = true;
                     continue;
                 }
-                else if (inDeps && !trimmed.startsWith("-") && !trimmed.empty)
+                else if (inDeps && !(() @trusted => SIMDStrings.startsWith(trimmed, "-"))() && !trimmed.empty)
                 {
                     inDeps = false;
                 }
                 
-                if (inDeps && trimmed.startsWith("-"))
+                if (inDeps && (() @trusted => SIMDStrings.startsWith(trimmed, "-"))())
                 {
                     auto depLine = trimmed[1 .. $].strip;
                     

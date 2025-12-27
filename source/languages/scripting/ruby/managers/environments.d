@@ -10,6 +10,7 @@ import std.string;
 import std.conv;
 import languages.scripting.ruby.core.config;
 import infrastructure.utils.logging;
+import infrastructure.utils.simd.strings : SIMDStrings;
 
 /// Ruby version manager interface
 interface VersionManager
@@ -729,7 +730,7 @@ final class RubyVersionUtil
             // "ruby-3.3.0"
             // "3.3.0@gemset" (RVM format)
             
-            if (content.startsWith("ruby-"))
+            if (SIMDStrings.startsWith(content, "ruby-"))
                 content = content[5..$];
             
             immutable atPos = content.indexOf("@");
@@ -792,28 +793,28 @@ final class RubyVersionUtil
         
         immutable req = requirement.strip;
         
-        if (req.startsWith("~>"))
+        if (SIMDStrings.startsWith(req, "~>"))
         {
             // Pessimistic version constraint
             immutable reqVer = req[2..$].strip;
-            return version_.startsWith(reqVer);
+            return SIMDStrings.startsWith(version_, reqVer);
         }
-        else if (req.startsWith(">="))
+        else if (SIMDStrings.startsWith(req, ">="))
         {
             immutable reqVer = req[2..$].strip;
             return compareVersions(version_, reqVer) >= 0;
         }
-        else if (req.startsWith("<="))
+        else if (SIMDStrings.startsWith(req, "<="))
         {
             immutable reqVer = req[2..$].strip;
             return compareVersions(version_, reqVer) <= 0;
         }
-        else if (req.startsWith(">"))
+        else if (SIMDStrings.startsWith(req, ">"))
         {
             immutable reqVer = req[1..$].strip;
             return compareVersions(version_, reqVer) > 0;
         }
-        else if (req.startsWith("<"))
+        else if (SIMDStrings.startsWith(req, "<"))
         {
             immutable reqVer = req[1..$].strip;
             return compareVersions(version_, reqVer) < 0;
@@ -821,7 +822,7 @@ final class RubyVersionUtil
         else
         {
             // Exact match or prefix match
-            return version_.startsWith(req);
+            return SIMDStrings.startsWith(version_, req);
         }
     }
     

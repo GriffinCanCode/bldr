@@ -9,6 +9,7 @@ import infrastructure.migration.core.base;
 import infrastructure.migration.core.common;
 import infrastructure.config.schema.schema : TargetType, TargetLanguage;
 import infrastructure.errors;
+import infrastructure.utils.simd.strings : SIMDStrings;
 
 /// Migrator for CMake CMakeLists.txt files
 final class CMakeMigrator : BaseMigrator
@@ -162,13 +163,13 @@ final class CMakeMigrator : BaseMigrator
     
     private string[] parseSources(string sourcesStr)
     {
-        return sourcesStr.split().filter!(s => s.length > 0 && !s.startsWith("$")).array;
+        return sourcesStr.split().filter!(s => s.length > 0 && !SIMDStrings.startsWith(s, "$")).array;
     }
     
     private string[] parseDependencies(string depsStr)
     {
         return depsStr.split()
-            .filter!(s => s.length > 0 && !s.startsWith("$") && 
+            .filter!(s => s.length > 0 && !SIMDStrings.startsWith(s, "$") && 
                      s != "PUBLIC" && s != "PRIVATE" && s != "INTERFACE")
             .array;
     }
@@ -176,7 +177,7 @@ final class CMakeMigrator : BaseMigrator
     private string[] parseIncludes(string includesStr)
     {
         return includesStr.split()
-            .filter!(s => s.length > 0 && !s.startsWith("$") && 
+            .filter!(s => s.length > 0 && !SIMDStrings.startsWith(s, "$") && 
                      s != "PUBLIC" && s != "PRIVATE" && s != "INTERFACE")
             .array;
     }
@@ -185,7 +186,7 @@ final class CMakeMigrator : BaseMigrator
     {
         // Remove quotes and split
         return flagsStr.replace("\"", "").split()
-            .filter!(s => s.length > 0 && !s.startsWith("$"))
+            .filter!(s => s.length > 0 && !SIMDStrings.startsWith(s, "$"))
             .array;
     }
     
@@ -193,9 +194,9 @@ final class CMakeMigrator : BaseMigrator
     {
         foreach (source; sources)
         {
-            if (source.endsWith(".cpp") || source.endsWith(".cc") || source.endsWith(".cxx"))
+            if (SIMDStrings.endsWith(source, ".cpp") || SIMDStrings.endsWith(source, ".cc") || SIMDStrings.endsWith(source, ".cxx"))
                 return TargetLanguage.Cpp;
-            if (source.endsWith(".c"))
+            if (SIMDStrings.endsWith(source, ".c"))
                 return TargetLanguage.C;
         }
         return TargetLanguage.Cpp;  // Default for CMake

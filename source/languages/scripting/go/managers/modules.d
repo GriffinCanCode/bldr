@@ -8,6 +8,7 @@ import std.string;
 import std.regex;
 import std.conv;
 import infrastructure.utils.logging;
+import infrastructure.utils.simd.strings : SIMDStrings;
 
 /// Represents a Go module (parsed from go.mod)
 struct GoModule
@@ -133,8 +134,8 @@ class ModuleAnalyzer
         
         foreach (line; lines)
         {
-            // Skip empty lines and comments
-            if (line.empty || line.startsWith("//"))
+            // Skip empty lines and comments (SIMD-accelerated)
+            if (line.empty || (() @trusted => SIMDStrings.startsWith(line, "//"))())
                 continue;
             
             // Module directive
@@ -153,22 +154,22 @@ class ModuleAnalyzer
                 continue;
             }
             
-            // Require block start
-            if (line.startsWith("require ("))
+            // Require block start (SIMD-accelerated)
+            if ((() @trusted => SIMDStrings.startsWith(line, "require ("))())
             {
                 inRequire = true;
                 continue;
             }
             
-            // Replace block start
-            if (line.startsWith("replace ("))
+            // Replace block start (SIMD-accelerated)
+            if ((() @trusted => SIMDStrings.startsWith(line, "replace ("))())
             {
                 inReplace = true;
                 continue;
             }
             
-            // Exclude block start
-            if (line.startsWith("exclude ("))
+            // Exclude block start (SIMD-accelerated)
+            if ((() @trusted => SIMDStrings.startsWith(line, "exclude ("))())
             {
                 inExclude = true;
                 continue;
@@ -183,8 +184,8 @@ class ModuleAnalyzer
                 continue;
             }
             
-            // Parse require entries
-            if (inRequire || line.startsWith("require "))
+            // Parse require entries (SIMD-accelerated)
+            if (inRequire || (() @trusted => SIMDStrings.startsWith(line, "require "))())
             {
                 auto dep = parseRequire(line);
                 if (!dep.path.empty)
@@ -192,8 +193,8 @@ class ModuleAnalyzer
                 continue;
             }
             
-            // Parse replace entries
-            if (inReplace || line.startsWith("replace "))
+            // Parse replace entries (SIMD-accelerated)
+            if (inReplace || (() @trusted => SIMDStrings.startsWith(line, "replace "))())
             {
                 auto repl = parseReplace(line);
                 if (!repl.oldPath.empty)
@@ -201,8 +202,8 @@ class ModuleAnalyzer
                 continue;
             }
             
-            // Parse exclude entries
-            if (inExclude || line.startsWith("exclude "))
+            // Parse exclude entries (SIMD-accelerated)
+            if (inExclude || (() @trusted => SIMDStrings.startsWith(line, "exclude "))())
             {
                 auto excl = parseExclude(line);
                 if (!excl.path.empty)
@@ -210,8 +211,8 @@ class ModuleAnalyzer
                 continue;
             }
             
-            // Retract directive
-            if (line.startsWith("retract "))
+            // Retract directive (SIMD-accelerated)
+            if ((() @trusted => SIMDStrings.startsWith(line, "retract "))())
             {
                 auto retractMatch = matchFirst(line, regex(`retract\s+([\S]+)`));
                 if (retractMatch)
@@ -257,7 +258,7 @@ class ModuleAnalyzer
         
         foreach (line; lines)
         {
-            if (line.empty || line.startsWith("//"))
+            if (line.empty || (() @trusted => SIMDStrings.startsWith(line, "//"))())
                 continue;
             
             // Go version
@@ -268,15 +269,15 @@ class ModuleAnalyzer
                 continue;
             }
             
-            // Use block
-            if (line.startsWith("use ("))
+            // Use block (SIMD-accelerated)
+            if ((() @trusted => SIMDStrings.startsWith(line, "use ("))())
             {
                 inUse = true;
                 continue;
             }
             
-            // Replace block
-            if (line.startsWith("replace ("))
+            // Replace block (SIMD-accelerated)
+            if ((() @trusted => SIMDStrings.startsWith(line, "replace ("))())
             {
                 inReplace = true;
                 continue;
@@ -290,8 +291,8 @@ class ModuleAnalyzer
                 continue;
             }
             
-            // Parse use entries
-            if (inUse || line.startsWith("use "))
+            // Parse use entries (SIMD-accelerated)
+            if (inUse || (() @trusted => SIMDStrings.startsWith(line, "use "))())
             {
                 auto useMatch = matchFirst(line, regex(`(?:use\s+)?([\S]+)`));
                 if (useMatch && !useMatch[1].empty)
@@ -299,8 +300,8 @@ class ModuleAnalyzer
                 continue;
             }
             
-            // Parse replace entries
-            if (inReplace || line.startsWith("replace "))
+            // Parse replace entries (SIMD-accelerated)
+            if (inReplace || (() @trusted => SIMDStrings.startsWith(line, "replace "))())
             {
                 auto repl = parseReplace(line);
                 if (!repl.oldPath.empty)
