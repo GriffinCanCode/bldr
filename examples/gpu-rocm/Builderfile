@@ -1,0 +1,15 @@
+// ROCm/HIP GPU Kernel Example
+// Requires AMD GPU + ROCm
+
+workspace "rocm-kernels"
+
+target("hip_kernels") {
+    type: library;
+    language: rocm;
+    sources: ["src/*.hip"];
+    rocm: {
+        arch: ["gfx908", "gfx90a"];
+        opt: "O3";
+    }
+}
+

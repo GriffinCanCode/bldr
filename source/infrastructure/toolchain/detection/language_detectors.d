@@ -449,5 +449,9 @@ void registerAllDetectors(AutoDetector detector) @system
     detector.register(new ZigDetector());
     detector.register(new DCompilerDetector());
     detector.register(new CMakeDetector());
+    
+    // GPU toolchain detectors
+    import infrastructure.toolchain.detection.gpu_detectors : registerGPUDetectors;
+    registerGPUDetectors(detector);
 }
 

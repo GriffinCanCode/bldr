@@ -122,6 +122,15 @@ final class HandlerRegistry : IHandlerRegistry
             case TargetLanguage.WebAssembly:
                 import languages.wasm : WebAssemblyHandler;
                 return new WebAssemblyHandler();
+            case TargetLanguage.CUDA:
+                import languages.compiled.gpu.cuda : CUDAHandler;
+                return new CUDAHandler();
+            case TargetLanguage.ROCm:
+                import languages.compiled.gpu.rocm : ROCmHandler;
+                return new ROCmHandler();
+            case TargetLanguage.Metal:
+                import languages.compiled.gpu.metal : MetalHandler;
+                return new MetalHandler();
             case TargetLanguage.FSharp:
             case TargetLanguage.CSS:
             case TargetLanguage.Generic:

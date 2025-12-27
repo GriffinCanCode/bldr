@@ -25,4 +25,5 @@ module infrastructure.toolchain.detection;
 
 public import infrastructure.toolchain.detection.detector;
 public import infrastructure.toolchain.detection.language_detectors;
+public import infrastructure.toolchain.detection.gpu_detectors;
 

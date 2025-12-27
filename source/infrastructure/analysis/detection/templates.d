@@ -134,6 +134,12 @@ class TemplateGenerator
                 return generateGleamTarget(langInfo);
             case TargetLanguage.WebAssembly:
                 return generateWebAssemblyTarget(langInfo);
+            case TargetLanguage.CUDA:
+                return generateGPUTarget(langInfo, "cuda");
+            case TargetLanguage.ROCm:
+                return generateGPUTarget(langInfo, "rocm");
+            case TargetLanguage.Metal:
+                return generateGPUTarget(langInfo, "metal");
             case TargetLanguage.Generic:
                 return generateGenericTarget();
         }
@@ -249,6 +255,9 @@ class TemplateGenerator
             case TargetLanguage.Elm: return "elm";
             case TargetLanguage.Gleam: return "gleam";
             case TargetLanguage.WebAssembly: return "webassembly";
+            case TargetLanguage.CUDA: return "cuda";
+            case TargetLanguage.ROCm: return "rocm";
+            case TargetLanguage.Metal: return "metal";
             case TargetLanguage.Generic: return "generic";
         }
     }
@@ -975,6 +984,9 @@ class TemplateGenerator
                 case TargetLanguage.Elm:
                 case TargetLanguage.Gleam:
                 case TargetLanguage.WebAssembly:
+                case TargetLanguage.CUDA:
+                case TargetLanguage.ROCm:
+                case TargetLanguage.Metal:
                 case TargetLanguage.Generic:
                     break;
             }
@@ -1001,6 +1013,43 @@ class TemplateGenerator
         target ~= "    };\n";
         target ~= "}";
         
+        return target;
+    }
+    
+    private string generateGPUTarget(LanguageInfo info, string gpuLang)
+    {
+        string ext = gpuLang == "cuda" ? "*.cu" : (gpuLang == "rocm" ? "*.hip" : "*.metal");
+        string sources = generateSourcesArray(info.sourceFiles, ext);
+        string targetName = generateUniqueTargetName(gpuLang, info);
+        
+        string target = format("target(\"%s\") {\n", targetName);
+        target ~= "    type: library;\n";
+        target ~= format("    language: %s;\n", gpuLang);
+        target ~= format("    sources: %s;\n", sources);
+        
+        if (gpuLang == "cuda")
+        {
+            target ~= "    cuda: {\n";
+            target ~= "        \"arch\": [\"sm_80\"],\n";
+            target ~= "        \"opt\": \"O2\"\n";
+            target ~= "    };\n";
+        }
+        else if (gpuLang == "rocm")
+        {
+            target ~= "    rocm: {\n";
+            target ~= "        \"arch\": [\"gfx908\"],\n";
+            target ~= "        \"opt\": \"O2\"\n";
+            target ~= "    };\n";
+        }
+        else if (gpuLang == "metal")
+        {
+            target ~= "    metal: {\n";
+            target ~= "        \"platform\": \"macos\",\n";
+            target ~= "        \"version\": \"3.0\"\n";
+            target ~= "    };\n";
+        }
+        
+        target ~= "}";
         return target;
     }
 }

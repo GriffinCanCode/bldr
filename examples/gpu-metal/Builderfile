@@ -1,0 +1,15 @@
+// Metal GPU Shader Example
+// Works on macOS with Xcode Command Line Tools
+
+workspace "metal-shaders"
+
+target("compute_shaders") {
+    type: library;
+    language: metal;
+    sources: ["shaders/*.metal"];
+    metal: {
+        platform: "macos";
+        version: "3.0";
+    }
+}
+

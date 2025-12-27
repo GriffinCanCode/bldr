@@ -142,6 +142,9 @@ class EnhancedTemplateGenerator
             case TargetLanguage.Haskell:
             case TargetLanguage.Elm:
             case TargetLanguage.WebAssembly:
+            case TargetLanguage.CUDA:
+            case TargetLanguage.ROCm:
+            case TargetLanguage.Metal:
             case TargetLanguage.Generic:
                 return "";
         }

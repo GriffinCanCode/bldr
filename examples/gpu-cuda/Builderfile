@@ -1,0 +1,27 @@
+// CUDA GPU Kernel Example
+// Requires NVIDIA GPU + CUDA Toolkit
+
+workspace "cuda-kernels"
+
+target("ml_kernels") {
+    type: library;
+    language: cuda;
+    sources: ["src/*.cu"];
+    cuda: {
+        arch: ["sm_80", "sm_90"];
+        opt: "O3";
+        relocatable: true;
+        fastMath: true;
+    }
+}
+
+target("cuda_app") {
+    type: executable;
+    language: cuda;
+    sources: ["main.cpp", "src/*.cu"];
+    cuda: {
+        arch: ["sm_80"];
+        libs: ["cudart"];
+    }
+}
+

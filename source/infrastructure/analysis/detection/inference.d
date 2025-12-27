@@ -199,6 +199,9 @@ class TargetInference
             case TargetLanguage.CSS:
             case TargetLanguage.Protobuf:
             case TargetLanguage.WebAssembly:
+            case TargetLanguage.CUDA:
+            case TargetLanguage.ROCm:
+            case TargetLanguage.Metal:
             case TargetLanguage.Generic:
                 return config;
         }

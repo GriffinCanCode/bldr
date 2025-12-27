@@ -243,6 +243,9 @@ enum TargetLanguage
     Haskell,
     Elm,
     WebAssembly,  // WASM/WASI targets
+    CUDA,         // NVIDIA CUDA GPU kernels
+    ROCm,         // AMD ROCm/HIP GPU kernels
+    Metal,        // Apple Metal GPU shaders
     Generic
 }
 

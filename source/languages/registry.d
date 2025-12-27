@@ -55,6 +55,9 @@ shared static this()
     aliases[TargetLanguage.Haskell] = ["haskell", "hs"];
     aliases[TargetLanguage.Elm] = ["elm"];
     aliases[TargetLanguage.WebAssembly] = ["webassembly", "wasm", "wasi", "wat"];
+    aliases[TargetLanguage.CUDA] = ["cuda", "cu"];
+    aliases[TargetLanguage.ROCm] = ["rocm", "hip", "hipcc"];
+    aliases[TargetLanguage.Metal] = ["metal", "metallib"];
     aliases[TargetLanguage.Generic] = ["generic"];
     
     languageAliases = cast(immutable) aliases;
@@ -179,6 +182,18 @@ shared static this()
     extensions[".wasm"] = TargetLanguage.WebAssembly;
     extensions[".wat"] = TargetLanguage.WebAssembly;
     extensions[".wast"] = TargetLanguage.WebAssembly;
+    
+    // CUDA
+    extensions[".cu"] = TargetLanguage.CUDA;
+    extensions[".cuh"] = TargetLanguage.CUDA;
+    
+    // ROCm/HIP
+    extensions[".hip"] = TargetLanguage.ROCm;
+    extensions[".hiph"] = TargetLanguage.ROCm;
+    
+    // Metal
+    extensions[".metal"] = TargetLanguage.Metal;
+    extensions[".metallib"] = TargetLanguage.Metal;
     
     extensionMap = cast(immutable) extensions;
 }
@@ -325,6 +340,9 @@ string getLanguageLabel(TargetLanguage language)
         case TargetLanguage.Haskell: return "Haskell";
         case TargetLanguage.Elm: return "Elm";
         case TargetLanguage.WebAssembly: return "WebAssembly";
+        case TargetLanguage.CUDA: return "CUDA";
+        case TargetLanguage.ROCm: return "ROCm/HIP";
+        case TargetLanguage.Metal: return "Metal";
         case TargetLanguage.Generic: return "Generic";
         default: return "Unknown";
     }
@@ -338,7 +356,8 @@ enum LanguageCategory
     JVM,
     DotNet,
     Web,
-    Wasm  // WebAssembly/WASI targets
+    Wasm,  // WebAssembly/WASI targets
+    GPU    // GPU compute languages (CUDA, ROCm, Metal)
 }
 
 /// Get the category for a language
@@ -387,6 +406,11 @@ LanguageCategory getLanguageCategory(TargetLanguage language)
             
         case TargetLanguage.WebAssembly:
             return LanguageCategory.Wasm;
+            
+        case TargetLanguage.CUDA:
+        case TargetLanguage.ROCm:
+        case TargetLanguage.Metal:
+            return LanguageCategory.GPU;
             
         default:
             return LanguageCategory.Scripting;

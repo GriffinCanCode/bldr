@@ -221,6 +221,11 @@ class DependencyResolver
             case TargetLanguage.WebAssembly:
                 target = "";  // WASM imports resolved at runtime
                 break;
+            case TargetLanguage.CUDA:
+            case TargetLanguage.ROCm:
+            case TargetLanguage.Metal:
+                target = "";  // GPU imports handled by respective compilers
+                break;
             case TargetLanguage.Generic:
                 target = "";
                 break;

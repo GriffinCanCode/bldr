@@ -534,9 +534,12 @@ IgnoreSeverity getIgnoreSeverity(TargetLanguage lang)
         case TargetLanguage.Zig:
             return IgnoreSeverity.Low;
         
-        // NONE
+        // NONE - GPU languages have their own build caches
         case TargetLanguage.CSS:
         case TargetLanguage.WebAssembly:
+        case TargetLanguage.CUDA:
+        case TargetLanguage.ROCm:
+        case TargetLanguage.Metal:
         case TargetLanguage.Generic:
         default:
             return IgnoreSeverity.None;
