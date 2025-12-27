@@ -329,13 +329,13 @@ final class SpeculationService : ISpeculationService
         => _warmer !is null ? _warmer.status : WarmupStatus.Ready;
     
     /// Get pre-warmed prediction (O(1) lookup after warmup)
-    Nullable!ChangeProbability getWarmedPrediction(TargetId targetId) @trusted
+    Nullable!(const(ChangeProbability)) getWarmedPrediction(TargetId targetId) @trusted
     {
         if (_warmer is null || !_warmer.isReady)
-            return Nullable!ChangeProbability.init;
+            return Nullable!(const(ChangeProbability)).init;
         
         auto pred = _warmer.getCachedPrediction(targetId);
-        return pred !is null ? nullable(*pred) : Nullable!ChangeProbability.init;
+        return pred !is null ? nullable(*pred) : Nullable!(const(ChangeProbability)).init;
     }
     
     /// Get top N pre-warmed predictions
@@ -430,14 +430,14 @@ final class SpeculationService : ISpeculationService
             auto reason = determineReason(*profile);
             auto task = new SpeculativeTask(
                 targetId, 
-                *nodePtr, 
+                node, 
                 profile.estimatedCostMs,
                 1.0f - profile.cacheHitProbability,  // Confidence inversely related to cache hit
                 reason
             );
             
             // Record current input hashes
-            recordInputHashes(task, *nodePtr);
+            recordInputHashes(task, node);
             
             _tasks[key] = task;
             atomicOp!"+="(_activeCount, 1);

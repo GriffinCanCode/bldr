@@ -31,10 +31,8 @@ struct PredictionCache
     SysTime computedAt;
     
     /// Top N predictions by score
-    ChangeProbability[] top(size_t n) const pure @safe nothrow
-    {
-        return ranked[0 .. min(n, ranked.length)];
-    }
+    const(ChangeProbability)[] top(size_t n) const pure @safe nothrow
+        => ranked[0 .. min(n, ranked.length)];
     
     /// Get prediction for target, null if not cached
     const(ChangeProbability)* get(string targetKey) const pure @safe nothrow @nogc
@@ -179,7 +177,12 @@ final class PredictorWarmer
     ChangeProbability[] topPredictions(size_t n = 100) @trusted
     {
         if (!isReady) return [];
-        synchronized (_mutex) { return _cache.top(n).dup; }
+        synchronized (_mutex) {
+            auto top = _cache.top(n);
+            auto result = new ChangeProbability[top.length];
+            foreach (i, ref r; result) r = cast(ChangeProbability)top[i];
+            return result;
+        }
     }
     
     /// Get all cached predictions

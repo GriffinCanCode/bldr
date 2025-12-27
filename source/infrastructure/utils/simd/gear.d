@@ -182,10 +182,10 @@ struct SIMDGear {
     @property size_t maxSize() const pure @safe nothrow @nogc => _config.maxSize;
 }
 
-/// Convenience function: find boundary with default config
-@system
-size_t simdGearFindBoundary(const(ubyte)[] data, size_t remaining) {
-    static SIMDGear* _cached;
+/// Convenience function: find boundary with default config (outside extern(C) block)
+pragma(inline, false)
+size_t simdGearFindBoundary()(const(ubyte)[] data, size_t remaining) {
+    __gshared SIMDGear* _cached;
     if (_cached is null) _cached = new SIMDGear(SIMDGear.Config.artifact());
     return _cached.findBoundary(data, remaining);
 }
