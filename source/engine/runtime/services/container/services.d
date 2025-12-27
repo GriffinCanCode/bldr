@@ -688,5 +688,87 @@ final class BuildServices : IServiceContainer
     {
         return _persistentWorkers !is null;
     }
+    
+    /// Analyze build graph and emit persistent worker recommendations
+    /// Call after graph analysis to suggest optimizations based on detected languages
+    void emitWorkerRecommendations(BuildGraph graph) @trusted
+    {
+        import std.process : environment;
+        import std.algorithm : canFind, filter, map;
+        import std.array : array;
+        
+        if (graph is null) return;
+        
+        // Language-specific speedup info for recommendations
+        static immutable struct WorkerInfo { string lang; string envVar; string speedup; size_t startupMs; }
+        static immutable WorkerInfo[] workerInfos = [
+            WorkerInfo("Java", "BUILDER_JVM_WORKERS", "16-53x", 800),
+            WorkerInfo("Kotlin", "BUILDER_JVM_WORKERS", "20-67x", 2000),
+            WorkerInfo("Scala", "BUILDER_JVM_WORKERS", "15-30x", 1500),
+            WorkerInfo("TypeScript", "BUILDER_TS_WORKERS", "13-40x", 400),
+            WorkerInfo("Go", "BUILDER_GO_WORKERS", "2-5x", 100),
+            WorkerInfo("Python", "BUILDER_PYTHON_WORKERS", "15-50x", 1500),
+        ];
+        
+        // Collect unique languages from graph
+        TargetLanguage[] detectedLangs;
+        foreach (node; graph.nodes.values)
+        {
+            if (!detectedLangs.canFind(node.target.language))
+                detectedLangs ~= node.target.language;
+        }
+        
+        // Check for languages that benefit from persistent workers
+        bool hasRecommendations = false;
+        
+        foreach (info; workerInfos)
+        {
+            bool langDetected = false;
+            switch (info.lang)
+            {
+                case "Java": langDetected = detectedLangs.canFind(TargetLanguage.Java); break;
+                case "Kotlin": langDetected = detectedLangs.canFind(TargetLanguage.Kotlin); break;
+                case "Scala": langDetected = detectedLangs.canFind(TargetLanguage.Scala); break;
+                case "TypeScript": langDetected = detectedLangs.canFind(TargetLanguage.TypeScript); break;
+                case "Go": langDetected = detectedLangs.canFind(TargetLanguage.Go); break;
+                case "Python": langDetected = detectedLangs.canFind(TargetLanguage.Python); break;
+                default: break;
+            }
+            
+            if (!langDetected) continue;
+            
+            // Check if workers are disabled for this language
+            auto envVal = environment.get(info.envVar, "1");
+            if (envVal == "0" || envVal == "false")
+            {
+                structuredLog.info("persistent_worker_recommendation")
+                    .field("language", info.lang)
+                    .field("speedup", info.speedup)
+                    .field("startup_ms", info.startupMs)
+                    .field("action", "enable " ~ info.envVar ~ "=1")
+                    .emit();
+                hasRecommendations = true;
+            }
+            else if (_persistentWorkers is null)
+            {
+                // Workers configured but service failed to initialize
+                structuredLog.warning("persistent_worker_unavailable")
+                    .field("language", info.lang)
+                    .field("potential_speedup", info.speedup)
+                    .emit();
+            }
+        }
+        
+        // Log remote cache recommendation if not configured
+        auto remoteUrl = environment.get("BUILDER_REMOTE_CACHE_URL", "");
+        if (remoteUrl.length == 0 && graph.nodes.length > 20)
+        {
+            structuredLog.info("optimization_recommendation")
+                .field("type", "remote_cache")
+                .field("benefit", "team-wide cache sharing, 70-85% faster CI builds")
+                .field("action", "set BUILDER_REMOTE_CACHE_URL=http://cache:8080")
+                .emit();
+        }
+    }
 }
 

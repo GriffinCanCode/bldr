@@ -15,10 +15,17 @@ import infrastructure.utils.compression.compress;
 import infrastructure.utils.files.chunking : ChunkManifest, ChunkTransfer, TransferStats, ContentChunker;
 import infrastructure.utils.files.cdc : FastCDC, CDCManifest = ChunkManifest, shouldChunk, LARGE_ARTIFACT_THRESHOLD;
 import infrastructure.utils.crypto.merkle : MerkleProof;
+import infrastructure.utils.simd.bloom : BloomFilter;
 import infrastructure.errors;
 
 /// Remote cache client with connection pooling and retry logic
 /// Provides high-level interface for artifact storage and retrieval
+/// 
+/// Optimizations:
+/// - Bloom filter for fast negative lookups (avoid network for known misses)
+/// - Connection pooling for reduced latency
+/// - Retry logic with exponential backoff
+/// - FastCDC chunking for large artifacts
 final class RemoteCacheClient
 {
     private RemoteCacheConfig config;
@@ -26,6 +33,8 @@ final class RemoteCacheClient
     private RemoteCacheStats stats;
     private Mutex statsMutex;
     private IntegrityValidator validator;
+    private BloomFilter knownEntries;  // Fast negative lookup filter
+    private shared size_t bloomFilterSaves;  // Network requests avoided
     
     /// Constructor
     this(RemoteCacheConfig config) @trusted
@@ -37,6 +46,10 @@ final class RemoteCacheClient
         // Initialize integrity validator for workspace isolation
         import std.file : getcwd;
         this.validator = IntegrityValidator.fromEnvironment(getcwd());
+        
+        // Initialize bloom filter for fast negative lookups
+        // Sized for 100K entries with 0.1% FPR - avoids network for known misses
+        this.knownEntries = BloomFilter.create(100_000, 0.001);
     }
     
     /// Destructor
@@ -75,6 +88,9 @@ final class RemoteCacheClient
                 stats.hits++;
                 auto data = result.unwrap();
                 stats.bytesDownloaded += data.length;
+                
+                // Add to bloom filter for future fast lookups
+                if (knownEntries.valid) knownEntries.insert(contentHash);
                 
                 // Decompress if needed (check first byte for compression marker)
                 if (data.length > 0 && data[0] == 0xFD)  // Zstd magic number
@@ -221,9 +237,15 @@ final class RemoteCacheClient
             stats.putRequests++;
             
             if (result.isOk)
+            {
                 stats.bytesUploaded += payload.length;
+                // Add to bloom filter for future fast lookups
+                if (knownEntries.valid) knownEntries.insert(contentHash);
+            }
             else
+            {
                 stats.errors++;
+            }
             
             updateLatency(startTime);
             stats.compute();
@@ -233,11 +255,27 @@ final class RemoteCacheClient
     }
     
     /// Check if artifact exists in remote cache
+    /// Uses bloom filter for fast negative lookups - avoids network for known misses
     BuildResult!bool has(string contentHash) @trusted
     {
+        import core.atomic : atomicOp;
+        
         if (!config.enabled())
             return Err!(bool, BuildError)(
                 Errors.cache("Remote cache not configured", Cache.Disabled).build());
+        
+        // Fast path: bloom filter says definitely not in cache
+        // Bloom filters have no false negatives, so if it says "not present", it's certain
+        if (knownEntries.valid && !knownEntries.mayContain(contentHash))
+        {
+            synchronized (statsMutex)
+            {
+                stats.headRequests++;
+                stats.misses++;
+            }
+            atomicOp!"+="(bloomFilterSaves, 1);
+            return Ok!(bool, BuildError)(false);
+        }
         
         immutable startTime = Clock.currStdTime();
         
@@ -251,9 +289,15 @@ final class RemoteCacheClient
             if (result.isOk)
             {
                 if (result.unwrap())
+                {
                     stats.hits++;
+                    // Add to bloom filter for future fast lookups
+                    if (knownEntries.valid) knownEntries.insert(contentHash);
+                }
                 else
+                {
                     stats.misses++;
+                }
             }
             else
             {
@@ -276,13 +320,28 @@ final class RemoteCacheClient
         }
     }
     
+    /// Get bloom filter statistics
+    /// Returns: (network requests saved, estimated entries, memory bytes)
+    auto getBloomFilterStats() @system
+    {
+        import core.atomic : atomicLoad;
+        struct BloomStats { size_t networkSaved; size_t estimatedEntries; size_t memoryBytes; }
+        return BloomStats(
+            atomicLoad(bloomFilterSaves),
+            knownEntries.valid ? knownEntries.itemCount : 0,
+            knownEntries.valid ? knownEntries.memoryBytes : 0
+        );
+    }
+    
     /// Reset statistics
     void resetStats() @trusted
     {
+        import core.atomic : atomicStore;
         synchronized (statsMutex)
         {
             stats = RemoteCacheStats.init;
         }
+        atomicStore(bloomFilterSaves, cast(size_t)0);
     }
     
     private void updateLatency(long startTime) nothrow

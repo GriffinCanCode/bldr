@@ -588,8 +588,8 @@ struct BuildOptions
     bool incrementalLinking = true;  // Enable incremental linking (ld.lld --incremental, MSVC /INCREMENTAL)
     bool parallel = true;
     bool useWorkStealing = true;     // Use work-stealing scheduler for better load balancing
-    bool enableSpeculation = true;   // Auto-enable speculation for builds >10 targets
-    size_t speculationThreshold = 10; // Min targets to auto-enable speculation
+    bool enableSpeculation = true;   // Auto-enable speculation for builds >5 targets
+    size_t speculationThreshold = 5;  // Min targets to auto-enable speculation (lowered for better critical path opt)
     size_t maxJobs = 0; // 0 = auto
     string cacheDir = ".builder-cache";
     string outputDir = "bin";
@@ -622,10 +622,10 @@ struct BuildOptions
         auto speculation = environment.get("BUILDER_SPECULATION", "true");
         opts.enableSpeculation = (speculation == "1" || speculation == "true");
         
-        // Speculation threshold
-        auto threshold = environment.get("BUILDER_SPECULATION_THRESHOLD", "10");
+        // Speculation threshold (lowered from 10 to 5 for better critical path optimization)
+        auto threshold = environment.get("BUILDER_SPECULATION_THRESHOLD", "5");
         try { opts.speculationThreshold = threshold.to!size_t; }
-        catch (Exception) { opts.speculationThreshold = 10; }
+        catch (Exception) { opts.speculationThreshold = 5; }
         
         return opts;
     }

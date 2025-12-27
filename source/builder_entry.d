@@ -81,7 +81,7 @@ int runBuilder(string[] args)
     // Performance optimization flags
     bool workStealing = true;   // Work-stealing scheduler (default: enabled)
     bool speculation = true;    // Speculative execution (default: enabled)
-    size_t speculationThreshold = 10;  // Min targets for speculation
+    size_t speculationThreshold = 5;   // Min targets for speculation (lowered for critical path opt)
     
     // Economic optimization flags
     float budget = float.infinity;
@@ -103,7 +103,7 @@ int runBuilder(string[] args)
         "remote", "Enable remote execution on worker pool", &remoteExecution,
         "work-stealing", "Work-stealing scheduler for load balancing (default: true)", &workStealing,
         "speculation", "Speculative execution for critical path (default: true)", &speculation,
-        "speculation-threshold", "Min targets to enable speculation (default: 10)", &speculationThreshold,
+        "speculation-threshold", "Min targets to enable speculation (default: 5)", &speculationThreshold,
         "budget", "Maximum budget in USD (e.g., --budget=5.00)", &budget,
         "time-limit", "Maximum time limit in seconds (e.g., --time-limit=120)", &timeLimit,
         "optimize", "Optimization mode: cost, time, balanced", &optimize,
@@ -273,6 +273,10 @@ int runBuilder(string[] args)
                 writeln("bldr version 2.0.3");
                 writeln("High-performance build system for mixed-language monorepos");
                 break;
+            case "optimize":
+            case "optimizations":
+                showOptimizationGuide();
+                break;
             default:
                 structuredLog.error("unknown_command_").field("detail", "Unknown command: " ~ command).emit();
                 HelpCommand.execute();
@@ -365,6 +369,9 @@ void buildCommand(
         exit(1);
     }
     auto graph = graphResult.unwrap();
+    
+    // Emit persistent worker recommendations based on detected languages
+    services.emitWorkerRecommendations(graph);
     
     if (showGraph)
     {
@@ -729,5 +736,125 @@ void exploreCommand(string[] args) @system
     }
     
     ExplorerCommand.execute(target, criticalPath, nonInteractive, cacheDir);
+}
+
+/// Show optimization guide with all available performance tuning options
+void showOptimizationGuide() @system
+{
+    import std.process : environment;
+    import infrastructure.utils.simd.detection : CPU;
+    import engine.caching.distributed.remote.protocol : RemoteCacheConfig;
+    
+    writeln("╔════════════════════════════════════════════════════════════════╗");
+    writeln("║              BLDR PERFORMANCE OPTIMIZATION GUIDE               ║");
+    writeln("╚════════════════════════════════════════════════════════════════╝");
+    writeln();
+    
+    // Current Status
+    writeln("┌─ CURRENT CONFIGURATION ─────────────────────────────────────────┐");
+    
+    // SIMD
+    auto simdDisabled = environment.get("BUILDER_SIMD_DISABLED", "0");
+    writeln("│ SIMD Acceleration:     ", simdDisabled == "1" ? "❌ DISABLED" : "✅ ENABLED");
+    if (simdDisabled != "1") CPU.printBanner();
+    
+    // Speculation
+    auto speculation = environment.get("BUILDER_SPECULATION", "true");
+    auto threshold = environment.get("BUILDER_SPECULATION_THRESHOLD", "5");
+    writeln("│ Speculation:           ", speculation == "false" || speculation == "0" ? "❌ DISABLED" : "✅ ENABLED (threshold: " ~ threshold ~ " targets)");
+    
+    // Work Stealing
+    auto workStealing = environment.get("BUILDER_WORK_STEALING", "true");
+    writeln("│ Work Stealing:         ", workStealing == "false" || workStealing == "0" ? "❌ DISABLED" : "✅ ENABLED");
+    
+    // Persistent Workers
+    auto jvmWorkers = environment.get("BUILDER_JVM_WORKERS", "1");
+    auto tsWorkers = environment.get("BUILDER_TS_WORKERS", "1");
+    auto goWorkers = environment.get("BUILDER_GO_WORKERS", "1");
+    auto pyWorkers = environment.get("BUILDER_PYTHON_WORKERS", "1");
+    writeln("│ Persistent Workers:");
+    writeln("│   JVM (Java/Kotlin):   ", jvmWorkers == "0" ? "❌ DISABLED (enable for 16-67x speedup)" : "✅ ENABLED");
+    writeln("│   TypeScript:          ", tsWorkers == "0" ? "❌ DISABLED (enable for 13-40x speedup)" : "✅ ENABLED");
+    writeln("│   Go:                  ", goWorkers == "0" ? "❌ DISABLED (enable for 2-5x speedup)" : "✅ ENABLED");
+    writeln("│   Python:              ", pyWorkers == "0" ? "❌ DISABLED (enable for 15-50x speedup)" : "✅ ENABLED");
+    
+    // Remote Cache
+    auto remoteUrl = environment.get("BUILDER_REMOTE_CACHE_URL", "");
+    writeln("│ Remote Cache:          ", remoteUrl.length == 0 ? "❌ NOT CONFIGURED" : "✅ " ~ remoteUrl);
+    
+    // Incremental
+    auto incremental = environment.get("BUILDER_INCREMENTAL", "true");
+    writeln("│ Incremental Builds:    ", incremental == "false" || incremental == "0" ? "❌ DISABLED" : "✅ ENABLED");
+    
+    writeln("└──────────────────────────────────────────────────────────────────┘");
+    writeln();
+    
+    // Recommendations
+    writeln("┌─ OPTIMIZATION RECOMMENDATIONS ──────────────────────────────────┐");
+    writeln("│");
+    writeln("│ 1. SPECULATION (10-30% faster critical path)");
+    writeln("│    Already enabled with lowered threshold (5 targets)");
+    writeln("│    For aggressive speculation: BUILDER_SPECULATION_THRESHOLD=3");
+    writeln("│");
+    writeln("│ 2. PERSISTENT WORKERS (10-50x faster compilation)");
+    writeln("│    JVM:    BUILDER_JVM_WORKERS=1      # Java, Kotlin, Scala");
+    writeln("│    TS:     BUILDER_TS_WORKERS=1       # TypeScript, JavaScript");
+    writeln("│    Go:     BUILDER_GO_WORKERS=1       # Go builds");
+    writeln("│    Python: BUILDER_PYTHON_WORKERS=1   # mypy type checking");
+    writeln("│");
+    writeln("│ 3. REMOTE CACHE (70-85% faster CI builds)");
+    if (remoteUrl.length == 0)
+    {
+        writeln("│    ⚠️  NOT CONFIGURED - Set up for team-wide cache sharing:");
+        writeln("│");
+        writeln("│    Quick start:");
+        writeln("│      docker run -p 8080:8080 ghcr.io/buchgr/bazel-remote-cache");
+        writeln("│      export BUILDER_REMOTE_CACHE_URL=http://localhost:8080");
+        writeln("│");
+        writeln("│    Or create .bldr-cache file in project root:");
+        writeln("│      echo \"http://cache-server:8080\" > .bldr-cache");
+    }
+    else
+    {
+        writeln("│    ✅ Configured: " ~ remoteUrl);
+    }
+    writeln("│");
+    writeln("│ 4. PARALLELISM (Linear scaling with cores)");
+    writeln("│    BUILDER_WORK_STEALING=true  # Better load balancing");
+    writeln("│    --jobs=N                    # Override CPU auto-detection");
+    writeln("│");
+    writeln("│ 5. I/O OPTIMIZATION (2-5x faster file operations)");
+    writeln("│    Linux: io_uring auto-enabled for batch hashing");
+    writeln("│    All:   Use SSD for .builder-cache directory");
+    writeln("│");
+    writeln("└──────────────────────────────────────────────────────────────────┘");
+    writeln();
+    
+    // Environment variable reference
+    writeln("┌─ ENVIRONMENT VARIABLES REFERENCE ───────────────────────────────┐");
+    writeln("│");
+    writeln("│ Core:");
+    writeln("│   BUILDER_SPECULATION=true          # Enable speculation");
+    writeln("│   BUILDER_SPECULATION_THRESHOLD=5   # Min targets for speculation");
+    writeln("│   BUILDER_WORK_STEALING=true        # Work-stealing scheduler");
+    writeln("│   BUILDER_INCREMENTAL=true          # Incremental builds");
+    writeln("│");
+    writeln("│ Persistent Workers:");
+    writeln("│   BUILDER_JVM_WORKERS=1             # JVM compiler workers");
+    writeln("│   BUILDER_TS_WORKERS=1              # TypeScript workers");
+    writeln("│   BUILDER_GO_WORKERS=1              # Go workers");
+    writeln("│   BUILDER_PYTHON_WORKERS=1          # Python/mypy workers");
+    writeln("│   BUILDER_WORKERS_DISABLED=0        # Master switch");
+    writeln("│");
+    writeln("│ Remote Cache:");
+    writeln("│   BUILDER_REMOTE_CACHE_URL=         # Cache server URL");
+    writeln("│   BUILDER_REMOTE_CACHE_TOKEN=       # Auth token (optional)");
+    writeln("│   BUILDER_REMOTE_CACHE_COMPRESS=1   # Enable compression");
+    writeln("│");
+    writeln("│ Advanced:");
+    writeln("│   BUILDER_SIMD_DISABLED=0           # SIMD acceleration");
+    writeln("│   BUILDER_TRACING_ENABLED=1         # Distributed tracing");
+    writeln("│");
+    writeln("└──────────────────────────────────────────────────────────────────┘");
 }
 

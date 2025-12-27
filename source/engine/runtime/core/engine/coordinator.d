@@ -30,7 +30,7 @@ struct EngineCoordinator
     private enum size_t KB_PER_MB = 1024;
     private enum size_t MB_PER_GB = 1024;
     private enum size_t MAX_STAT_STRING_LENGTH = 4;
-    private enum size_t DEFAULT_SPECULATION_THRESHOLD = 10;  // Auto-enable speculation above this
+    private enum size_t DEFAULT_SPECULATION_THRESHOLD = 5;  // Auto-enable speculation above this (lowered for critical path opt)
     
     private EngineLifecycle* lifecycle;
     private EngineExecutor* executor;
