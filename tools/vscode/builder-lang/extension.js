@@ -42,7 +42,7 @@ async function activate(context) {
             'Install Builder'
         ).then(selection => {
             if (selection === 'Install Builder') {
-                vscode.env.openExternal(vscode.Uri.parse('https://github.com/GriffinCanCode/Builder'));
+                vscode.env.openExternal(vscode.Uri.parse('https://github.com/GriffinCanCode/bldr'));
             }
         });
         return;

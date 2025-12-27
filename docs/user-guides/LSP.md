@@ -34,8 +34,8 @@ code --install-extension builder-lang-*.vsix
 
 **From Source:**
 ```bash
-git clone https://github.com/GriffinCanCode/Builder.git
-cd Builder
+git clone https://github.com/GriffinCanCode/bldr.git
+cd bldr
 make build-all
 sudo make install-all
 make install-extension

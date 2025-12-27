@@ -319,7 +319,7 @@ fn handle_info(id: i64) -> Value {
         version: "1.0.0".to_string(),
         author: "Griffin".to_string(),
         description: "Dependency vulnerability scanner".to_string(),
-        homepage: "https://github.com/GriffinCanCode/Builder".to_string(),
+        homepage: "https://github.com/GriffinCanCode/bldr".to_string(),
         capabilities: vec!["build.pre_hook".to_string(), "build.post_hook".to_string()],
         min_builder_version: "1.0.0".to_string(),
         license: "MIT".to_string(),

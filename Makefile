@@ -1,6 +1,6 @@
 # Builder Makefile
 
-.PHONY: all build build-c build-lsp lsp test tests examples clean install install-lsp help tsan test-tsan extension
+.PHONY: all build build-c build-lsp lsp test tests examples clean install install-lsp help tsan test-tsan extension ext ext-full
 
 all: build
 
@@ -151,14 +151,34 @@ extension: build-lsp
 	@echo "Packaging VS Code extension..."
 	@mkdir -p tools/vscode/builder-lang/bin
 	@cp bin/bldr-lsp tools/vscode/builder-lang/bin/
-	@cd tools/vscode/builder-lang && npm install && npx vsce package
+	@cd tools/vscode/builder-lang && npm install && npm run compile && npx vsce package --allow-missing-repository
 	@echo "Extension packaged: tools/vscode/builder-lang/builder-lang-*.vsix"
 
 # Install VS Code extension (requires builder to be built)
 install-extension: extension
 	@echo "Installing VS Code extension..."
-	@code --install-extension tools/vscode/builder-lang/builder-lang-*.vsix
+	@code --install-extension tools/vscode/builder-lang/builder-lang-*.vsix --force
 	@echo "Extension installed! Reload VS Code to activate."
+
+# Quick extension install/update (no LSP rebuild, just repackage and install)
+ext:
+	@echo "Building and installing VS Code extension..."
+	@cd tools/vscode/builder-lang && npm install --silent && npm run compile
+	@cd tools/vscode/builder-lang && npx vsce package --allow-missing-repository -o builder-lang.vsix
+	@code --install-extension tools/vscode/builder-lang/builder-lang.vsix --force
+	@rm -f tools/vscode/builder-lang/builder-lang.vsix
+	@echo "✓ Extension installed! Reload VS Code (Cmd+Shift+P → 'Reload Window')"
+
+# Extension with LSP (full rebuild)
+ext-full: build-lsp
+	@echo "Building full extension with LSP..."
+	@mkdir -p tools/vscode/builder-lang/bin
+	@cp bin/bldr-lsp tools/vscode/builder-lang/bin/
+	@cd tools/vscode/builder-lang && npm install --silent && npm run compile
+	@cd tools/vscode/builder-lang && npx vsce package --allow-missing-repository -o builder-lang.vsix
+	@code --install-extension tools/vscode/builder-lang/builder-lang.vsix --force
+	@rm -f tools/vscode/builder-lang/builder-lang.vsix
+	@echo "✓ Extension with LSP installed! Reload VS Code (Cmd+Shift+P → 'Reload Window')"
 
 # Show help
 help:
@@ -183,6 +203,8 @@ help:
 	@echo "  make install-lsp       - Install LSP server to /usr/local/bin"
 	@echo "  make install-all       - Install both bldr and LSP server"
 	@echo "  make uninstall         - Uninstall from system"
+	@echo "  make ext               - Quick install/update VS Code extension"
+	@echo "  make ext-full          - Full extension build with LSP server"
 	@echo "  make extension         - Package VS Code extension with LSP"
 	@echo "  make install-extension - Build and install VS Code extension"
 	@echo "  make fmt               - Format code"

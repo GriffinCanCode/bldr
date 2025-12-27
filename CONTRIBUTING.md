@@ -28,8 +28,8 @@ This project adheres to a code of conduct that all contributors are expected to 
 
 1. **Fork the repository**
    ```bash
-   git clone https://github.com/GriffinCanCode/Builder.git
-   cd Builder
+   git clone https://github.com/GriffinCanCode/bldr.git
+   cd bldr
    ```
 
 2. **Build the project**

@@ -221,7 +221,7 @@ var pluginInfo = PluginInfo{
 	Version:           "1.0.0",
 	Author:            "Griffin",
 	Description:       "Advanced build metrics and analytics",
-	Homepage:          "https://github.com/GriffinCanCode/Builder",
+	Homepage:          "https://github.com/GriffinCanCode/bldr",
 	Capabilities:      []string{"build.pre_hook", "build.post_hook"},
 	MinBuilderVersion: "1.0.0",
 	License:           "MIT",

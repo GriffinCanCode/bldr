@@ -1,41 +1,216 @@
 {
   "name": "builder-lang",
-  "displayName": "Builder Language Support",
-  "description": "Complete language support for Builder configuration files with LSP",
-  "version": "2.0.3",
+  "displayName": "Builder - Build System IDE",
+  "description": "Complete IDE for Builder: LSP, Dashboard, Build-as-Code Generator, Dependency Visualizer, and CLI Integration",
+  "version": "3.0.0",
   "publisher": "builder",
+  "icon": "icons/file-icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GriffinCanCode/bldr"
+  },
+  "homepage": "https://github.com/GriffinCanCode/bldr",
   "engines": {
-    "vscode": "^1.75.0"
+    "vscode": "^1.85.0"
   },
   "categories": [
-    "Programming Languages"
+    "Programming Languages",
+    "Other",
+    "Visualization"
+  ],
+  "keywords": [
+    "build",
+    "builder",
+    "builderfile",
+    "build system",
+    "monorepo",
+    "cache",
+    "dependency graph"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "workspaceContains:**/Builderfile",
+    "workspaceContains:**/Builderspace",
+    "onView:builder.dashboard",
+    "onView:builder.explorer"
   ],
-  "main": "./extension.js",
+  "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "builder.build",
         "title": "Builder: Run Build",
-        "icon": "$(tools)"
+        "icon": "$(tools)",
+        "category": "Builder"
+      },
+      {
+        "command": "builder.buildTarget",
+        "title": "Builder: Build Specific Target",
+        "icon": "$(target)",
+        "category": "Builder"
+      },
+      {
+        "command": "builder.test",
+        "title": "Builder: Run Tests",
+        "icon": "$(beaker)",
+        "category": "Builder"
+      },
+      {
+        "command": "builder.watch",
+        "title": "Builder: Watch Mode",
+        "icon": "$(eye)",
+        "category": "Builder"
+      },
+      {
+        "command": "builder.clean",
+        "title": "Builder: Clean Build Artifacts",
+        "icon": "$(trash)",
+        "category": "Builder"
+      },
+      {
+        "command": "builder.showDashboard",
+        "title": "Builder: Open Dashboard",
+        "icon": "$(dashboard)",
+        "category": "Builder"
+      },
+      {
+        "command": "builder.showGraph",
+        "title": "Builder: Show Dependency Graph",
+        "icon": "$(type-hierarchy)",
+        "category": "Builder"
+      },
+      {
+        "command": "builder.generateBuilderfile",
+        "title": "Builder: Generate Builderfile from Project",
+        "icon": "$(sparkle)",
+        "category": "Builder"
+      },
+      {
+        "command": "builder.previewTargets",
+        "title": "Builder: Preview Auto-detected Targets",
+        "icon": "$(search)",
+        "category": "Builder"
+      },
+      {
+        "command": "builder.runWizard",
+        "title": "Builder: Run Setup Wizard",
+        "icon": "$(wand)",
+        "category": "Builder"
+      },
+      {
+        "command": "builder.query",
+        "title": "Builder: Query Targets",
+        "icon": "$(search)",
+        "category": "Builder"
+      },
+      {
+        "command": "builder.explore",
+        "title": "Builder: Interactive Explorer",
+        "icon": "$(compass)",
+        "category": "Builder"
+      },
+      {
+        "command": "builder.telemetry",
+        "title": "Builder: View Build Analytics",
+        "icon": "$(graph)",
+        "category": "Builder"
+      },
+      {
+        "command": "builder.cacheStats",
+        "title": "Builder: Show Cache Statistics",
+        "icon": "$(database)",
+        "category": "Builder"
+      },
+      {
+        "command": "builder.refreshExplorer",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "builder.openTarget",
+        "title": "Open Target Definition",
+        "icon": "$(go-to-file)"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "builder-explorer",
+          "title": "Builder",
+          "icon": "icons/statusbar-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "builder-explorer": [
+        {
+          "id": "builder.targets",
+          "name": "Build Targets",
+          "contextualTitle": "Builder Targets"
+        },
+        {
+          "id": "builder.quickActions",
+          "name": "Quick Actions",
+          "contextualTitle": "Builder Actions"
+        },
+        {
+          "id": "builder.cacheInfo",
+          "name": "Cache Status",
+          "contextualTitle": "Builder Cache"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "builder.targets",
+        "contents": "No Builderfile found in workspace.\n[Generate Builderfile](command:builder.generateBuilderfile)\n[Run Setup Wizard](command:builder.runWizard)\n[Preview Auto-detected Targets](command:builder.previewTargets)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "builder.refreshExplorer",
+          "when": "view == builder.targets",
+          "group": "navigation"
+        },
+        {
+          "command": "builder.generateBuilderfile",
+          "when": "view == builder.targets",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "builder.buildTarget",
+          "when": "view == builder.targets && viewItem == target",
+          "group": "inline"
+        },
+        {
+          "command": "builder.openTarget",
+          "when": "view == builder.targets && viewItem == target",
+          "group": "navigation"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "builder.build",
+          "when": "resourceFilename =~ /Builderfile|Builderspace/",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "builder.buildTarget",
+          "when": "workspaceContains:**/Builderfile"
+        }
+      ]
+    },
     "languages": [
       {
         "id": "builder",
-        "aliases": [
-          "Builder",
-          "builder"
-        ],
-        "filenames": [
-          "Builderfile",
-          "Builderspace"
-        ],
-        "extensions": [
-          ".builder"
-        ],
+        "aliases": ["Builder", "builder"],
+        "filenames": ["Builderfile", "Builderspace"],
+        "extensions": [".builder"],
         "configuration": "./language-configuration.json",
         "icon": {
           "light": "./icons/file-icon.svg",
@@ -44,12 +219,8 @@
       },
       {
         "id": "builderignore",
-        "aliases": [
-          "Builder Ignore"
-        ],
-        "filenames": [
-          ".builderignore"
-        ],
+        "aliases": ["Builder Ignore"],
+        "filenames": [".builderignore"],
         "icon": {
           "light": "./icons/builderignore-icon.svg",
           "dark": "./icons/builderignore-icon.svg"
@@ -82,15 +253,107 @@
           "type": "string",
           "default": "",
           "description": "Custom path to builder-lsp executable (leave empty for auto-detection)"
+        },
+        "builder.cli.path": {
+          "type": "string",
+          "default": "",
+          "description": "Custom path to bldr CLI executable (leave empty for auto-detection)"
+        },
+        "builder.dashboard.autoOpen": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically open dashboard on build start"
+        },
+        "builder.dashboard.showCacheStats": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show cache statistics in dashboard"
+        },
+        "builder.graph.layout": {
+          "type": "string",
+          "enum": ["hierarchical", "force", "circular"],
+          "default": "hierarchical",
+          "description": "Default layout for dependency graph visualization"
+        },
+        "builder.autoDetect.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable automatic project detection when no Builderfile exists"
+        },
+        "builder.autoDetect.showNotification": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show notification when targets are auto-detected"
+        },
+        "builder.watch.clearOnRebuild": {
+          "type": "boolean",
+          "default": false,
+          "description": "Clear terminal before each watch rebuild"
+        },
+        "builder.build.parallel": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable parallel builds by default"
+        },
+        "builder.build.verbose": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable verbose output by default"
         }
       }
-    }
+    },
+    "keybindings": [
+      {
+        "command": "builder.build",
+        "key": "ctrl+shift+b",
+        "mac": "cmd+shift+b",
+        "when": "editorTextFocus && resourceFilename =~ /Builderfile|Builderspace/"
+      },
+      {
+        "command": "builder.showDashboard",
+        "key": "ctrl+shift+d",
+        "mac": "cmd+shift+d",
+        "when": "workspaceContains:**/Builderfile"
+      }
+    ],
+    "taskDefinitions": [
+      {
+        "type": "builder",
+        "required": ["target"],
+        "properties": {
+          "target": {
+            "type": "string",
+            "description": "The target to build"
+          },
+          "watch": {
+            "type": "boolean",
+            "description": "Enable watch mode"
+          },
+          "verbose": {
+            "type": "boolean",
+            "description": "Enable verbose output"
+          }
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "package": "vsce package",
+    "lint": "eslint src --ext ts"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "@types/vscode": "^1.75.0"
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "esbuild": "^0.19.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.3.0"
   }
 }

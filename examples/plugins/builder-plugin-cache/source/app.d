@@ -36,7 +36,7 @@ struct PluginInfo {
     string version_ = "1.0.0";
     string author = "Griffin";
     string description = "Intelligent cache warming and optimization";
-    string homepage = "https://github.com/GriffinCanCode/Builder";
+    string homepage = "https://github.com/GriffinCanCode/bldr";
     string[] capabilities = ["build.pre_hook", "build.post_hook"];
     string minBuilderVersion = "1.0.0";
     string license = "MIT";

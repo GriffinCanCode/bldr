@@ -189,7 +189,7 @@ Legend:
 
 - [Builder Documentation](../../docs/README.md)
 - [LSP Server Documentation](../lsp/README.md)
-- [Issue Tracker](https://github.com/GriffinCanCode/Builder/issues)
+- [Issue Tracker](https://github.com/GriffinCanCode/bldr/issues)
 - [Development Guide](../../docs/development/TESTING.md)
 
 ## Community Contributions

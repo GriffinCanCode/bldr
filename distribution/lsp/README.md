@@ -40,21 +40,21 @@ Download the appropriate binary for your platform:
 
 ```bash
 # macOS ARM64
-curl -L -o builder-lsp https://github.com/GriffinCanCode/Builder/releases/latest/download/bldr-lsp-darwin-arm64
+curl -L -o builder-lsp https://github.com/GriffinCanCode/bldr/releases/latest/download/bldr-lsp-darwin-arm64
 chmod +x builder-lsp
 sudo mv builder-lsp /usr/local/bin/
 ```
 
 ```bash
 # Linux x86_64
-curl -L -o builder-lsp https://github.com/GriffinCanCode/Builder/releases/latest/download/bldr-lsp-linux-x86_64
+curl -L -o builder-lsp https://github.com/GriffinCanCode/bldr/releases/latest/download/bldr-lsp-linux-x86_64
 chmod +x builder-lsp
 sudo mv builder-lsp /usr/local/bin/
 ```
 
 ```powershell
 # Windows (PowerShell)
-curl -L -o builder-lsp.exe https://github.com/GriffinCanCode/Builder/releases/latest/download/bldr-lsp-windows-x86_64.exe
+curl -L -o builder-lsp.exe https://github.com/GriffinCanCode/bldr/releases/latest/download/bldr-lsp-windows-x86_64.exe
 # Add to PATH or place in system directory
 ```
 
@@ -81,8 +81,8 @@ yay -S builder-lsp
 #### 4. From Source
 
 ```bash
-git clone https://github.com/GriffinCanCode/Builder.git
-cd Builder
+git clone https://github.com/GriffinCanCode/bldr.git
+cd bldr
 dub build --build=release
 # Binary will be in bin/bldr-lsp
 ```
@@ -213,7 +213,7 @@ command = "builder-lsp"
   "servers": {
     "builder": {
       "command": ["builder-lsp"],
-      "url": "https://github.com/GriffinCanCode/Builder",
+      "url": "https://github.com/GriffinCanCode/bldr",
       "highlightingModeRegex": "^Builder$"
     }
   }
@@ -296,7 +296,7 @@ The LSP server accepts configuration through initialization options:
 ### Build
 
 ```bash
-cd Builder
+cd bldr
 dub build :lsp --build=release --compiler=ldc2
 ```
 
@@ -392,9 +392,9 @@ cd tests
 
 ## Support
 
-- [Builder Documentation](https://github.com/GriffinCanCode/Builder/tree/master/docs)
+- [Builder Documentation](https://github.com/GriffinCanCode/bldr/tree/master/docs)
 - [LSP Source Code](../../source/lsp/)
-- [Report Issues](https://github.com/GriffinCanCode/Builder/issues)
+- [Report Issues](https://github.com/GriffinCanCode/bldr/issues)
 - [LSP Specification](https://microsoft.github.io/language-server-protocol/)
 
 ## Contributing

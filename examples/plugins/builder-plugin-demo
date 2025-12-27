@@ -14,7 +14,7 @@ PLUGIN_INFO = {
     "version": "1.0.0",
     "author": "Griffin",
     "description": "Demo plugin showcasing Builder plugin capabilities",
-    "homepage": "https://github.com/GriffinCanCode/Builder",
+    "homepage": "https://github.com/GriffinCanCode/bldr",
     "capabilities": [
         "build.pre_hook",
         "build.post_hook",

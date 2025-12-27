@@ -17,7 +17,7 @@ PLUGIN_INFO = {
     "version": "1.0.0",
     "author": "Griffin",
     "description": "Smart build notifications (Slack, Discord, email)",
-    "homepage": "https://github.com/GriffinCanCode/Builder",
+    "homepage": "https://github.com/GriffinCanCode/bldr",
     "capabilities": ["build.post_hook"],
     "minBuilderVersion": "1.0.0",
     "license": "MIT"

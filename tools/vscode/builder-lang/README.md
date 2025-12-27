@@ -1,132 +1,216 @@
-# Builder Language Support for VS Code
+# Builder IDE - VS Code Extension
 
-Complete language support for Builder configuration files with Language Server Protocol (LSP).
+The complete IDE experience for the Builder build system. Go beyond basic LSP support with a full dashboard, dependency visualizer, Build-as-Code generator, and integrated CLI.
 
 ## Features
 
-### 🎨 Syntax Highlighting
-- Full syntax highlighting for `Builderfile` and `Builderspace` files
-- Custom file icons for `Builderfile`, `Builderspace`, and `.builderignore` (works with any icon theme!)
-- Auto-closing brackets and quotes
-- Comment toggling (Cmd+/)
-- Smart code folding
+### 🚀 Build-as-Code Generator
 
-### 🚀 Language Server Protocol (LSP)
-- **Autocomplete**: Smart suggestions for fields, types, languages, and dependencies
-- **Diagnostics**: Real-time error detection and validation
-- **Go to Definition**: Jump to target definitions (F12)
-- **Hover Information**: Rich documentation on hover
-- **Find References**: Find all uses of a target (Shift+F12)
-- **Rename Refactoring**: Rename targets across all Builderfiles (F2)
+Automatically generate `Builderfile` configurations from your project structure:
+
+- **Smart Detection**: Detects languages, frameworks, entry points, and test files
+- **Multi-Language Support**: Python, JavaScript/TypeScript, Rust, Go, C/C++, Java, Ruby, Elixir, and more
+- **Framework Awareness**: Recognizes React, Vue, Next.js, Django, Flask, FastAPI, Express, Rails, Phoenix, etc.
+- **One-Click Setup**: Generate complete build configurations instantly
+
+```
+Command Palette: "Builder: Generate Builderfile from Project"
+```
+
+### 📊 Interactive Dashboard
+
+Real-time build status and project insights:
+
+- **Target Overview**: See all build targets at a glance
+- **Cache Statistics**: Monitor cache size, entries, and hit rate
+- **Quick Actions**: Build, test, clean, and watch with one click
+- **Build History**: Track recent build performance
+
+```
+Command Palette: "Builder: Open Dashboard"
+Keyboard: Cmd+Shift+D (Mac) / Ctrl+Shift+D (Windows/Linux)
+```
+
+### 📈 Dependency Graph Visualizer
+
+Interactive DAG visualization of your build targets:
+
+- **Hierarchical Layout**: Clear visualization of dependency relationships
+- **Click to Navigate**: Jump directly to target definitions
+- **Double-Click to Build**: Build individual targets from the graph
+- **Real-time Updates**: Graph updates as you modify Builderfile
+
+```
+Command Palette: "Builder: Show Dependency Graph"
+```
+
+### 🎯 Build Explorer Sidebar
+
+Dedicated sidebar panel for build management:
+
+- **Target Tree**: Browse all targets organized by type
+- **Quick Actions**: Common commands always accessible
+- **Cache Status**: Real-time cache monitoring
+- **Click to Build**: Build individual targets directly
+
+### 🔧 Full CLI Integration
+
+Execute any Builder CLI command from VS Code:
+
+| Command | Description |
+|---------|-------------|
+| `builder.build` | Build all targets |
+| `builder.buildTarget` | Build specific target |
+| `builder.test` | Run test targets |
+| `builder.watch` | Enable watch mode |
+| `builder.clean` | Clean build artifacts |
+| `builder.query` | Query targets and dependencies |
+| `builder.explore` | Interactive TUI explorer |
+| `builder.telemetry` | View build analytics |
+
+### 💡 Language Server Protocol (LSP)
+
+Full IDE intelligence for Builderfile editing:
+
+- **Code Completion**: Smart suggestions for targets, actions, variables
+- **Go to Definition**: Jump to target/variable definitions
+- **Find References**: Find all uses across files
+- **Hover Information**: Documentation on hover
+- **Rename Refactoring**: Safely rename targets and variables
+- **Real-time Diagnostics**: Error detection as you type
+- **Document Symbols**: Outline view of all targets
+
+### ⚡ Zero-Config Detection
+
+No Builderfile? No problem:
+
+- Automatically detects project structure on workspace open
+- Suggests Builderfile generation for detected languages
+- Preview detected targets before committing
 
 ## Installation
 
-### From Marketplace (Recommended)
+### From VS Code Marketplace
+
 1. Open VS Code
-2. Go to Extensions (Cmd+Shift+X)
-3. Search for "Builder Language Support"
+2. Go to Extensions (Cmd+Shift+X / Ctrl+Shift+X)
+3. Search for "Builder"
 4. Click Install
 
-**No additional setup required!** The LSP server is bundled for all platforms.
+### From VSIX
 
-### Manual Installation
 ```bash
-# Build and install
-cd /path/to/Builder
-make install-extension
-
-# Or install pre-built VSIX
-code --install-extension builder-lang-2.0.0.vsix
+code --install-extension builder-lang-3.0.0.vsix
 ```
 
-Then reload VS Code (Cmd+Shift+P → "Developer: Reload Window")
+## Configuration
 
-## Platform Support
+### Extension Settings
 
-✅ **Pre-built LSP server binaries included for:**
-- macOS (Apple Silicon & Intel)
-- Linux (x86_64)
-- Windows (x64)
-
-**No D compiler required!** Everything works out of the box.
-
-## Requirements
-
-**None!** The extension is completely self-contained with bundled LSP binaries.
-
-**Optional**: If you have Builder installed system-wide, the extension can also use that installation.
-
-## Extension Settings
-
-This extension contributes the following settings:
-
-* `builder.lsp.enabled`: Enable/disable Builder Language Server Protocol support (default: true)
-* `builder.lsp.trace.server`: Trace communication between VS Code and the language server (default: "off")
-* `builder.lsp.serverPath`: Custom path to builder-lsp executable (leave empty for auto-detection)
-
-## Usage
-
-Simply open any `Builderfile` or `Builderspace` file, and the extension will automatically activate with full LSP support!
-
-### Example Features in Action
-
-**Autocomplete:**
-```
-target("my-app") {
-    type: e|  ← Suggests: executable, library, test, custom
-    deps: ["|"]  ← Suggests available targets
+```json
+{
+  // LSP
+  "builder.lsp.enabled": true,
+  "builder.lsp.trace.server": "off",
+  "builder.lsp.serverPath": "",
+  
+  // CLI
+  "builder.cli.path": "",
+  
+  // Dashboard
+  "builder.dashboard.autoOpen": false,
+  "builder.dashboard.showCacheStats": true,
+  
+  // Graph
+  "builder.graph.layout": "hierarchical",
+  
+  // Auto Detection
+  "builder.autoDetect.enabled": true,
+  "builder.autoDetect.showNotification": true,
+  
+  // Build
+  "builder.build.parallel": true,
+  "builder.build.verbose": false,
+  
+  // Watch
+  "builder.watch.clearOnRebuild": false
 }
 ```
 
-**Hover Documentation:**
-Hover over any field or target to see detailed documentation
+## Keyboard Shortcuts
 
-**Go to Definition:**
-Ctrl/Cmd+Click on a dependency to jump to its definition
+| Shortcut | Command |
+|----------|---------|
+| `Cmd+Shift+B` / `Ctrl+Shift+B` | Build (when editing Builderfile) |
+| `Cmd+Shift+D` / `Ctrl+Shift+D` | Open Dashboard |
 
-**Find All References:**
-Right-click on a target and select "Find All References"
+## Supported File Types
+
+- `Builderfile` - Main build configuration
+- `Builderspace` - Workspace/monorepo configuration
+- `*.builder` - Additional builder files
+- `.builderignore` - File ignore patterns
+
+## Activity Bar
+
+The Builder icon in the activity bar provides:
+
+- **Build Targets**: Tree view of all targets
+- **Quick Actions**: Common operations
+- **Cache Status**: Real-time cache info
+
+## Task Provider
+
+Integrates with VS Code's task system:
+
+```json
+{
+  "type": "builder",
+  "target": "main",
+  "watch": false,
+  "verbose": false
+}
+```
+
+## Requirements
+
+- VS Code 1.85.0 or higher
+- Builder CLI installed (`bldr`)
+- For LSP features: builder-lsp executable
 
 ## Troubleshooting
 
-### LSP Server Not Found
-If you see "Builder LSP server not found":
-1. Ensure Builder is installed: `builder --version`
-2. Install the LSP server: `make install-lsp` from the Builder repository
-3. Or set a custom path in settings: `builder.lsp.serverPath`
+### LSP Not Working
 
-### Extension Not Activating
-1. Check the Output panel: View → Output → "Builder LSP"
-2. Ensure file is recognized as Builder language (check status bar)
-3. Try reloading the window: Cmd+Shift+P → "Developer: Reload Window"
+1. Check LSP is enabled in settings
+2. Verify builder-lsp is installed:
+   ```bash
+   which builder-lsp
+   ```
+3. Enable trace logging:
+   ```json
+   "builder.lsp.trace.server": "verbose"
+   ```
+4. Check Output panel → "Builder LSP"
 
-## Development
+### Build Commands Not Working
 
-### Building the Extension
-```bash
-cd tools/vscode/builder-lang
-npm install
-npx vsce package
-```
+1. Verify Builder CLI is installed:
+   ```bash
+   which bldr
+   ```
+2. Check custom path setting if using non-standard location
 
-### Building with LSP Server
-```bash
-cd /path/to/Builder
-make extension
-```
+### Dashboard Not Loading
 
-## Release Notes
+1. Check Output panel → "Builder" for errors
+2. Ensure workspace contains valid Builderfile
+3. Try refreshing: Command Palette → "Builder: Refresh Explorer"
 
-### 2.0.1
-- Fixed `.builderignore` file icon to display automatically
-- Icons now work with any icon theme (no longer requires switching themes)
+## Contributing
 
-### 2.0.0
-- Added full Language Server Protocol support
-- Autocomplete for fields, types, and dependencies
-- Real-time diagnostics and validation
-- Go to definition, hover, and find references
-- Rename refactoring across all Builderfiles
+See [CONTRIBUTING.md](https://github.com/GriffinCanCode/bldr/blob/master/CONTRIBUTING.md) for development setup.
 
-### 1.0.0
-- Initial release with syntax highlighting
+## License
+
+See [LICENSE](https://github.com/GriffinCanCode/bldr/blob/master/LICENSE) in the bldr repository.
