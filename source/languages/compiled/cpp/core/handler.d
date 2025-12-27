@@ -102,7 +102,13 @@ class CppHandler : BaseCompiledLanguageHandler
         _config.outputType = OutputType.Executable;
         
         auto buildResult = compileTarget(target, config);
-        return toBuildResult(buildResult);
+        auto result = toBuildResult(buildResult);
+        
+        // Run with sanitizers if requested and build succeeded
+        if (result.success && !_config.sanitizers.empty && !result.outputs.empty)
+            runWithSanitizers(result.outputs[0]);
+        
+        return result;
     }
     
     override protected LanguageBuildResult buildLibrary(in Target target, in WorkspaceConfig config, string toolPath) @system
@@ -136,6 +142,10 @@ class CppHandler : BaseCompiledLanguageHandler
         auto buildResult = compileTarget(target, config);
         if (!buildResult.success)
             return toBuildResult(buildResult);
+        
+        // Run with sanitizers if requested before running tests
+        if (!_config.sanitizers.empty && !buildResult.outputs.empty)
+            runWithSanitizers(buildResult.outputs[0]);
         
         // Run the test executable
         if (!buildResult.outputs.empty)
@@ -377,6 +387,21 @@ class CppHandler : BaseCompiledLanguageHandler
             case StaticAnalyzer.Coverity:
                 structuredLog.warning("analyzer_not_implemented_").field("detail", "Not implemented: " ~ _config.analyzer.to!string).emit();
                 return AnalysisResult();
+        }
+    }
+    
+    private void runWithSanitizers(string executable) @system
+    {
+        if (_config.sanitizers.empty) return;
+        
+        auto sanitizerResult = SanitizerRunner.run(executable, _config.sanitizers);
+        if (sanitizerResult.hadIssues)
+        {
+            structuredLog.warning("sanitizer_detected_issues").emit();
+            foreach (issue; sanitizerResult.issues[0 .. min(5, $)])
+                structuredLog.warning("__").field("detail", "  " ~ issue).emit();
+            if (sanitizerResult.issues.length > 5)
+                structuredLog.warning("___and_more_").field("detail", "  ... and " ~ (sanitizerResult.issues.length - 5).to!string ~ " more issues").emit();
         }
     }
 }

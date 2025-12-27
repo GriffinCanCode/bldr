@@ -6,7 +6,7 @@ import std.algorithm;
 import std.array;
 import std.json;
 import std.conv;
-import std.string : lineSplitter;
+import std.string : lineSplitter, replace;
 import std.regex;
 import languages.compiled.base;
 import languages.compiled.protobuf.core.config;
@@ -26,23 +26,35 @@ class ProtobufHandler : BaseCompiledLanguageHandler, DiscoverableAction
     
     // ===== Required Overrides =====
     
-    override string languageName() const pure nothrow @safe => "Protocol Buffers";
+    override protected string languageId() const pure nothrow => "protobuf";
     
-    override string[] fileExtensions() const pure nothrow @safe => [".proto"];
+    override protected TargetLanguage languageType() const pure nothrow => TargetLanguage.Protobuf;
     
-    override bool detectToolchain() @system
+    override protected string[] configKeys() const pure nothrow => ["protobuf", "proto"];
+    
+    override protected string toolchainNotFoundError() const pure nothrow =>
+        "Protocol Buffer compiler not found. Install protoc from: https://github.com/protocolbuffers/protobuf/releases";
+    
+    override protected string detectToolchain(in Target target, in WorkspaceConfig config) @system
     {
-        return ProtocWrapper.isAvailable() || BufWrapper.isAvailable();
+        import infrastructure.toolchain.detection.detector : ExecutableDetector;
+        
+        parseProtobufConfig(target, config);
+        
+        if (ProtocWrapper.isAvailable()) return ExecutableDetector.findInPath("protoc");
+        if (BufWrapper.isAvailable()) return ExecutableDetector.findInPath("buf");
+        return "";
     }
     
-    override string getToolchainVersion() @system
+    /// Get toolchain version string
+    string getToolchainVersion() @system
     {
         if (ProtocWrapper.isAvailable()) return "protoc " ~ ProtocWrapper.getVersion();
         if (BufWrapper.isAvailable()) return "buf (available)";
         return "unknown";
     }
     
-    override void parseConfig(in Target target, in WorkspaceConfig config) @system
+    private void parseProtobufConfig(in Target target, in WorkspaceConfig config) @system
     {
         _config = ProtobufConfig.init;
         
@@ -59,16 +71,20 @@ class ProtobufHandler : BaseCompiledLanguageHandler, DiscoverableAction
             _config.outputDir = config.options.outputDir;
     }
     
-    override FormatResult formatSources(in string[] sources) @system
+    override protected bool shouldFormat(in Target target) const @system => _config.format;
+    
+    override protected bool shouldLint(in Target target) const @system => _config.lint;
+    
+    override protected CompiledLanguageResult runFormatter(in Target target, in WorkspaceConfig config) @system
     {
-        FormatResult result;
+        CompiledLanguageResult result;
         result.success = true;
         
         if (!_config.format || !BufWrapper.isAvailable())
             return result;
         
         structuredLog.debug_("running_buf_format").emit();
-        string[] protoFiles = sources.filter!(s => extension(s) == ".proto").array;
+        string[] protoFiles = target.sources.filter!(s => extension(s) == ".proto").array;
         
         auto fmtResult = BufWrapper.format(protoFiles, true);
         result.success = fmtResult.success;
@@ -78,35 +94,46 @@ class ProtobufHandler : BaseCompiledLanguageHandler, DiscoverableAction
         return result;
     }
     
-    override LintResult lintSources(in string[] sources) @system
+    override protected CompiledLanguageResult runLinter(in Target target, in WorkspaceConfig config) @system
     {
-        LintResult result;
+        CompiledLanguageResult result;
         result.success = true;
         
         if (!_config.lint || !BufWrapper.isAvailable())
             return result;
         
         structuredLog.debug_("running_buf_lint").emit();
-        string[] protoFiles = sources.filter!(s => extension(s) == ".proto").array;
+        string[] protoFiles = target.sources.filter!(s => extension(s) == ".proto").array;
         
         auto lintResult = BufWrapper.lint(protoFiles);
         result.success = lintResult.success;
-        result.hadIssues = !lintResult.warnings.empty;
-        result.issues = lintResult.warnings.dup;
+        result.hadLintIssues = !lintResult.warnings.empty;
+        result.lintIssues = lintResult.warnings.dup;
         
         return result;
     }
     
-    override CompiledLanguageResult compileTarget(
-        in Target target,
-        in WorkspaceConfig config,
-        in string[] sources
-    ) @system
+    override protected LanguageBuildResult buildExecutable(in Target target, in WorkspaceConfig config, string toolPath) @system
     {
-        CompiledLanguageResult result;
+        return doCompile(target, config);
+    }
+    
+    override protected LanguageBuildResult buildLibrary(in Target target, in WorkspaceConfig config, string toolPath) @system
+    {
+        return doCompile(target, config);
+    }
+    
+    override protected LanguageBuildResult buildAndRunTests(in Target target, in WorkspaceConfig config, string toolPath) @system
+    {
+        return doCompile(target, config);
+    }
+    
+    private LanguageBuildResult doCompile(in Target target, in WorkspaceConfig config) @system
+    {
+        LanguageBuildResult result;
         
         // Filter for .proto files
-        string[] protoFiles = sources.filter!(s => extension(s) == ".proto").array;
+        string[] protoFiles = target.sources.filter!(s => extension(s) == ".proto").array;
         
         if (protoFiles.empty)
         {
@@ -138,8 +165,6 @@ class ProtobufHandler : BaseCompiledLanguageHandler, DiscoverableAction
         result.success = compileResult.success;
         result.error = compileResult.error;
         result.outputs = compileResult.outputs.dup;
-        result.hadWarnings = !compileResult.warnings.empty;
-        result.warnings = compileResult.warnings.dup;
         
         if (!result.outputs.empty)
             result.outputHash = FastHash.hashString(result.outputs.join("\n"));
@@ -147,13 +172,13 @@ class ProtobufHandler : BaseCompiledLanguageHandler, DiscoverableAction
         return result;
     }
     
-    override string[] getOutputs(in Target target, in WorkspaceConfig config)
+    override string[] getOutputs(in Target target, in WorkspaceConfig config) @system
     {
         string outputDir = _config.outputDir.empty ? config.options.outputDir : _config.outputDir;
         return [outputDir];
     }
     
-    override Import[] analyzeImports(in string[] sources)
+    override Import[] analyzeImports(in string[] sources) @system
     {
         Import[] imports;
         
@@ -204,7 +229,7 @@ class ProtobufHandler : BaseCompiledLanguageHandler, DiscoverableAction
         structuredLog.info("executing_protobuf_discovery").field("target", target.name).emit();
         
         // Parse configuration
-        parseConfig(target, config);
+        parseProtobufConfig(target, config);
         
         // Filter proto files
         string[] protoFiles = target.sources.filter!(s => extension(s) == ".proto").array;
@@ -216,7 +241,7 @@ class ProtobufHandler : BaseCompiledLanguageHandler, DiscoverableAction
         }
         
         // Compile to generate output files
-        auto buildResult = compileTarget(target, config, protoFiles);
+        auto buildResult = doCompile(target, config);
         if (!buildResult.success)
         {
             result.error = buildResult.error;
@@ -250,7 +275,6 @@ class ProtobufHandler : BaseCompiledLanguageHandler, DiscoverableAction
         
         foreach (ext, files; filesByExt)
         {
-            import std.string : replace;
             auto targetName = target.name ~ "-generated" ~ ext.replace(".", "-");
             auto compileTarget = createCompileTarget(targetName, files, target.id);
             if (compileTarget.language != TargetLanguage.Generic)
