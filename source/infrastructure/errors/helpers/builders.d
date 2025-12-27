@@ -81,6 +81,30 @@ auto createParseError(
     return error;
 }
 
+/// Create a ParseError with rich context (accepts Parse enum directly)
+auto createParseError(
+    string filePath,
+    string message,
+    Parse code,
+    string file = __FILE__,
+    size_t line = __LINE__
+) @system
+{
+    return createParseError(filePath, message, cast(ErrorCode) code, file, line);
+}
+
+/// Create a ParseError with rich context (accepts Analysis enum directly)
+auto createParseError(
+    string filePath,
+    string message,
+    Analysis code,
+    string file = __FILE__,
+    size_t line = __LINE__
+) @system
+{
+    return createParseError(filePath, message, cast(ErrorCode) code, file, line);
+}
+
 /// Create a file read error with rich context
 auto createFileReadError(
     string filePath,
@@ -141,17 +165,17 @@ auto createAnalysisError(
     ));
     
     // Add code-specific suggestions
-    if (code == Analysis.CircularDependency)
+    if (code == cast(ErrorCode) Analysis.CircularDependency)
     {
         error.addSuggestion(ErrorSuggestion.command("Visualize dependency graph", "bldr query --graph " ~ targetName));
         error.addSuggestion(ErrorSuggestion("Break the cycle by removing or refactoring dependencies"));
     }
-    else if (code == Analysis.MissingDependency)
+    else if (code == cast(ErrorCode) Analysis.MissingDependency)
     {
         error.addSuggestion(ErrorSuggestion.config("Add missing dependency to target's deps field"));
         error.addSuggestion(ErrorSuggestion.command("List available targets", "bldr query --targets"));
     }
-    else if (code == Analysis.ImportResolutionFailed)
+    else if (code == cast(ErrorCode) Analysis.ImportResolutionFailed)
     {
         error.addSuggestion(ErrorSuggestion.fileCheck("Verify imported file exists"));
         error.addSuggestion(ErrorSuggestion.config("Check import paths in target configuration"));
@@ -164,6 +188,18 @@ auto createAnalysisError(
     }
     
     return error;
+}
+
+/// Create an AnalysisError with rich context (accepts Analysis enum directly)
+auto createAnalysisError(
+    string targetName,
+    string message,
+    Analysis code,
+    string file = __FILE__,
+    size_t line = __LINE__
+) @system
+{
+    return createAnalysisError(targetName, message, cast(ErrorCode) code, file, line);
 }
 
 /// Create a build error with rich context
@@ -183,17 +219,17 @@ auto createBuildError(
         format("%s:%d", baseName(file), line)
     ));
     
-    if (code == Build.Timeout)
+    if (code == cast(ErrorCode) Build.Timeout)
     {
         error.addSuggestion(ErrorSuggestion.config("Increase timeout in target configuration", "timeout: 600"));
         error.addSuggestion(ErrorSuggestion("Check for infinite loops or blocking operations"));
     }
-    else if (code == Build.OutputMissing)
+    else if (code == cast(ErrorCode) Build.OutputMissing)
     {
         error.addSuggestion(ErrorSuggestion.fileCheck("Verify build command produces expected output files"));
         error.addSuggestion(ErrorSuggestion.config("Check outputs field in target configuration"));
     }
-    else if (code == Build.HandlerNotFound)
+    else if (code == cast(ErrorCode) Build.HandlerNotFound)
     {
         error.addSuggestion(ErrorSuggestion.command("List supported languages", "bldr query --languages"));
         error.addSuggestion(ErrorSuggestion.config("Specify correct language in target configuration"));
@@ -225,19 +261,19 @@ auto createLanguageError(
         format("%s:%d", baseName(file), line)
     ));
     
-    if (code == Language.MissingCompiler)
+    if (code == cast(ErrorCode) Language.MissingCompiler)
     {
         error.addSuggestion(ErrorSuggestion.command("Check if compiler is installed", "which " ~ getCompilerName(language)));
         error.addSuggestion(ErrorSuggestion("Install compiler/toolchain for " ~ language));
         error.addSuggestion(ErrorSuggestion.docs("See toolchain setup guide", "docs/user-guides/examples.md"));
     }
-    else if (code == Language.UnsupportedLanguage)
+    else if (code == cast(ErrorCode) Language.UnsupportedLanguage)
     {
         error.addSuggestion(ErrorSuggestion.command("List supported languages", "bldr query --languages"));
         error.addSuggestion(ErrorSuggestion.docs("See language support", "docs/features/languages.md"));
         error.addSuggestion(ErrorSuggestion("Consider implementing a custom language handler"));
     }
-    else if (code == Language.CompilationFailed)
+    else if (code == cast(ErrorCode) Language.CompilationFailed)
     {
         error.addSuggestion(ErrorSuggestion("Run compiler directly to see full error output"));
         error.addSuggestion(ErrorSuggestion("Check for syntax errors in source files"));
@@ -245,6 +281,18 @@ auto createLanguageError(
     }
     
     return error;
+}
+
+/// Create a cache error with rich context (accepts Cache enum)
+auto createCacheError(
+    string message,
+    Cache code,
+    string cachePath = "",
+    string file = __FILE__,
+    size_t line = __LINE__
+) @system
+{
+    return createCacheError(message, cast(ErrorCode) code, cachePath, file, line);
 }
 
 /// Create a cache error with rich context
@@ -267,17 +315,17 @@ auto createCacheError(
         format("%s:%d", baseName(file), line)
     ));
     
-    if (code == Cache.Corrupted)
+    if (code == cast(ErrorCode) Cache.Corrupted)
     {
         error.addSuggestion(ErrorSuggestion.command("Clear corrupted cache", "bldr clean --cache"));
         error.addSuggestion(ErrorSuggestion("Rebuild from clean state"));
     }
-    else if (code == Cache.TooLarge)
+    else if (code == cast(ErrorCode) Cache.TooLarge)
     {
         error.addSuggestion(ErrorSuggestion.command("Clean old cache entries", "bldr clean --cache"));
         error.addSuggestion(ErrorSuggestion.config("Configure cache size limits", "cache.max_size: \"10GB\""));
     }
-    else if (code == Cache.WriteFailed || code == Cache.SaveFailed)
+    else if (code == cast(ErrorCode) Cache.WriteFailed || code == cast(ErrorCode) Cache.SaveFailed)
     {
         error.addSuggestion(ErrorSuggestion.fileCheck("Check cache directory write permissions", cachePath));
         error.addSuggestion(ErrorSuggestion("Verify sufficient disk space"));
@@ -307,17 +355,17 @@ auto createSystemError(
         format("%s:%d", baseName(file), line)
     ));
     
-    if (code == System.ProcessSpawnFailed)
+    if (code == cast(ErrorCode) System.ProcessSpawnFailed)
     {
         error.addSuggestion(ErrorSuggestion.fileCheck("Check if required tool is installed and in PATH"));
         error.addSuggestion(ErrorSuggestion.command("Verify tool availability", "which <command>"));
     }
-    else if (code == System.ProcessTimeout)
+    else if (code == cast(ErrorCode) System.ProcessTimeout)
     {
         error.addSuggestion(ErrorSuggestion.config("Increase timeout value in configuration"));
         error.addSuggestion(ErrorSuggestion("Check if process is hanging or waiting for input"));
     }
-    else if (code == System.OutOfMemory)
+    else if (code == cast(ErrorCode) System.OutOfMemory)
     {
         error.addSuggestion(ErrorSuggestion.config("Reduce parallelism to use less memory", "parallelism: 2"));
         error.addSuggestion(ErrorSuggestion("Close other applications to free memory"));

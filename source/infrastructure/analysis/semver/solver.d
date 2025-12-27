@@ -17,50 +17,56 @@ struct Term
     bool positive;  // true = must satisfy, false = must not satisfy
     
     /// Create positive term (package must satisfy constraint)
-    static Term must(PackageId pkg, VersionConstraint c) pure nothrow @safe
+    static Term must(PackageId pkg, VersionConstraint c) pure @safe
         => Term(pkg, c, true);
     
     /// Create negative term (package must NOT satisfy constraint)
-    static Term mustNot(PackageId pkg, VersionConstraint c) pure nothrow @safe
+    static Term mustNot(PackageId pkg, VersionConstraint c) pure @safe
         => Term(pkg, c, false);
     
     /// Negate this term
-    Term negate() const pure nothrow @safe
-        => Term(pkg, constraint, !positive);
+    Term negate() const pure @trusted
+        => Term(pkg, cast(VersionConstraint) constraint, !positive);
     
     /// Check if term is satisfied by assignment
-    bool satisfiedBy(SemVer v) const pure nothrow @safe
-        => positive ? constraint.allows(v) : !constraint.allows(v);
+    bool satisfiedBy(SemVer v) const pure @trusted
+        => positive ? (cast(VersionConstraint) constraint).allows(v) : !(cast(VersionConstraint) constraint).allows(v);
     
     /// Check if terms are compatible (can both be true)
-    bool compatible(Term other) const pure nothrow @safe
+    bool compatible(Term other) const pure @trusted
     {
         if (pkg != other.pkg) return true;
         
+        auto c = cast(VersionConstraint) constraint;
+        auto oc = cast(VersionConstraint) other.constraint;
+        
         if (positive && other.positive)
-            return constraint.allowsAny(other.constraint);
+            return c.allowsAny(oc);
         if (!positive && !other.positive)
             return true;  // Both negative, always compatible
         
         // One positive, one negative
-        auto pos = positive ? constraint : other.constraint;
-        auto neg = positive ? other.constraint : constraint;
+        auto pos = positive ? c : oc;
+        auto neg = positive ? oc : c;
         return !neg.allowsAll(pos);
     }
     
     /// Intersect with another term for same package
-    Term intersect(Term other) const pure nothrow @safe
+    Term intersect(Term other) const pure @trusted
     {
         assert(pkg == other.pkg);
         
+        auto c = cast(VersionConstraint) constraint;
+        auto oc = cast(VersionConstraint) other.constraint;
+        
         if (positive && other.positive)
-            return Term(pkg, constraint.intersect(other.constraint), true);
+            return Term(pkg, c.intersect(oc), true);
         if (!positive && !other.positive)
-            return Term(pkg, constraint.unite(other.constraint), false);
+            return Term(pkg, c.unite(oc), false);
         
         // Mixed: positive intersected with negation
-        auto pos = positive ? constraint : other.constraint;
-        auto neg = positive ? other.constraint : constraint;
+        auto pos = positive ? c : oc;
+        auto neg = positive ? oc : c;
         return Term(pkg, pos.intersect(neg.negate()), true);
     }
     
@@ -76,7 +82,7 @@ struct Incompatibility
     IncompatibilityCause cause;
     
     /// Create from dependency: if A@v then B must satisfy constraint
-    static Incompatibility fromDependency(PackageVersion pkg, PackageId dep, VersionConstraint c) pure nothrow @safe
+    static Incompatibility fromDependency(PackageVersion pkg, PackageId dep, VersionConstraint c) pure @safe
     {
         return Incompatibility(
             [Term.must(pkg.pkg, VersionConstraint.exact(pkg.ver)),
@@ -86,7 +92,7 @@ struct Incompatibility
     }
     
     /// Create root requirement
-    static Incompatibility fromRoot(PackageId pkg, VersionConstraint c) pure nothrow @safe
+    static Incompatibility fromRoot(PackageId pkg, VersionConstraint c) pure @safe
     {
         return Incompatibility(
             [Term.mustNot(pkg, c)],
@@ -95,7 +101,7 @@ struct Incompatibility
     }
     
     /// Create no-versions-available
-    static Incompatibility noVersions(PackageId pkg, VersionConstraint c) pure nothrow @safe
+    static Incompatibility noVersions(PackageId pkg, VersionConstraint c) pure @safe
     {
         return Incompatibility(
             [Term.must(pkg, c)],
@@ -104,7 +110,7 @@ struct Incompatibility
     }
     
     /// Check if this incompatibility is satisfied (conflict!)
-    bool isSatisfied(const Assignment[PackageId] assignments) const pure nothrow @safe
+    bool isSatisfied(const Assignment[PackageId] assignments) const pure @safe
     {
         foreach (ref term; terms)
         {
@@ -121,7 +127,7 @@ struct Incompatibility
     
     /// Get the single term that makes this almost-satisfied
     /// Returns null if not exactly one term is undecided/unsatisfied
-    const(Term)* unitTerm(const Assignment[PackageId] assignments) const pure nothrow @trusted
+    const(Term)* unitTerm(const Assignment[PackageId] assignments) const pure @trusted
     {
         const(Term)* unit;
         size_t unsatisfied;
@@ -296,9 +302,11 @@ private:
     BuildResult!bool derive(ref const Term term, const(Incompatibility)* cause) @system
     {
         // Find best version satisfying negated term
-        auto constraint = term.positive ? term.constraint.negate() : term.constraint;
+        auto termConstraint = cast(VersionConstraint) term.constraint;
+        auto constraint = term.positive ? termConstraint.negate() : termConstraint;
+        auto pkg = cast(PackageId) term.pkg;
         
-        auto versionsResult = source.versions(term.pkg);
+        auto versionsResult = source.versions(pkg);
         if (versionsResult.isErr)
             return Err!(bool, BuildError)(versionsResult.unwrapErr());
         
@@ -321,16 +329,16 @@ private:
         if (!found)
         {
             // No valid version - add incompatibility
-            incompatibilities ~= Incompatibility.noVersions(term.pkg, constraint);
+            incompatibilities ~= Incompatibility.noVersions(pkg, constraint);
             return Ok!(bool, BuildError)(false);
         }
         
         // Check if already assigned
-        if (term.pkg in solution)
+        if (pkg in solution)
             return Ok!(bool, BuildError)(false);
         
         // Add assignment
-        solution[term.pkg] = Assignment(term.pkg, best, decisionLevel, false, cause);
+        solution[pkg] = Assignment(pkg, best, decisionLevel, false, cause);
         
         // Add incompatibilities from dependencies
         auto depsResult = source.dependencies(PackageVersion(term.pkg, best));
@@ -354,9 +362,9 @@ private:
             if (backtrackResult.isErr)
                 return Err!(PackageId, BuildError)(backtrackResult.unwrapErr());
             
-            auto backtrack = backtrackResult.unwrap();
+            auto btAssign = backtrackResult.unwrap();
             
-            if (backtrack.level == 0)
+            if (btAssign.level == 0)
             {
                 // Can't backtrack - unsolvable
                 return Err!(PackageId, BuildError)(
@@ -364,18 +372,18 @@ private:
             }
             
             // Learn new incompatibility from conflict
-            auto learned = learnFromConflict(conflict, backtrack.pkg);
+            auto learned = learnFromConflict(conflict, btAssign.pkg);
             incompatibilities ~= learned;
             
             // Backtrack
-            backtrack(backtrack.level - 1);
+            doBacktrack(btAssign.level - 1);
             
-            return Ok!(PackageId, BuildError)(backtrack.pkg);
+            return Ok!(PackageId, BuildError)(btAssign.pkg);
         }
     }
     
     /// Find the decision level to backtrack to
-    BuildResult!Assignment findBacktrackLevel(ref Incompatibility incompat) @safe
+    BuildResult!Assignment findBacktrackLevel(ref Incompatibility incompat) @system
     {
         Assignment result;
         size_t highestLevel;
@@ -400,7 +408,7 @@ private:
     }
     
     /// Learn a new incompatibility from conflict
-    Incompatibility learnFromConflict(ref Incompatibility conflict, PackageId pivot) pure nothrow @safe
+    Incompatibility learnFromConflict(ref Incompatibility conflict, PackageId pivot) pure @safe
     {
         // Resolution: combine terms excluding pivot
         Term[] newTerms;
@@ -412,7 +420,7 @@ private:
     }
     
     /// Backtrack to given level
-    void backtrack(size_t level) pure nothrow @safe
+    void doBacktrack(size_t level) pure
     {
         PackageId[] toRemove;
         foreach (pkg, a; solution)
@@ -493,14 +501,14 @@ private:
     }
     
     /// Build final resolution from solution
-    Resolution buildResolution() const pure @safe
+    Resolution buildResolution() const pure @trusted
     {
         Resolution res;
         foreach (pkg, a; solution)
             res.packages ~= PackageVersion(pkg, a.version_);
         
         res.packages.sort!((a, b) => a.pkg.name < b.pkg.name);
-        res.trace = incompatibilities.dup;
+        res.trace = (cast(Incompatibility[]) incompatibilities).dup;
         return res;
     }
 }

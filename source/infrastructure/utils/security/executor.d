@@ -10,7 +10,11 @@ import infrastructure.utils.security.validation;
 import infrastructure.utils.logging;
 import engine.runtime.hermetic;
 import infrastructure.errors : ErrorCode, Errors, BuildError, BuildResult, Err, Ok, 
-    VoidBuildResult, IOError, SystemError, InternalError, Config, Security;
+    VoidBuildResult, IOError, SystemError, InternalError, Security;
+import infrastructure.errors : Config_ = Config;
+
+/// Alias for std.process.Config to avoid name collision with error Config
+private alias ProcessConfig = std.process.Config;
 
 
 /// Known safe build tool patterns that contain path separators but aren't actual paths
@@ -413,7 +417,7 @@ struct SecureExecutor
             auto res = execute(
                 cast(string[])cmd,
                 environment.length > 0 ? environment : null,
-                Config.none,
+                ProcessConfig.none,
                 size_t.max,
                 workDir.empty ? null : workDir
             );
@@ -508,7 +512,7 @@ private import std.conv : to;
 auto execute(
     scope const(string)[] args,
     const string[string] env = null,
-    Config config = Config.none,
+    ProcessConfig config = ProcessConfig.none,
     size_t maxOutput = size_t.max,
     scope const(char)[] workDir = null,
     bool skipValidation = false
@@ -519,7 +523,7 @@ auto execute(
     
     // Critical security check: validate command is not empty
     if (args.length == 0)
-        throw Errors.config("Cannot execute empty command", Config.InvalidInput)
+        throw Errors.config("Cannot execute empty command", Config_.InvalidInput)
             .withContext("security validation").build();
     
     // Skip validation only if explicitly requested (for trusted internal use)
@@ -599,7 +603,7 @@ auto execute(
     bool skipValidation = false
 )
 {
-    return execute(args, null, Config.none, size_t.max, workDir, skipValidation);
+    return execute(args, null, ProcessConfig.none, size_t.max, workDir, skipValidation);
 }
 
 @system unittest

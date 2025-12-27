@@ -28,16 +28,29 @@ class OCamlHandler : BaseCompiledLanguageHandler
     
     // ===== Required Overrides =====
     
-    override string languageName() const pure nothrow @safe => "OCaml";
+    override protected string languageId() const pure nothrow => "ocaml";
     
-    override string[] fileExtensions() const pure nothrow @safe => [".ml", ".mli", ".mll", ".mly"];
+    override protected TargetLanguage languageType() const pure nothrow => TargetLanguage.OCaml;
     
-    override bool detectToolchain() @system
+    override protected string[] configKeys() const pure nothrow => ["ocaml", "ocamlConfig"];
+    
+    override protected string toolchainNotFoundError() const pure nothrow =>
+        "OCaml compiler not found. Install from: https://ocaml.org/docs/install.html";
+    
+    override protected string detectToolchain(in Target target, in WorkspaceConfig config) @system
     {
-        return isDuneAvailable() || isOcamlOptAvailable() || isOcamlCAvailable();
+        import infrastructure.toolchain.detection.detector : ExecutableDetector;
+        
+        parseOCamlConfig(target, config);
+        
+        if (isDuneAvailable()) return ExecutableDetector.findInPath("dune");
+        if (isOcamlOptAvailable()) return ExecutableDetector.findInPath("ocamlopt");
+        if (isOcamlCAvailable()) return ExecutableDetector.findInPath("ocamlc");
+        return "";
     }
     
-    override string getToolchainVersion() @system
+    /// Get toolchain version string
+    string getToolchainVersion() @system
     {
         if (_config.compiler == OCamlCompiler.Dune && isDuneAvailable())
             return "Dune " ~ getDuneVersion();
@@ -48,7 +61,7 @@ class OCamlHandler : BaseCompiledLanguageHandler
         return "unknown";
     }
     
-    override void parseConfig(in Target target, in WorkspaceConfig config) @system
+    private void parseOCamlConfig(in Target target, in WorkspaceConfig config) @system
     {
         _config = OCamlConfig.init;
         
@@ -66,9 +79,11 @@ class OCamlHandler : BaseCompiledLanguageHandler
             _config.compilerFlags ~= target.flags;
     }
     
-    override FormatResult formatSources(in string[] sources) @system
+    override protected bool shouldFormat(in Target target) const @system => _config.runFormat;
+    
+    override protected CompiledLanguageResult runFormatter(in Target target, in WorkspaceConfig config) @system
     {
-        FormatResult result;
+        CompiledLanguageResult result;
         result.success = true;
         
         if (!_config.runFormat || !isOcamlFormatAvailable())
@@ -76,7 +91,7 @@ class OCamlHandler : BaseCompiledLanguageHandler
         
         structuredLog.debug_("running_ocamlformat").emit();
         
-        foreach (file; sources)
+        foreach (file; target.sources)
         {
             if (extension(file) != ".ml" && extension(file) != ".mli") continue;
             
@@ -95,29 +110,33 @@ class OCamlHandler : BaseCompiledLanguageHandler
         return result;
     }
     
-    override LintResult lintSources(in string[] sources) @system
+    override protected LanguageBuildResult buildExecutable(in Target target, in WorkspaceConfig config, string toolPath) @system
     {
-        LintResult result;
-        result.success = true;
-        // OCaml doesn't have a standard linter - type checking happens during compilation
-        return result;
+        return doCompile(target, config);
     }
     
-    override CompiledLanguageResult compileTarget(
-        in Target target,
-        in WorkspaceConfig config,
-        in string[] sources
-    ) @system
+    override protected LanguageBuildResult buildLibrary(in Target target, in WorkspaceConfig config, string toolPath) @system
     {
+        return doCompile(target, config);
+    }
+    
+    override protected LanguageBuildResult buildAndRunTests(in Target target, in WorkspaceConfig config, string toolPath) @system
+    {
+        return doCompile(target, config);
+    }
+    
+    private LanguageBuildResult doCompile(in Target target, in WorkspaceConfig config) @system
+    {
+        LanguageBuildResult result;
+        
         // Filter for ML files
-        string[] mlFiles = sources.filter!(s => 
+        string[] mlFiles = target.sources.filter!(s => 
             extension(s) == ".ml" || extension(s) == ".mli" ||
             extension(s) == ".mll" || extension(s) == ".mly"
         ).array;
         
         if (mlFiles.empty)
         {
-            CompiledLanguageResult result;
             result.error = "No .ml files found in sources";
             return result;
         }
@@ -126,22 +145,33 @@ class OCamlHandler : BaseCompiledLanguageHandler
         if (_config.compiler == OCamlCompiler.Auto)
             _config.compiler = detectCompiler();
         
+        CompiledLanguageResult compResult;
+        
         // Build based on compiler type
         final switch (_config.compiler)
         {
             case OCamlCompiler.Dune:
-                return buildWithDune(target, config);
+                compResult = buildWithDune(target, config);
+                break;
             case OCamlCompiler.OCamlOpt:
-                return buildWithOCamlOpt(target, config, mlFiles);
+                compResult = buildWithOCamlOpt(target, config, mlFiles);
+                break;
             case OCamlCompiler.OCamlC:
-                return buildWithOCamlC(target, config, mlFiles);
+                compResult = buildWithOCamlC(target, config, mlFiles);
+                break;
             case OCamlCompiler.OCamlBuild:
-                return buildWithOCamlBuild(target, config);
+                compResult = buildWithOCamlBuild(target, config);
+                break;
             case OCamlCompiler.Auto:
-                CompiledLanguageResult result;
                 result.error = "Failed to auto-detect OCaml compiler";
                 return result;
         }
+        
+        result.success = compResult.success;
+        result.error = compResult.error;
+        result.outputs = compResult.outputs;
+        result.outputHash = compResult.outputHash;
+        return result;
     }
     
     override string[] getOutputs(in Target target, in WorkspaceConfig config)

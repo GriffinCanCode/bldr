@@ -301,7 +301,7 @@ BuildResult!OutputFormat parseOutputFormat(string formatStr) @system
             return BuildResult!OutputFormat.ok(OutputFormat.DOT);
         default:
             return BuildResult!OutputFormat.err(
-                Errors.parse("N/A", std.string.format("Unknown output format: %s (valid: pretty, list, json, dot)", formatStr), Parse.InvalidInput).build()
+                Errors.parse("N/A", std.string.format("Unknown output format: %s (valid: pretty, list, json, dot)", formatStr), Parse.InvalidFieldValue).build()
             );
     }
 }

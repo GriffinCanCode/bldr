@@ -24,13 +24,15 @@ struct RetryPolicy
         {
             case System:
                 return RetryPolicy(5, 200.msecs, 60.seconds, 2.0, 0.15, true);
-            case Cache:
+            case Cache, Network:
                 return RetryPolicy(3, 100.msecs, 10.seconds, 1.5, 0.1, true);
-            case IO:
+            case IO, Repository:
                 return RetryPolicy(3, 50.msecs, 5.seconds, 2.0, 0.05, true);
-            case Plugin, LSP, Watch, Config:
+            case Plugin, LSP, Watch, Config, Telemetry:
                 return RetryPolicy(2, 100.msecs, 5.seconds, 1.5, 0.1, true);
-            case Build, Parse, Analysis, Graph, Language, Internal:
+            case Distributed:
+                return RetryPolicy(4, 150.msecs, 30.seconds, 2.0, 0.1, true);
+            case Build, Parse, Analysis, Graph, Language, Internal, Security, Toolchain, Migration:
                 return RetryPolicy(1, Duration.zero, Duration.zero, 1.0, 0.0, false);
         }
     }
@@ -209,7 +211,7 @@ final class RetryOrchestrator
                 if (ctx.currentAttempt > 0)
                 {
                     stats.recordAttempt(
-                        ctx.lastError ? ctx.lastError.code() : Internal.Error,
+                        ctx.lastError ? ctx.lastError.code() : ErrorCode.InternalError,
                         ctx.elapsed(),
                         true
                     );

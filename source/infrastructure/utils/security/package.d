@@ -40,7 +40,7 @@ module infrastructure.utils.security;
 ///     import infrastructure.utils.security : execute;  // Secure drop-in replacement
 
 public import infrastructure.utils.security.validation;
-public import infrastructure.utils.security.executor : SecureExecutor, ProcessResult, SecurityCode, execute;
+public import infrastructure.utils.security.executor : SecureExecutor, ProcessResult, execute;
 public import infrastructure.utils.security.integrity;
 public import infrastructure.utils.security.tempdir;
 

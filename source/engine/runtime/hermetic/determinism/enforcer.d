@@ -9,7 +9,7 @@ import std.range : empty;
 import engine.runtime.hermetic.core.spec;
 import engine.runtime.hermetic.core.executor;
 import infrastructure.errors;
-import infrastructure.utils.logging : Logger, structuredLog;
+import infrastructure.utils.logging : structuredLog;
 
 /// Determinism configuration for reproducible builds
 struct DeterminismConfig
@@ -90,7 +90,6 @@ struct DeterminismEnforcer
         if (shimResult.isErr)
         {
             // Shim not available - log warning but continue
-            import infrastructure.utils.logging : Logger;
             structuredLog.warning("determinism_shim_library_not_available_").field("detail", "Determinism shim library not available: " ~ shimResult.unwrapErr()).emit();
             structuredLog.warning("determinism_enforcement_will_be_limited").emit();
         }
@@ -165,7 +164,6 @@ struct DeterminismEnforcer
     ) @system
     {
         import std.algorithm : all;
-        import infrastructure.utils.logging : Logger;
         
         if (iterations < 2)
             iterations = 2;

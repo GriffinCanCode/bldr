@@ -1,7 +1,6 @@
 module languages.web.typescript.tooling.bundlers.tsc;
 
 import languages.web.typescript.tooling.bundlers.base;
-import languages.web.typescript.core.config;
 import languages.web.typescript.tooling.checker;
 import infrastructure.config.schema.schema;
 import std.process;

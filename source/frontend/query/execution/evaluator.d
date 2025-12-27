@@ -36,7 +36,7 @@ final class QueryEvaluator : QueryVisitor
         }
         catch (Exception e)
         {
-            return BuildResult!(BuildNode[]).err(Errors.parse("N/A", e.msg, Parse.SyntaxError).build());
+            return BuildResult!(BuildNode[]).err(Errors.parse("N/A", e.msg, Parse.Failed).build());
         }
     }
     
@@ -422,7 +422,7 @@ final class OptimizedQueryEvaluator : QueryVisitor
         }
         catch (Exception e)
         {
-            return BuildResult!(BuildNode[]).err(Errors.parse("N/A", e.msg, Parse.SyntaxError).build());
+            return BuildResult!(BuildNode[]).err(Errors.parse("N/A", e.msg, Parse.Failed).build());
         }
     }
     

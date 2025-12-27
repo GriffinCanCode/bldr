@@ -10,6 +10,7 @@ import engine.graph;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.logging;
 import infrastructure.errors : BuildResult, Errors, Cache, BuildError;
+import infrastructure.errors.handling.result : Result;
 import infrastructure.errors.formatting.format : formatError = format;
 
 /// Re-discovery statistics

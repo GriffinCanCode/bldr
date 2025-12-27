@@ -13,6 +13,9 @@ import engine.distributed.protocol.grpc.connection;
 import engine.distributed.protocol.grpc.frame : ReapiServices;
 import infrastructure.errors;
 
+// Alias to avoid conflict with codes.distributed.DistErrFactory
+alias DistErrFactory = engine.distributed.protocol.protocol.DistributedErrors;
+
 /**
  * REAPI v2 Protocol Adapter
  * 
@@ -310,7 +313,7 @@ final class ReapiV2Client {
         auto poolResult = GrpcConnectionPool.instance.getConnection(endpoint);
         if (poolResult.isErr)
             return Err!(GrpcConnection, BuildError)(
-                DistributedErrors.protocol("gRPC connection failed: " ~ poolResult.unwrapErr()).build());
+                DistErrFactory.protocol("gRPC connection failed: " ~ poolResult.unwrapErr()).build());
         
         grpcConn = poolResult.unwrap();
         return Ok!(GrpcConnection, BuildError)(grpcConn);
@@ -320,7 +323,7 @@ final class ReapiV2Client {
     BuildResult!ActionResult execute(ActionRequest request, bool skipCache = false) @trusted {
         if (request is null)
             return Err!(ActionResult, BuildError)(
-                DistributedErrors.protocol("Null action request").build());
+                DistErrFactory.protocol("Null action request").build());
         
         auto connResult = ensureConnection();
         if (connResult.isErr)
@@ -340,7 +343,7 @@ final class ReapiV2Client {
         auto digestResult = adapter.getHashTranslator().actionIdToDigest(request.id, 0);
         if (digestResult.isErr)
             return Err!(ActionResult, BuildError)(
-                DistributedErrors.protocol("Failed to convert action digest: " ~ digestResult.unwrapErr()).build());
+                DistErrFactory.protocol("Failed to convert action digest: " ~ digestResult.unwrapErr()).build());
         
         execReq.actionDigest = digestResult.unwrap();
         
@@ -351,26 +354,26 @@ final class ReapiV2Client {
         auto streamResult = conn.serverStreamingCall(ReapiServices.execute().path, requestData, timeout);
         if (streamResult.isErr)
             return Err!(ActionResult, BuildError)(
-                DistributedErrors.protocol("Execute gRPC call failed: " ~ streamResult.unwrapErr()).build());
+                DistErrFactory.protocol("Execute gRPC call failed: " ~ streamResult.unwrapErr()).build());
         
         // Get final response from stream (last Operation with done=true)
         auto responses = streamResult.unwrap();
         if (responses.length == 0)
             return Err!(ActionResult, BuildError)(
-                DistributedErrors.protocol("No response from Execute stream").build());
+                DistErrFactory.protocol("No response from Execute stream").build());
         
         // Decode final response
         auto decodeResult = ReapiV2Codec.decodeExecuteResponse(responses[$ - 1]);
         if (decodeResult.isErr)
             return Err!(ActionResult, BuildError)(
-                DistributedErrors.protocol("Failed to decode response: " ~ decodeResult.unwrapErr()).build());
+                DistErrFactory.protocol("Failed to decode response: " ~ decodeResult.unwrapErr()).build());
         
         auto response = decodeResult.unwrap();
         
         // Check status
         if (!response.status.isOk)
             return Err!(ActionResult, BuildError)(
-                DistributedErrors.protocol("Execution failed: " ~ response.status.message).build());
+                DistErrFactory.protocol("Execution failed: " ~ response.status.message).build());
         
         // Convert to Builder ActionResult
         return Ok!(ActionResult, BuildError)(
@@ -388,7 +391,7 @@ final class ReapiV2Client {
         auto digestResult = adapter.getHashTranslator().actionIdToDigest(actionId, 0);
         if (digestResult.isErr)
             return Err!(ActionResult, BuildError)(
-                DistributedErrors.protocol("Failed to convert digest").build());
+                DistErrFactory.protocol("Failed to convert digest").build());
         
         // Build GetActionResult request
         auto digest = digestResult.unwrap();
@@ -397,12 +400,12 @@ final class ReapiV2Client {
         auto grpcResult = conn.unaryCall(ReapiServices.getActionResult().path, reqData, timeout);
         if (grpcResult.isErr)
             return Err!(ActionResult, BuildError)(
-                DistributedErrors.protocol("GetActionResult gRPC call failed: " ~ grpcResult.unwrapErr()).build());
+                DistErrFactory.protocol("GetActionResult gRPC call failed: " ~ grpcResult.unwrapErr()).build());
         
         auto decodeResult = ReapiV2Codec.decodeActionResult(grpcResult.unwrap());
         if (decodeResult.isErr)
             return Err!(ActionResult, BuildError)(
-                DistributedErrors.protocol("Failed to decode action result").build());
+                DistErrFactory.protocol("Failed to decode action result").build());
         
         return Ok!(ActionResult, BuildError)(
             adapter.reapiToActionResult(decodeResult.unwrap(), actionId));
@@ -424,7 +427,7 @@ final class ReapiV2Client {
         auto grpcResult = conn.unaryCall(ReapiServices.getCapabilities().path, reqData, timeout);
         if (grpcResult.isErr)
             return Err!(ReapiServerCapabilities, BuildError)(
-                DistributedErrors.protocol("GetCapabilities gRPC call failed: " ~ grpcResult.unwrapErr()).build());
+                DistErrFactory.protocol("GetCapabilities gRPC call failed: " ~ grpcResult.unwrapErr()).build());
         
         auto decodeResult = ReapiV2Codec.decodeServerCapabilities(grpcResult.unwrap());
         if (decodeResult.isErr)
@@ -450,12 +453,12 @@ final class ReapiV2Client {
         auto grpcResult = conn.unaryCall(ReapiServices.findMissingBlobs().path, reqData, timeout);
         if (grpcResult.isErr)
             return Err!(ReapiDigest[], BuildError)(
-                DistributedErrors.protocol("FindMissingBlobs gRPC call failed: " ~ grpcResult.unwrapErr()).build());
+                DistErrFactory.protocol("FindMissingBlobs gRPC call failed: " ~ grpcResult.unwrapErr()).build());
         
         auto decodeResult = ReapiV2Codec.decodeFindMissingBlobsResponse(grpcResult.unwrap());
         if (decodeResult.isErr)
             return Err!(ReapiDigest[], BuildError)(
-                DistributedErrors.protocol("Failed to decode response: " ~ decodeResult.unwrapErr()).build());
+                DistErrFactory.protocol("Failed to decode response: " ~ decodeResult.unwrapErr()).build());
         
         return Ok!(ReapiDigest[], BuildError)(decodeResult.unwrap().missingBlobDigests);
     }
@@ -478,7 +481,7 @@ final class ReapiV2Client {
         auto grpcResult = conn.unaryCall(ReapiServices.batchUpdateBlobs().path, reqData, timeout);
         if (grpcResult.isErr)
             return VoidBuildResult.err(
-                DistributedErrors.protocol("BatchUpdateBlobs gRPC call failed: " ~ grpcResult.unwrapErr()).build());
+                DistErrFactory.protocol("BatchUpdateBlobs gRPC call failed: " ~ grpcResult.unwrapErr()).build());
         
         return Ok!BuildError();
     }
@@ -502,12 +505,12 @@ final class ReapiV2Client {
         auto grpcResult = conn.unaryCall(ReapiServices.batchReadBlobs().path, reqData, timeout);
         if (grpcResult.isErr)
             return Err!(ubyte[], BuildError)(
-                DistributedErrors.protocol("BatchReadBlobs gRPC call failed: " ~ grpcResult.unwrapErr()).build());
+                DistErrFactory.protocol("BatchReadBlobs gRPC call failed: " ~ grpcResult.unwrapErr()).build());
         
         auto decodeResult = ReapiV2Codec.decodeBatchReadBlobsResponse(grpcResult.unwrap());
         if (decodeResult.isErr)
             return Err!(ubyte[], BuildError)(
-                DistributedErrors.protocol("Failed to decode response: " ~ decodeResult.unwrapErr()).build());
+                DistErrFactory.protocol("Failed to decode response: " ~ decodeResult.unwrapErr()).build());
         
         auto resp = decodeResult.unwrap();
         if (resp.responses.length > 0 && resp.responses[0].data.length > 0)

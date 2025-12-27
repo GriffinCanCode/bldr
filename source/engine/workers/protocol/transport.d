@@ -12,6 +12,9 @@ import engine.workers.protocol.types;
 import infrastructure.errors;
 import infrastructure.utils.logging;
 
+/// Alias for std.process.Config to avoid name collision with error Config
+private alias ProcessConfig = std.process.Config;
+
 /// Transport interface for worker communication
 interface IWorkerTransport
 {
@@ -213,7 +216,7 @@ Result!(StdioWorkerTransport, WorkerError) spawnWorkerTransport(
             [executable] ~ args,
             Redirect.stdin | Redirect.stdout | Redirect.stderr,
             env,
-            Config.none,
+            ProcessConfig.none,
             workDir
         );
         

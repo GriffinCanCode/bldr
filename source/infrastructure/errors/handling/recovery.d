@@ -180,9 +180,9 @@ RecoveryManager createDefaultRecoveryManager()
     // Retry transient errors
     auto retryStrategy = new RetryStrategy(3, 1.seconds, 2.0);
     manager.registerStrategyForCodes([
-        Build.Timeout,
-        System.ProcessTimeout,
-        Cache.LoadFailed
+        cast(ErrorCode) Build.Timeout,
+        cast(ErrorCode) System.ProcessTimeout,
+        cast(ErrorCode) Cache.LoadFailed
     ], retryStrategy);
     
     return manager;

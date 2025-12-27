@@ -48,6 +48,14 @@ abstract class BaseBuildError : Exception, BuildError
         _message = message;
     }
     
+    /// Constructor accepting any int-based enum (for domain-specific codes)
+    this(E)(E code, string message) @trusted if (is(E == enum) && is(typeof(cast(int) code)))
+    {
+        super(message);
+        _code = cast(ErrorCode) code;
+        _message = message;
+    }
+    
     ErrorCode code() const pure nothrow
     {
         return _code;
@@ -121,6 +129,18 @@ class BuildFailureError : BaseBuildError
         this.targetId = targetId;
     }
     
+    /// Constructor accepting Build enum for convenience
+    this(string targetId, string message, Build code) @system
+    {
+        this(targetId, message, cast(ErrorCode) code);
+    }
+    
+    /// Constructor accepting Language enum for convenience
+    this(string targetId, string message, Language code) @system
+    {
+        this(targetId, message, cast(ErrorCode) code);
+    }
+    
     override string toString() const
     {
         string result = super.toString();
@@ -154,6 +174,19 @@ class ParseError : BaseBuildError
         this.filePath = filePath;
         this.line = line;
         this.column = column;
+    }
+    
+    /// Constructor accepting Parse enum for convenience
+    this(string filePath, string message, size_t line, size_t column, Parse code) @trusted
+    {
+        this(filePath, message, line, column, cast(ErrorCode) code);
+    }
+    
+    /// Constructor accepting Build enum for convenience
+    this(string filePath, string message, Build code) @trusted
+    {
+        super(cast(ErrorCode) code, message);
+        this.filePath = filePath;
     }
     
     /// Auto-extract snippet from file
@@ -197,6 +230,19 @@ class AnalysisError : BaseBuildError
         this.targetName = targetName;
     }
     
+    this(string targetName, string message, Analysis code) @system
+    {
+        super(cast(ErrorCode) code, message);
+        this.targetName = targetName;
+    }
+    
+    /// Constructor accepting Build enum for convenience
+    this(string targetName, string message, Build code) @system
+    {
+        super(cast(ErrorCode) code, message);
+        this.targetName = targetName;
+    }
+    
     override string toString() const
     {
         string result = super.toString();
@@ -222,6 +268,12 @@ class CacheError : BaseBuildError
         super(code, message);
     }
     
+    /// Constructor accepting Cache enum directly
+    this(string message, Cache code) @system
+    {
+        super(cast(ErrorCode) code, message);
+    }
+    
     override string toString() const
     {
         string result = super.toString();
@@ -244,6 +296,12 @@ class IOError : BaseBuildError
         this.path = path;
     }
     
+    this(string path, string message, IO code) @system
+    {
+        super(cast(ErrorCode) code, message);
+        this.path = path;
+    }
+    
     override string toString() const
     {
         string result = super.toString();
@@ -260,6 +318,11 @@ class GraphError : BaseBuildError
     this(string message, ErrorCode code = ErrorCode.GraphInvalid) @system
     {
         super(code, message);
+    }
+    
+    this(string message, Graph code) @system
+    {
+        super(cast(ErrorCode) code, message);
     }
     
     override string toString() const
@@ -285,6 +348,12 @@ class LanguageError : BaseBuildError
     {
         super(code, message);
         this.language = language;
+    }
+    
+    /// Constructor accepting Language enum for convenience
+    this(string language, string message, Language code)
+    {
+        this(language, message, cast(ErrorCode) code);
     }
     
     override string toString() const
@@ -315,6 +384,12 @@ class SystemError : BaseBuildError
     this(string message, ErrorCode code = ErrorCode.ProcessSpawnFailed)
     {
         super(code, message);
+    }
+    
+    /// Constructor accepting System enum for convenience
+    this(string message, System code)
+    {
+        this(message, cast(ErrorCode) code);
     }
     
     override string toString() const
@@ -574,10 +649,52 @@ struct Errors
         return ErrorBuilder!ParseError.create(filePath, message, code);
     }
     
+    /// Parse operation error (accepts Parse enum directly)
+    static ErrorBuilder!ParseError parse(string filePath, string message, Parse code)
+    {
+        return ErrorBuilder!ParseError.create(filePath, message, cast(ErrorCode) code);
+    }
+    
+    /// Parse operation error (accepts Analysis enum for analysis-related parse errors)
+    static ErrorBuilder!ParseError parse(string filePath, string message, Analysis code)
+    {
+        return ErrorBuilder!ParseError.create(filePath, message, cast(ErrorCode) code);
+    }
+    
+    /// Parse operation error (accepts Language enum for language-related parse errors)
+    static ErrorBuilder!ParseError parse(string filePath, string message, Language code)
+    {
+        return ErrorBuilder!ParseError.create(filePath, message, cast(ErrorCode) code);
+    }
+    
+    /// Parse operation error (accepts Internal enum for internal parse errors)
+    static ErrorBuilder!ParseError parse(string filePath, string message, Internal code)
+    {
+        return ErrorBuilder!ParseError.create(filePath, message, cast(ErrorCode) code);
+    }
+    
+    /// Parse operation error (accepts Config enum for config-related parse errors)
+    static ErrorBuilder!ParseError parse(string filePath, string message, Config code)
+    {
+        return ErrorBuilder!ParseError.create(filePath, message, cast(ErrorCode) code);
+    }
+    
+    /// Parse operation error (accepts Migration enum for migration-related parse errors)
+    static ErrorBuilder!ParseError parse(string filePath, string message, Migration code)
+    {
+        return ErrorBuilder!ParseError.create(filePath, message, cast(ErrorCode) code);
+    }
+    
     /// Parse error with location
     static ErrorBuilder!ParseError parseAt(string filePath, string message, size_t line, size_t col = 0, ErrorCode code = ErrorCode.ParseFailed)
     {
         return ErrorBuilder!ParseError.create(filePath, message, line, col, code);
+    }
+    
+    /// Parse error at location (accepts Parse enum directly)
+    static ErrorBuilder!ParseError parseAt(string filePath, string message, size_t line, size_t col, Parse code)
+    {
+        return ErrorBuilder!ParseError.create(filePath, message, line, col, cast(ErrorCode) code);
     }
     
     /// Analysis error
@@ -592,6 +709,18 @@ struct Errors
         return ErrorBuilder!CacheError.create(message, code);
     }
     
+    /// Cache operation error (accepts Cache enum directly)
+    static ErrorBuilder!CacheError cache(string message, Cache code)
+    {
+        return ErrorBuilder!CacheError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// Cache operation error (accepts Config enum for config-related cache errors)
+    static ErrorBuilder!CacheError cache(string message, Config code)
+    {
+        return ErrorBuilder!CacheError.create(message, cast(ErrorCode) code);
+    }
+    
     /// IO operation error
     static ErrorBuilder!IOError io(string path, string message, ErrorCode code = ErrorCode.FileNotFound)
     {
@@ -604,10 +733,28 @@ struct Errors
         return ErrorBuilder!GraphError.create(message, code);
     }
     
+    /// Graph operation error (accepts Graph enum directly)
+    static ErrorBuilder!GraphError graph(string message, Graph code)
+    {
+        return ErrorBuilder!GraphError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// Graph operation error (accepts Cache enum for cache-related graph errors)
+    static ErrorBuilder!GraphError graph(string message, Cache code)
+    {
+        return ErrorBuilder!GraphError.create(message, cast(ErrorCode) code);
+    }
+    
     /// Language-specific error
     static ErrorBuilder!LanguageError language(string lang, string message, ErrorCode code = ErrorCode.CompilationFailed)
     {
         return ErrorBuilder!LanguageError.create(lang, message, code);
+    }
+    
+    /// Language-specific error (accepts Language enum directly)
+    static ErrorBuilder!LanguageError language(string lang, string message, Language code)
+    {
+        return ErrorBuilder!LanguageError.create(lang, message, cast(ErrorCode) code);
     }
     
     /// System-level error
@@ -617,9 +764,9 @@ struct Errors
     }
     
     /// Network communication error
-    static NetworkError network(string message, ErrorCode code = ErrorCode.NetworkError)
+    static ErrorBuilder!NetworkError network(string message, ErrorCode code = ErrorCode.NetworkError)
     {
-        return new NetworkError(message, code);
+        return ErrorBuilder!NetworkError.create(message, code);
     }
     
     /// Internal/unexpected error
@@ -640,6 +787,42 @@ struct Errors
         return ErrorBuilder!PluginError.create(message, code);
     }
     
+    /// Plugin error with Plugin enum
+    static ErrorBuilder!PluginError plugin(string message, Plugin code)
+    {
+        return ErrorBuilder!PluginError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// Plugin error with Parse enum
+    static ErrorBuilder!PluginError plugin(string message, Parse code)
+    {
+        return ErrorBuilder!PluginError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// Plugin error with Cache enum
+    static ErrorBuilder!PluginError plugin(string message, Cache code)
+    {
+        return ErrorBuilder!PluginError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// Plugin error with Config enum
+    static ErrorBuilder!PluginError plugin(string message, Config code)
+    {
+        return ErrorBuilder!PluginError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// Plugin error with Build enum
+    static ErrorBuilder!PluginError plugin(string message, Build code)
+    {
+        return ErrorBuilder!PluginError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// Plugin error with IO enum
+    static ErrorBuilder!PluginError plugin(string message, IO code)
+    {
+        return ErrorBuilder!PluginError.create(message, cast(ErrorCode) code);
+    }
+    
     /// LSP server error
     static ErrorBuilder!LSPError lsp(string message, ErrorCode code = ErrorCode.LSPError)
     {
@@ -652,10 +835,208 @@ struct Errors
         return ErrorBuilder!WatchError.create(message, code);
     }
     
+    /// Watch mode error (accepts Watch enum directly)
+    static ErrorBuilder!WatchError watch(string message, Watch code)
+    {
+        return ErrorBuilder!WatchError.create(message, cast(ErrorCode) code);
+    }
+    
     /// Configuration/validation error
     static ErrorBuilder!ConfigError config(string message, ErrorCode code = ErrorCode.ConfigError)
     {
         return ErrorBuilder!ConfigError.create(message, code);
+    }
+    
+    /// Configuration/validation error (accepts Config enum directly)
+    static ErrorBuilder!ConfigError config(string message, Config code)
+    {
+        return ErrorBuilder!ConfigError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// Configuration/validation error (accepts Internal enum for internal config errors)
+    static ErrorBuilder!ConfigError config(string message, Internal code)
+    {
+        return ErrorBuilder!ConfigError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// Configuration/validation error (accepts Parse enum for parse-related config errors)
+    static ErrorBuilder!ConfigError config(string message, Parse code)
+    {
+        return ErrorBuilder!ConfigError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// Generic error (accepts Network enum directly)
+    static ErrorBuilder!GenericError generic(string message, Network code)
+    {
+        return ErrorBuilder!GenericError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// Internal error (accepts Internal enum directly)
+    static ErrorBuilder!InternalError internal(string message, Internal code)
+    {
+        return ErrorBuilder!InternalError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// IO operation error (accepts IO enum directly)
+    static ErrorBuilder!IOError io(string path, string message, IO code)
+    {
+        return ErrorBuilder!IOError.create(path, message, cast(ErrorCode) code);
+    }
+    
+    /// IO operation error (accepts Cache enum for cache-related IO errors)
+    static ErrorBuilder!IOError io(string path, string message, Cache code)
+    {
+        return ErrorBuilder!IOError.create(path, message, cast(ErrorCode) code);
+    }
+    
+    /// IO operation error (accepts Security enum for security-related IO errors)
+    static ErrorBuilder!IOError io(string path, string message, Security code)
+    {
+        return ErrorBuilder!IOError.create(path, message, cast(ErrorCode) code);
+    }
+    
+    /// Analysis error (accepts Analysis enum directly)
+    static ErrorBuilder!AnalysisError analysis(string targetName, string message, Analysis code)
+    {
+        return ErrorBuilder!AnalysisError.create(targetName, message, cast(ErrorCode) code);
+    }
+    
+    /// System-level error (accepts Network enum directly for network-related system errors)
+    static ErrorBuilder!SystemError system(string message, Network code)
+    {
+        return ErrorBuilder!SystemError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// System-level error (accepts Security enum for security-related system errors)
+    static ErrorBuilder!SystemError system(string message, Security code)
+    {
+        return ErrorBuilder!SystemError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// System-level error (accepts Language enum for language-related system errors)
+    static ErrorBuilder!SystemError system(string message, Language code)
+    {
+        return ErrorBuilder!SystemError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// System-level error (accepts Parse enum for parse-related system errors)
+    static ErrorBuilder!SystemError system(string message, Parse code)
+    {
+        return ErrorBuilder!SystemError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// System-level error (accepts Internal enum for internal errors)
+    static ErrorBuilder!SystemError system(string message, Internal code)
+    {
+        return ErrorBuilder!SystemError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// System-level error (accepts IO enum for io-related system errors)
+    static ErrorBuilder!SystemError system(string message, IO code)
+    {
+        return ErrorBuilder!SystemError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// System-level error (accepts System enum directly)
+    static ErrorBuilder!SystemError system(string message, System code)
+    {
+        return ErrorBuilder!SystemError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// System-level error (accepts Distributed enum for distributed errors)
+    static ErrorBuilder!SystemError system(string message, Distributed code)
+    {
+        return ErrorBuilder!SystemError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// System-level error (accepts Cache enum for cache-related system errors)
+    static ErrorBuilder!SystemError system(string message, Cache code)
+    {
+        return ErrorBuilder!SystemError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// System-level error (accepts Config enum for config-related system errors)
+    static ErrorBuilder!SystemError system(string message, Config code)
+    {
+        return ErrorBuilder!SystemError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// System-level error (accepts Build enum for build-related system errors)
+    static ErrorBuilder!SystemError system(string message, Build code)
+    {
+        return ErrorBuilder!SystemError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// System-level error (accepts Plugin enum for plugin-related system errors)
+    static ErrorBuilder!SystemError system(string message, Plugin code)
+    {
+        return ErrorBuilder!SystemError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// System-level error (accepts Repository enum for repository-related system errors)
+    static ErrorBuilder!SystemError system(string message, Repository code)
+    {
+        return ErrorBuilder!SystemError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// Network communication error (accepts Network enum directly)
+    static ErrorBuilder!NetworkError network(string message, Network code)
+    {
+        return ErrorBuilder!NetworkError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// Network error (accepts Telemetry enum for telemetry-related network errors)
+    static ErrorBuilder!NetworkError network(string message, Telemetry code)
+    {
+        return ErrorBuilder!NetworkError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// Generic error (accepts IO enum directly)
+    static ErrorBuilder!GenericError generic(string message, IO code)
+    {
+        return ErrorBuilder!GenericError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// Generic error (accepts Cache enum directly)
+    static ErrorBuilder!GenericError generic(string message, Cache code)
+    {
+        return ErrorBuilder!GenericError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// Generic error (accepts Parse enum directly)
+    static ErrorBuilder!GenericError generic(string message, Parse code)
+    {
+        return ErrorBuilder!GenericError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// Generic error (accepts Internal enum directly)
+    static ErrorBuilder!GenericError generic(string message, Internal code)
+    {
+        return ErrorBuilder!GenericError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// Generic error (accepts System enum directly)
+    static ErrorBuilder!GenericError generic(string message, System code)
+    {
+        return ErrorBuilder!GenericError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// Generic error (accepts Distributed enum directly)
+    static ErrorBuilder!GenericError generic(string message, Distributed code)
+    {
+        return ErrorBuilder!GenericError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// Generic error (accepts Build enum directly)
+    static ErrorBuilder!GenericError generic(string message, Build code)
+    {
+        return ErrorBuilder!GenericError.create(message, cast(ErrorCode) code);
+    }
+    
+    /// Generic error (accepts Language enum directly)
+    static ErrorBuilder!GenericError generic(string message, Language code)
+    {
+        return ErrorBuilder!GenericError.create(message, cast(ErrorCode) code);
     }
 }
 

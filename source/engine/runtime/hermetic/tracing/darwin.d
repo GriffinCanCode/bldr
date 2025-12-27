@@ -2,7 +2,7 @@ module engine.runtime.hermetic.tracing.darwin;
 
 version(OSX):
 
-import std.process : execute, Config, pipeProcess, Redirect, wait, spawnProcess;
+import std.process : execute, ProcessConfig = Config, pipeProcess, Redirect, wait, spawnProcess;
 import std.file : exists, mkdirRecurse, write, remove, tempDir, readText, dirEntries, SpanMode;
 import std.path : buildPath, baseName;
 import std.string : strip, split, indexOf, startsWith, toStringz;
@@ -105,7 +105,7 @@ final class DarwinSyscallTracer : ISyscallTracer
                 sandboxCmd,
                 Redirect.stdout | Redirect.stderr,
                 null,  // Use current environment
-                Config.none,
+                ProcessConfig.none,
                 workingDir.length > 0 ? workingDir : null
             );
             

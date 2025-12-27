@@ -27,19 +27,31 @@ class HaskellHandler : BaseCompiledLanguageHandler
     
     // ===== Required Overrides =====
     
-    override string languageName() const pure nothrow @safe => "Haskell";
+    override protected string languageId() const pure nothrow => "haskell";
     
-    override string[] fileExtensions() const pure nothrow @safe => [".hs", ".lhs"];
+    override protected TargetLanguage languageType() const pure nothrow => TargetLanguage.Haskell;
     
-    override bool detectToolchain() @system
+    override protected string[] configKeys() const pure nothrow => ["haskell", "hs"];
+    
+    override protected string toolchainNotFoundError() const pure nothrow =>
+        "Haskell toolchain not found. Install from: https://www.haskell.org/ghcup/";
+    
+    override protected string detectToolchain(in Target target, in WorkspaceConfig config) @system
     {
+        import infrastructure.toolchain.detection.detector : ExecutableDetector;
+        
+        // Parse config
+        parseHaskellConfig(target, config);
+        
         // Check for any available build tool
-        if (StackWrapper.isAvailable()) return true;
-        if (CabalWrapper.isAvailable()) return true;
-        return GHCWrapper.isAvailable();
+        if (StackWrapper.isAvailable()) return ExecutableDetector.findInPath("stack");
+        if (CabalWrapper.isAvailable()) return ExecutableDetector.findInPath("cabal");
+        if (GHCWrapper.isAvailable()) return ExecutableDetector.findInPath("ghc");
+        return "";
     }
     
-    override string getToolchainVersion() @system
+    /// Get toolchain version string
+    string getToolchainVersion() @system
     {
         if (_config.buildTool == HaskellBuildTool.Stack && StackWrapper.isAvailable())
             return "Stack " ~ StackWrapper.getVersion();
@@ -50,7 +62,7 @@ class HaskellHandler : BaseCompiledLanguageHandler
         return "unknown";
     }
     
-    override void parseConfig(in Target target, in WorkspaceConfig config) @system
+    private void parseHaskellConfig(in Target target, in WorkspaceConfig config) @system
     {
         _config = HaskellConfig.init;
         
@@ -67,12 +79,22 @@ class HaskellHandler : BaseCompiledLanguageHandler
             _config.outputDir = config.options.outputDir;
     }
     
-    override FormatResult formatSources(in string[] sources) @system
+    override protected bool shouldFormat(in Target target) const @system
     {
-        FormatResult result;
+        return _config.ormolu || _config.fourmolu;
+    }
+    
+    override protected bool shouldLint(in Target target) const @system
+    {
+        return _config.hlint;
+    }
+    
+    override protected CompiledLanguageResult runFormatter(in Target target, in WorkspaceConfig config) @system
+    {
+        CompiledLanguageResult result;
         result.success = true;
         
-        string[] hsFiles = sources.filter!(s => extension(s) == ".hs").array;
+        string[] hsFiles = target.sources.filter!(s => extension(s) == ".hs").array;
         if (hsFiles.empty) return result;
         
         if (_config.ormolu && GHCWrapper.isOroluAvailable())
@@ -89,58 +111,61 @@ class HaskellHandler : BaseCompiledLanguageHandler
         return result;
     }
     
-    override LintResult lintSources(in string[] sources) @system
+    override protected CompiledLanguageResult runLinter(in Target target, in WorkspaceConfig config) @system
     {
-        LintResult result;
+        CompiledLanguageResult result;
         result.success = true;
         
         if (!_config.hlint || !GHCWrapper.isHLintAvailable())
             return result;
         
-        string[] hsFiles = sources.filter!(s => extension(s) == ".hs").array;
+        string[] hsFiles = target.sources.filter!(s => extension(s) == ".hs").array;
         if (hsFiles.empty) return result;
         
         auto lintResult = GHCWrapper.runHLint(hsFiles);
         result.success = lintResult.success;
-        result.hadIssues = !lintResult.hlintIssues.empty;
-        result.issues = lintResult.hlintIssues.dup;
+        result.hadLintIssues = !lintResult.hlintIssues.empty;
+        result.lintIssues = lintResult.hlintIssues.dup;
         
         return result;
     }
     
-    override CompiledLanguageResult compileTarget(
-        in Target target,
-        in WorkspaceConfig config,
-        in string[] sources
-    ) @system
+    override protected LanguageBuildResult buildExecutable(in Target target, in WorkspaceConfig config, string toolPath) @system
     {
-        CompiledLanguageResult result;
-        
+        setupBuild(target, config);
+        _config.mode = HaskellBuildMode.Compile;
+        return doCompile(target, config);
+    }
+    
+    override protected LanguageBuildResult buildLibrary(in Target target, in WorkspaceConfig config, string toolPath) @system
+    {
+        setupBuild(target, config);
+        _config.mode = HaskellBuildMode.Library;
+        return doCompile(target, config);
+    }
+    
+    override protected LanguageBuildResult buildAndRunTests(in Target target, in WorkspaceConfig config, string toolPath) @system
+    {
+        setupBuild(target, config);
+        _config.mode = HaskellBuildMode.Test;
+        return doCompile(target, config);
+    }
+    
+    private void setupBuild(in Target target, in WorkspaceConfig config) @system
+    {
         // Auto-detect build tool if needed
         if (_config.buildTool == HaskellBuildTool.Auto)
             _config.buildTool = detectBuildTool(config.root);
         
         // Auto-detect entry point
-        if (_config.entry.empty && !sources.empty)
-            _config.entry = findMainFile(sources);
-        
-        // Build based on target type and tool
-        final switch (target.type)
-        {
-            case TargetType.Library:
-                _config.mode = HaskellBuildMode.Library;
-                break;
-            case TargetType.Test:
-                _config.mode = HaskellBuildMode.Test;
-                break;
-            case TargetType.Custom:
-            case TargetType.Shell:
-                _config.mode = HaskellBuildMode.Custom;
-                break;
-            case TargetType.Executable:
-                _config.mode = HaskellBuildMode.Compile;
-                break;
-        }
+        if (_config.entry.empty && !target.sources.empty)
+            _config.entry = findMainFile(target.sources);
+    }
+    
+    private LanguageBuildResult doCompile(in Target target, in WorkspaceConfig config) @system
+    {
+        LanguageBuildResult result;
+        CompiledLanguageResult compResult;
         
         // Compile based on build tool
         final switch (_config.buildTool)
@@ -149,12 +174,21 @@ class HaskellHandler : BaseCompiledLanguageHandler
                 result.error = "Build tool not resolved";
                 return result;
             case HaskellBuildTool.GHC:
-                return buildWithGHC(target, config);
+                compResult = buildWithGHC(target, config);
+                break;
             case HaskellBuildTool.Cabal:
-                return buildWithCabal(target, config);
+                compResult = buildWithCabal(target, config);
+                break;
             case HaskellBuildTool.Stack:
-                return buildWithStack(target, config);
+                compResult = buildWithStack(target, config);
+                break;
         }
+        
+        result.success = compResult.success;
+        result.error = compResult.error;
+        result.outputs = compResult.outputs;
+        result.outputHash = compResult.outputHash;
+        return result;
     }
     
     override string[] getOutputs(in Target target, in WorkspaceConfig config)

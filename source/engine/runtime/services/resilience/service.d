@@ -131,7 +131,7 @@ final class ResilienceService : IResilienceService
         if (loadResult.isErr)
         {
             return BuildResult!Checkpoint.err(
-                Errors.system(loadResult.unwrapErr(), Cache.LoadFailed)
+                Errors.system(loadResult.unwrapErr().message, Cache.LoadFailed)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -154,7 +154,7 @@ final class ResilienceService : IResilienceService
         if (checkpointResult.isErr)
         {
             return BuildResult!ResumePlan.err(
-                Errors.system(checkpointResult.unwrapErr(), Cache.LoadFailed)
+                Errors.system(checkpointResult.unwrapErr().message, Cache.LoadFailed)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );
@@ -165,7 +165,7 @@ final class ResilienceService : IResilienceService
         if (planResult.isErr)
         {
             return BuildResult!ResumePlan.err(
-                Errors.system(planResult.unwrapErr(), Internal.Error)
+                Errors.system(planResult.unwrapErr().message, Internal.Error)
                     .withLocation(__FILE__, __LINE__)
                     .build()
             );

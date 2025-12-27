@@ -411,11 +411,11 @@ final class CircuitBreaker
             return true;
         
         immutable code = error.code();
-        return code == Network.Error ||
-               code == Distributed.CoordinatorTimeout ||
-               code == Distributed.WorkerTimeout ||
-               code == System.ProcessTimeout ||
-               code == Distributed.ArtifactTransferFailed;
+        return code == cast(ErrorCode) Network.Error ||
+               code == cast(ErrorCode) Distributed.CoordinatorTimeout ||
+               code == cast(ErrorCode) Distributed.WorkerTimeout ||
+               code == cast(ErrorCode) System.ProcessTimeout ||
+               code == cast(ErrorCode) Distributed.ArtifactTransferFailed;
     }
 }
 

@@ -6,7 +6,7 @@ import std.conv;
 import std.string;
 
 /// Import Result type for error handling
-import infrastructure.errors : Result, BuildResult, BuildError, ParseError, Errors;
+import infrastructure.errors : Result, BuildResult, BuildError, ParseError, Errors, Config;
 
 /// Strongly-typed target identifier
 /// Represents a fully-qualified target in the format: workspace//path:name

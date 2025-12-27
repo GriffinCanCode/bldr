@@ -27,15 +27,27 @@ class NimHandler : BaseCompiledLanguageHandler
     
     // ===== Required Overrides =====
     
-    override string languageName() const pure nothrow @safe => "Nim";
+    override protected string languageId() const pure nothrow => "nim";
     
-    override string[] fileExtensions() const pure nothrow @safe => [".nim", ".nims"];
+    override protected TargetLanguage languageType() const pure nothrow => TargetLanguage.Nim;
     
-    override bool detectToolchain() @system => NimTools.isCompilerAvailable();
+    override protected string[] configKeys() const pure nothrow => ["nim", "nimConfig"];
     
-    override string getToolchainVersion() @system => NimTools.getVersion();
+    override protected string toolchainNotFoundError() const pure nothrow =>
+        "Nim compiler not found. Install from: https://nim-lang.org/install.html";
     
-    override void parseConfig(in Target target, in WorkspaceConfig config) @system
+    override protected string detectToolchain(in Target target, in WorkspaceConfig config) @system
+    {
+        import infrastructure.toolchain.detection.detector : ExecutableDetector;
+        
+        parseNimConfig(target, config);
+        return NimTools.isCompilerAvailable() ? ExecutableDetector.findInPath("nim") : "";
+    }
+    
+    /// Get toolchain version string
+    string getToolchainVersion() @system => NimTools.getVersion();
+    
+    private void parseNimConfig(in Target target, in WorkspaceConfig config) @system
     {
         _config = NimConfig.init;
         
@@ -57,80 +69,80 @@ class NimHandler : BaseCompiledLanguageHandler
             enhanceConfigFromProject(target, config);
     }
     
-    override FormatResult formatSources(in string[] sources) @system
+    override protected bool shouldFormat(in Target target) const @system => _config.runFormat;
+    
+    override protected bool shouldLint(in Target target) const @system => _config.runCheck;
+    
+    override protected CompiledLanguageResult runFormatter(in Target target, in WorkspaceConfig config) @system
     {
-        FormatResult result;
+        CompiledLanguageResult result;
         result.success = true;
         
         if (!_config.runFormat) return result;
         
         auto fmtResult = NimTools.format(
-            sources.dup,
+            target.sources.dup,
             _config.formatCheck,
             _config.formatIndent,
             _config.formatMaxLineLen
         );
         
         result.success = !fmtResult.hasIssues;
-        result.hadIssues = fmtResult.hasIssues;
+        result.hadWarnings = fmtResult.hasIssues;
         result.warnings = fmtResult.warnings.dup;
         
         return result;
     }
     
-    override LintResult lintSources(in string[] sources) @system
+    override protected CompiledLanguageResult runLinter(in Target target, in WorkspaceConfig config) @system
     {
-        LintResult result;
+        CompiledLanguageResult result;
         result.success = true;
         
         if (!_config.runCheck) return result;
         
-        auto checkResult = NimTools.check(sources.dup);
+        auto checkResult = NimTools.check(target.sources.dup);
         result.success = checkResult.success;
-        result.hadIssues = !checkResult.errors.empty;
-        result.issues = checkResult.errors.dup;
+        result.hadLintIssues = !checkResult.errors.empty;
+        result.lintIssues = checkResult.errors.dup;
         
         return result;
     }
     
-    override CompiledLanguageResult compileTarget(
-        in Target target,
-        in WorkspaceConfig config,
-        in string[] sources
-    ) @system
+    override protected LanguageBuildResult buildExecutable(in Target target, in WorkspaceConfig config, string toolPath) @system
     {
-        CompiledLanguageResult result;
+        if (_config.appType != AppType.Console && _config.appType != AppType.Gui)
+            _config.appType = AppType.Console;
+        return doCompile(target, config);
+    }
+    
+    override protected LanguageBuildResult buildLibrary(in Target target, in WorkspaceConfig config, string toolPath) @system
+    {
+        if (_config.appType != AppType.StaticLib && _config.appType != AppType.DynamicLib)
+            _config.appType = AppType.StaticLib;
+        return doCompile(target, config);
+    }
+    
+    override protected LanguageBuildResult buildAndRunTests(in Target target, in WorkspaceConfig config, string toolPath) @system
+    {
+        _config.mode = NimBuildMode.Test;
+        return doCompile(target, config);
+    }
+    
+    private LanguageBuildResult doCompile(in Target target, in WorkspaceConfig config) @system
+    {
+        LanguageBuildResult result;
         
         // Install dependencies if requested
         if (_config.nimble.enabled && _config.nimble.installDeps)
         {
-            string projectDir = sources.empty ? "." : dirName(sources[0]);
+            string projectDir = target.sources.empty ? "." : dirName(target.sources[0]);
             NimbleManager.installDependencies(projectDir, _config.nimble.devMode, _config.verbose);
         }
         
         // Auto-detect entry point
-        if (_config.entry.empty && !sources.empty)
-            _config.entry = findEntryFile(sources);
-        
-        // Set mode based on target type
-        final switch (target.type)
-        {
-            case TargetType.Library:
-                if (_config.appType != AppType.StaticLib && _config.appType != AppType.DynamicLib)
-                    _config.appType = AppType.StaticLib;
-                break;
-            case TargetType.Test:
-                _config.mode = NimBuildMode.Test;
-                break;
-            case TargetType.Custom:
-            case TargetType.Shell:
-                _config.mode = NimBuildMode.Custom;
-                break;
-            case TargetType.Executable:
-                if (_config.appType != AppType.Console && _config.appType != AppType.Gui)
-                    _config.appType = AppType.Console;
-                break;
-        }
+        if (_config.entry.empty && !target.sources.empty)
+            _config.entry = findEntryFile(target.sources);
         
         // Create builder and compile
         auto builder = NimBuilderFactory.create(_config.builder, _config, actionCache);
@@ -143,14 +155,12 @@ class NimHandler : BaseCompiledLanguageHandler
         
         structuredLog.debug_("using_nim_builder").field("name", builder.name()).field("version", builder.getVersion()).emit();
         
-        auto compileResult = builder.build(sources, _config, target, config);
+        auto compileResult = builder.build(target.sources, _config, target, config);
         
         result.success = compileResult.success;
         result.error = compileResult.error;
         result.outputs = compileResult.outputs ~ compileResult.artifacts;
         result.outputHash = compileResult.outputHash;
-        result.hadWarnings = compileResult.hadWarnings;
-        result.warnings = compileResult.warnings.dup;
         
         return result;
     }

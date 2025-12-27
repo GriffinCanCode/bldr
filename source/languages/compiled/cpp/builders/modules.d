@@ -13,7 +13,7 @@ import languages.compiled.cpp.analysis.modules : CppModuleInfo = ModuleInfo, ana
     sortModulesByDependency, isModuleInterface, getModuleFlags, getBMIOutputPath, isModuleSupportedVersion;
 import infrastructure.toolchain : Tool, Toolchain;
 import infrastructure.utils.files.hash : FastHash;
-import infrastructure.utils.logging : Logger, structuredLog;
+import infrastructure.utils.logging : structuredLog;
 import engine.caching.modules.bmi;
 
 /// Build compiler flags from CppConfig

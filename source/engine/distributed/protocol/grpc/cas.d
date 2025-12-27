@@ -9,7 +9,8 @@ import engine.distributed.protocol.grpc.http2 : H2Connection, H2Settings, HpackE
 import engine.distributed.protocol.grpc.frame;
 import engine.distributed.protocol.grpc.codec : GrpcCodec;
 import engine.caching.distributed.remote.artifact;
-import infrastructure.errors : Errors, Network, BuildError, VoidBuildResult, BuildResult, Err, Ok;
+import infrastructure.errors : Errors, Network, BuildError, VoidBuildResult, BuildResult, Err, Ok, Cache, Internal, Parse;
+import infrastructure.errors.handling.result : Result;
 
 /**
  * gRPC Content-Addressable Storage Transport

@@ -688,6 +688,14 @@ class DistributedError : BaseBuildError
         addContext(ErrorContext("file", file));
         addContext(ErrorContext("line", line.to!string));
     }
+    
+    /// Constructor accepting Distributed enum directly
+    this(Distributed code, string message, string file = __FILE__, size_t line = __LINE__) @trusted
+    {
+        super(cast(ErrorCode) code, message);
+        addContext(ErrorContext("file", file));
+        addContext(ErrorContext("line", line.to!string));
+    }
 }
 
 /// Execution errors (sandbox, timeout, etc.)

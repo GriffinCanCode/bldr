@@ -105,7 +105,7 @@ class ConfigParser
                     return Err!(WorkspaceConfig, BuildError)(error);
                 }
                 
-                slog.success("config_inference_complete")
+                slog.info("config_inference_complete")
                     .field("workspace", root)
                     .field("targets", config.targets.length)
                     .field("hint", "Auto-detected targets. Create a Builderfile for more control")

@@ -967,10 +967,10 @@ class UnifiedParser
         return tokens[current - 1];
     }
     
-    private Token expect(TokenType type) pure @safe
+    private Token expect(TokenType type) @trusted
     {
         if (!check(type))
-            throw new Exception("Expected " ~ type.to!string);
+            throw Errors.parse(filePath, "Expected " ~ type.to!string, Parse.Failed).build();
         return advance();
     }
     

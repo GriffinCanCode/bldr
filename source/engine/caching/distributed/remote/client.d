@@ -14,6 +14,7 @@ import infrastructure.utils.security.integrity : IntegrityValidator;
 import infrastructure.utils.compression.compress;
 import infrastructure.utils.files.chunking : ChunkManifest, ChunkTransfer, TransferStats, ContentChunker;
 import infrastructure.utils.files.cdc : FastCDC, CDCManifest = ChunkManifest, shouldChunk, LARGE_ARTIFACT_THRESHOLD;
+import infrastructure.utils.crypto.merkle : MerkleProof;
 import infrastructure.errors;
 
 /// Remote cache client with connection pooling and retry logic
@@ -102,7 +103,7 @@ final class RemoteCacheClient
                 auto error = result.unwrapErr();
                 if (auto cacheErr = cast(CacheError)error)
                 {
-                    if (cacheErr.code != Cache.NotFound)
+                    if (cacheErr.code != cast(ErrorCode) Cache.NotFound)
                         stats.errors++;
                 }
                 else
@@ -351,8 +352,8 @@ final class RemoteCacheClient
             // Some cache errors are retryable
             if (auto cacheErr = cast(CacheError)error)
             {
-                return cacheErr.code == Network.Error ||
-                       cacheErr.code == Cache.Timeout;
+                return cacheErr.code == cast(ErrorCode) Network.Error ||
+                       cacheErr.code == cast(ErrorCode) Cache.Timeout;
             }
             
             return false;
@@ -828,6 +829,87 @@ mixin template DeltaTransferOps()
             return get(contentHash);  // Reconstruction failed, try full blob
         
         return reconstructResult;
+    }
+    
+    /// Get Merkle proof for a specific chunk of an artifact
+    /// Enables partial artifact validation without full download
+    BuildResult!MerkleProof getChunkProof(string artifactHash, uint chunkIndex) @trusted
+    {
+        import infrastructure.utils.files.cdc : ChunkManifest;
+        
+        // Get manifest
+        auto manifestKey = "cdc:" ~ artifactHash;
+        auto manifestResult = executeWithRetry(() => transport.get(manifestKey));
+        
+        if (manifestResult.isErr)
+            return Err!(MerkleProof, BuildError)(Errors.cache(
+                "Manifest not found for artifact: " ~ artifactHash, Cache.NotFound).build());
+        
+        auto parseResult = ChunkManifest.deserialize(manifestResult.unwrap());
+        if (parseResult.isErr)
+            return Err!(MerkleProof, BuildError)(Errors.cache(
+                "Failed to parse manifest", Cache.LoadFailed).build());
+        
+        auto manifest = parseResult.unwrap();
+        
+        if (chunkIndex >= manifest.chunkCount)
+            return Err!(MerkleProof, BuildError)(Errors.cache(
+                "Chunk index out of range", Cache.NotFound).build());
+        
+        // Generate proof from manifest
+        auto proof = manifest.generateProof(chunkIndex);
+        return Ok!(MerkleProof, BuildError)(proof);
+    }
+    
+    /// Compare two artifact versions using Merkle tree diff
+    /// Returns indices of changed chunks for incremental updates
+    BuildResult!(uint[]) compareArtifacts(string localHash, string remoteHash) @trusted
+    {
+        import infrastructure.utils.files.cdc : ChunkManifest;
+        
+        // Get remote manifest
+        auto remoteKey = "cdc:" ~ remoteHash;
+        auto remoteResult = executeWithRetry(() => transport.get(remoteKey));
+        
+        if (remoteResult.isErr)
+            return Err!(uint[], BuildError)(Errors.cache(
+                "Remote manifest not found: " ~ remoteHash, Cache.NotFound).build());
+        
+        auto remoteParseResult = ChunkManifest.deserialize(remoteResult.unwrap());
+        if (remoteParseResult.isErr)
+            return Err!(uint[], BuildError)(Errors.cache(
+                "Failed to parse remote manifest", Cache.LoadFailed).build());
+        
+        auto remoteManifest = remoteParseResult.unwrap();
+        
+        // Get local manifest
+        auto localKey = "cdc:" ~ localHash;
+        auto localResult = executeWithRetry(() => transport.get(localKey));
+        
+        if (localResult.isErr)
+        {
+            // No local manifest - return all chunks as changed
+            uint[] allIndices;
+            foreach (i; 0 .. remoteManifest.chunkCount)
+                allIndices ~= cast(uint)i;
+            return Ok!(uint[], BuildError)(allIndices);
+        }
+        
+        auto localParseResult = ChunkManifest.deserialize(localResult.unwrap());
+        if (localParseResult.isErr)
+        {
+            // Can't parse local - return all chunks as changed
+            uint[] allIndices;
+            foreach (i; 0 .. remoteManifest.chunkCount)
+                allIndices ~= cast(uint)i;
+            return Ok!(uint[], BuildError)(allIndices);
+        }
+        
+        auto localManifest = localParseResult.unwrap();
+        
+        // Use Merkle tree diff for O(log n) comparison
+        auto changedIndices = remoteManifest.findChanged(localManifest);
+        return Ok!(uint[], BuildError)(changedIndices);
     }
 }
 

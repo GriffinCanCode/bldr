@@ -24,7 +24,7 @@ struct SemVer
     static immutable SemVer max = SemVer(uint.max, uint.max, uint.max);
     
     /// Parse version string (e.g., "1.2.3-alpha+build")
-    static BuildResult!SemVer parse(string s) @safe
+    static BuildResult!SemVer parse(string s) @trusted
     {
         if (s.length == 0)
             return Err!(SemVer, BuildError)(parseError("Empty version string"));
@@ -73,7 +73,7 @@ struct SemVer
     }
     
     /// Comparison (prerelease < release, lexicographic prerelease comparison)
-    int opCmp(const SemVer other) const pure nothrow @safe
+    int opCmp(const SemVer other) const pure @safe
     {
         // Compare major.minor.patch
         if (auto c = cmp([major, minor, patch], [other.major, other.minor, other.patch]))
@@ -131,7 +131,7 @@ struct SemVer
     
 private:
     /// Compare prerelease identifiers per SemVer spec
-    static int comparePrerelease(string a, string b) pure nothrow @safe
+    static int comparePrerelease(string a, string b) pure @safe
     {
         auto aParts = splitSafe(a, '.');
         auto bParts = splitSafe(b, '.');
@@ -189,7 +189,7 @@ private:
         return parts;
     }
     
-    static BuildError parseError(string msg) @safe
+    static BuildError parseError(string msg) @trusted
         => Errors.parse("", msg, Parse.InvalidConfiguration).build();
 }
 

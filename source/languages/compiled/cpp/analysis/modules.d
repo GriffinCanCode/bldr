@@ -6,7 +6,7 @@ import std.file : exists, isFile, readText;
 import std.path : baseName, buildPath, dirName, extension;
 import std.regex : matchAll, matchFirst, regex;
 import std.string : strip, toLower;
-import infrastructure.utils.logging : Logger, structuredLog;
+import infrastructure.utils.logging : structuredLog;
 
 /// C++20 module information extracted from source
 struct ModuleInfo

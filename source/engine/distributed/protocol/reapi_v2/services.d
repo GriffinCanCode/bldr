@@ -9,6 +9,9 @@ import engine.distributed.protocol.reapi_v2.adapter;
 import engine.distributed.protocol.reapi_v2.hash;
 import infrastructure.errors;
 
+// Alias to avoid conflict with codes.distributed.DistErrFactory
+alias DistErrFactory = engine.distributed.protocol.protocol.DistributedErrors;
+
 /**
  * REAPI v2 Service Implementations
  * 
@@ -155,14 +158,14 @@ final class ExecutionService : IExecutionService {
                     return Ok!(ReapiOperation, BuildError)(*op);
             } else {
                 return Err!(ReapiOperation, BuildError)(
-                    DistributedErrors.protocol("Operation not found: " ~ operationName).build());
+                    DistErrFactory.protocol("Operation not found: " ~ operationName).build());
             }
             
             Thread.sleep(100.msecs);
         }
         
         return Err!(ReapiOperation, BuildError)(
-            DistributedErrors.protocol("Operation timeout").build());
+            DistErrFactory.protocol("Operation timeout").build());
     }
     
     /// Cancel operation
@@ -176,7 +179,7 @@ final class ExecutionService : IExecutionService {
         }
         
         return VoidBuildResult.err(
-            DistributedErrors.protocol("Operation not found: " ~ operationName).build());
+            DistErrFactory.protocol("Operation not found: " ~ operationName).build());
     }
 }
 

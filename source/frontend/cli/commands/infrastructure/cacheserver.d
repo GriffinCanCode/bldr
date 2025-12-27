@@ -6,7 +6,7 @@ import std.getopt;
 import engine.caching.distributed.remote.server : CacheServer;
 import engine.caching.distributed.remote.tls : TlsConfig;
 import engine.caching.distributed.remote.cdn : CdnConfig;
-import infrastructure.utils.logging : Logger, structuredLog;
+import infrastructure.utils.logging : structuredLog;
 
 /// Cache server command
 /// Starts a remote cache server for distributed builds

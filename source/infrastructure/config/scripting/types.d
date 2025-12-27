@@ -4,7 +4,7 @@ import std.variant;
 import std.conv;
 import std.algorithm;
 import std.array;
-import infrastructure.errors : BuildResult, Errors, Parse;
+import infrastructure.errors : BuildResult, Errors, Parse, Config;
 
 /// Type of value in the scripting system
 enum ValueType

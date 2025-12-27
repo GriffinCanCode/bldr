@@ -31,7 +31,7 @@ struct QueryParser
     BuildResult!QueryExpr parse() @system
     {
         if (tokens.length == 0)
-            return BuildResult!QueryExpr.err(Errors.parse("N/A", "Empty query", Parse.InvalidInput).build());
+            return BuildResult!QueryExpr.err(Errors.parse("N/A", "Empty query", Parse.Failed).build());
         
         try
         {
@@ -39,15 +39,15 @@ struct QueryParser
             
             if (!isAtEnd() && !check(TokenType.EOF))
                 return BuildResult!QueryExpr.err(
-                    Errors.parse("N/A", format("Unexpected token '%s' at line %d", peek().value, peek().line), 
-                                 peek().line, 0, Parse.SyntaxError).build()
+                    Errors.parseAt("N/A", format("Unexpected token '%s' at line %d", peek().value, peek().line), 
+                                 peek().line, 0, Parse.Failed).build()
                 );
             
             return BuildResult!QueryExpr.ok(expr);
         }
         catch (Exception e)
         {
-            return BuildResult!QueryExpr.err(Errors.parse("N/A", e.msg, Parse.SyntaxError).build());
+            return BuildResult!QueryExpr.err(Errors.parse("N/A", e.msg, Parse.Failed).build());
         }
     }
     
@@ -83,7 +83,7 @@ struct QueryParser
     }
     
     /// Parse primary expressions
-    private QueryExpr parsePrimary() @safe
+    private QueryExpr parsePrimary() @trusted
     {
         // Parenthesized expression
         if (match(TokenType.LeftParen))
@@ -210,7 +210,7 @@ struct QueryParser
     }
     
     /// Parse kind(type, expr)
-    private QueryExpr parseKind() @safe
+    private QueryExpr parseKind() @trusted
     {
         consume(TokenType.Kind, "Expected 'kind'");
         consume(TokenType.LeftParen, "Expected '(' after 'kind'");
@@ -275,7 +275,7 @@ struct QueryParser
     }
     
     /// Parse buildfiles(pattern)
-    private QueryExpr parseBuildFiles() @safe
+    private QueryExpr parseBuildFiles() @trusted
     {
         consume(TokenType.BuildFiles, "Expected 'buildfiles'");
         consume(TokenType.LeftParen, "Expected '(' after 'buildfiles'");
@@ -353,7 +353,7 @@ struct QueryParser
         return tokens[current - 1];
     }
     
-    private Token consume(TokenType type, string message) @safe
+    private Token consume(TokenType type, string message) @trusted
     {
         if (check(type))
             return advance();

@@ -3,6 +3,7 @@ module infrastructure.toolchain.detection.gpu_detectors;
 import std.process : execute, environment;
 import std.file : exists;
 import std.path : buildPath;
+import std.range : empty;
 import std.string : strip, split, indexOf;
 import std.regex : matchFirst, regex;
 import std.conv : to;

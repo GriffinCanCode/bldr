@@ -88,7 +88,7 @@ struct WorkerExecutor
             {
                 slog.error("action_command_failed")
                     .field("action_id", request.id.toString())
-                    .field("command", request.command.length > 0 ? request.command[0] : "")
+                    .field("command", request.command.length > 0 ? request.command : "")
                     .field("error", formatError(execResult.unwrapErr()))
                     .field("hint", "Check command syntax and that required tools are installed")
                     .emit();

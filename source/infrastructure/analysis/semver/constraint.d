@@ -25,19 +25,19 @@ struct VersionRange
     static immutable VersionRange any = VersionRange(SemVer.zero, SemVer.max, Bound.Inclusive, Bound.Exclusive);
     
     /// Exact version match
-    static VersionRange exact(SemVer v) pure nothrow @safe
+    static VersionRange exact(SemVer v) pure @safe
         => VersionRange(v, v, Bound.Inclusive, Bound.Inclusive);
     
     /// Greater than or equal
-    static VersionRange atLeast(SemVer v) pure nothrow @safe
+    static VersionRange atLeast(SemVer v) pure @safe
         => VersionRange(v, SemVer.max, Bound.Inclusive, Bound.Exclusive);
     
     /// Less than
-    static VersionRange lessThan(SemVer v) pure nothrow @safe
+    static VersionRange lessThan(SemVer v) pure @safe
         => VersionRange(SemVer.zero, v, Bound.Inclusive, Bound.Exclusive);
     
     /// Caret range (^1.2.3 = >=1.2.3 <2.0.0 for major>0)
-    static VersionRange caret(SemVer v) pure nothrow @safe
+    static VersionRange caret(SemVer v) pure @safe
     {
         if (v.major == 0)
         {
@@ -49,11 +49,11 @@ struct VersionRange
     }
     
     /// Tilde range (~1.2.3 = >=1.2.3 <1.3.0)
-    static VersionRange tilde(SemVer v) pure nothrow @safe
+    static VersionRange tilde(SemVer v) pure @safe
         => VersionRange(v, SemVer(v.major, v.minor + 1, 0));
     
     /// Check if version satisfies this range
-    bool contains(SemVer v) const pure nothrow @safe
+    bool contains(SemVer v) const pure @safe
     {
         // Check minimum
         int minCmp = v.opCmp(min);
@@ -69,7 +69,7 @@ struct VersionRange
     }
     
     /// Check if range is empty (matches nothing)
-    bool isEmpty() const pure nothrow @safe
+    bool isEmpty() const pure @safe
     {
         int cmp = min.opCmp(max);
         if (cmp > 0) return true;
@@ -78,7 +78,7 @@ struct VersionRange
     }
     
     /// Intersect with another range
-    VersionRange intersect(VersionRange other) const pure nothrow @safe
+    VersionRange intersect(VersionRange other) const pure @safe
     {
         // Compute new min
         SemVer newMin;
@@ -127,7 +127,7 @@ struct VersionRange
     }
     
     /// Check if ranges overlap
-    bool overlaps(VersionRange other) const pure nothrow @safe
+    bool overlaps(VersionRange other) const pure @safe
         => !intersect(other).isEmpty();
     
     /// String representation
@@ -157,24 +157,27 @@ struct VersionConstraint
     VersionRange[] ranges;
     
     /// Create from single range
-    this(VersionRange r) pure nothrow @safe { ranges = [r]; }
+    this(VersionRange r) pure @safe { ranges = [r]; }
     
     /// Create from array of ranges
-    this(VersionRange[] rs) pure nothrow @safe { ranges = rs; }
+    this(VersionRange[] rs) pure @safe { ranges = rs; }
+    
+    /// Create from const array of ranges
+    this(const(VersionRange)[] rs) pure @safe { ranges = cast(VersionRange[]) rs.dup; }
     
     /// Empty constraint (matches nothing)
     static immutable VersionConstraint empty;
     
     /// Universal constraint (matches everything)
-    static VersionConstraint any() pure nothrow @safe
+    static VersionConstraint any() pure @safe
         => VersionConstraint(VersionRange.any);
     
     /// Exact version
-    static VersionConstraint exact(SemVer v) pure nothrow @safe
+    static VersionConstraint exact(SemVer v) pure @safe
         => VersionConstraint(VersionRange.exact(v));
     
     /// Parse constraint from string (npm/cargo/pip compatible)
-    static BuildResult!VersionConstraint parse(string s) @safe
+    static BuildResult!VersionConstraint parse(string s) @trusted
     {
         s = s.strip;
         if (s.length == 0 || s == "*" || s == "latest")
@@ -199,11 +202,11 @@ struct VersionConstraint
     }
     
     /// Check if version satisfies constraint
-    bool allows(SemVer v) const pure nothrow @safe
+    bool allows(SemVer v) const pure @safe
         => ranges.any!(r => r.contains(v));
     
     /// Check if any version in other constraint is allowed
-    bool allowsAny(VersionConstraint other) const pure nothrow @safe
+    bool allowsAny(VersionConstraint other) const pure @safe
     {
         foreach (r1; ranges)
             foreach (r2; other.ranges)
@@ -213,7 +216,7 @@ struct VersionConstraint
     }
     
     /// Check if all versions in other constraint are allowed
-    bool allowsAll(VersionConstraint other) const pure nothrow @safe
+    bool allowsAll(VersionConstraint other) const pure @safe
     {
         foreach (r2; other.ranges)
         {
@@ -227,7 +230,7 @@ struct VersionConstraint
     }
     
     /// Intersect with another constraint
-    VersionConstraint intersect(VersionConstraint other) const pure nothrow @safe
+    VersionConstraint intersect(VersionConstraint other) const pure @safe
     {
         VersionRange[] result;
         foreach (r1; ranges)
@@ -241,15 +244,15 @@ struct VersionConstraint
     }
     
     /// Union with another constraint (logical OR)
-    VersionConstraint unite(VersionConstraint other) const pure nothrow @safe
+    VersionConstraint unite(VersionConstraint other) const pure @safe
         => VersionConstraint(ranges ~ other.ranges);
     
     /// Check if constraint is empty
-    bool isEmpty() const pure nothrow @safe
+    bool isEmpty() const pure @safe
         => ranges.length == 0 || ranges.all!(r => r.isEmpty());
     
     /// Negate constraint (complement)
-    VersionConstraint negate() const pure nothrow @safe
+    VersionConstraint negate() const pure @safe
     {
         if (isEmpty()) return VersionConstraint.any();
         if (ranges.length == 0) return VersionConstraint.any();
@@ -294,7 +297,7 @@ struct VersionConstraint
     
 private:
     /// Parse single range (e.g., ">=1.0.0 <2.0.0" or "^1.2.3")
-    static BuildResult!VersionRange parseRange(string s) @safe
+    static BuildResult!VersionRange parseRange(string s) @trusted
     {
         s = s.strip;
         if (s.length == 0) return Ok!(VersionRange, BuildError)(VersionRange.any);
@@ -391,7 +394,7 @@ private:
     }
     
     /// Split on || for union
-    static string[] splitOr(string s) pure nothrow @safe
+    static string[] splitOr(string s) pure @safe
     {
         string[] parts;
         size_t start = 0;
@@ -410,7 +413,7 @@ private:
     }
     
     /// Split on space/comma for AND within a range
-    static string[] splitAnd(string s) pure nothrow @safe
+    static string[] splitAnd(string s) pure @safe
     {
         string[] parts;
         size_t start = 0;
@@ -433,7 +436,7 @@ private:
 }
 
 /// Helper: convert range to single-range constraint
-VersionConstraint toConstraint(VersionRange r) pure nothrow @safe
+VersionConstraint toConstraint(VersionRange r) pure @safe
     => VersionConstraint(r);
 
 unittest

@@ -414,7 +414,7 @@ final class PersistentWorkerPool
             case TargetLanguage.Python: return Ok!(WorkerLanguage, BuildError)(WorkerLanguage.Python);
             default:
                 return Err!(WorkerLanguage, BuildError)(
-                    Errors.language(lang.to!string, "Language not supported by persistent workers", Language.NotSupported).build());
+                    Errors.language(lang.to!string, "Language not supported by persistent workers", Language.UnsupportedLanguage).build());
         }
     }
     

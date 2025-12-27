@@ -534,32 +534,32 @@ struct ReplayError
     
     static ReplayError notRecording() pure @system
     {
-        return ReplayError("Not currently recording", Internal.Error);
+        return ReplayError("Not currently recording", cast(ErrorCode) Internal.Error);
     }
     
     static ReplayError recordingNotFound(string id) pure @system
     {
-        return ReplayError("Recording not found: " ~ id, IO.FileNotFound);
+        return ReplayError("Recording not found: " ~ id, cast(ErrorCode) IO.FileNotFound);
     }
     
     static ReplayError loadFailed(string details) pure @system
     {
-        return ReplayError("Failed to load recording: " ~ details, IO.FileReadFailed);
+        return ReplayError("Failed to load recording: " ~ details, cast(ErrorCode) IO.FileReadFailed);
     }
     
     static ReplayError saveFailed(string details) pure @system
     {
-        return ReplayError("Failed to save recording: " ~ details, IO.FileWriteFailed);
+        return ReplayError("Failed to save recording: " ~ details, cast(ErrorCode) IO.FileWriteFailed);
     }
     
     static ReplayError replayFailed(string details) pure @system
     {
-        return ReplayError("Replay failed: " ~ details, Internal.Error);
+        return ReplayError("Replay failed: " ~ details, cast(ErrorCode) Internal.Error);
     }
     
     static ReplayError listFailed(string details) pure @system
     {
-        return ReplayError("Failed to list recordings: " ~ details, IO.FileReadFailed);
+        return ReplayError("Failed to list recordings: " ~ details, cast(ErrorCode) IO.FileReadFailed);
     }
     
     string toString() const pure nothrow @system

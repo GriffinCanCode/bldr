@@ -1,6 +1,6 @@
 module engine.runtime.hermetic.core.executor;
 
-import std.process : execute, Config;
+import std.process : execute, ProcessConfig = Config;
 import std.file : exists, mkdirRecurse, tempDir;
 import std.path : buildPath, absolutePath;
 import std.datetime : Duration;
@@ -325,7 +325,7 @@ struct HermeticExecutor
         // Execute without sandboxing
         try
         {
-            auto result = .execute(command, env, Config.none, size_t.max, workingDir);
+            auto result = .execute(command, env, ProcessConfig.none, size_t.max, workingDir);
             
             Output output;
             output.stdout = result.output;

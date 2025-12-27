@@ -40,19 +40,19 @@ struct RepositoryRule
     {
         if (name.length == 0)
             return Result!RepositoryError.err(
-                new RepositoryError("Repository name cannot be empty", Config.InvalidConfiguration));
+                new RepositoryError("Repository name cannot be empty", ErrorCode.InvalidConfiguration));
         
         if (url.length == 0 && kind != RepositoryKind.Local)
             return Result!RepositoryError.err(
-                new RepositoryError("Repository URL is required for " ~ kind.to!string, Config.InvalidConfiguration));
+                new RepositoryError("Repository URL is required for " ~ kind.to!string, ErrorCode.InvalidConfiguration));
         
         if (kind == RepositoryKind.Http && integrity.length == 0)
             return Result!RepositoryError.err(
-                new RepositoryError("Integrity hash is required for HTTP repositories", Config.InvalidConfiguration));
+                new RepositoryError("Integrity hash is required for HTTP repositories", ErrorCode.InvalidConfiguration));
         
         if (kind == RepositoryKind.Git && gitCommit.length == 0 && gitTag.length == 0)
             return Result!RepositoryError.err(
-                new RepositoryError("Git commit or tag is required for Git repositories", Config.InvalidConfiguration));
+                new RepositoryError("Git commit or tag is required for Git repositories", ErrorCode.InvalidConfiguration));
         
         return Ok!RepositoryError();
     }
@@ -116,6 +116,12 @@ final class RepositoryError : BaseBuildError
          string file = __FILE__, size_t line = __LINE__) @trusted
     {
         super(code, message);
+    }
+    
+    /// Constructor accepting Repository enum for convenience
+    this(string message, Repository code) @trusted
+    {
+        super(cast(ErrorCode) code, message);
     }
 }
 

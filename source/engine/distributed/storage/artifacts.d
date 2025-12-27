@@ -463,7 +463,7 @@ final class ArtifactStore
             immutable headersEnd = responseStr.indexOf("\r\n\r\n");
             if (headersEnd < 0)
             {
-                auto error = new DistributedError(Network.Error, "Invalid HTTP response");
+                auto error = new DistributedError(ErrorCode.NetworkError, "Invalid HTTP response");
                 return Err!(ubyte[], BuildError)(error);
             }
             
@@ -473,7 +473,7 @@ final class ArtifactStore
             auto parts = firstLine.split(' ');
             if (parts.length < 2)
             {
-                auto error = new DistributedError(Network.Error, "Invalid HTTP status line");
+                auto error = new DistributedError(ErrorCode.NetworkError, "Invalid HTTP status line");
                 return Err!(ubyte[], BuildError)(error);
             }
             
@@ -484,7 +484,7 @@ final class ArtifactStore
             else if (statusCode >= 400)
             {
                 auto error = new DistributedError(
-                    Network.Error,
+                    ErrorCode.NetworkError,
                     "HTTP error: " ~ statusCode.to!string
                 );
                 return Err!(ubyte[], BuildError)(error);
@@ -496,7 +496,7 @@ final class ArtifactStore
         }
         catch (Exception e)
         {
-            auto error = new DistributedError(Network.Error, "HTTP GET failed: " ~ e.msg);
+            auto error = new DistributedError(ErrorCode.NetworkError, "HTTP GET failed: " ~ e.msg);
             return Err!(ubyte[], BuildError)(error);
         }
     }
@@ -583,7 +583,7 @@ final class ArtifactStore
                     if (statusCode >= 400)
                     {
                         auto error = new DistributedError(
-                            Network.Error,
+                            ErrorCode.NetworkError,
                             "HTTP PUT error: " ~ statusCode.to!string
                         );
                         return VoidBuildResult.err(error);
@@ -595,7 +595,7 @@ final class ArtifactStore
         }
         catch (Exception e)
         {
-            auto error = new DistributedError(Network.Error, "HTTP PUT failed: " ~ e.msg);
+            auto error = new DistributedError(ErrorCode.NetworkError, "HTTP PUT failed: " ~ e.msg);
             return VoidBuildResult.err(error);
         }
     }

@@ -62,7 +62,7 @@ struct Arena
         immutable newOffset = alignedOffset + size;
         
         if (newOffset > capacity)
-            throw Errors.internal("Arena out of memory: " ~ newOffset.to!string ~ " > " ~ capacity.to!string, Internal.ResourceExhausted).build();
+            throw Errors.internal("Arena out of memory: " ~ newOffset.to!string ~ " > " ~ capacity.to!string, Internal.Error).build();
         
         offset = newOffset;
         return buffer[alignedOffset .. newOffset];

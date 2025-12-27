@@ -79,7 +79,7 @@ final class HttpTransport
             // Not found is not an error for HEAD
             if (auto cacheErr = cast(CacheError)error)
             {
-                if (cacheErr.code == Cache.NotFound)
+                if (cacheErr.code == cast(ErrorCode) Cache.NotFound)
                     return Ok!(bool, BuildError)(false);
             }
             return Err!(bool, BuildError)(error);

@@ -924,17 +924,17 @@ struct TraceError
     
     static TraceError invalidFormat(string details) pure @system
     {
-        return TraceError("Invalid format: " ~ details, Telemetry.TraceInvalidFormat);
+        return TraceError("Invalid format: " ~ details, cast(ErrorCode) Telemetry.TraceInvalidFormat);
     }
     
     static TraceError noActiveSpan() pure @system
     {
-        return TraceError("No active span", Telemetry.TraceNoActiveSpan);
+        return TraceError("No active span", cast(ErrorCode) Telemetry.TraceNoActiveSpan);
     }
     
     static TraceError exportFailed(string details) pure @system
     {
-        return TraceError("Export failed: " ~ details, Telemetry.TraceExportFailed);
+        return TraceError("Export failed: " ~ details, cast(ErrorCode) Telemetry.TraceExportFailed);
     }
     
     string toString() const pure nothrow @system
