@@ -301,11 +301,11 @@ class <Language>Handler : Base<Category>Handler
 - [ ] C#
 - [ ] F#
 
-### Priority 5: Web Languages
-- [ ] TypeScript
-- [ ] JavaScript
-- [ ] CSS
-- [ ] Elm
+### Priority 5: Web Languages ✅
+- [x] TypeScript
+- [x] JavaScript
+- [x] CSS
+- [x] Elm
 
 ---
 

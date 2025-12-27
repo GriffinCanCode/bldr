@@ -1,69 +1,51 @@
 module languages.web.javascript.bundlers.vite;
 
-import languages.web.javascript.bundlers.base;
-import languages.web.javascript.core.config;
-import infrastructure.config.schema.schema;
-import std.process;
+import std.process : execute, Config;
 import std.path;
 import std.file;
 import std.algorithm;
 import std.array;
-import std.conv;
-import std.json;
-import std.string;
+import std.string : strip;
+import languages.web.javascript.bundlers.base;
+import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.logging;
 
+/// Framework detection for Vite plugins
+private enum Framework { None, React, Vue, Svelte, Preact }
+
 /// Vite bundler - modern dev server with lightning-fast HMR and optimized production builds
-/// Ideal for: React/Vue/Svelte apps, modern ESM projects, library development
 class ViteBundler : Bundler
 {
-    BundleResult bundle(
-        const(string[]) sources,
-        JSConfig config,
-        in Target target,
-        in WorkspaceConfig workspace
-    )
+    BundleResult bundle(const(string[]) sources, JSConfig config, in Target target, in WorkspaceConfig workspace)
     {
         BundleResult result;
         
-        // Check if vite is available
         if (!isAvailable())
         {
             result.error = "vite not found. Install: npm install -g vite";
             return result;
         }
         
-        // If custom config file specified, use it
         if (!config.configFile.empty && exists(config.configFile))
-        {
             return bundleWithConfigFile(config.configFile, workspace, result);
-        }
         
-        // Check for vite.config.js/ts in project
         string autoConfig = detectViteConfig(sources);
         if (!autoConfig.empty)
         {
-            structuredLog.debug_("detected_vite_config_").field("detail", "Detected Vite config: " ~ autoConfig).emit();
+            structuredLog.debug_("detected_vite_config").field("detail", autoConfig).emit();
             return bundleWithConfigFile(autoConfig, workspace, result);
         }
         
-        // Otherwise, generate temporary config for precise control
         return bundleWithGeneratedConfig(sources, config, target, workspace, result);
     }
     
-    private BundleResult bundleWithConfigFile(
-        string configFile,
-        in WorkspaceConfig workspace,
-        BundleResult result
-    )
+    private BundleResult bundleWithConfigFile(string configFile, in WorkspaceConfig workspace, BundleResult result)
     {
-        structuredLog.debug_("using_vite_config_").field("detail", "Using Vite config: " ~ configFile).emit();
-        
-        string[] cmd = ["npx", "vite", "build", "--config", configFile];
+        structuredLog.debug_("using_vite_config").field("detail", configFile).emit();
         
         string configDir = dirName(absolutePath(configFile));
-        auto res = execute(cmd, null, Config.none, size_t.max, configDir);
+        auto res = execute(["npx", "vite", "build", "--config", configFile], null, Config.none, size_t.max, configDir);
         
         if (res.status != 0)
         {
@@ -72,22 +54,9 @@ class ViteBundler : Bundler
         }
         
         result.success = true;
-        
-        // Parse Vite output - default is dist/ directory
         string outputDir = buildPath(configDir, "dist");
-        if (exists(outputDir) && isDir(outputDir))
-        {
-            collectOutputs(outputDir, result);
-        }
-        else
-        {
-            // Fallback to workspace output dir
-            outputDir = workspace.options.outputDir;
-            if (exists(outputDir) && isDir(outputDir))
-            {
-                collectOutputs(outputDir, result);
-            }
-        }
+        if (!exists(outputDir)) outputDir = workspace.options.outputDir;
+        collectOutputs(outputDir, result);
         
         if (result.outputs.empty)
         {
@@ -96,69 +65,27 @@ class ViteBundler : Bundler
         }
         
         result.outputHash = FastHash.hashFiles(result.outputs);
-        
         return result;
     }
     
-    private BundleResult bundleWithGeneratedConfig(
-        const(string[]) sources,
-        JSConfig config,
-        in Target target,
-        in WorkspaceConfig workspace,
-        BundleResult result
-    )
+    private BundleResult bundleWithGeneratedConfig(const(string[]) sources, JSConfig config, in Target target, in WorkspaceConfig workspace, BundleResult result)
     {
         string entry = config.entry.empty ? sources[0] : config.entry;
         string outputDir = workspace.options.outputDir;
         mkdirRecurse(outputDir);
-        
         string outputFile = target.name.split(":")[$ - 1] ~ ".js";
         
-        // Detect framework for preset optimization
         Framework framework = detectFramework(sources);
+        string viteConfig = generateConfig(entry, outputDir, outputFile, config, framework);
         
-        // Generate temporary Vite config
-        string viteConfig = generateViteConfig(
-            entry,
-            outputDir,
-            outputFile,
-            config,
-            framework,
-            target
-        );
-        
-        // Write temporary config in project root (where package.json is)
-        // Walk up from entry file to find package.json
-        string projectDir = dirName(absolutePath(entry));
-        string packageJsonPath = "";
-        string searchDir = projectDir;
-        while (searchDir != "/" && searchDir.length > 1)
-        {
-            string pkgPath = buildPath(searchDir, "package.json");
-            if (exists(pkgPath))
-            {
-                packageJsonPath = pkgPath;
-                projectDir = searchDir;
-                break;
-            }
-            searchDir = dirName(searchDir);
-        }
-        
+        string projectDir = findProjectDir(entry);
         string tempConfig = buildPath(projectDir, "vite.config.temp.cjs");
         std.file.write(tempConfig, viteConfig);
+        scope(exit) if (exists(tempConfig)) remove(tempConfig);
         
-        scope(exit)
-        {
-            if (exists(tempConfig))
-                remove(tempConfig);
-        }
+        structuredLog.debug_("generated_vite_config").field("detail", tempConfig).emit();
         
-        structuredLog.debug_("generated_vite_config_").field("detail", "Generated Vite config: " ~ tempConfig).emit();
-        
-        // Run Vite build
-        string[] cmd = ["npx", "vite", "build", "--config", tempConfig];
-        
-        auto res = execute(cmd, null, Config.none, size_t.max, projectDir);
+        auto res = execute(["npx", "vite", "build", "--config", tempConfig], null, Config.none, size_t.max, projectDir);
         
         if (res.status != 0)
         {
@@ -166,289 +93,148 @@ class ViteBundler : Bundler
             return result;
         }
         
-        structuredLog.debug_("vite_build_completed_successfully").emit();
-        
         result.success = true;
-        
-        // Collect outputs from output directory
         collectOutputs(outputDir, result);
-        
         if (result.outputs.empty)
         {
-            // Fallback: assume primary output
             string primaryOutput = buildPath(outputDir, outputFile);
-            if (exists(primaryOutput))
-            {
-                result.outputs = [primaryOutput];
-            }
+            if (exists(primaryOutput)) result.outputs = [primaryOutput];
         }
-        
         result.outputHash = FastHash.hashFiles(result.outputs);
-        
         return result;
     }
     
-    /// Detect Vite config in project
     private string detectViteConfig(const(string[]) sources)
     {
-        if (sources.empty)
-            return "";
-        
-        string projectDir = dirName(sources[0]);
-        
-        // Check for vite.config.ts (preferred for TypeScript projects)
-        string tsConfig = buildPath(projectDir, "vite.config.ts");
-        if (exists(tsConfig))
-            return tsConfig;
-        
-        // Check for vite.config.js
-        string jsConfig = buildPath(projectDir, "vite.config.js");
-        if (exists(jsConfig))
-            return jsConfig;
-        
-        // Check for vite.config.mjs (ESM)
-        string mjsConfig = buildPath(projectDir, "vite.config.mjs");
-        if (exists(mjsConfig))
-            return mjsConfig;
-        
+        if (sources.empty) return "";
+        string dir = dirName(sources[0]);
+        foreach (cfg; ["vite.config.ts", "vite.config.js", "vite.config.mjs"])
+        {
+            string path = buildPath(dir, cfg);
+            if (exists(path)) return path;
+        }
         return "";
     }
     
-    /// Detect framework from sources and dependencies
     private Framework detectFramework(const(string[]) sources)
     {
-        // Check file extensions first
-        if (sources.any!(s => s.endsWith(".vue")))
-            return Framework.Vue;
-        
-        if (sources.any!(s => s.endsWith(".svelte")))
-            return Framework.Svelte;
-        
+        if (sources.any!(s => s.endsWith(".vue"))) return Framework.Vue;
+        if (sources.any!(s => s.endsWith(".svelte"))) return Framework.Svelte;
         if (sources.any!(s => s.endsWith(".jsx") || s.endsWith(".tsx")))
         {
-            // Check for React/Preact in package.json if available
-            string packageJson = findPackageJson(sources);
-            if (!packageJson.empty && exists(packageJson))
+            string pkg = findPackageJson(sources);
+            if (!pkg.empty && exists(pkg))
             {
                 try
                 {
-                    auto content = readText(packageJson);
-                    if (content.indexOf("\"react\"") != -1)
-                        return Framework.React;
-                    if (content.indexOf("\"preact\"") != -1)
-                        return Framework.Preact;
+                    auto content = readText(pkg);
+                    if (content.indexOf("\"react\"") != -1) return Framework.React;
+                    if (content.indexOf("\"preact\"") != -1) return Framework.Preact;
                 }
-                catch (Exception e)
-                {
-                    // Ignore
-                }
+                catch (Exception) {}
             }
-            
-            // Default JSX to React
             return Framework.React;
         }
-        
         return Framework.None;
     }
     
-    /// Find package.json in source tree
     private string findPackageJson(const(string[]) sources)
     {
-        if (sources.empty)
-            return "";
-        
+        if (sources.empty) return "";
         string dir = dirName(sources[0]);
-        
         while (dir != "/" && dir.length > 1)
         {
-            string packagePath = buildPath(dir, "package.json");
-            if (exists(packagePath))
-                return packagePath;
-            
+            string pkg = buildPath(dir, "package.json");
+            if (exists(pkg)) return pkg;
             dir = dirName(dir);
         }
-        
         return "";
     }
     
-    /// Generate Vite configuration
-    private string generateViteConfig(
-        string entry,
-        string outputDir,
-        string outputFile,
-        JSConfig config,
-        Framework framework,
-        in Target target
-    )
+    private string findProjectDir(string entry)
     {
-        string pluginsSection = generatePlugins(framework, config);
-        string buildSection = generateBuildSection(entry, outputDir, outputFile, config);
-        string resolveSection = generateResolveSection(config);
-        
-        // Use CommonJS format (.cjs) with createRequire to properly resolve from project dir
-        // This ensures plugins are loaded from project's node_modules, not npx cache
-        return `const { createRequire } = require('module');
-const { join } = require('path');
-// Create require from current directory (where package.json is) to resolve from project's node_modules
-const projectRequire = createRequire(join(__dirname, 'package.json'));
-` ~ pluginsSection ~ `
-
-module.exports = {
-  plugins: [` ~ getPluginsList(framework) ~ `],
-  build: ` ~ buildSection ~ `,
-  resolve: ` ~ resolveSection ~ `,
-  esbuild: {
-    target: '` ~ config.target ~ `',
-    jsx: ` ~ (config.jsx ? "'transform'" : "'automatic'") ~ `,
-    jsxFactory: '` ~ config.jsxFactory ~ `'
-  }
-};
-`;
-    }
-    
-    /// Generate plugins section (using CommonJS require to avoid ESM resolution issues)
-    private string generatePlugins(Framework framework, JSConfig config)
-    {
-        // Return empty - we'll use inline require() in getPluginsList
-        return "";
-    }
-    
-    /// Get plugins list for config (using projectRequire to load from project's node_modules)
-    private string getPluginsList(Framework framework)
-    {
-        final switch (framework)
+        string dir = dirName(absolutePath(entry));
+        while (dir != "/" && dir.length > 1)
         {
-            case Framework.None:
-                return "";
-            case Framework.React:
-                return "projectRequire('@vitejs/plugin-react').default()";
-            case Framework.Vue:
-                return "projectRequire('@vitejs/plugin-vue').default()";
-            case Framework.Svelte:
-                return "projectRequire('@sveltejs/vite-plugin-svelte').svelte()";
-            case Framework.Preact:
-                return "projectRequire('@preact/preset-vite').default()";
+            if (exists(buildPath(dir, "package.json"))) return dir;
+            dir = dirName(dir);
         }
+        return dirName(absolutePath(entry));
     }
     
-    /// Generate build section
-    private string generateBuildSection(
-        string entry,
-        string outputDir,
-        string outputFile,
-        JSConfig config
-    )
+    private string generateConfig(string entry, string outputDir, string outputFile, JSConfig config, Framework framework)
     {
-        string minifyOption = config.minify ? "'esbuild'" : "false";
-        string sourcemapOption = config.sourcemap ? "true" : "false";
-        
-        // Library mode vs application mode
-        string libSection = "";
-        if (config.mode == JSBuildMode.Library)
-        {
-            string formatsList = generateLibraryFormats(config.format);
-            libSection = `
+        string pluginsList = getPluginsList(framework);
+        string libSection = config.mode == JSBuildMode.Library ? `
     lib: {
       entry: '` ~ absolutePath(entry) ~ `',
       name: '` ~ baseName(outputFile, ".js") ~ `',
-      formats: [` ~ formatsList ~ `],
+      formats: ['` ~ formatToVite(config.format) ~ `'],
       fileName: (format) => '` ~ baseName(outputFile, ".js") ~ `.${format}.js'
-    },`;
-        }
+    },` : "";
         
-        string externalsSection = "";
-        if (!config.external.empty)
-        {
-            externalsSection = `
-    rollupOptions: {
-      external: [` ~ config.external.map!(e => "'" ~ e ~ "'").join(", ") ~ `]
-    },`;
-        }
+        string externals = config.external.empty ? "" : `
+    rollupOptions: { external: [` ~ config.external.map!(e => "'" ~ e ~ "'").join(", ") ~ `] },`;
         
-        return `{
+        return `const { createRequire } = require('module');
+const { join } = require('path');
+const projectRequire = createRequire(join(__dirname, 'package.json'));
+
+module.exports = {
+  plugins: [` ~ pluginsList ~ `],
+  build: {
     outDir: '` ~ absolutePath(outputDir) ~ `',
     emptyOutDir: true,
-    minify: ` ~ minifyOption ~ `,
-    sourcemap: ` ~ sourcemapOption ~ `,` ~ libSection ~ externalsSection ~ `
-  }`;
+    minify: ` ~ (config.minify ? "'esbuild'" : "false") ~ `,
+    sourcemap: ` ~ (config.sourcemap ? "true" : "false") ~ `,` ~ libSection ~ externals ~ `
+  },
+  resolve: { extensions: ['.js', '.jsx', '.ts', '.tsx', '.json', '.vue', '.svelte'] },
+  esbuild: { target: '` ~ config.target ~ `', jsx: ` ~ (config.jsx ? "'transform'" : "'automatic'") ~ `, jsxFactory: '` ~ config.jsxFactory ~ `' }
+};`;
     }
     
-    /// Generate library formats
-    private string generateLibraryFormats(OutputFormat format)
+    private string getPluginsList(Framework f)
     {
-        final switch (format)
+        final switch (f)
         {
-            case OutputFormat.ESM:
-                return "'es'";
-            case OutputFormat.CommonJS:
-                return "'cjs'";
-            case OutputFormat.IIFE:
-                return "'iife'";
-            case OutputFormat.UMD:
-                return "'umd'";
+            case Framework.None: return "";
+            case Framework.React: return "projectRequire('@vitejs/plugin-react').default()";
+            case Framework.Vue: return "projectRequire('@vitejs/plugin-vue').default()";
+            case Framework.Svelte: return "projectRequire('@sveltejs/vite-plugin-svelte').svelte()";
+            case Framework.Preact: return "projectRequire('@preact/preset-vite').default()";
         }
     }
     
-    /// Generate resolve section
-    private string generateResolveSection(JSConfig config)
+    private string formatToVite(OutputFormat f)
     {
-        return `{
-    extensions: ['.js', '.jsx', '.ts', '.tsx', '.json', '.vue', '.svelte']
-  }`;
+        final switch (f)
+        {
+            case OutputFormat.ESM: return "es";
+            case OutputFormat.CommonJS: return "cjs";
+            case OutputFormat.IIFE: return "iife";
+            case OutputFormat.UMD: return "umd";
+        }
     }
     
-    /// Collect all outputs from directory
     private void collectOutputs(string outputDir, ref BundleResult result)
     {
-        if (!exists(outputDir) || !isDir(outputDir))
-            return;
-        
+        if (!exists(outputDir) || !isDir(outputDir)) return;
         foreach (entry; dirEntries(outputDir, SpanMode.depth))
         {
             if (entry.isFile)
             {
                 string ext = extension(entry.name);
-                // Collect JS, CSS, and source maps
-                if (ext == ".js" || ext == ".mjs" || ext == ".cjs" || 
-                    ext == ".css" || ext == ".map")
-                {
+                if (ext == ".js" || ext == ".mjs" || ext == ".cjs" || ext == ".css" || ext == ".map")
                     result.outputs ~= entry.name;
-                }
             }
         }
     }
     
-    bool isAvailable()
-    {
-        // Check if npx can find vite (works for both global and local installs)
-        auto res = execute(["npx", "vite", "--version"]);
-        return res.status == 0;
-    }
-    
-    string name() const
-    {
-        return "vite";
-    }
-    
+    bool isAvailable() { return execute(["npx", "vite", "--version"]).status == 0; }
+    string name() const => "vite";
     string getVersion()
     {
-        auto res = execute(["npx", "vite", "--version"]);
-        if (res.status == 0)
-        {
-            // Vite version output is like "vite/5.0.0"
-            return res.output.strip;
-        }
-        return "unknown";
+        auto r = execute(["npx", "vite", "--version"]);
+        return r.status == 0 ? r.output.strip : "unknown";
     }
 }
-
-/// Framework detection for Vite plugins
-private enum Framework
-{
-    None,
-    React,
-    Vue,
-    Svelte,
-    Preact
-}
-

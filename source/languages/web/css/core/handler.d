@@ -1,242 +1,138 @@
 module languages.web.css.core.handler;
 
-import std.stdio;
-import std.process;
 import std.file;
 import std.path;
 import std.algorithm;
 import std.array;
 import std.json;
 import std.conv;
-import languages.base.base;
-import languages.web.css.core.config;
+import languages.base;
+import languages.web.base;
 import languages.web.css.processors;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.logging;
-import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
+import engine.caching.actions.action;
 
-/// CSS/SCSS/PostCSS build handler with action-level caching
-class CSSHandler : BaseLanguageHandler
+/// CSS build handler - leverages BaseWebHandler for common functionality
+class CSSHandler : BaseWebHandler
 {
-    private ActionCache actionCache;
+    private CSSProcessorType processor = CSSProcessorType.Auto;
+    private CSSFramework framework = CSSFramework.None;
+    private bool autoprefix = true;
+    private bool purge = false;
+    private string[] targets;
+    private string[] postcssPlugins;
+    private string[] includePaths;
+    private string[] contentPaths;
+    private string tailwindConfig;
     
-    this()
+    override protected string languageId() const pure nothrow => "css";
+    override protected TargetLanguage languageEnum() const pure nothrow => TargetLanguage.CSS;
+    override protected string[] configKeys() const pure nothrow => ["css", "cssConfig"];
+    
+    override protected string toolkitNotFoundError() const pure nothrow =>
+        "CSS processor not found. Install PostCSS, Sass, or use pure CSS.";
+    
+    override protected string validateSources(const(string[]) sources, WebConfig config) const => "";
+    
+    override protected string detectToolkit(WebConfig config) => "css";
+    
+    override protected LanguageBuildResult buildExecutable(
+        in Target target, in WorkspaceConfig config, WebConfig webConfig, string toolPath
+    ) => compileCSS(target, config, webConfig);
+    
+    override protected LanguageBuildResult buildLibrary(
+        in Target target, in WorkspaceConfig config, WebConfig webConfig, string toolPath
+    ) => compileCSS(target, config, webConfig);
+    
+    override protected LanguageBuildResult runTests(in Target target, in WorkspaceConfig config, WebConfig webConfig)
+        => validateCSS(target, config);
+    
+    override protected string getOutputName(string name, WebConfig config) const pure nothrow => name ~ ".css";
+    
+    override protected void parseLanguageSpecificConfig(ref WebConfig config, JSONValue json)
     {
-        auto cacheConfig = ActionCacheConfig.fromEnvironment();
-        actionCache = new ActionCache(".builder-cache/actions/css", cacheConfig);
+        if (auto v = "processor" in json)
+        {
+            string s = (*v).str.toLower;
+            processor = s == "postcss" ? CSSProcessorType.PostCSS :
+                       s == "scss" || s == "sass" ? CSSProcessorType.SCSS :
+                       s == "less" ? CSSProcessorType.Less :
+                       s == "stylus" ? CSSProcessorType.Stylus :
+                       s == "none" ? CSSProcessorType.None : CSSProcessorType.Auto;
+        }
+        
+        if (auto v = "framework" in json)
+        {
+            string s = (*v).str.toLower;
+            framework = s == "tailwind" ? CSSFramework.Tailwind :
+                       s == "bootstrap" ? CSSFramework.Bootstrap :
+                       s == "bulma" ? CSSFramework.Bulma : CSSFramework.None;
+        }
+        
+        if (auto v = "autoprefix" in json) autoprefix = (*v).type == JSONType.true_;
+        if (auto v = "purge" in json) purge = (*v).type == JSONType.true_;
+        if (auto v = "tailwindConfig" in json) tailwindConfig = (*v).str;
+        if (auto v = "targets" in json) targets = (*v).array.map!(e => e.str).array;
+        if (auto v = "postcssPlugins" in json) postcssPlugins = (*v).array.map!(e => e.str).array;
+        if (auto v = "includePaths" in json) includePaths = (*v).array.map!(e => e.str).array;
+        if (auto v = "contentPaths" in json) contentPaths = (*v).array.map!(e => e.str).array;
     }
     
-    ~this()
-    {
-        import core.memory : GC;
-        if (actionCache && !GC.inFinalizer())
-        {
-            try
-            {
-                actionCache.close();
-            }
-            catch (Exception) {}
-        }
-    }
-    
-    protected override LanguageBuildResult buildImplWithContext(in BuildContext context)
-    {
-        // Extract target and config from context for convenience
-        auto target = context.target;
-        auto config = context.config;
-        
-        LanguageBuildResult result;
-        
-        structuredLog.debug_("building_css_target_").field("detail", "Building CSS target: " ~ target.name).emit();
-        
-        // Parse CSS configuration
-        CSSConfig cssConfig = parseCSSConfig(target);
-        
-        // Auto-detect processor from file extensions
-        if (cssConfig.processor == CSSProcessorType.Auto)
-        {
-            cssConfig.processor = detectProcessor(target.sources);
-        }
-        
-        final switch (target.type)
-        {
-            case TargetType.Executable:
-            case TargetType.Library:
-                result = compileCSS(target, config, cssConfig);
-                break;
-            case TargetType.Test:
-                // CSS doesn't have tests, just validate
-                result = validateCSS(target, config, cssConfig);
-                break;
-            case TargetType.Custom:
-            case TargetType.Shell:
-                result = compileCSS(target, config, cssConfig);
-                break;
-        }
-        
-        return result;
-    }
-    
-    override string[] getOutputs(in Target target, in WorkspaceConfig config)
-    {
-        CSSConfig cssConfig = parseCSSConfig(target);
-        
-        string[] outputs;
-        
-        if (!target.outputPath.empty)
-        {
-            outputs ~= buildPath(config.options.outputDir, target.outputPath);
-        }
-        else if (!cssConfig.output.empty)
-        {
-            outputs ~= buildPath(config.options.outputDir, cssConfig.output);
-        }
-        else
-        {
-            auto name = target.name.split(":")[$ - 1];
-            outputs ~= buildPath(config.options.outputDir, name ~ ".css");
-        }
-        
-        if (cssConfig.sourcemap)
-        {
-            outputs ~= outputs[0] ~ ".map";
-        }
-        
-        return outputs;
-    }
-    
-    private LanguageBuildResult compileCSS(in Target target, in WorkspaceConfig config, CSSConfig cssConfig)
+    private LanguageBuildResult compileCSS(in Target target, in WorkspaceConfig config, WebConfig webConfig)
     {
         LanguageBuildResult result;
         
-        // Check for empty sources
-        if (target.sources.length == 0)
+        if (target.sources.empty)
         {
-            result.success = false;
-            result.error = "No source files specified for target " ~ target.name;
+            result.error = "No source files specified";
             return result;
         }
         
-        // Production mode enables minification
-        if (cssConfig.mode == CSSBuildMode.Production)
+        if (webConfig.mode == WebBuildMode.Production) webConfig.minify = true;
+        if (processor == CSSProcessorType.Auto) processor = detectProcessor(target.sources);
+        
+        auto cssProcessor = CSSProcessorFactory.create(processor);
+        
+        if (!cssProcessor.isAvailable() && processor != CSSProcessorType.None)
         {
-            cssConfig.minify = true;
+            structuredLog.warning("processor_not_available_using_pure_css").emit();
+            cssProcessor = CSSProcessorFactory.create(CSSProcessorType.None);
         }
         
-        // Create processor
-        auto processor = CSSProcessorFactory.create(cssConfig.processor);
+        structuredLog.debug_("using_css_processor_").field("detail", cssProcessor.name()).emit();
         
-        if (!processor.isAvailable())
-        {
-            // Fallback to no processing for pure CSS
-            if (cssConfig.processor != CSSProcessorType.None)
-            {
-                structuredLog.warning("processor_").field("detail", "Processor '" ~ processor.name() ~ "' not available, using pure CSS").emit();
-                processor = CSSProcessorFactory.create(CSSProcessorType.None);
-            }
-        }
-        
-        structuredLog.debug_("using_css_processor_").field("detail", "Using CSS processor: " ~ processor.name()).emit();
-        
-        // Prepare inputs: sources + config files
-        string[] inputFiles = target.sources.dup;
-        
-        // Add processor config files if they exist
-        if (!target.sources.empty)
-        {
-            string baseDir = dirName(target.sources[0]);
-            
-            // PostCSS configs
-            string[] configFiles = [
-                buildPath(baseDir, "postcss.config.js"),
-                buildPath(baseDir, "postcss.config.json"),
-                buildPath(baseDir, ".postcssrc"),
-                buildPath(baseDir, "tailwind.config.js"),
-                buildPath(baseDir, ".browserslistrc")
-            ];
-            
-            // SCSS config
-            if (cssConfig.processor == CSSProcessorType.SCSS)
-            {
-                configFiles ~= buildPath(baseDir, "sass-options.json");
-            }
-            
-            foreach (cf; configFiles)
-            {
-                if (exists(cf))
-                    inputFiles ~= cf;
-            }
-        }
-        
-        // Add explicit tailwind config if specified
-        if (!cssConfig.tailwindConfig.empty && exists(cssConfig.tailwindConfig))
-        {
-            inputFiles ~= cssConfig.tailwindConfig;
-        }
-        
-        // Determine expected outputs
+        string[] inputFiles = collectCSSInputFiles(target.sources, webConfig);
         string[] expectedOutputs = getOutputs(target, config);
         
-        // Build metadata for cache validation
-        string[string] metadata;
-        metadata["processor"] = processor.name();
-        metadata["processorVersion"] = processor.getVersion();
-        metadata["processorType"] = cssConfig.processor.to!string;
-        metadata["minify"] = cssConfig.minify.to!string;
-        metadata["sourcemap"] = cssConfig.sourcemap.to!string;
-        metadata["autoprefix"] = cssConfig.autoprefix.to!string;
-        metadata["purge"] = cssConfig.purge.to!string;
-        metadata["framework"] = cssConfig.framework.to!string;
+        string[string] metadata = buildCacheMetadata(webConfig, cssProcessor.name());
+        metadata["processor"] = cssProcessor.name();
+        metadata["processorVersion"] = cssProcessor.getVersion();
+        metadata["autoprefix"] = autoprefix.to!string;
+        metadata["purge"] = purge.to!string;
+        metadata["framework"] = framework.to!string;
         
-        if (!cssConfig.output.empty)
-            metadata["output"] = cssConfig.output;
-        if (!cssConfig.targets.empty)
-            metadata["targets"] = cssConfig.targets.join(",");
-        if (!cssConfig.postcssPlugins.empty)
-            metadata["postcssPlugins"] = cssConfig.postcssPlugins.join(",");
-        if (!cssConfig.includePaths.empty)
-            metadata["includePaths"] = cssConfig.includePaths.join(",");
-        if (!cssConfig.contentPaths.empty)
-            metadata["contentPaths"] = cssConfig.contentPaths.join(",");
-        
-        // Create action ID for CSS processing
         ActionId actionId;
         actionId.targetId = target.name;
-        actionId.type = ActionType.Transform;  // CSS processing is a transformation
+        actionId.type = ActionType.Transform;
         actionId.subId = "css-compile";
         actionId.inputHash = FastHash.hashStrings(inputFiles);
         
-        // Check if compilation is cached
-        if (actionCache.isCached(actionId, inputFiles, metadata))
+        if (getCache().isCached(actionId, inputFiles, metadata) && expectedOutputs.all!(o => exists(o)))
         {
-            bool allOutputsExist = expectedOutputs.all!(o => exists(o));
-            if (allOutputsExist)
-            {
-                structuredLog.debug_("__cached_css_compilation_").field("detail", "  [Cached] CSS compilation: " ~ target.name).emit();
-                result.success = true;
-                result.outputs = expectedOutputs;
-                result.outputHash = FastHash.hashStrings(expectedOutputs);
-                return result;
-            }
+            structuredLog.debug_("__cached_css_").field("detail", "[Cached] CSS: " ~ target.name).emit();
+            result.success = true;
+            result.outputs = expectedOutputs;
+            result.outputHash = FastHash.hashStrings(expectedOutputs);
+            return result;
         }
         
-        // Compile
-        auto compileResult = processor.compile(target.sources, cssConfig, target, config);
+        auto compileResult = cssProcessor.compile(target.sources, toCSSConfig(webConfig), target, config);
+        getCache().update(actionId, inputFiles, compileResult.outputs, metadata, compileResult.success);
         
-        bool success = compileResult.success;
-        
-        // Update cache with result
-        actionCache.update(
-            actionId,
-            inputFiles,
-            compileResult.outputs,
-            metadata,
-            success
-        );
-        
-        if (!success)
+        if (!compileResult.success)
         {
             result.error = compileResult.error;
             return result;
@@ -245,15 +141,12 @@ class CSSHandler : BaseLanguageHandler
         result.success = true;
         result.outputs = compileResult.outputs;
         result.outputHash = compileResult.outputHash;
-        
         return result;
     }
     
-    private LanguageBuildResult validateCSS(in Target target, in WorkspaceConfig config, CSSConfig cssConfig)
+    private LanguageBuildResult validateCSS(in Target target, in WorkspaceConfig config)
     {
         LanguageBuildResult result;
-        
-        // Simple validation - check files exist and are readable
         foreach (source; target.sources)
         {
             if (!exists(source) || !isFile(source))
@@ -261,101 +154,67 @@ class CSSHandler : BaseLanguageHandler
                 result.error = "CSS file not found: " ~ source;
                 return result;
             }
-            
-            try
-            {
-                readText(source);
-            }
-            catch (Exception e)
-            {
-                result.error = "Failed to read CSS file " ~ source ~ ": " ~ e.msg;
-                return result;
-            }
+            try { readText(source); }
+            catch (Exception e) { result.error = "Failed to read " ~ source; return result; }
         }
-        
         result.success = true;
         result.outputs = target.sources.dup;
         result.outputHash = FastHash.hashStrings(target.sources);
-        
         return result;
     }
     
-    /// Parse CSS configuration from target
-    private CSSConfig parseCSSConfig(in Target target)
-    {
-        CSSConfig config;
-        
-        // Try language-specific keys
-        string configKey = "";
-        if ("css" in target.langConfig)
-            configKey = "css";
-        else if ("cssConfig" in target.langConfig)
-            configKey = "cssConfig";
-        
-        if (!configKey.empty)
-        {
-            try
-            {
-                auto json = parseJSON(target.langConfig[configKey]);
-                config = CSSConfig.fromJSON(json);
-            }
-            catch (Exception e)
-            {
-                structuredLog.warning("failed_to_parse_css_config_using_default").field("detail", "Failed to parse CSS config, using defaults: " ~ e.msg).emit();
-            }
-        }
-        
-        // Auto-detect entry point if not specified
-        if (config.entry.empty && !target.sources.empty)
-        {
-            config.entry = target.sources[0];
-        }
-        
-        return config;
-    }
-    
-    /// Detect processor from file extensions
     private CSSProcessorType detectProcessor(const(string[]) sources)
     {
         foreach (source; sources)
         {
             string ext = extension(source);
-            switch (ext)
-            {
-                case ".scss":
-                case ".sass":
-                    return CSSProcessorType.SCSS;
-                case ".less":
-                    return CSSProcessorType.Less;
-                case ".styl":
-                case ".stylus":
-                    return CSSProcessorType.Stylus;
-                default:
-                    break;
-            }
+            if (ext == ".scss" || ext == ".sass") return CSSProcessorType.SCSS;
+            if (ext == ".less") return CSSProcessorType.Less;
+            if (ext == ".styl" || ext == ".stylus") return CSSProcessorType.Stylus;
         }
-        
-        // Check for PostCSS config files
         if (!sources.empty)
         {
             string dir = dirName(sources[0]);
             if (exists(buildPath(dir, "postcss.config.js")) ||
                 exists(buildPath(dir, "postcss.config.json")) ||
                 exists(buildPath(dir, ".postcssrc")))
-            {
                 return CSSProcessorType.PostCSS;
-            }
         }
-        
-        // Default to pure CSS
         return CSSProcessorType.None;
     }
     
-    override Import[] analyzeImports(in string[] sources)
+    private string[] collectCSSInputFiles(const(string[]) sources, WebConfig config)
     {
-        // CSS imports are typically @import statements
-        // For now, return empty - could be enhanced
-        return [];
+        string[] inputs = sources.dup;
+        if (!sources.empty)
+        {
+            string baseDir = dirName(sources[0]);
+            foreach (cf; ["postcss.config.js", "postcss.config.json", ".postcssrc", 
+                         "tailwind.config.js", ".browserslistrc"])
+                if (exists(buildPath(baseDir, cf))) inputs ~= buildPath(baseDir, cf);
+            if (processor == CSSProcessorType.SCSS && exists(buildPath(baseDir, "sass-options.json")))
+                inputs ~= buildPath(baseDir, "sass-options.json");
+        }
+        if (!tailwindConfig.empty && exists(tailwindConfig)) inputs ~= tailwindConfig;
+        return inputs;
+    }
+    
+    private CSSConfig toCSSConfig(WebConfig config)
+    {
+        CSSConfig c;
+        c.entry = config.entry;
+        c.output = config.output;
+        c.minify = config.minify;
+        c.sourcemap = config.sourcemap;
+        c.processor = processor;
+        c.framework = framework;
+        c.autoprefix = autoprefix;
+        c.purge = purge;
+        c.targets = targets;
+        c.postcssPlugins = postcssPlugins;
+        c.includePaths = includePaths;
+        c.contentPaths = contentPaths;
+        c.tailwindConfig = tailwindConfig;
+        return c;
     }
 }
-

@@ -1,44 +1,23 @@
 module languages.web.css.processors.none;
 
-import std.process;
 import std.file;
 import std.path;
 import std.algorithm;
 import std.array;
+import std.regex;
 import std.string;
-import languages.web.css.core.config;
 import languages.web.css.processors.base;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;
-import infrastructure.utils.logging;
 
 /// No processing - pure CSS passthrough with optional minification
 class NoneProcessor : CSSProcessor
 {
-    CSSCompileResult compile(
-        const(string[]) sources,
-        CSSConfig config,
-        in Target target,
-        in WorkspaceConfig workspace
-    )
+    CSSCompileResult compile(const(string[]) sources, CSSConfig config, in Target target, in WorkspaceConfig workspace)
     {
         CSSCompileResult result;
         
-        // Determine output path
-        string outputPath;
-        if (!config.output.empty)
-        {
-            outputPath = buildPath(workspace.options.outputDir, config.output);
-        }
-        else if (!target.outputPath.empty)
-        {
-            outputPath = buildPath(workspace.options.outputDir, target.outputPath);
-        }
-        else
-        {
-            auto name = target.name.split(":")[$ - 1];
-            outputPath = buildPath(workspace.options.outputDir, name ~ ".css");
-        }
+        string outputPath = resolveOutputPath(config, target, workspace);
         
         // Concatenate all source files
         string combinedCSS;
@@ -50,22 +29,17 @@ class NoneProcessor : CSSProcessor
                 return result;
             }
             
-            try
-            {
-                combinedCSS ~= readText(source) ~ "\n";
-            }
+            try { combinedCSS ~= readText(source) ~ "\n"; }
             catch (Exception e)
             {
-                result.error = "Failed to read CSS file " ~ source ~ ": " ~ e.msg;
+                result.error = "Failed to read " ~ source ~ ": " ~ e.msg;
                 return result;
             }
         }
         
-        // Optionally minify (basic minification)
+        // Optionally minify
         if (config.minify)
-        {
             combinedCSS = minifyCSS(combinedCSS);
-        }
         
         // Write output
         try
@@ -82,48 +56,33 @@ class NoneProcessor : CSSProcessor
         result.success = true;
         result.outputs = [outputPath];
         result.outputHash = FastHash.hashFiles(result.outputs);
-        
         return result;
     }
     
-    bool isAvailable()
-    {
-        return true; // Always available
-    }
+    bool isAvailable() => true;
+    string name() const => "none";
+    string getVersion() => "1.0";
     
-    string name() const
+    private string resolveOutputPath(CSSConfig config, in Target target, in WorkspaceConfig workspace)
     {
-        return "none";
-    }
-    
-    string getVersion()
-    {
-        return "1.0";
+        if (!config.output.empty)
+            return buildPath(workspace.options.outputDir, config.output);
+        if (!target.outputPath.empty)
+            return buildPath(workspace.options.outputDir, target.outputPath);
+        return buildPath(workspace.options.outputDir, target.name.split(":")[$ - 1] ~ ".css");
     }
     
     private string minifyCSS(string css)
     {
-        import std.regex;
-        import std.string;
-        
-        // Basic minification - remove comments, extra whitespace
         auto result = css;
-        
-        // Remove /* */ comments
         result = replaceAll(result, regex(r"/\*[\s\S]*?\*/"), "");
-        
-        // Remove whitespace around { } : ; ,
         result = replaceAll(result, regex(r"\s*\{\s*"), "{");
         result = replaceAll(result, regex(r"\s*\}\s*"), "}");
         result = replaceAll(result, regex(r"\s*:\s*"), ":");
         result = replaceAll(result, regex(r"\s*;\s*"), ";");
         result = replaceAll(result, regex(r"\s*,\s*"), ",");
-        
-        // Remove extra line breaks and spaces
         result = replaceAll(result, regex(r"\n+"), "");
         result = replaceAll(result, regex(r"\s+"), " ");
-        
         return strip(result);
     }
 }
-

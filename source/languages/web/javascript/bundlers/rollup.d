@@ -1,58 +1,40 @@
 module languages.web.javascript.bundlers.rollup;
 
-import languages.web.javascript.bundlers.base;
-import languages.web.javascript.core.config;
-import infrastructure.config.schema.schema;
-import std.process;
+import std.process : execute;
 import std.path;
 import std.file;
 import std.algorithm;
 import std.array;
-import std.conv;
-import std.string;
+import std.string : strip;
+import languages.web.javascript.bundlers.base;
+import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.logging;
 
 /// Rollup bundler - optimized for library bundles with tree-shaking
 class RollupBundler : Bundler
 {
-    BundleResult bundle(
-        const(string[]) sources,
-        JSConfig config,
-        in Target target,
-        in WorkspaceConfig workspace
-    )
+    BundleResult bundle(const(string[]) sources, JSConfig config, in Target target, in WorkspaceConfig workspace)
     {
         BundleResult result;
         
-        // Check if rollup is available
         if (!isAvailable())
         {
             result.error = "rollup not found. Install: npm install -g rollup";
             return result;
         }
         
-        // If custom config file specified, use it
         if (!config.configFile.empty && exists(config.configFile))
-        {
             return bundleWithConfigFile(config.configFile, workspace, result);
-        }
         
-        // Otherwise, use CLI mode
         return bundleWithCLI(sources, config, target, workspace, result);
     }
     
-    private BundleResult bundleWithConfigFile(
-        string configFile,
-        in WorkspaceConfig workspace,
-        BundleResult result
-    )
+    private BundleResult bundleWithConfigFile(string configFile, in WorkspaceConfig workspace, BundleResult result)
     {
-        structuredLog.debug_("using_rollup_config_").field("detail", "Using rollup config: " ~ configFile).emit();
+        structuredLog.debug_("using_rollup_config").field("detail", configFile).emit();
         
-        string[] cmd = ["rollup", "-c", configFile];
-        auto res = execute(cmd);
-        
+        auto res = execute(["rollup", "-c", configFile]);
         if (res.status != 0)
         {
             result.error = "rollup failed: " ~ res.output;
@@ -60,73 +42,27 @@ class RollupBundler : Bundler
         }
         
         result.success = true;
-        
-        // Parse rollup output to find generated files
         string outputDir = workspace.options.outputDir;
         if (exists(outputDir) && isDir(outputDir))
-        {
             foreach (entry; dirEntries(outputDir, SpanMode.shallow))
-            {
-                if (entry.isFile && entry.name.endsWith(".js"))
-                    result.outputs ~= entry.name;
-            }
-        }
+                if (entry.isFile && entry.name.endsWith(".js")) result.outputs ~= entry.name;
         
         result.outputHash = FastHash.hashFiles(result.outputs);
-        
         return result;
     }
     
-    private BundleResult bundleWithCLI(
-        const(string[]) sources,
-        JSConfig config,
-        in Target target,
-        in WorkspaceConfig workspace,
-        BundleResult result
-    )
+    private BundleResult bundleWithCLI(const(string[]) sources, JSConfig config, in Target target, in WorkspaceConfig workspace, BundleResult result)
     {
         string entry = config.entry.empty ? sources[0] : config.entry;
         string outputDir = workspace.options.outputDir;
         mkdirRecurse(outputDir);
+        string outputFile = buildPath(outputDir, target.name.split(":")[$ - 1] ~ ".js");
         
-        string outputFile = buildPath(
-            outputDir,
-            target.name.split(":")[$ - 1] ~ ".js"
-        );
+        string[] cmd = ["rollup", entry, "--file", outputFile, "--format", formatToRollup(config.format)];
+        if (config.sourcemap) cmd ~= "--sourcemap";
+        foreach (ext; config.external) cmd ~= ["--external", ext];
         
-        // Build rollup command
-        string[] cmd = ["rollup", entry];
-        
-        // Output file
-        cmd ~= "--file";
-        cmd ~= outputFile;
-        
-        // Format
-        cmd ~= "--format";
-        cmd ~= outputFormatToRollup(config.format);
-        
-        // Source maps
-        if (config.sourcemap)
-        {
-            cmd ~= "--sourcemap";
-        }
-        
-        // External packages
-        foreach (ext; config.external)
-        {
-            cmd ~= "--external";
-            cmd ~= ext;
-        }
-        
-        // Plugins for minification (requires @rollup/plugin-terser)
-        if (config.minify)
-        {
-            structuredLog.warning("rollup_minification_requires_rollupplugi").emit();
-        }
-        
-        structuredLog.debug_("running_rollup_").field("detail", "Running rollup: " ~ cmd.join(" ")).emit();
-        
-        // Execute rollup
+        structuredLog.debug_("running_rollup").field("detail", cmd.join(" ")).emit();
         auto res = execute(cmd);
         
         if (res.status != 0)
@@ -135,24 +71,17 @@ class RollupBundler : Bundler
             return result;
         }
         
-        structuredLog.debug_("rollup_completed_successfully").emit();
-        
         result.success = true;
         result.outputs = [outputFile];
-        
         if (config.sourcemap && exists(outputFile ~ ".map"))
-        {
             result.outputs ~= outputFile ~ ".map";
-        }
-        
         result.outputHash = FastHash.hashFiles(result.outputs);
-        
         return result;
     }
     
-    private string outputFormatToRollup(OutputFormat format)
+    private string formatToRollup(OutputFormat f)
     {
-        final switch (format)
+        final switch (f)
         {
             case OutputFormat.ESM: return "es";
             case OutputFormat.CommonJS: return "cjs";
@@ -161,23 +90,11 @@ class RollupBundler : Bundler
         }
     }
     
-    bool isAvailable()
-    {
-        auto res = execute(["rollup", "--version"]);
-        return res.status == 0;
-    }
-    
-    string name() const
-    {
-        return "rollup";
-    }
-    
+    bool isAvailable() { return execute(["rollup", "--version"]).status == 0; }
+    string name() const => "rollup";
     string getVersion()
     {
-        auto res = execute(["rollup", "--version"]);
-        if (res.status == 0)
-            return res.output.strip;
-        return "unknown";
+        auto r = execute(["rollup", "--version"]);
+        return r.status == 0 ? r.output.strip : "unknown";
     }
 }
-

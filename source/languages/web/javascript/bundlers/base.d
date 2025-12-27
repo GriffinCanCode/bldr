@@ -1,33 +1,68 @@
 module languages.web.javascript.bundlers.base;
 
-import languages.web.javascript.core.config;
 import infrastructure.config.schema.schema;
+
+// ============================================================================
+// JavaScript Types (moved from legacy config.d)
+// ============================================================================
+
+/// JavaScript build modes
+enum JSBuildMode { Node, Bundle, Library }
+
+/// Bundler type selection
+enum BundlerType { Auto, ESBuild, Webpack, Rollup, Vite, None }
+
+/// Output format for bundles
+enum OutputFormat { ESM, CommonJS, IIFE, UMD }
+
+/// Target platform
+enum Platform { Browser, Node, Neutral }
+
+/// JavaScript configuration
+struct JSConfig
+{
+    JSBuildMode mode = JSBuildMode.Node;
+    BundlerType bundler = BundlerType.Auto;
+    string entry;
+    Platform platform = Platform.Node;
+    OutputFormat format = OutputFormat.CommonJS;
+    bool minify = false;
+    bool sourcemap = false;
+    string[] external;
+    string configFile;
+    string packageManager = "npm";
+    bool installDeps = false;
+    string target = "es2018";
+    bool jsx = false;
+    string jsxFactory = "React.createElement";
+    string[string] loaders;
+}
+
+/// Bundler result
+struct BundleResult
+{
+    bool success;
+    string error;
+    string[] outputs;
+    string outputHash;
+}
+
+// ============================================================================
+// Bundler Interface
+// ============================================================================
 
 /// Base interface for JavaScript bundlers
 interface Bundler
 {
-    /// Bundle JavaScript files
-    BundleResult bundle(
-        const(string[]) sources,
-        JSConfig config,
-        in Target target,
-        in WorkspaceConfig workspace
-    );
-    
-    /// Check if bundler is available on system
+    BundleResult bundle(const(string[]) sources, JSConfig config, in Target target, in WorkspaceConfig workspace);
     bool isAvailable();
-    
-    /// Get bundler name
     string name() const;
-    
-    /// Get bundler version
     string getVersion();
 }
 
 /// Factory for creating bundlers
 class BundlerFactory
 {
-    /// Create bundler based on type
     static Bundler create(BundlerType type, JSConfig config)
     {
         import languages.web.javascript.bundlers.esbuild;
@@ -37,22 +72,15 @@ class BundlerFactory
         
         final switch (type)
         {
-            case BundlerType.Auto:
-                return createAuto(config);
-            case BundlerType.ESBuild:
-                return new ESBuildBundler();
-            case BundlerType.Webpack:
-                return new WebpackBundler();
-            case BundlerType.Rollup:
-                return new RollupBundler();
-            case BundlerType.Vite:
-                return new ViteBundler();
-            case BundlerType.None:
-                return new NullBundler();
+            case BundlerType.Auto: return createAuto(config);
+            case BundlerType.ESBuild: return new ESBuildBundler();
+            case BundlerType.Webpack: return new WebpackBundler();
+            case BundlerType.Rollup: return new RollupBundler();
+            case BundlerType.Vite: return new ViteBundler();
+            case BundlerType.None: return new NullBundler();
         }
     }
     
-    /// Auto-detect best available bundler
     private static Bundler createAuto(JSConfig config)
     {
         import languages.web.javascript.bundlers.esbuild;
@@ -60,41 +88,23 @@ class BundlerFactory
         import languages.web.javascript.bundlers.rollup;
         import languages.web.javascript.bundlers.vite;
         
-        // For library mode with modern frameworks, prefer Vite
         if (config.mode == JSBuildMode.Library)
         {
             auto vite = new ViteBundler();
-            if (vite.isAvailable())
-                return vite;
-            
-            // Fallback to Rollup for libraries
+            if (vite.isAvailable()) return vite;
             auto rollup = new RollupBundler();
-            if (rollup.isAvailable())
-                return rollup;
+            if (rollup.isAvailable()) return rollup;
         }
         
-        // Priority: esbuild > vite > webpack > rollup
-        // esbuild is fastest and handles most cases
         auto esbuild = new ESBuildBundler();
-        if (esbuild.isAvailable())
-            return esbuild;
-        
-        // Vite for modern tooling and dev experience
+        if (esbuild.isAvailable()) return esbuild;
         auto vite = new ViteBundler();
-        if (vite.isAvailable())
-            return vite;
-        
-        // Webpack for complex projects
+        if (vite.isAvailable()) return vite;
         auto webpack = new WebpackBundler();
-        if (webpack.isAvailable())
-            return webpack;
-        
-        // Rollup for libraries
+        if (webpack.isAvailable()) return webpack;
         auto rollup = new RollupBundler();
-        if (rollup.isAvailable())
-            return rollup;
+        if (rollup.isAvailable()) return rollup;
         
-        // Fallback to null bundler (validation only)
         return new NullBundler();
     }
 }
@@ -102,60 +112,39 @@ class BundlerFactory
 /// Null bundler - validates but doesn't bundle
 class NullBundler : Bundler
 {
-    BundleResult bundle(
-        const(string[]) sources,
-        JSConfig config,
-        in Target target,
-        in WorkspaceConfig workspace
-    )
+    BundleResult bundle(const(string[]) sources, JSConfig config, in Target target, in WorkspaceConfig workspace)
     {
         import std.process : execute;
-        import std.path : buildPath;
         import infrastructure.utils.files.hash : FastHash;
         
         BundleResult result;
-        
-        // Just validate syntax with Node.js
         foreach (source; sources)
         {
-            auto cmd = ["node", "--check", source];
-            auto res = execute(cmd);
-            
+            auto res = execute(["node", "--check", source]);
             if (res.status != 0)
             {
                 result.error = "Syntax error in " ~ source ~ ": " ~ res.output;
                 return result;
             }
         }
-        
         result.success = true;
-        result.outputHash = FastHash.hashStrings(sources);
-        
-        // Sources are outputs in this case
         result.outputs = sources.dup;
-        
+        result.outputHash = FastHash.hashStrings(sources);
         return result;
     }
     
     bool isAvailable()
     {
         import std.process : execute;
-        auto res = execute(["node", "--version"]);
-        return res.status == 0;
+        return execute(["node", "--version"]).status == 0;
     }
     
-    string name() const
-    {
-        return "none";
-    }
+    string name() const => "none";
     
     string getVersion()
     {
         import std.process : execute;
-        auto res = execute(["node", "--version"]);
-        if (res.status == 0)
-            return res.output;
-        return "unknown";
+        auto r = execute(["node", "--version"]);
+        return r.status == 0 ? r.output : "unknown";
     }
 }
-

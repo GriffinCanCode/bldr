@@ -1,59 +1,40 @@
 module languages.web.javascript.bundlers.webpack;
 
-import languages.web.javascript.bundlers.base;
-import languages.web.javascript.core.config;
-import infrastructure.config.schema.schema;
-import std.process;
+import std.process : execute;
 import std.path;
 import std.file;
 import std.algorithm;
 import std.array;
-import std.json;
-import std.conv;
-import std.string;
+import std.string : strip;
+import languages.web.javascript.bundlers.base;
+import infrastructure.config.schema.schema;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.logging;
 
 /// Webpack bundler - for complex projects with advanced features
 class WebpackBundler : Bundler
 {
-    BundleResult bundle(
-        const(string[]) sources,
-        JSConfig config,
-        in Target target,
-        in WorkspaceConfig workspace
-    )
+    BundleResult bundle(const(string[]) sources, JSConfig config, in Target target, in WorkspaceConfig workspace)
     {
         BundleResult result;
         
-        // Check if webpack is available
         if (!isAvailable())
         {
             result.error = "webpack not found. Install: npm install -g webpack webpack-cli";
             return result;
         }
         
-        // If custom config file specified, use it
         if (!config.configFile.empty && exists(config.configFile))
-        {
             return bundleWithConfigFile(config.configFile, workspace, result);
-        }
         
-        // Otherwise, generate temporary config
         return bundleWithGeneratedConfig(sources, config, target, workspace, result);
     }
     
-    private BundleResult bundleWithConfigFile(
-        string configFile,
-        in WorkspaceConfig workspace,
-        BundleResult result
-    )
+    private BundleResult bundleWithConfigFile(string configFile, in WorkspaceConfig workspace, BundleResult result)
     {
-        structuredLog.debug_("using_webpack_config_").field("detail", "Using webpack config: " ~ configFile).emit();
+        structuredLog.debug_("using_webpack_config").field("detail", configFile).emit();
         
-        string[] cmd = ["webpack", "--config", configFile];
-        auto res = execute(cmd);
-        
+        auto res = execute(["webpack", "--config", configFile]);
         if (res.status != 0)
         {
             result.error = "webpack failed: " ~ res.output;
@@ -61,62 +42,30 @@ class WebpackBundler : Bundler
         }
         
         result.success = true;
-        
-        // Parse webpack output to find generated files
         string outputDir = workspace.options.outputDir;
         if (exists(outputDir) && isDir(outputDir))
-        {
             foreach (entry; dirEntries(outputDir, SpanMode.shallow))
-            {
-                if (entry.isFile)
-                    result.outputs ~= entry.name;
-            }
-        }
+                if (entry.isFile) result.outputs ~= entry.name;
         
         result.outputHash = FastHash.hashFiles(result.outputs);
-        
         return result;
     }
     
-    private BundleResult bundleWithGeneratedConfig(
-        const(string[]) sources,
-        JSConfig config,
-        in Target target,
-        in WorkspaceConfig workspace,
-        BundleResult result
-    )
+    private BundleResult bundleWithGeneratedConfig(const(string[]) sources, JSConfig config, in Target target, in WorkspaceConfig workspace, BundleResult result)
     {
-        // Generate temporary webpack config
         string entry = config.entry.empty ? sources[0] : config.entry;
         string outputDir = workspace.options.outputDir;
         mkdirRecurse(outputDir);
-        
         string outputFile = target.name.split(":")[$ - 1] ~ ".js";
         
-        // Build webpack config as JavaScript
-        string webpackConfig = generateWebpackConfig(
-            entry,
-            outputDir,
-            outputFile,
-            config
-        );
-        
-        // Write temporary config
+        string webpackConfig = generateConfig(entry, outputDir, outputFile, config);
         string tempConfig = buildPath(outputDir, ".webpack.config.temp.js");
         std.file.write(tempConfig, webpackConfig);
+        scope(exit) if (exists(tempConfig)) remove(tempConfig);
         
-        scope(exit)
-        {
-            if (exists(tempConfig))
-                remove(tempConfig);
-        }
+        structuredLog.debug_("generated_webpack_config").field("detail", tempConfig).emit();
         
-        structuredLog.debug_("generated_webpack_config_").field("detail", "Generated webpack config: " ~ tempConfig).emit();
-        
-        // Run webpack
-        string[] cmd = ["webpack", "--config", tempConfig];
-        auto res = execute(cmd);
-        
+        auto res = execute(["webpack", "--config", tempConfig]);
         if (res.status != 0)
         {
             result.error = "webpack failed: " ~ res.output;
@@ -126,24 +75,16 @@ class WebpackBundler : Bundler
         result.success = true;
         result.outputs = [buildPath(outputDir, outputFile)];
         result.outputHash = FastHash.hashFiles(result.outputs);
-        
         return result;
     }
     
-    private string generateWebpackConfig(
-        string entry,
-        string outputDir,
-        string outputFile,
-        JSConfig config
-    )
+    private string generateConfig(string entry, string outputDir, string outputFile, JSConfig config)
     {
         string mode = config.minify ? "production" : "development";
-        string libraryTarget = outputFormatToLibraryTarget(config.format);
-        string target = platformToWebpackTarget(config.platform);
+        string libraryTarget = formatToLibrary(config.format);
+        string target = platformToTarget(config.platform);
         
-        return `
-const path = require('path');
-
+        return `const path = require('path');
 module.exports = {
   mode: '` ~ mode ~ `',
   entry: '` ~ absolutePath(entry) ~ `',
@@ -154,17 +95,14 @@ module.exports = {
   },
   target: '` ~ target ~ `',
   devtool: ` ~ (config.sourcemap ? "'source-map'" : "false") ~ `,
-  externals: ` ~ externalToJSON(config.external) ~ `,
-  resolve: {
-    extensions: ['.js', '.json', '.jsx']
-  }
-};
-`;
+  externals: [` ~ config.external.map!(e => "'" ~ e ~ "'").join(", ") ~ `],
+  resolve: { extensions: ['.js', '.json', '.jsx'] }
+};`;
     }
     
-    private string outputFormatToLibraryTarget(OutputFormat format)
+    private string formatToLibrary(OutputFormat f)
     {
-        final switch (format)
+        final switch (f)
         {
             case OutputFormat.ESM: return "module";
             case OutputFormat.CommonJS: return "commonjs2";
@@ -173,9 +111,9 @@ module.exports = {
         }
     }
     
-    private string platformToWebpackTarget(Platform platform)
+    private string platformToTarget(Platform p)
     {
-        final switch (platform)
+        final switch (p)
         {
             case Platform.Browser: return "web";
             case Platform.Node: return "node";
@@ -183,31 +121,11 @@ module.exports = {
         }
     }
     
-    private string externalToJSON(string[] external)
-    {
-        if (external.empty)
-            return "[]";
-        
-        return "[" ~ external.map!(e => "'" ~ e ~ "'").join(", ") ~ "]";
-    }
-    
-    bool isAvailable()
-    {
-        auto res = execute(["webpack", "--version"]);
-        return res.status == 0;
-    }
-    
-    string name() const
-    {
-        return "webpack";
-    }
-    
+    bool isAvailable() { return execute(["webpack", "--version"]).status == 0; }
+    string name() const => "webpack";
     string getVersion()
     {
-        auto res = execute(["webpack", "--version"]);
-        if (res.status == 0)
-            return res.output.strip;
-        return "unknown";
+        auto r = execute(["webpack", "--version"]);
+        return r.status == 0 ? r.output.strip : "unknown";
     }
 }
-
