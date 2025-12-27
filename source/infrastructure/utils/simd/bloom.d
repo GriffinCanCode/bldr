@@ -122,6 +122,15 @@ struct BloomFilter
     
     @disable this(this);  // Non-copyable (owns C memory)
     
+    /// Compute optimal FPR based on expected item count
+    /// For large caches (100K+), use lower FPR to reduce unnecessary lookups
+    static double optimalFPR(size_t expectedItems) pure @safe nothrow @nogc
+    {
+        if (expectedItems >= 1_000_000) return 0.0001;  // 0.01% for 1M+
+        if (expectedItems >= 100_000) return 0.001;     // 0.1% for 100K+
+        return 0.01;                                     // 1% default
+    }
+    
     /// Create filter with optimal parameters for expected items and error rate
     /// 
     /// Params:
@@ -141,6 +150,13 @@ struct BloomFilter
             bf._initialized = true;
         
         return bf;
+    }
+    
+    /// Create filter with auto-tuned FPR based on expected size
+    /// Uses 0.1% FPR for 100K+ items, 0.01% for 1M+, 1% otherwise
+    static BloomFilter createOptimal(size_t expectedItems) @system
+    {
+        return create(expectedItems, optimalFPR(expectedItems));
     }
     
     /// Create filter with explicit parameters
@@ -453,6 +469,15 @@ struct LockFreeBloomFilter
     
     @disable this(this);  // Non-copyable
     
+    /// Compute optimal FPR based on expected item count
+    /// For large caches (100K+), use lower FPR to reduce unnecessary CAS lookups
+    static double optimalFPR(size_t expectedItems) pure @safe nothrow @nogc
+    {
+        if (expectedItems >= 1_000_000) return 0.0001;  // 0.01% for 1M+
+        if (expectedItems >= 100_000) return 0.001;     // 0.1% for 100K+
+        return 0.01;                                     // 1% default
+    }
+    
     /// Create filter with optimal parameters
     static LockFreeBloomFilter create(size_t expectedItems, double errorRate = 0.01) @trusted
     {
@@ -484,6 +509,13 @@ struct LockFreeBloomFilter
         bf._bits[] = 0;
         
         return bf;
+    }
+    
+    /// Create filter with auto-tuned FPR based on expected size
+    /// Uses 0.1% FPR for 100K+ items, 0.01% for 1M+, 1% otherwise
+    static LockFreeBloomFilter createOptimal(size_t expectedItems) @trusted
+    {
+        return create(expectedItems, optimalFPR(expectedItems));
     }
     
     /// Create with explicit parameters
@@ -1060,5 +1092,48 @@ unittest
     assert(found == 10_000, "Lost items during concurrent insertion");
     
     writeln("LockFreeBloomFilter concurrent insertion test passed");
+}
+
+// === Adaptive FPR Tests ===
+
+unittest
+{
+    import std.stdio : writeln;
+    
+    // Test optimalFPR thresholds
+    assert(BloomFilter.optimalFPR(1_000) == 0.01);        // Small: 1%
+    assert(BloomFilter.optimalFPR(50_000) == 0.01);       // Medium: 1%
+    assert(BloomFilter.optimalFPR(100_000) == 0.001);     // Large: 0.1%
+    assert(BloomFilter.optimalFPR(500_000) == 0.001);     // Large: 0.1%
+    assert(BloomFilter.optimalFPR(1_000_000) == 0.0001);  // Very large: 0.01%
+    assert(BloomFilter.optimalFPR(10_000_000) == 0.0001); // Huge: 0.01%
+    
+    // Same for LockFreeBloomFilter
+    assert(LockFreeBloomFilter.optimalFPR(1_000) == 0.01);
+    assert(LockFreeBloomFilter.optimalFPR(100_000) == 0.001);
+    assert(LockFreeBloomFilter.optimalFPR(1_000_000) == 0.0001);
+    
+    writeln("Adaptive FPR thresholds test passed");
+}
+
+@system unittest
+{
+    import std.stdio : writeln;
+    
+    // Test createOptimal factory
+    auto smallFilter = BloomFilter.createOptimal(1_000);
+    assert(smallFilter.valid);
+    
+    auto largeFilter = BloomFilter.createOptimal(100_000);
+    assert(largeFilter.valid);
+    
+    // LockFreeBloomFilter createOptimal
+    auto lockFreeSmall = LockFreeBloomFilter.createOptimal(1_000);
+    assert(lockFreeSmall.valid);
+    
+    auto lockFreeLarge = LockFreeBloomFilter.createOptimal(100_000);
+    assert(lockFreeLarge.valid);
+    
+    writeln("createOptimal factory test passed");
 }
 

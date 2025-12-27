@@ -131,15 +131,29 @@ final class ShardedStringPool
     }
     
     /// Factory with optimal shard count for core count
-    static ShardedStringPool create(size_t coreHint = 0) @trusted
+    /// 
+    /// Params:
+    ///   coreHint = Number of cores (0 = auto-detect)
+    ///   maxShards = Maximum shard count (default 64, increase for 128+ cores)
+    static ShardedStringPool create(size_t coreHint = 0, size_t maxShards = 64) @trusted
     {
         import std.parallelism : totalCPUs;
-        if (coreHint == 0)
-            coreHint = totalCPUs;
+        import std.math : isPowerOf2;
         
-        // Round up to next power of 2, minimum 4, maximum 64
+        if (coreHint == 0) coreHint = totalCPUs;
+        if (maxShards < 4) maxShards = 4;
+        
+        // Round maxShards up to power of 2 if not already
+        if (!isPowerOf2(maxShards))
+        {
+            size_t rounded = 4;
+            while (rounded < maxShards) rounded *= 2;
+            maxShards = rounded;
+        }
+        
+        // Round up to next power of 2, minimum 4, cap at maxShards
         size_t shardCount = 4;
-        while (shardCount < coreHint && shardCount < 64)
+        while (shardCount < coreHint && shardCount < maxShards)
             shardCount *= 2;
         
         return new ShardedStringPool(shardCount);
@@ -479,9 +493,20 @@ unittest
     assert(pool2.shardCount == 8);  // Rounded up
     
     auto pool3 = ShardedStringPool.create(100);
-    assert(pool3.shardCount == 64);  // Max 64
+    assert(pool3.shardCount == 64);  // Max 64 (default)
     
-    writeln("\x1b[32m  ✓ Factory with core hint\x1b[0m");
+    // Test configurable max shards for high core counts (128+)
+    auto pool4 = ShardedStringPool.create(128, 128);
+    assert(pool4.shardCount == 128);
+    
+    auto pool5 = ShardedStringPool.create(200, 256);
+    assert(pool5.shardCount == 256);
+    
+    // Non-power-of-2 maxShards gets rounded up
+    auto pool6 = ShardedStringPool.create(100, 100);
+    assert(pool6.shardCount == 64);  // coreHint capped at rounded maxShards (128)
+    
+    writeln("\x1b[32m  ✓ Factory with core hint and configurable max shards\x1b[0m");
 }
 
 @system unittest
