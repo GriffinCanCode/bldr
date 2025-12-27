@@ -16,6 +16,7 @@ import engine.distributed.worker.peers;
 import engine.distributed.worker.steal;
 import engine.distributed.worker.adaptive;
 import engine.distributed.memory;
+import engine.distributed.memory.local;
 import engine.distributed.metrics.steal : StealTelemetry;
 import infrastructure.errors;
 import infrastructure.utils.logging;
@@ -59,7 +60,7 @@ struct WorkerLifecycle
     private StealEngine stealEngine;
     private StealTelemetry stealTelemetry;
     
-    // Memory optimization components
+    // Memory optimization: shared pools as fallback (thread-local is primary)
     private ArenaPool arenaPool;
     private BufferPool bufferPool;
     
@@ -70,9 +71,15 @@ struct WorkerLifecycle
         this.localQueue = WorkStealingDeque!ActionRequest(config.localQueueSize);
         atomicStore(state, WorkerState.Idle);
         atomicStore(running, false);
-        this.arenaPool = new ArenaPool(64 * 1024, 32);
-        this.bufferPool = new BufferPool(64 * 1024, 128);
-        bufferPool.preallocate(16);
+        
+        // Configure thread-local pools (primary path - zero sync)
+        ThreadLocalBufferPool.configure(64 * 1024, 32);
+        ThreadLocalBufferPool.preallocate(8);
+        
+        // Keep shared pools as fallback for cross-thread transfers
+        this.arenaPool = new ArenaPool(64 * 1024, 16);
+        this.bufferPool = new BufferPool(64 * 1024, 64);
+        bufferPool.preallocate(8);
     }
     
     /// Start worker
@@ -108,6 +115,18 @@ struct WorkerLifecycle
         
         // Transport cleanup
         if (coordinatorTransport !is null) coordinatorTransport.close();
+        
+        // Log memory statistics (thread-local + shared)
+        auto localStats = LocalMemoryStats.collect();
+        structuredLog.info("memory_stats")
+            .field("arena_allocs", localStats.arena.totalAllocations)
+            .field("arena_resets", localStats.arena.totalResets)
+            .field("buffer_reused", localStats.buffers.totalReused)
+            .field("buffer_created", localStats.buffers.totalCreated)
+            .emit();
+        
+        // Clear thread-local memory
+        resetThreadLocalMemory();
         
         // Log statistics
         if (stealTelemetry !is null) structuredLog.info("workstealing_stats_").field("detail", "Work-stealing stats: " ~ stealTelemetry.getStats().toString()).emit();
@@ -227,5 +246,8 @@ struct WorkerLifecycle
     bool isAdaptiveEnabled() @trusted => stealEngine !is null && stealEngine.isAdaptiveEnabled();
     ThresholdState getAdaptiveState() @trusted => stealEngine !is null ? stealEngine.getAdaptiveState() : ThresholdState.init;
     AdaptiveStats getAdaptiveStats() @trusted => stealEngine !is null ? stealEngine.getAdaptiveStats() : AdaptiveStats.init;
+    
+    /// Thread-local memory statistics (for monitoring)
+    LocalMemoryStats getLocalMemoryStats() @trusted nothrow @nogc => LocalMemoryStats.collect();
 }
 

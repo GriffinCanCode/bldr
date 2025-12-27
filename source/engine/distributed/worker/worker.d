@@ -16,6 +16,7 @@ import infrastructure.utils.concurrency.structured : TaskScope, VoidTask;
 import engine.distributed.worker.peers;
 import engine.distributed.worker.steal;
 import engine.distributed.memory;
+import engine.distributed.memory.local : ThreadLocalArena, resetThreadLocalMemory;
 import engine.distributed.metrics.steal : StealTelemetry;
 import infrastructure.errors;
 import infrastructure.utils.logging;
@@ -121,10 +122,15 @@ final class Worker
     private void executeAction(ActionRequest request) @trusted
     {
         lifecycle.setState(WorkerState.Executing);
+        scope(exit)
+        {
+            ThreadLocalArena.reset();  // Reset arena between actions
+            lifecycle.setState(WorkerState.Idle);
+        }
+        
         auto config = lifecycle.getConfig();
         executor.executeAction(request, config.enableSandboxing, config.defaultCapabilities,
             (ActionResult result) @trusted { communication.sendResult(lifecycle.getId(), result, lifecycle.getCoordinatorTransport()); });
-        lifecycle.setState(WorkerState.Idle);
     }
     
     /// Heartbeat body (called periodically by TaskScope.launchPeriodic)

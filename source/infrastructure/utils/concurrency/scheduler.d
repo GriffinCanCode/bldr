@@ -324,6 +324,7 @@ final class WorkStealingScheduler(T)
                         
                         atomicOp!"+="(activeWorkers, 1);
                         executeTask(stolenBatch[0].payload);
+                        resetWorkerArena();  // Reset thread-local arena between tasks
                         worker.recordExecution();
                         worker.recordSteal();
                         atomicOp!"-="(activeWorkers, 1);

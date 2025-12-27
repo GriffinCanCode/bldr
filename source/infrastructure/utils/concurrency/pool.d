@@ -10,6 +10,18 @@ import infrastructure.errors : Errors, Internal;
 import std.conv : to;
 import std.parallelism : totalCPUs;
 
+// Thread-local arena for zero-sync allocations within worker threads
+private void resetWorkerMemory() @trusted nothrow
+{
+    // Import conditionally to avoid circular deps during init
+    try
+    {
+        import engine.distributed.memory.local : ThreadLocalArena;
+        ThreadLocalArena.reset();
+    }
+    catch (Exception) {}  // Ignore if module not yet loaded
+}
+
 
 /// Persistent thread pool for reusable parallel execution
 /// Thread-safe: All shared state is protected by mutex or atomic operations
@@ -355,6 +367,7 @@ private final class Worker
     /// 3. Exception handling prevents thread crashes
     /// 4. Proper cleanup via pool.completeJob()
     /// 5. Job is a class (heap-allocated), so reference remains valid
+    /// 6. Thread-local arena reset between jobs eliminates pool contention
     @system
     private void run()
     {
@@ -375,6 +388,9 @@ private final class Worker
                 // Log error but continue
                 atomicStore(job.completed, true);
             }
+            
+            // Reset thread-local arena between jobs (zero-sync memory reuse)
+            resetWorkerMemory();
             
             pool.completeJob();
         }

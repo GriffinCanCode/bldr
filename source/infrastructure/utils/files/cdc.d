@@ -10,6 +10,18 @@ import infrastructure.utils.crypto.merkle : MerkleTree, MerkleProof, StreamingMe
 import infrastructure.errors : Result, Ok, Err, BuildResult, BuildError, VoidBuildResult;
 import infrastructure.utils.simd.gear : SIMDGear;
 
+// Thread-local buffer for zero-sync allocation in parallel chunking
+private ubyte[] getThreadLocalBuffer(size_t size) @trusted nothrow
+{
+    static ubyte[] tlsBuffer;  // Thread-local storage
+    if (tlsBuffer.length < size)
+    {
+        try tlsBuffer = new ubyte[size];
+        catch (Exception) return null;
+    }
+    return tlsBuffer[0 .. size];
+}
+
 /// FastCDC - Content-Defined Chunking using Gear rolling hash
 /// 2-3x faster than Rabin fingerprinting with comparable deduplication
 /// 
@@ -176,7 +188,9 @@ struct FastCDC
         auto chunkHashes = appender!(ubyte[32][])();
         
         size_t offset = 0;
-        ubyte[] buffer = new ubyte[config.maxSize];
+        // Use thread-local buffer to avoid allocation per call (zero sync)
+        ubyte[] buffer = getThreadLocalBuffer(config.maxSize);
+        if (buffer is null) buffer = new ubyte[config.maxSize];  // Fallback
         
         while (offset < fileSize)
         {
