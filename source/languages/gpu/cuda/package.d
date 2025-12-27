@@ -1,4 +1,4 @@
-module languages.compiled.gpu.cuda;
+module languages.gpu.cuda;
 
 /// CUDA Language Support
 /// 
@@ -24,6 +24,4 @@ module languages.compiled.gpu.cuda;
 ///       }
 ///   }
 
-public import languages.compiled.gpu.cuda.core;
-public import languages.compiled.gpu.cuda.builders;
-
+public import languages.gpu.cuda.core;

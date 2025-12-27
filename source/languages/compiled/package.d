@@ -10,10 +10,8 @@ module languages.compiled;
 ///   - Zig
 ///   - OCaml (dune, ocamlopt, ocamlc support)
 ///   - Protocol Buffers (protoc/buf compiler support)
-///   - CUDA (NVIDIA GPU kernels via nvcc)
-///   - ROCm/HIP (AMD GPU kernels via hipcc)
-///   - Metal (Apple GPU shaders)
 ///
+/// Note: GPU languages (CUDA, Metal, ROCm) are in languages.gpu package
 
 public import languages.compiled.cpp;
 public import languages.compiled.d;
@@ -22,5 +20,3 @@ public import languages.compiled.nim;
 public import languages.compiled.zig;
 public import languages.compiled.ocaml;
 public import languages.compiled.protobuf;
-public import languages.compiled.gpu;
-

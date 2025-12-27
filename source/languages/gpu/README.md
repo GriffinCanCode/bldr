@@ -2,6 +2,31 @@
 
 First-class support for GPU kernel compilation with proper dependency tracking.
 
+## Architecture
+
+All GPU handlers extend `BaseGPUHandler` from `languages/gpu/base.d`:
+
+```
+languages/gpu/
+├── base.d          ← BaseGPUHandler (shared compile/link workflow)
+├── cuda/core/      ← CUDAHandler extends BaseGPUHandler
+├── metal/core/     ← MetalHandler extends BaseGPUHandler
+├── rocm/core/      ← ROCmHandler extends BaseGPUHandler
+└── package.d
+```
+
+The base class provides:
+- Device/host source file separation
+- Unified compile → link workflow with caching
+- Dependency tracking infrastructure
+- Progress reporting and error codes
+- Test execution framework
+
+Individual handlers only implement:
+- Toolkit detection (nvcc, xcrun, hipcc)
+- Architecture flag generation
+- Compiler/linker command building
+
 ## Supported Languages
 
 ### CUDA (NVIDIA)

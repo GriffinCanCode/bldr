@@ -123,13 +123,13 @@ final class HandlerRegistry : IHandlerRegistry
                 import languages.wasm : WebAssemblyHandler;
                 return new WebAssemblyHandler();
             case TargetLanguage.CUDA:
-                import languages.compiled.gpu.cuda : CUDAHandler;
+                import languages.gpu.cuda : CUDAHandler;
                 return new CUDAHandler();
             case TargetLanguage.ROCm:
-                import languages.compiled.gpu.rocm : ROCmHandler;
+                import languages.gpu.rocm : ROCmHandler;
                 return new ROCmHandler();
             case TargetLanguage.Metal:
-                import languages.compiled.gpu.metal : MetalHandler;
+                import languages.gpu.metal : MetalHandler;
                 return new MetalHandler();
             case TargetLanguage.FSharp:
             case TargetLanguage.CSS:

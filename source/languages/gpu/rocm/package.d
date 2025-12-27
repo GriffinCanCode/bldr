@@ -1,4 +1,4 @@
-module languages.compiled.gpu.rocm;
+module languages.gpu.rocm;
 
 /// ROCm/HIP Language Support
 /// 
@@ -21,5 +21,4 @@ module languages.compiled.gpu.rocm;
 ///       }
 ///   }
 
-public import languages.compiled.gpu.rocm.core;
-
+public import languages.gpu.rocm.core;

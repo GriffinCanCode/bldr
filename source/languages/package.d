@@ -83,6 +83,6 @@ public import languages.scripting.lua;
 public import languages.compiled.nim;
 public import languages.compiled.zig;
 public import languages.compiled.haskell;
-public import languages.compiled.gpu;  // CUDA/ROCm/Metal GPU compute
+public import languages.gpu;  // CUDA/ROCm/Metal GPU compute
 public import languages.wasm;  // WebAssembly/WASI
 

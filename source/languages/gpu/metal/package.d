@@ -1,4 +1,4 @@
-module languages.compiled.gpu.metal;
+module languages.gpu.metal;
 
 /// Apple Metal Language Support
 /// 
@@ -21,5 +21,4 @@ module languages.compiled.gpu.metal;
 ///       }
 ///   }
 
-public import languages.compiled.gpu.metal.core;
-
+public import languages.gpu.metal.core;
