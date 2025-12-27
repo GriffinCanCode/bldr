@@ -5,30 +5,34 @@ import engine.graph.core.graph;
 import engine.graph.caching.schema;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.serialization;
+import infrastructure.utils.compression.streaming : zstdCompress, zstdDecompress;
 import infrastructure.errors : Result, Ok, Err, BuildError, Errors, Cache, Graph;
 
 /// High-performance binary serialization for BuildGraph
-/// Uses SIMD-accelerated serialization framework
+/// Uses SIMD-accelerated serialization framework + zstd compression
 /// 
 /// Design:
 /// - Schema-based serialization with versioning
 /// - Preserves full graph topology (nodes + edges)
 /// - All metadata preserved (status, hashes, retry counts)
-/// - ~10x faster than JSON, ~40% smaller
+/// - ~10x faster than JSON, ~60-80% smaller with compression
 /// 
 /// Performance:
 /// - Compile-time code generation
 /// - SIMD varint encoding
-/// - Zero-copy deserialization
+/// - Zstd compression (typically 50-70% reduction on graphs)
 /// - Arena buffer management
 struct GraphStorage
 {
-    /// Serialize BuildGraph to binary format
+    /// Magic header for compressed graphs
+    private enum ubyte[4] COMPRESSED_MAGIC = [0x47, 0x52, 0x43, 0x5A];  // "GRCZ"
+    
+    /// Serialize BuildGraph to binary format (with compression)
     /// 
     /// Safety: @system due to:
     /// - Atomic reads from shared fields (thread-safe)
     /// - Pointer access to graph nodes (bounds-checked)
-    static ubyte[] serialize(BuildGraph graph) @system
+    static ubyte[] serialize(BuildGraph graph, bool compress = true) @system
     {
         // Convert to serializable format
         SerializableBuildGraph serializable;
@@ -50,7 +54,28 @@ struct GraphStorage
         serializable.isValidated = graph.isValidated;
         
         // Serialize with high-performance codec
-        return Codec.serialize(serializable);
+        auto raw = Codec.serialize(serializable);
+        
+        // Compress if enabled and beneficial
+        if (compress && raw.length > 1024)
+        {
+            auto compResult = zstdCompress(raw, 3);
+            if (compResult.isOk)
+            {
+                auto compressed = compResult.unwrap();
+                if (compressed.length < raw.length * 9 / 10)
+                {
+                    // Prepend magic header
+                    ubyte[] result;
+                    result.reserve(4 + compressed.length);
+                    result ~= COMPRESSED_MAGIC[];
+                    result ~= compressed;
+                    return result;
+                }
+            }
+        }
+        
+        return raw;
     }
     
     /// Deserialize BuildGraph from binary format
@@ -68,8 +93,19 @@ struct GraphStorage
                 .withSuggestion("Graph cache file is empty or corrupted")
                 .withCommand("Clear cache", "bldr clean --cache").build();
         
+        // Check for compression header and decompress
+        ubyte[] toDeserialize = data;
+        if (data.length > 4 && data[0..4] == COMPRESSED_MAGIC)
+        {
+            auto decompResult = zstdDecompress(data[4 .. $]);
+            if (decompResult.isErr)
+                throw Errors.cache("Graph decompression failed", Cache.CompressionFailed)
+                    .withCommand("Clear corrupted cache", "bldr clean --cache").build();
+            toDeserialize = decompResult.unwrap();
+        }
+        
         // Deserialize with codec
-        auto result = Codec.deserialize!SerializableBuildGraph(data);
+        auto result = Codec.deserialize!SerializableBuildGraph(toDeserialize);
         
         if (result.isErr)
             throw Errors.cache("Failed to deserialize graph: " ~ result.unwrapErr(), Cache.Corrupted)
@@ -134,17 +170,19 @@ struct GraphStorage
             }
         }
         
-        // Add nodes to graph
+        // Add nodes to graph with indexed lookup
         foreach (key, node; nodeMap)
         {
+            graph._stringToIndex[key] = node._nodeIndex;
             graph.nodes[key] = node;
         }
         
-        // Reconstruct roots
+        // Reconstruct roots using indexed lookup
         foreach (rootId; serializable.rootIds)
         {
-            if (auto node = rootId in nodeMap)
-                graph.roots ~= *node;
+            auto node = graph.getNodeByKey(rootId);
+            if (node !is null)
+                graph.roots ~= node;
         }
         
         // Restore validation state

@@ -4,16 +4,16 @@ import std.algorithm : map, filter, sum, min, max;
 import std.array : array, appender;
 import std.bitmanip : nativeToBigEndian, bigEndianToNative;
 import std.datetime : Duration, MonoTime, seconds;
-import std.file : exists, read, write, mkdirRecurse, remove;
+import std.file : exists, read, write, mkdirRecurse;
 import std.path : buildPath, dirName;
-import std.process : execute, Config;
-import std.uuid : randomUUID;
 import std.conv : to;
 import engine.caching.distributed.remote.artifact;
 import engine.caching.storage.chunked : ChunkedCAS;
 import infrastructure.utils.files.cdc : ChunkManifest, DeltaStats, FastCDC;
 import infrastructure.utils.crypto.blake3 : Blake3, toHexString;
 import infrastructure.utils.crypto.merkle : MerkleTree, MerkleProof;
+import infrastructure.utils.compression.zstd;
+import infrastructure.utils.compression.streaming : ZstdStream;
 import infrastructure.errors;
 
 /// Rolling Checksum (rsync-style Adler32 variant)
@@ -322,13 +322,18 @@ final class RsyncDelta
     }
 }
 
-/// Zstd dictionary compression for artifact families
+/// Zstd dictionary compression for artifact families (FFI-based)
 /// Trains dictionaries on similar artifacts for 30-50% better compression
+/// Uses direct libzstd FFI bindings for optimal performance
 final class ZstdDictionary
 {
     private string dictionaryPath;
     private ubyte[] dictionary;
     private size_t dictSize;
+    private ZSTD_CCtx* cctx;
+    private ZSTD_DCtx* dctx;
+    private ZSTD_CDict* cdict;
+    private ZSTD_DDict* ddict;
     
     enum DEFAULT_DICT_SIZE = 110 * 1024;  // 110KB default
     
@@ -338,118 +343,149 @@ final class ZstdDictionary
         this.dictSize = dictSize;
         this.dictionaryPath = buildPath(storagePath, "zstd_dict");
         
+        // Create contexts
+        cctx = ZSTD_createCCtx();
+        dctx = ZSTD_createDCtx();
+        
         if (!exists(dirName(dictionaryPath)))
             mkdirRecurse(dirName(dictionaryPath));
         
         if (exists(dictionaryPath))
+        {
             dictionary = cast(ubyte[])read(dictionaryPath);
+            compileDictionary();
+        }
     }
     
-    /// Train dictionary on sample data
+    ~this() @trusted
+    {
+        if (cctx) ZSTD_freeCCtx(cctx);
+        if (dctx) ZSTD_freeDCtx(dctx);
+        if (cdict) ZSTD_freeCDict(cdict);
+        if (ddict) ZSTD_freeDDict(ddict);
+    }
+    
+    /// Compile dictionary into optimized form
+    private void compileDictionary() @trusted
+    {
+        if (dictionary.length == 0) return;
+        
+        if (cdict) ZSTD_freeCDict(cdict);
+        if (ddict) ZSTD_freeDDict(ddict);
+        
+        cdict = ZSTD_createCDict(dictionary.ptr, dictionary.length, 5);
+        ddict = ZSTD_createDDict(dictionary.ptr, dictionary.length);
+    }
+    
+    /// Train dictionary on sample data using FFI
     @system
     VoidBuildResult train(const(ubyte)[][] samples)
     {
-        import std.file : tempDir, remove;
-        
         if (samples.length == 0)
-            return VoidBuildResult.err(Errors.generic(
-                "No samples for dictionary training").build());
+            return VoidBuildResult.err(Errors.generic("No samples for dictionary training").build());
         
-        // Write samples to temp files
-        string[] samplePaths;
-        scope(exit) foreach (p; samplePaths) if (exists(p)) .remove(p);
+        // Concatenate samples into single buffer
+        size_t totalSize = 0;
+        foreach (s; samples) totalSize += s.length;
         
+        auto samplesBuffer = new ubyte[](totalSize);
+        auto samplesSizes = new size_t[](samples.length);
+        
+        size_t offset = 0;
         foreach (i, sample; samples)
         {
-            auto path = buildPath(tempDir(), randomUUID().toString() ~ ".sample");
-            write(path, sample);
-            samplePaths ~= path;
+            samplesBuffer[offset .. offset + sample.length] = sample[];
+            samplesSizes[i] = sample.length;
+            offset += sample.length;
         }
         
-        // Train dictionary using zstd CLI
-        auto outputPath = buildPath(tempDir(), randomUUID().toString() ~ ".dict");
-        scope(exit) if (exists(outputPath)) .remove(outputPath);
+        // Train dictionary using ZDICT API
+        auto dictBuffer = new ubyte[](dictSize);
+        auto trainedSize = ZDICT_trainFromBuffer(
+            dictBuffer.ptr, dictBuffer.length,
+            samplesBuffer.ptr, samplesSizes.ptr,
+            cast(uint)samples.length
+        );
         
-        auto args = ["zstd", "--train", "-o", outputPath, 
-                     "--maxdict=" ~ dictSize.to!string] ~ samplePaths;
-        
-        auto result = execute(args, null, Config.none);
-        if (result.status != 0)
+        if (ZDICT_isError(trainedSize))
             return VoidBuildResult.err(Errors.generic(
-                "Dictionary training failed: " ~ result.output).build());
+                "Dictionary training failed: " ~ 
+                cast(string)ZDICT_getErrorName(trainedSize)[0..strLen(ZDICT_getErrorName(trainedSize))]
+            ).build());
         
-        // Load trained dictionary
-        dictionary = cast(ubyte[])read(outputPath);
+        // Save trained dictionary
+        dictionary = dictBuffer[0 .. trainedSize].dup;
         write(dictionaryPath, dictionary);
+        compileDictionary();
         
         return Ok!BuildError();
     }
     
-    /// Compress data with dictionary
+    /// Compress data with dictionary using FFI
     @system
     BuildResult!(ubyte[]) compress(const(ubyte)[] data, int level = 5)
     {
-        import std.file : tempDir, remove;
+        if (data.length == 0)
+            return Err!(ubyte[], BuildError)(Errors.generic("Cannot compress empty data").build());
         
-        if (dictionary.length == 0)
-            return compressWithoutDict(data, level);
+        auto dstCapacity = ZSTD_compressBound(data.length);
+        auto output = new ubyte[](dstCapacity);
         
-        auto inputPath = buildPath(tempDir(), randomUUID().toString() ~ ".in");
-        auto outputPath = buildPath(tempDir(), randomUUID().toString() ~ ".zst");
-        scope(exit)
+        size_t written;
+        if (cdict !is null)
         {
-            if (exists(inputPath)) .remove(inputPath);
-            if (exists(outputPath)) .remove(outputPath);
+            written = ZSTD_compress_usingCDict(cctx, 
+                output.ptr, output.length, 
+                data.ptr, data.length, cdict);
+        }
+        else
+        {
+            written = ZSTD_compressCCtx(cctx, 
+                output.ptr, output.length, 
+                data.ptr, data.length, level);
         }
         
-        write(inputPath, data);
+        if (ZSTD_isError(written))
+            return Err!(ubyte[], BuildError)(Errors.cache(
+                "Zstd compression failed", Cache.CompressionFailed).build());
         
-        auto result = execute([
-            "zstd", "-" ~ level.to!string, "-q", "-f",
-            "-D", dictionaryPath,
-            "-o", outputPath, inputPath
-        ], null, Config.none);
-        
-        if (result.status != 0 || !exists(outputPath))
-            return compressWithoutDict(data, level);
-        
-        return Ok!(ubyte[], BuildError)(cast(ubyte[])read(outputPath));
+        return Ok!(ubyte[], BuildError)(output[0 .. written].dup);
     }
     
-    /// Decompress data with dictionary
+    /// Decompress data with dictionary using FFI
     @system
     BuildResult!(ubyte[]) decompress(const(ubyte)[] data)
     {
-        import std.file : tempDir, remove;
+        if (data.length == 0)
+            return Err!(ubyte[], BuildError)(Errors.generic("Cannot decompress empty data").build());
         
-        auto inputPath = buildPath(tempDir(), randomUUID().toString() ~ ".zst");
-        auto outputPath = buildPath(tempDir(), randomUUID().toString() ~ ".out");
-        scope(exit)
+        // Get decompressed size from frame
+        auto frameSize = ZSTD_getFrameContentSize(data.ptr, data.length);
+        size_t dstCapacity = (frameSize != ZSTD_CONTENTSIZE_UNKNOWN && frameSize != ZSTD_CONTENTSIZE_ERROR)
+            ? cast(size_t)frameSize
+            : data.length * 4;  // Heuristic
+        
+        auto output = new ubyte[](dstCapacity);
+        
+        size_t written;
+        if (ddict !is null)
         {
-            if (exists(inputPath)) .remove(inputPath);
-            if (exists(outputPath)) .remove(outputPath);
+            written = ZSTD_decompress_usingDDict(dctx, 
+                output.ptr, output.length, 
+                data.ptr, data.length, ddict);
+        }
+        else
+        {
+            written = ZSTD_decompressDCtx(dctx, 
+                output.ptr, output.length, 
+                data.ptr, data.length);
         }
         
-        write(inputPath, data);
+        if (ZSTD_isError(written))
+            return Err!(ubyte[], BuildError)(Errors.cache(
+                "Zstd decompression failed", Cache.CompressionFailed).build());
         
-        // Try with dictionary first
-        string[] args = ["zstd", "-d", "-q", "-f", "-o", outputPath];
-        if (dictionary.length > 0 && exists(dictionaryPath))
-            args ~= ["-D", dictionaryPath];
-        args ~= inputPath;
-        
-        auto result = execute(args, null, Config.none);
-        if (result.status != 0 || !exists(outputPath))
-        {
-            // Retry without dictionary
-            result = execute(["zstd", "-d", "-q", "-f", "-o", outputPath, inputPath], 
-                           null, Config.none);
-            if (result.status != 0 || !exists(outputPath))
-                return Err!(ubyte[], BuildError)(Errors.generic(
-                    "Zstd decompression failed").build());
-        }
-        
-        return Ok!(ubyte[], BuildError)(cast(ubyte[])read(outputPath));
+        return Ok!(ubyte[], BuildError)(output[0 .. written].dup);
     }
     
     /// Has trained dictionary
@@ -458,31 +494,21 @@ final class ZstdDictionary
     /// Get dictionary size
     size_t getDictSize() const @safe => dictionary.length;
     
-    private BuildResult!(ubyte[]) compressWithoutDict(const(ubyte)[] data, int level) @system
+    /// Get dictionary ID (for frame verification)
+    uint getDictID() const @trusted
     {
-        import std.file : tempDir, remove;
-        
-        auto inputPath = buildPath(tempDir(), randomUUID().toString() ~ ".in");
-        auto outputPath = buildPath(tempDir(), randomUUID().toString() ~ ".zst");
-        scope(exit)
-        {
-            if (exists(inputPath)) .remove(inputPath);
-            if (exists(outputPath)) .remove(outputPath);
-        }
-        
-        write(inputPath, data);
-        
-        auto result = execute([
-            "zstd", "-" ~ level.to!string, "-q", "-f",
-            "-o", outputPath, inputPath
-        ], null, Config.none);
-        
-        if (result.status != 0 || !exists(outputPath))
-            return Err!(ubyte[], BuildError)(Errors.generic(
-                "Zstd compression failed").build());
-        
-        return Ok!(ubyte[], BuildError)(cast(ubyte[])read(outputPath));
+        if (dictionary.length == 0) return 0;
+        return ZSTD_getDictID_fromDict(dictionary.ptr, dictionary.length);
     }
+}
+
+// Helper to get null-terminated string length
+private size_t strLen(const(char)* s) @trusted nothrow @nogc
+{
+    if (s is null) return 0;
+    size_t len = 0;
+    while (s[len] != '\0') len++;
+    return len;
 }
 
 /// Delta Transfer Protocol

@@ -8,24 +8,30 @@ import std.conv : to;
 import core.sync.mutex : Mutex;
 import infrastructure.utils.files.hash : FastHash;
 import infrastructure.utils.memory.mmap : MmapRegion, MapMode;
+import infrastructure.utils.compression.streaming : zstdCompress, zstdDecompress;
 import infrastructure.errors;
 import infrastructure.errors.helpers;
 
 /// Size threshold for memory-mapped reads (files larger than this use mmap)
 private enum size_t CAS_MMAP_THRESHOLD = 256 * 1024;  // 256 KB
+/// Minimum size to compress (below this, compression overhead isn't worth it)
+private enum size_t CAS_COMPRESS_THRESHOLD = 1024;    // 1 KB
 
-/// Content-addressable storage with automatic deduplication
+/// Content-addressable storage with automatic deduplication and compression
 /// Stores blobs by content hash, enabling zero-copy artifact sharing
+/// Uses zstd compression for blobs > 1KB (typically 30-70% reduction)
 final class ContentAddressableStorage
 {
     private string storageDir;
     private Mutex storageMutex;
     private size_t[string] refCounts;  // Track blob references
+    private bool compressionEnabled;
     
-    this(string storageDir = ".builder-cache/blobs") @system
+    this(string storageDir = ".builder-cache/blobs", bool compress = true) @system
     {
         this.storageDir = storageDir;
         this.storageMutex = new Mutex();
+        this.compressionEnabled = compress;
         
         if (!exists(storageDir))
             mkdirRecurse(storageDir);
@@ -38,6 +44,7 @@ final class ContentAddressableStorage
         string blobPath;
         try
         {
+            // Hash original data (before compression) for content addressing
             immutable hash = FastHash.hashBytes(data);
             blobPath = getBlobPath(hash);
             
@@ -50,11 +57,26 @@ final class ContentAddressableStorage
                     return Ok!(string, BuildError)(hash);
                 }
                 
-                // Store new blob
+                // Store new blob (with optional compression)
                 immutable dir = dirName(blobPath);
                 if (!exists(dir)) mkdirRecurse(dir);
                 
-                write(blobPath, data);
+                const(ubyte)[] toStore = data;
+                
+                // Compress if beneficial (size > threshold)
+                if (compressionEnabled && data.length >= CAS_COMPRESS_THRESHOLD)
+                {
+                    auto compResult = zstdCompress(data, 3);  // Level 3: fast + good ratio
+                    if (compResult.isOk)
+                    {
+                        auto compressed = compResult.unwrap();
+                        // Only use if >10% smaller (accounting for header)
+                        if (compressed.length + 5 < data.length * 9 / 10)
+                            toStore = makeCompressedBlob(compressed, data.length);
+                    }
+                }
+                
+                write(blobPath, toStore);
                 refCounts[hash] = 1;
             }
             
@@ -69,7 +91,7 @@ final class ContentAddressableStorage
     }
     
     /// Retrieve blob by content hash
-    /// Uses mmap for large blobs to reduce memory copies
+    /// Automatically decompresses if stored compressed
     BuildResult!(ubyte[]) getBlob(string hash) @system
     {
         try
@@ -85,17 +107,28 @@ final class ContentAddressableStorage
                 
                 immutable size = getSize(blobPath);
                 
+                ubyte[] rawData;
+                
                 // Small blobs: standard read
                 if (size < CAS_MMAP_THRESHOLD)
-                    return Ok!(ubyte[], BuildError)(cast(ubyte[])read(blobPath));
+                {
+                    rawData = cast(ubyte[])read(blobPath);
+                }
+                else
+                {
+                    // Large blobs: memory-mapped read
+                    auto region = MmapRegion.map(blobPath, MapMode.ReadOnly);
+                    if (region is null)
+                        rawData = cast(ubyte[])read(blobPath);
+                    else
+                    {
+                        scope(exit) region.unmap();
+                        rawData = region[].dup;
+                    }
+                }
                 
-                // Large blobs: memory-mapped read (zero kernel-to-user copy)
-                auto region = MmapRegion.map(blobPath, MapMode.ReadOnly);
-                if (region is null)
-                    return Ok!(ubyte[], BuildError)(cast(ubyte[])read(blobPath)); // Fallback
-                
-                scope(exit) region.unmap();
-                return Ok!(ubyte[], BuildError)(region[].dup);
+                // Check for compression header and decompress if needed
+                return decompressBlobIfNeeded(rawData);
             }
         }
         catch (Exception e)
@@ -103,6 +136,38 @@ final class ContentAddressableStorage
             return Err!(ubyte[], BuildError)(Errors.cache(
                 "Failed to read blob: " ~ e.msg, Cache.LoadFailed).build());
         }
+    }
+    
+    /// Create compressed blob with header: [MAGIC:1][ORIG_SIZE:4][COMPRESSED_DATA]
+    private static ubyte[] makeCompressedBlob(const(ubyte)[] compressed, size_t origSize) pure @trusted
+    {
+        ubyte[] blob;
+        blob.reserve(5 + compressed.length);
+        blob ~= 0xCB;  // Magic byte: Compressed Blob
+        blob ~= (origSize & 0xFF);
+        blob ~= ((origSize >> 8) & 0xFF);
+        blob ~= ((origSize >> 16) & 0xFF);
+        blob ~= ((origSize >> 24) & 0xFF);
+        blob ~= compressed;
+        return blob;
+    }
+    
+    /// Check if blob is compressed and decompress
+    private static BuildResult!(ubyte[]) decompressBlobIfNeeded(ubyte[] data) @trusted
+    {
+        if (data.length < 5 || data[0] != 0xCB)
+            return Ok!(ubyte[], BuildError)(data);  // Not compressed
+        
+        // Extract original size
+        uint origSize = data[1] | (data[2] << 8) | (data[3] << 16) | (data[4] << 24);
+        
+        // Decompress
+        auto decompResult = zstdDecompress(data[5 .. $]);
+        if (decompResult.isErr)
+            return Err!(ubyte[], BuildError)(Errors.cache(
+                "Blob decompression failed", Cache.CompressionFailed).build());
+        
+        return Ok!(ubyte[], BuildError)(decompResult.unwrap());
     }
     
     /// Check if blob exists

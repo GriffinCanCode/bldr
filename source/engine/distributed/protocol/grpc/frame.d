@@ -3,15 +3,16 @@ module engine.distributed.protocol.grpc.frame;
 import std.bitmanip : bigEndianToNative, nativeToBigEndian;
 import std.array : Appender;
 import infrastructure.errors : Result, Ok, Err;
+import infrastructure.utils.compression.streaming : zstdCompress, zstdDecompress;
 
 /**
  * gRPC Wire Format (Length-Prefixed Message Framing)
  * 
  * Each gRPC message has a 5-byte header:
- * - 1 byte: Compressed flag (0 = uncompressed, 1 = compressed)
+ * - 1 byte: Compressed flag (0 = uncompressed, 1 = compressed with zstd)
  * - 4 bytes: Message length (big-endian uint32)
  * 
- * Followed by the message payload (protobuf-encoded).
+ * Followed by the message payload (protobuf-encoded, optionally compressed).
  */
 struct GrpcFrame {
     bool compressed;
@@ -22,6 +23,9 @@ struct GrpcFrame {
     
     /// Maximum message size (4MB default)
     enum DefaultMaxSize = 4 * 1024 * 1024;
+    
+    /// Minimum size to compress (below this, overhead isn't worth it)
+    enum CompressThreshold = 512;
     
     /// Encode frame to wire format
     ubyte[] encode() const @trusted {
@@ -40,7 +44,7 @@ struct GrpcFrame {
         return buf;
     }
     
-    /// Decode frame from wire format
+    /// Decode frame from wire format (auto-decompresses if compressed)
     static Result!(GrpcFrame, string) decode(const ubyte[] data, size_t maxSize = DefaultMaxSize) @trusted {
         if (data.length < HeaderSize)
             return Err!(GrpcFrame, string)("Insufficient data for gRPC frame header");
@@ -56,7 +60,22 @@ struct GrpcFrame {
         if (data.length < HeaderSize + msgLen)
             return Err!(GrpcFrame, string)("Insufficient data for gRPC message");
         
-        frame.message = data[HeaderSize .. HeaderSize + msgLen].dup;
+        auto payload = data[HeaderSize .. HeaderSize + msgLen];
+        
+        // Decompress if needed
+        if (frame.compressed)
+        {
+            auto decompResult = zstdDecompress(payload);
+            if (decompResult.isErr)
+                return Err!(GrpcFrame, string)("Failed to decompress gRPC frame");
+            frame.message = decompResult.unwrap();
+            frame.compressed = false;  // Now decompressed
+        }
+        else
+        {
+            frame.message = payload.dup;
+        }
+        
         return Ok!(GrpcFrame, string)(frame);
     }
     
@@ -66,6 +85,31 @@ struct GrpcFrame {
     /// Create uncompressed frame
     static GrpcFrame uncompressed(const ubyte[] msg) @trusted {
         GrpcFrame f;
+        f.compressed = false;
+        f.message = msg.dup;
+        return f;
+    }
+    
+    /// Create compressed frame (uses zstd if beneficial)
+    static GrpcFrame create(const ubyte[] msg, bool enableCompression = true) @trusted {
+        GrpcFrame f;
+        
+        if (enableCompression && msg.length >= CompressThreshold)
+        {
+            auto compResult = zstdCompress(msg, 1);  // Level 1: fastest
+            if (compResult.isOk)
+            {
+                auto compressed = compResult.unwrap();
+                // Only use if >15% smaller (gRPC overhead consideration)
+                if (compressed.length < msg.length * 85 / 100)
+                {
+                    f.compressed = true;
+                    f.message = compressed;
+                    return f;
+                }
+            }
+        }
+        
         f.compressed = false;
         f.message = msg.dup;
         return f;

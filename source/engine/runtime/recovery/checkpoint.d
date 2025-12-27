@@ -10,6 +10,7 @@ import std.conv;
 import engine.graph;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.files.directories : ensureDirectoryWithGitignore;
+import infrastructure.utils.compression.streaming : zstdCompress, zstdDecompress;
 import infrastructure.errors : BuildResult, Errors, Cache, BuildError;
 
 /// Build checkpoint - persists build state for resumption
@@ -50,10 +51,9 @@ struct Checkpoint
     {
         foreach (targetId, status; nodeStates)
         {
-            if (targetId !in graph.nodes)
+            auto node = graph.getNodeByKey(targetId);
+            if (node is null)
                 continue;
-            
-            auto node = graph.nodes[targetId];
             
             // Only restore Success/Cached states
             // Failed/Pending nodes should retry
@@ -128,7 +128,10 @@ final class CheckpointManager
         return checkpoint;
     }
     
-    /// Save checkpoint to disk
+    /// Compression magic header
+    private enum ubyte[4] COMPRESS_MAGIC = [0x43, 0x4B, 0x43, 0x5A];  // "CKCZ"
+    
+    /// Save checkpoint to disk (with compression)
     /// 
     /// Safety: This function is @system because:
     /// 1. serialize() returns owned ubyte[] (no dangling references)
@@ -144,6 +147,30 @@ final class CheckpointManager
         try
         {
             auto data = serialize(checkpoint);
+            
+            // Compress if > 1KB (checkpoints with many targets benefit)
+            if (data.length > 1024)
+            {
+                auto compResult = zstdCompress(data, 3);
+                if (compResult.isOk)
+                {
+                    auto compressed = compResult.unwrap();
+                    if (compressed.length < data.length * 9 / 10)
+                    {
+                        ubyte[] toWrite;
+                        toWrite.reserve(4 + compressed.length);
+                        toWrite ~= COMPRESS_MAGIC[];
+                        toWrite ~= compressed;
+                        std.file.write(checkpointPath, toWrite);
+                        
+                        writeln("Checkpoint saved: ", checkpoint.completedTargets, "/", 
+                                checkpoint.totalTargets, " targets (compressed ",
+                                compressed.length * 100 / data.length, "%)");
+                        return;
+                    }
+                }
+            }
+            
             std.file.write(checkpointPath, data);
             
             writeln("Checkpoint saved: ", checkpoint.completedTargets, "/", 
@@ -157,7 +184,7 @@ final class CheckpointManager
         }
     }
     
-    /// Load checkpoint from disk
+    /// Load checkpoint from disk (auto-decompresses)
     /// 
     /// Safety: This function is @system because:
     /// 1. exists() check prevents file not found errors
@@ -173,6 +200,16 @@ final class CheckpointManager
         try
         {
             auto data = cast(ubyte[])std.file.read(checkpointPath);
+            
+            // Check for compression header
+            if (data.length > 4 && data[0..4] == COMPRESS_MAGIC)
+            {
+                auto decompResult = zstdDecompress(data[4 .. $]);
+                if (decompResult.isErr)
+                    return BuildResult!Checkpoint.err(Errors.cache("Checkpoint decompression failed", Cache.CompressionFailed).build());
+                data = decompResult.unwrap();
+            }
+            
             auto checkpoint = deserialize(data);
             return BuildResult!Checkpoint.ok(checkpoint);
         }
