@@ -42,7 +42,7 @@
             ],
             "libs": ["tree-sitter", "sqlite3"],
             "lflags-osx": ["-L/opt/homebrew/lib", "-L/usr/local/lib"],
-            "dflags": ["-I/opt/homebrew/include", "-I/usr/local/include"]
+            "dflags": ["-I/opt/homebrew/include", "-I/usr/local/include", "-od.dub/obj"]
         },
         {
             "name": "lsp",
@@ -71,7 +71,7 @@
             ],
             "libs": ["tree-sitter", "sqlite3"],
             "lflags-osx": ["-L/opt/homebrew/lib", "-L/usr/local/lib"],
-            "dflags": ["-I/opt/homebrew/include", "-I/usr/local/include"]
+            "dflags": ["-I/opt/homebrew/include", "-I/usr/local/include", "-od.dub/obj"]
         },
         {
             "name": "library",
@@ -80,7 +80,7 @@
             "versions": ["BuilderLib"],
             "excludedSourceFiles": ["source/frontend/lsp/core/main.d"],
             "sourceFiles": ["source/app.d"],
-            "dflags": ["-I/opt/homebrew/include", "-I/usr/local/include"]
+            "dflags": ["-I/opt/homebrew/include", "-I/usr/local/include", "-od.dub/obj"]
         },
         {
             "name": "unittest",
@@ -117,7 +117,7 @@
             ],
             "libs": ["tree-sitter", "sqlite3"],
             "lflags-osx": ["-L/opt/homebrew/lib", "-L/usr/local/lib"],
-            "dflags": ["-I/opt/homebrew/include", "-I/usr/local/include"]
+            "dflags": ["-I/opt/homebrew/include", "-I/usr/local/include", "-od.dub/obj"]
         }
     ],
     
