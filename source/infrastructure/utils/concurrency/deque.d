@@ -198,6 +198,53 @@ struct WorkStealingDeque(T) if (is(T == class) || is(T == interface))
         return task;
     }
     
+    /// Batch steal: claim range from top with single CAS
+    /// Reduces atomic overhead when stealing multiple tasks for load balancing
+    /// 
+    /// Performance:
+    /// - Single CAS to claim up to maxCount tasks
+    /// - Efficient for aggressive work stealing strategies
+    /// 
+    /// Returns: actual count stolen (0 if empty or lost race)
+    @system
+    size_t stealBatch(size_t maxCount, ref T[] results) nothrow
+    {
+        if (maxCount == 0) return 0;
+        
+        // Ensure results has capacity
+        if (results.length < maxCount)
+        {
+            try { results.length = maxCount; }
+            catch (Exception) { return 0; }
+        }
+        
+        auto t = atomicLoad!(MemoryOrder.acq)(top);
+        atomicFence!(MemoryOrder.seq)();
+        auto b = atomicLoad!(MemoryOrder.acq)(bottom);
+        
+        if (t >= b) return 0;  // Empty
+        
+        // Calculate how many we can steal
+        immutable available = cast(size_t)(b - t);
+        // Steal at most half to maintain fairness with owner
+        immutable toSteal = available < maxCount ? available : maxCount;
+        immutable halfAvailable = (available + 1) / 2;
+        immutable claimed = toSteal < halfAvailable ? toSteal : halfAvailable;
+        
+        if (claimed == 0) return 0;
+        
+        // Try to claim range
+        if (!cas(&top, t, t + cast(long)claimed))
+            return 0;  // Lost race
+        
+        // Read all stolen tasks
+        auto arr = cast(CircularArray*)atomicLoad(array);
+        foreach (i; 0 .. claimed)
+            results[i] = arr.get(t + cast(long)i);
+        
+        return claimed;
+    }
+    
     /// Get approximate size (may be stale immediately)
     /// Used for load balancing heuristics
     @system
@@ -299,6 +346,44 @@ unittest
     assert(deque.steal() is null);
     
     writeln("\x1b[32m  ✓ Stealing\x1b[0m");
+}
+
+/// Test batch stealing operations
+unittest
+{
+    import std.stdio;
+    writeln("\x1b[36m[TEST]\x1b[0m utils.concurrency.deque - Batch stealing");
+    
+    class Task
+    {
+        int value;
+        this(int v) { value = v; }
+    }
+    
+    auto deque = WorkStealingDeque!Task(16);
+    
+    // Push 10 tasks
+    foreach (i; 1 .. 11)
+        deque.push(new Task(i));
+    
+    assert(deque.size() == 10);
+    
+    // Batch steal (steals at most half for fairness)
+    Task[] stolen;
+    immutable count = deque.stealBatch(8, stolen);
+    
+    // Should steal at most 5 (half of 10)
+    assert(count <= 5);
+    assert(count > 0);
+    
+    // Verify FIFO order from top
+    foreach (i; 0 .. count)
+        assert(stolen[i].value == i + 1);
+    
+    // Remaining can still be popped
+    assert(deque.size() == 10 - count);
+    
+    writeln("\x1b[32m  ✓ Batch stealing\x1b[0m");
 }
 
 /// Test automatic growth

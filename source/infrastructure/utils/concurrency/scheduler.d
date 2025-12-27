@@ -11,6 +11,17 @@ import std.parallelism : totalCPUs;
 import infrastructure.utils.concurrency.deque;
 import infrastructure.utils.concurrency.priority;
 
+// Thread-local arena reset for zero-sync memory between tasks
+private void resetWorkerArena() @trusted nothrow
+{
+    try
+    {
+        import engine.distributed.memory.local : ThreadLocalArena;
+        ThreadLocalArena.reset();
+    }
+    catch (Exception) {}
+}
+
 
 /// Work-stealing scheduler with priority support
 /// Each worker has its own deque for local tasks
@@ -268,6 +279,7 @@ final class WorkStealingScheduler(T)
             {
                 atomicOp!"+="(activeWorkers, 1);
                 executeTask(task.payload);
+                resetWorkerArena();  // Reset thread-local arena between tasks
                 worker.recordExecution();
                 atomicOp!"-="(activeWorkers, 1);
                 consecutiveFails = 0;
@@ -284,13 +296,14 @@ final class WorkStealingScheduler(T)
             {
                 atomicOp!"+="(activeWorkers, 1);
                 executeTask(task.payload);
+                resetWorkerArena();  // Reset thread-local arena between tasks
                 worker.recordExecution();
                 atomicOp!"-="(activeWorkers, 1);
                 consecutiveFails = 0;
                 continue;
             }
             
-            // 3. Try stealing from random victims
+            // 3. Try batch stealing from random victims (single CAS for multiple tasks)
             bool stolen = false;
             foreach (_; 0 .. MAX_STEAL_ATTEMPTS)
             {
@@ -299,11 +312,18 @@ final class WorkStealingScheduler(T)
                 
                 if (victim !is null)
                 {
-                    task = victim.deque.steal();
-                    if (task !is null)
+                    // Try batch steal first (more efficient for large queues)
+                    PriorityTask!T[] stolenBatch;
+                    immutable batchCount = victim.deque.stealBatch(4, stolenBatch);
+                    
+                    if (batchCount > 0)
                     {
+                        // Push extras to local deque, execute first
+                        foreach (i; 1 .. batchCount)
+                            worker.deque.push(stolenBatch[i]);
+                        
                         atomicOp!"+="(activeWorkers, 1);
-                        executeTask(task.payload);
+                        executeTask(stolenBatch[0].payload);
                         worker.recordExecution();
                         worker.recordSteal();
                         atomicOp!"-="(activeWorkers, 1);

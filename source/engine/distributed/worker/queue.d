@@ -115,6 +115,36 @@ final class DistributedQueue
         return stolen;
     }
     
+    /// Handle batch steal request - give multiple items at once for network efficiency
+    /// Returns array of actions (empty if insufficient work)
+    ActionRequest[] handleBatchStealRequest(StealRequest req, size_t requestedCount) @trusted
+    {
+        immutable queueSize = localQueue.size();
+        immutable available = queueSize > minLocalReserve ? queueSize - minLocalReserve : 0;
+        
+        if (available == 0)
+        {
+            structuredLog.debug_("rejecting_batch_steal_from_").field("detail", "Rejecting batch steal from " ~ req.thief.toString()).emit();
+            return [];
+        }
+        
+        // Respect maxStealBatch config
+        immutable toSteal = available < requestedCount ? available : requestedCount;
+        immutable actualSteal = toSteal < maxStealBatch ? toSteal : maxStealBatch;
+        
+        ActionRequest[] stolen;
+        immutable count = localQueue.stealBatch(actualSteal, stolen);
+        
+        if (count > 0)
+        {
+            atomicOp!"+="(stealsGiven, count);
+            structuredLog.debug_("gave_batch_work_to_").field("count", count).field("thief", req.thief.toString()).emit();
+            peers.updateMetrics(selfId, localQueue.size(), calculateLoadFactor());
+            return stolen[0 .. count];
+        }
+        return [];
+    }
+    
     /// Get current queue depth
     size_t depth() @trusted const
     {

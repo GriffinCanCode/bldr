@@ -92,6 +92,34 @@ final class MessageQueue
         }
     }
     
+    /// Batch dequeue: get multiple messages at once to reduce lock acquisitions
+    /// Returns actual count dequeued (may be less than maxCount)
+    @system size_t tryDequeueBatch(size_t maxCount, ref LSPMessage[] results)
+    {
+        if (maxCount == 0) return 0;
+        
+        synchronized (mutex)
+        {
+            if (count == 0) return 0;
+            
+            immutable toDequeue = count < maxCount ? count : maxCount;
+            if (results.length < toDequeue)
+                results.length = toDequeue;
+            
+            foreach (i; 0 .. toDequeue)
+            {
+                results[i] = buffer[head];
+                head = (head + 1) % capacity;
+            }
+            count -= toDequeue;
+            
+            if (toDequeue > 0)
+                notFull.notify();
+            
+            return toDequeue;
+        }
+    }
+    
     /// Close queue and wake all waiters
     @system void close()
     {

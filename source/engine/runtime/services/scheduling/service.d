@@ -146,24 +146,14 @@ final class SchedulingService : ISchedulingService
     
     BuildNode[] dequeueReady(size_t maxCount) @trusted
     {
-        if (!_isActive || mode == SchedulingMode.WorkStealing)
+        if (!_isActive || mode == SchedulingMode.WorkStealing || readyQueue is null)
             return [];
         
+        // Use batch dequeue for single CAS vs N CAS operations
         BuildNode[] batch;
-        batch.reserve(maxCount);
+        immutable count = readyQueue.tryDequeueBatch(maxCount, batch);
         
-        foreach (i; 0 .. maxCount)
-        {
-            if (readyQueue is null)
-                return batch;
-            
-            auto node = readyQueue.tryDequeue();
-            if (node is null)
-                break;
-            batch ~= node;
-        }
-        
-        return batch;
+        return count > 0 ? batch[0 .. count] : [];
     }
     
     NodeBuildResult[] executeBatch(BuildNode[] nodes, NodeBuildResult delegate(BuildNode) @system executor) @trusted
