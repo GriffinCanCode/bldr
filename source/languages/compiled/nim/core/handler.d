@@ -1,14 +1,12 @@
 module languages.compiled.nim.core.handler;
 
-import std.stdio;
-import std.process;
 import std.file;
 import std.path;
 import std.algorithm;
 import std.array;
 import std.json;
-import languages.base.base;
-import languages.base.mixins;
+import std.uni : toLower;
+import languages.compiled.base;
 import languages.compiled.nim.core.config;
 import languages.compiled.nim.builders;
 import languages.compiled.nim.tooling.tools;
@@ -19,261 +17,123 @@ import infrastructure.analysis.targets.types;
 import infrastructure.analysis.targets.spec;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.logging;
-import engine.caching.actions.action : ActionCache, ActionCacheConfig;
 
-/// Comprehensive Nim build handler with multi-backend support and action-level caching
-class NimHandler : BaseLanguageHandler
+/// Nim build handler with multi-backend support
+class NimHandler : BaseCompiledLanguageHandler
 {
-    mixin CachingHandlerMixin!"nim";
+    private NimConfig _config;
     
-    protected override LanguageBuildResult buildImplWithContext(in BuildContext context)
+    this() { super(null); }
+    
+    // ===== Required Overrides =====
+    
+    override string languageName() const pure nothrow @safe => "Nim";
+    
+    override string[] fileExtensions() const pure nothrow @safe => [".nim", ".nims"];
+    
+    override bool detectToolchain() @system => NimTools.isCompilerAvailable();
+    
+    override string getToolchainVersion() @system => NimTools.getVersion();
+    
+    override void parseConfig(in Target target, in WorkspaceConfig config) @system
     {
-        // Extract target and config from context for convenience
-        auto target = context.target;
-        auto config = context.config;
+        _config = NimConfig.init;
         
-        LanguageBuildResult result;
+        string configKey = "nim" in target.langConfig ? "nim" :
+                          ("nimConfig" in target.langConfig ? "nimConfig" : "");
         
-        structuredLog.debug_("building_nim_target_").field("detail", "Building Nim target: " ~ target.name).emit();
-        
-        // Parse Nim configuration
-        NimConfig nimConfig = parseNimConfig(target);
-        
-        // Auto-detect and enhance configuration from project
-        enhanceConfigFromProject(nimConfig, target, config);
-        
-        // Run formatter if requested
-        if (nimConfig.runFormat)
+        if (!configKey.empty)
         {
-            auto fmtResult = formatCode(target.sources.dup, nimConfig);
-            if (fmtResult.hasIssues)
-            {
-                structuredLog.info("formatting_issues_found").emit();
-                foreach (warning; fmtResult.warnings)
-                {
-                    structuredLog.warning("__").field("detail", "  " ~ warning).emit();
-                }
-            }
+            try { _config = NimConfig.fromJSON(parseJSON(target.langConfig[configKey])); }
+            catch (Exception e) { structuredLog.warning("failed_to_parse_nim_config").field("error", e.msg).emit(); }
         }
         
-        // Run check if requested
-        if (nimConfig.runCheck)
-        {
-            auto checkResult = NimTools.check(target.sources.dup);
-            if (!checkResult.success)
-            {
-                structuredLog.warning("check_found_issues").emit();
-                foreach (error; checkResult.errors)
-                {
-                    structuredLog.warning("__").field("detail", "  " ~ error).emit();
-                }
-            }
-        }
+        // Apply target flags if not in langConfig
+        if (!target.flags.empty && configKey.empty)
+            _config.compilerFlags ~= target.flags;
         
-        // Install dependencies if requested
-        if (nimConfig.nimble.enabled && nimConfig.nimble.installDeps)
-        {
-            string projectDir = target.sources.empty ? "." : dirName(target.sources[0]);
-            NimbleManager.installDependencies(
-                projectDir,
-                nimConfig.nimble.devMode,
-                nimConfig.verbose
-            );
-        }
+        // Enhance config from project
+        if (!target.sources.empty)
+            enhanceConfigFromProject(target, config);
+    }
+    
+    override FormatResult formatSources(in string[] sources) @system
+    {
+        FormatResult result;
+        result.success = true;
         
-        // Build based on target type
-        final switch (target.type)
-        {
-            case TargetType.Executable:
-                result = buildExecutable(target, config, nimConfig);
-                break;
-            case TargetType.Library:
-                result = buildLibrary(target, config, nimConfig);
-                break;
-            case TargetType.Test:
-                result = runTests(target, config, nimConfig);
-                break;
-            case TargetType.Custom:
-            case TargetType.Shell:
-                result = buildCustom(target, config, nimConfig);
-                break;
-        }
+        if (!_config.runFormat) return result;
+        
+        auto fmtResult = NimTools.format(
+            sources.dup,
+            _config.formatCheck,
+            _config.formatIndent,
+            _config.formatMaxLineLen
+        );
+        
+        result.success = !fmtResult.hasIssues;
+        result.hadIssues = fmtResult.hasIssues;
+        result.warnings = fmtResult.warnings.dup;
         
         return result;
     }
     
-    override string[] getOutputs(in Target target, in WorkspaceConfig config)
+    override LintResult lintSources(in string[] sources) @system
     {
-        NimConfig nimConfig = parseNimConfig(target);
+        LintResult result;
+        result.success = true;
         
-        string[] outputs;
+        if (!_config.runCheck) return result;
         
-        if (!target.outputPath.empty)
-        {
-            outputs ~= buildPath(config.options.outputDir, target.outputPath);
-        }
-        else
-        {
-            auto name = target.name.split(":")[$ - 1];
-            string outputDir = nimConfig.outputDir.empty ? 
-                              config.options.outputDir : 
-                              nimConfig.outputDir;
-            
-            // Add extension based on app type and platform
-            string extension = getOutputExtension(nimConfig);
-            
-            outputs ~= buildPath(outputDir, name ~ extension);
-        }
+        auto checkResult = NimTools.check(sources.dup);
+        result.success = checkResult.success;
+        result.hadIssues = !checkResult.errors.empty;
+        result.issues = checkResult.errors.dup;
         
-        return outputs;
+        return result;
     }
     
-    override Import[] analyzeImports(in string[] sources)
-    {
-        auto spec = getLanguageSpec(TargetLanguage.Nim);
-        if (spec is null)
-            return [];
-        
-        Import[] allImports;
-        
-        foreach (source; sources)
-        {
-            if (!exists(source) || !isFile(source))
-                continue;
-            
-            try
-            {
-                auto content = readText(source);
-                auto imports = spec.scanImports(source, content);
-                allImports ~= imports;
-            }
-            catch (Exception e)
-            {
-                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source).emit();
-            }
-        }
-        
-        return allImports;
-    }
-    
-    private LanguageBuildResult buildExecutable(
+    override CompiledLanguageResult compileTarget(
         in Target target,
         in WorkspaceConfig config,
-        NimConfig nimConfig
-    )
+        in string[] sources
+    ) @system
     {
-        LanguageBuildResult result;
+        CompiledLanguageResult result;
         
-        // Ensure app type is appropriate for executable
-        if (nimConfig.appType != AppType.Console && nimConfig.appType != AppType.Gui)
+        // Install dependencies if requested
+        if (_config.nimble.enabled && _config.nimble.installDeps)
         {
-            nimConfig.appType = AppType.Console;
+            string projectDir = sources.empty ? "." : dirName(sources[0]);
+            NimbleManager.installDependencies(projectDir, _config.nimble.devMode, _config.verbose);
         }
         
         // Auto-detect entry point
-        if (nimConfig.entry.empty && !target.sources.empty)
+        if (_config.entry.empty && !sources.empty)
+            _config.entry = findEntryFile(sources);
+        
+        // Set mode based on target type
+        final switch (target.type)
         {
-            // Look for main.nim first
-            foreach (source; target.sources)
-            {
-                if (baseName(source) == "main.nim")
-                {
-                    nimConfig.entry = source;
-                    break;
-                }
-            }
-            
-            // Fallback to first source
-            if (nimConfig.entry.empty)
-                nimConfig.entry = target.sources[0];
+            case TargetType.Library:
+                if (_config.appType != AppType.StaticLib && _config.appType != AppType.DynamicLib)
+                    _config.appType = AppType.StaticLib;
+                break;
+            case TargetType.Test:
+                _config.mode = NimBuildMode.Test;
+                break;
+            case TargetType.Custom:
+            case TargetType.Shell:
+                _config.mode = NimBuildMode.Custom;
+                break;
+            case TargetType.Executable:
+                if (_config.appType != AppType.Console && _config.appType != AppType.Gui)
+                    _config.appType = AppType.Console;
+                break;
         }
         
-        // Build with selected builder
-        return compileTarget(target, config, nimConfig);
-    }
-    
-    private LanguageBuildResult buildLibrary(
-        in Target target,
-        in WorkspaceConfig config,
-        NimConfig nimConfig
-    )
-    {
-        LanguageBuildResult result;
-        
-        // Set app type to library
-        if (nimConfig.appType != AppType.StaticLib && nimConfig.appType != AppType.DynamicLib)
-        {
-            nimConfig.appType = AppType.StaticLib; // Default to static
-        }
-        
-        // Auto-detect entry point
-        if (nimConfig.entry.empty && !target.sources.empty)
-        {
-            // Look for lib.nim or packagename.nim
-            string nimbleFile = NimbleParser.findNimbleFile(".");
-            if (!nimbleFile.empty)
-            {
-                auto nimbleData = NimbleParser.parseNimbleFile(nimbleFile);
-                if (!nimbleData.name.empty)
-                {
-                    string libFile = nimbleData.name ~ ".nim";
-                    foreach (source; target.sources)
-                    {
-                        if (baseName(source) == libFile || baseName(source) == "lib.nim")
-                        {
-                            nimConfig.entry = source;
-                            break;
-                        }
-                    }
-                }
-            }
-            
-            // Fallback to first source
-            if (nimConfig.entry.empty)
-                nimConfig.entry = target.sources[0];
-        }
-        
-        return compileTarget(target, config, nimConfig);
-    }
-    
-    private LanguageBuildResult runTests(
-        in Target target,
-        in WorkspaceConfig config,
-        NimConfig nimConfig
-    )
-    {
-        LanguageBuildResult result;
-        
-        // Set mode to test
-        if (nimConfig.mode != NimBuildMode.Test)
-            nimConfig.mode = NimBuildMode.Test;
-        
-        return compileTarget(target, config, nimConfig);
-    }
-    
-    private LanguageBuildResult buildCustom(
-        in Target target,
-        in WorkspaceConfig config,
-        NimConfig nimConfig
-    )
-    {
-        LanguageBuildResult result;
-        
-        nimConfig.mode = NimBuildMode.Custom;
-        
-        return compileTarget(target, config, nimConfig);
-    }
-    
-    private LanguageBuildResult compileTarget(
-        in Target target,
-        in WorkspaceConfig config,
-        NimConfig nimConfig
-    )
-    {
-        LanguageBuildResult result;
-        
-        // Create builder and pass actionCache
-        auto builder = NimBuilderFactory.create(nimConfig.builder, nimConfig, actionCache);
+        // Create builder and compile
+        auto builder = NimBuilderFactory.create(_config.builder, _config, actionCache);
         
         if (!builder.isAvailable())
         {
@@ -281,189 +141,125 @@ class NimHandler : BaseLanguageHandler
             return result;
         }
         
-        structuredLog.debug_("using_nim_builder_").field("detail", "Using Nim builder: " ~ builder.name() ~ " (" ~ builder.getVersion() ~ ")").emit();
+        structuredLog.debug_("using_nim_builder").field("name", builder.name()).field("version", builder.getVersion()).emit();
         
-        // Compile (with action-level caching)
-        auto compileResult = builder.build(target.sources, nimConfig, target, config);
+        auto compileResult = builder.build(sources, _config, target, config);
         
-        if (!compileResult.success)
-        {
-            result.error = compileResult.error;
-            return result;
-        }
-        
-        // Report warnings
-        if (compileResult.hadWarnings && !compileResult.warnings.empty)
-        {
-            structuredLog.warning("compilation_warnings").emit();
-            import std.algorithm : min;
-            foreach (warn; compileResult.warnings[0 .. min(5, $)])
-            {
-                structuredLog.warning("__").field("detail", "  " ~ warn).emit();
-            }
-            if (compileResult.warnings.length > 5)
-            {
-                import std.conv : to;
-                structuredLog.warning("___and_").field("detail", "  ... and " ~ (compileResult.warnings.length - 5).to!string ~ " more warnings").emit();
-            }
-        }
-        
-        result.success = true;
+        result.success = compileResult.success;
+        result.error = compileResult.error;
         result.outputs = compileResult.outputs ~ compileResult.artifacts;
         result.outputHash = compileResult.outputHash;
+        result.hadWarnings = compileResult.hadWarnings;
+        result.warnings = compileResult.warnings.dup;
         
         return result;
     }
     
-    private NimConfig parseNimConfig(in Target target)
+    override string[] getOutputs(in Target target, in WorkspaceConfig config)
     {
-        NimConfig config;
+        string outputDir = _config.outputDir.empty ? config.options.outputDir : _config.outputDir;
         
-        // Try language-specific keys
-        string configKey = "";
-        if ("nim" in target.langConfig)
-            configKey = "nim";
-        else if ("nimConfig" in target.langConfig)
-            configKey = "nimConfig";
+        if (!target.outputPath.empty)
+            return [buildPath(outputDir, target.outputPath)];
         
-        if (!configKey.empty)
+        auto name = target.name.split(":")[$ - 1];
+        return [buildPath(outputDir, name ~ getOutputExtension())];
+    }
+    
+    override Import[] analyzeImports(in string[] sources)
+    {
+        auto spec = getLanguageSpec(TargetLanguage.Nim);
+        if (spec is null) return [];
+        
+        Import[] imports;
+        
+        foreach (source; sources)
         {
+            if (!exists(source) || !isFile(source)) continue;
+            
             try
             {
-                auto json = parseJSON(target.langConfig[configKey]);
-                config = NimConfig.fromJSON(json);
+                auto content = readText(source);
+                imports ~= spec.scanImports(source, content);
             }
             catch (Exception e)
             {
-                structuredLog.warning("failed_to_parse_nim_config_using_default").field("detail", "Failed to parse Nim config, using defaults: " ~ e.msg).emit();
+                structuredLog.warning("failed_to_analyze_imports").field("file", source).emit();
             }
         }
         
-        // Apply target flags to config if not in langConfig
-        if (!target.flags.empty && configKey.empty)
-        {
-            config.compilerFlags ~= target.flags;
-        }
-        
-        return config;
+        return imports;
     }
     
-    private void enhanceConfigFromProject(
-        ref NimConfig config,
-        in Target target,
-        in WorkspaceConfig workspace
-    )
+    // ===== Private Helpers =====
+    
+    private void enhanceConfigFromProject(in Target target, in WorkspaceConfig workspace) @system
     {
-        if (target.sources.empty)
-            return;
-        
         string sourceDir = dirName(target.sources[0]);
         
-        // Auto-detect nimble file
-        if (config.builder == NimBuilderType.Auto || config.nimble.enabled)
+        if (_config.builder == NimBuilderType.Auto || _config.nimble.enabled)
         {
             string nimbleFile = NimbleParser.findNimbleFile(sourceDir);
             if (!nimbleFile.empty)
             {
-                structuredLog.debug_("detected_nimble_file_").field("detail", "Detected nimble file: " ~ nimbleFile).emit();
-                config.nimble.nimbleFile = nimbleFile;
+                structuredLog.debug_("detected_nimble_file").field("path", nimbleFile).emit();
+                _config.nimble.nimbleFile = nimbleFile;
                 
-                // Parse nimble file for project info
                 auto nimbleData = NimbleParser.parseNimbleFile(nimbleFile);
-                if (!nimbleData.name.empty)
+                if (!nimbleData.name.empty && !nimbleData.backend.empty && _config.backend == NimBackend.C)
                 {
-                    structuredLog.debug_("package_").field("detail", "Package: " ~ nimbleData.name ~ 
-                                 (nimbleData.version_.empty ? "" : " v" ~ nimbleData.version_)).emit();
-                    
-                    // Set backend from nimble file if specified
-                    if (!nimbleData.backend.empty && config.backend == NimBackend.C)
+                    switch (nimbleData.backend.toLower)
                     {
-                        import std.uni : toLower;
-                        switch (nimbleData.backend.toLower)
-                        {
-                            case "cpp": case "c++":
-                                config.backend = NimBackend.Cpp;
-                                break;
-                            case "js": case "javascript":
-                                config.backend = NimBackend.Js;
-                                break;
-                            case "objc": case "objective-c":
-                                config.backend = NimBackend.ObjC;
-                                break;
-                            default:
-                                break;
-                        }
+                        case "cpp": case "c++": _config.backend = NimBackend.Cpp; break;
+                        case "js": case "javascript": _config.backend = NimBackend.Js; break;
+                        case "objc": case "objective-c": _config.backend = NimBackend.ObjC; break;
+                        default: break;
                     }
                 }
             }
         }
+    }
+    
+    private string findEntryFile(in string[] sources) @system
+    {
+        foreach (candidate; ["main.nim", "lib.nim"])
+            foreach (source; sources)
+                if (baseName(source) == candidate) return source;
         
-        // Auto-detect entry point if not specified
-        if (config.entry.empty && !target.sources.empty)
+        // Check nimble file for entry
+        string nimbleFile = NimbleParser.findNimbleFile(".");
+        if (!nimbleFile.empty)
         {
-            // Priority: main.nim > lib.nim > package name.nim > first source
-            string[] candidates = ["main.nim", "lib.nim"];
-            
-            foreach (candidate; candidates)
+            auto nimbleData = NimbleParser.parseNimbleFile(nimbleFile);
+            if (!nimbleData.name.empty)
             {
-                foreach (source; target.sources)
-                {
-                    if (baseName(source) == candidate)
-                    {
-                        config.entry = source;
-                        break;
-                    }
-                }
-                if (!config.entry.empty)
-                    break;
+                string libFile = nimbleData.name ~ ".nim";
+                foreach (source; sources)
+                    if (baseName(source) == libFile) return source;
             }
-            
-            // Fallback to first source
-            if (config.entry.empty)
-                config.entry = target.sources[0];
         }
+        
+        return sources.length > 0 ? sources[0] : "";
     }
     
-    private FormatResult formatCode(in string[] sources, NimConfig config)
+    private string getOutputExtension() @system
     {
-        return NimTools.format(
-            sources.dup,
-            config.formatCheck,
-            config.formatIndent,
-            config.formatMaxLineLen
-        );
-    }
-    
-    private string getOutputExtension(NimConfig config)
-    {
-        // For JavaScript backend
-        if (config.backend == NimBackend.Js)
-            return ".js";
+        if (_config.backend == NimBackend.Js) return ".js";
         
-        // For libraries
-        if (config.appType == AppType.StaticLib)
+        if (_config.appType == AppType.StaticLib)
         {
-            version(Windows)
-                return ".lib";
-            else
-                return ".a";
+            version(Windows) return ".lib";
+            else return ".a";
         }
         
-        if (config.appType == AppType.DynamicLib)
+        if (_config.appType == AppType.DynamicLib)
         {
-            version(Windows)
-                return ".dll";
-            else version(OSX)
-                return ".dylib";
-            else
-                return ".so";
+            version(Windows) return ".dll";
+            else version(OSX) return ".dylib";
+            else return ".so";
         }
         
-        // For executables
-        version(Windows)
-            return ".exe";
-        else
-            return "";
+        version(Windows) return ".exe";
+        else return "";
     }
 }
-

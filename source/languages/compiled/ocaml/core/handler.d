@@ -1,170 +1,228 @@
 module languages.compiled.ocaml.core.handler;
 
-import std.stdio;
 import std.file;
 import std.path;
 import std.algorithm;
 import std.array;
 import std.json;
 import std.conv;
-import std.process;
-import std.string : lineSplitter, strip;
-import languages.base.base;
-import languages.base.mixins;
+import std.string : lineSplitter, strip, startsWith, indexOf;
+import languages.compiled.base;
 import languages.compiled.ocaml.core.config;
 import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.logging;
-import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
+import infrastructure.utils.security : execute;
+import engine.caching.actions.action : ActionId, ActionType;
+import engine.linking.incremental;
 
-/// OCaml build handler with support for dune, ocamlopt, and ocamlc with action-level caching
-class OCamlHandler : BaseLanguageHandler
+/// OCaml build handler with dune, ocamlopt, and ocamlc support
+class OCamlHandler : BaseCompiledLanguageHandler
 {
-    mixin CachingHandlerMixin!"ocaml";
+    private OCamlConfig _config;
+    private IncrementalLinker incLinker;
+    private bool useIncrementalLink;
     
-    protected override LanguageBuildResult buildImplWithContext(in BuildContext context)
+    this() { super(null); }
+    
+    // ===== Required Overrides =====
+    
+    override string languageName() const pure nothrow @safe => "OCaml";
+    
+    override string[] fileExtensions() const pure nothrow @safe => [".ml", ".mli", ".mll", ".mly"];
+    
+    override bool detectToolchain() @system
     {
-        // Extract target and config from context for convenience
-        auto target = context.target;
-        auto config = context.config;
+        return isDuneAvailable() || isOcamlOptAvailable() || isOcamlCAvailable();
+    }
+    
+    override string getToolchainVersion() @system
+    {
+        if (_config.compiler == OCamlCompiler.Dune && isDuneAvailable())
+            return "Dune " ~ getDuneVersion();
+        if (isOcamlOptAvailable())
+            return "OCaml " ~ getOcamlVersion();
+        if (isOcamlCAvailable())
+            return "OCaml (bytecode)";
+        return "unknown";
+    }
+    
+    override void parseConfig(in Target target, in WorkspaceConfig config) @system
+    {
+        _config = OCamlConfig.init;
         
-        LanguageBuildResult result;
+        string configKey = "ocaml" in target.langConfig ? "ocaml" :
+                          ("ocamlConfig" in target.langConfig ? "ocamlConfig" : "");
         
-        structuredLog.debug_("building_ocaml_target_").field("detail", "Building OCaml target: " ~ target.name).emit();
-        
-        // Parse OCaml configuration
-        OCamlConfig ocamlConfig = parseOCamlConfig(target, config);
-        
-        // Validate sources
-        if (target.sources.empty)
+        if (!configKey.empty)
         {
-            result.error = "No OCaml source files specified";
-            return result;
+            try { _config = OCamlConfig.fromJSON(parseJSON(target.langConfig[configKey])); }
+            catch (Exception e) { structuredLog.warning("failed_to_parse_ocaml_config").field("error", e.msg).emit(); }
         }
         
-        // Filter for .ml files
-        string[] mlFiles;
-        foreach (source; target.sources)
+        // Apply target flags if not in langConfig
+        if (!target.flags.empty && configKey.empty)
+            _config.compilerFlags ~= target.flags;
+    }
+    
+    override FormatResult formatSources(in string[] sources) @system
+    {
+        FormatResult result;
+        result.success = true;
+        
+        if (!_config.runFormat || !isOcamlFormatAvailable())
+            return result;
+        
+        structuredLog.debug_("running_ocamlformat").emit();
+        
+        foreach (file; sources)
         {
-            string ext = extension(source);
-            if (ext == ".ml" || ext == ".mli" || ext == ".mll" || ext == ".mly")
+            if (extension(file) != ".ml" && extension(file) != ".mli") continue;
+            
+            try
             {
-                mlFiles ~= source;
+                auto fmtResult = execute(["ocamlformat", "--inplace", file]);
+                if (fmtResult.status != 0)
+                    structuredLog.warning("failed_to_format").field("file", file).emit();
             }
-        }
-        
-        if (mlFiles.empty)
-        {
-            result.error = "No .ml files found in sources";
-            return result;
-        }
-        
-        // Run formatter if requested
-        if (ocamlConfig.runFormat && isOcamlFormatAvailable())
-        {
-            structuredLog.debug_("running_ocamlformat").emit();
-            formatCode(mlFiles);
-        }
-        
-        // Auto-detect compiler if set to Auto
-        if (ocamlConfig.compiler == OCamlCompiler.Auto)
-        {
-            ocamlConfig.compiler = detectCompiler();
-        }
-        
-        // Build based on compiler type
-        final switch (ocamlConfig.compiler)
-        {
-            case OCamlCompiler.Dune:
-                result = buildWithDune(target, config, ocamlConfig);
-                break;
-            case OCamlCompiler.OCamlOpt:
-                result = buildWithOCamlOpt(target, config, ocamlConfig, mlFiles);
-                break;
-            case OCamlCompiler.OCamlC:
-                result = buildWithOCamlC(target, config, ocamlConfig, mlFiles);
-                break;
-            case OCamlCompiler.OCamlBuild:
-                result = buildWithOCamlBuild(target, config, ocamlConfig);
-                break;
-            case OCamlCompiler.Auto:
-                // This shouldn't happen as we detect above, but handle it
-                result.error = "Failed to auto-detect OCaml compiler";
-                break;
+            catch (Exception e)
+            {
+                structuredLog.warning("failed_to_format").field("file", file).field("error", e.msg).emit();
+            }
         }
         
         return result;
     }
     
+    override LintResult lintSources(in string[] sources) @system
+    {
+        LintResult result;
+        result.success = true;
+        // OCaml doesn't have a standard linter - type checking happens during compilation
+        return result;
+    }
+    
+    override CompiledLanguageResult compileTarget(
+        in Target target,
+        in WorkspaceConfig config,
+        in string[] sources
+    ) @system
+    {
+        // Filter for ML files
+        string[] mlFiles = sources.filter!(s => 
+            extension(s) == ".ml" || extension(s) == ".mli" ||
+            extension(s) == ".mll" || extension(s) == ".mly"
+        ).array;
+        
+        if (mlFiles.empty)
+        {
+            CompiledLanguageResult result;
+            result.error = "No .ml files found in sources";
+            return result;
+        }
+        
+        // Auto-detect compiler if set to Auto
+        if (_config.compiler == OCamlCompiler.Auto)
+            _config.compiler = detectCompiler();
+        
+        // Build based on compiler type
+        final switch (_config.compiler)
+        {
+            case OCamlCompiler.Dune:
+                return buildWithDune(target, config);
+            case OCamlCompiler.OCamlOpt:
+                return buildWithOCamlOpt(target, config, mlFiles);
+            case OCamlCompiler.OCamlC:
+                return buildWithOCamlC(target, config, mlFiles);
+            case OCamlCompiler.OCamlBuild:
+                return buildWithOCamlBuild(target, config);
+            case OCamlCompiler.Auto:
+                CompiledLanguageResult result;
+                result.error = "Failed to auto-detect OCaml compiler";
+                return result;
+        }
+    }
+    
     override string[] getOutputs(in Target target, in WorkspaceConfig config)
     {
-        OCamlConfig ocamlConfig = parseOCamlConfig(target, config);
-        
-        string[] outputs;
+        string outputDir = _config.outputDir.empty ? config.options.outputDir : _config.outputDir;
         
         if (!target.outputPath.empty)
-        {
-            outputs ~= buildPath(config.options.outputDir, target.outputPath);
-        }
-        else
-        {
-            auto name = target.name.split(":")[$ - 1];
-            string outputDir = ocamlConfig.outputDir.empty ? 
-                              config.options.outputDir : 
-                              ocamlConfig.outputDir;
-            
-            // Add extension based on platform and output type
-            if (ocamlConfig.outputType == OCamlOutputType.Bytecode)
-            {
-                name ~= ".byte";
-            }
-            else
-            {
-                version(Windows)
-                {
-                    if (ocamlConfig.outputType == OCamlOutputType.Executable)
-                        name ~= ".exe";
-                }
-            }
-            
-            outputs ~= buildPath(outputDir, name);
-        }
+            return [buildPath(outputDir, target.outputPath)];
         
-        return outputs;
+        auto name = target.name.split(":")[$ - 1];
+        
+        if (_config.outputType == OCamlOutputType.Bytecode)
+            name ~= ".byte";
+        else version(Windows)
+            if (_config.outputType == OCamlOutputType.Executable)
+                name ~= ".exe";
+        
+        return [buildPath(outputDir, name)];
     }
     
     override Import[] analyzeImports(in string[] sources)
     {
-        Import[] allImports;
+        Import[] imports;
         
         foreach (source; sources)
         {
-            if (!exists(source) || !isFile(source))
-                continue;
+            if (!exists(source) || !isFile(source)) continue;
             
             try
             {
                 auto content = readText(source);
-                auto imports = parseOCamlImports(source, content);
-                allImports ~= imports;
+                size_t lineNum = 1;
+                
+                foreach (line; content.lineSplitter)
+                {
+                    string trimmed = line.strip;
+                    if (trimmed.startsWith("open "))
+                    {
+                        string moduleName = trimmed[5 .. $].strip;
+                        auto semicolon = moduleName.indexOf(';');
+                        if (semicolon >= 0) moduleName = moduleName[0 .. semicolon].strip;
+                        
+                        if (!moduleName.empty)
+                        {
+                            Import imp;
+                            imp.moduleName = moduleName;
+                            imp.kind = ImportKind.External;
+                            imp.location = SourceLocation(source, lineNum, 0);
+                            imports ~= imp;
+                        }
+                    }
+                    lineNum++;
+                }
             }
             catch (Exception e)
             {
-                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source ~ ": " ~ e.msg).emit();
+                structuredLog.warning("failed_to_analyze_imports").field("file", source).field("error", e.msg).emit();
             }
         }
         
-        return allImports;
+        return imports;
     }
     
-    private LanguageBuildResult buildWithDune(
-        in Target target,
-        in WorkspaceConfig config,
-        OCamlConfig ocamlConfig
-    )
+    // ===== Private Build Methods =====
+    
+    private void ensureIncLinker() @system
     {
-        LanguageBuildResult result;
+        if (incLinker is null)
+        {
+            incLinker = new IncrementalLinker(".builder-cache/linking/ocaml", actionCache);
+            useIncrementalLink = incLinker.isIncrementalAvailable();
+            
+            if (useIncrementalLink)
+                structuredLog.debug_("ocaml_incremental_link_enabled")
+                    .field("linker", incLinker.getLinkerConfig().type.to!string).emit();
+        }
+    }
+    
+    private CompiledLanguageResult buildWithDune(in Target target, in WorkspaceConfig config) @system
+    {
+        CompiledLanguageResult result;
         
         if (!isDuneAvailable())
         {
@@ -174,131 +232,69 @@ class OCamlHandler : BaseLanguageHandler
         
         structuredLog.debug_("building_with_dune").emit();
         
-        // Collect all ML sources for cache tracking
-        string[] allSources;
-        if (exists("dune") || exists("dune-project"))
-        {
-            allSources ~= exists("dune") ? "dune" : "dune-project";
-        }
-        foreach (source; target.sources)
-        {
-            if (exists(source))
-                allSources ~= source;
-        }
-        
         // Build metadata for cache validation
         string[string] metadata;
-        metadata["profile"] = ocamlConfig.duneProfile == DuneProfile.Dev ? "dev" : "release";
-        metadata["targets"] = ocamlConfig.duneTargets.join(",");
+        metadata["profile"] = _config.duneProfile == DuneProfile.Dev ? "dev" : "release";
+        metadata["targets"] = _config.duneTargets.join(",");
         metadata["duneVersion"] = getDuneVersion();
         
-        // Create action ID for this dune build
+        // Create action ID
+        string[] allSources;
+        if (exists("dune")) allSources ~= "dune";
+        else if (exists("dune-project")) allSources ~= "dune-project";
+        allSources ~= target.sources.filter!(s => exists(s)).array;
+        
         ActionId actionId;
         actionId.targetId = target.name;
         actionId.type = ActionType.Compile;
         actionId.subId = "dune_build";
         actionId.inputHash = FastHash.hashStrings(allSources);
         
-        // Determine expected output
-        string expectedOutput = buildPath(ocamlConfig.outputDir, "default");
+        string expectedOutput = buildPath(_config.outputDir, "default");
         
-        // Check if build is cached
+        // Check cache
         if (actionCache.isCached(actionId, allSources, metadata) && exists(expectedOutput))
         {
-            structuredLog.debug_("__cached_dune_build_").field("detail", "  [Cached] dune build: " ~ target.name).emit();
+            structuredLog.debug_("cached_dune_build").field("target", target.name).emit();
             result.success = true;
             result.outputs = [expectedOutput];
             return result;
         }
         
         // Build command
-        string[] cmd = ["dune", "build"];
+        string[] cmd = ["dune", "build", "--profile", _config.duneProfile == DuneProfile.Dev ? "dev" : "release"];
+        if (!_config.duneTargets.empty) cmd ~= _config.duneTargets;
+        if (_config.verbose) cmd ~= "--verbose";
         
-        // Add profile
-        cmd ~= ["--profile", ocamlConfig.duneProfile == DuneProfile.Dev ? "dev" : "release"];
-        
-        // Add specific targets if specified
-        if (!ocamlConfig.duneTargets.empty)
-        {
-            cmd ~= ocamlConfig.duneTargets;
-        }
-        
-        // Add verbose flag
-        if (ocamlConfig.verbose)
-        {
-            cmd ~= "--verbose";
-        }
-        
-        // Execute dune build
         try
         {
             auto duneResult = execute(cmd);
             
-            bool success = (duneResult.status == 0);
-            
-            if (!success)
+            if (duneResult.status != 0)
             {
                 result.error = "dune build failed:\n" ~ duneResult.output;
-                
-                // Update cache with failure
-                actionCache.update(
-                    actionId,
-                    allSources,
-                    [],
-                    metadata,
-                    false
-                );
-                
+                actionCache.update(actionId, allSources, [], metadata, false);
                 return result;
             }
             
-            // Parse output for warnings
-            if (!duneResult.output.empty)
-            {
-                structuredLog.info("log_event").field("message", duneResult.output).emit();
-            }
-            
             result.success = true;
-            
-            // Dune outputs to _build directory by default
             result.outputs = [expectedOutput];
-            
-            // Update cache with success
-            actionCache.update(
-                actionId,
-                allSources,
-                result.outputs,
-                metadata,
-                true
-            );
-            
-            return result;
+            actionCache.update(actionId, allSources, result.outputs, metadata, true);
         }
         catch (Exception e)
         {
             result.error = "Failed to execute dune: " ~ e.msg;
-            
-            // Update cache with failure
-            actionCache.update(
-                actionId,
-                allSources,
-                [],
-                metadata,
-                false
-            );
-            
-            return result;
+            actionCache.update(actionId, allSources, [], metadata, false);
         }
+        
+        return result;
     }
     
-    private LanguageBuildResult buildWithOCamlOpt(
-        in Target target,
-        in WorkspaceConfig config,
-        OCamlConfig ocamlConfig,
-        in string[] mlFiles
-    )
+    private CompiledLanguageResult buildWithOCamlOpt(
+        in Target target, in WorkspaceConfig config, in string[] mlFiles
+    ) @system
     {
-        LanguageBuildResult result;
+        CompiledLanguageResult result;
         
         if (!isOcamlOptAvailable())
         {
@@ -306,82 +302,46 @@ class OCamlHandler : BaseLanguageHandler
             return result;
         }
         
-        structuredLog.debug_("building_with_ocamlopt_native_compiler").emit();
+        structuredLog.debug_("building_with_ocamlopt").emit();
+        ensureIncLinker();
         
-        // Build metadata for cache validation
+        // Build metadata
         string[string] metadata;
         metadata["compiler"] = "ocamlopt";
-        metadata["optimize"] = ocamlConfig.optimize.to!string;
-        metadata["debugInfo"] = ocamlConfig.debugInfo.to!string;
-        metadata["includeDirs"] = ocamlConfig.includeDirs.join(",");
-        metadata["libs"] = ocamlConfig.libs.join(",");
-        metadata["compilerFlags"] = ocamlConfig.compilerFlags.join(" ");
+        metadata["optimize"] = _config.optimize.to!string;
+        metadata["debugInfo"] = _config.debugInfo.to!string;
         
         // Determine output file
-        string outputDir = ocamlConfig.outputDir.empty ? 
-                          config.options.outputDir : 
-                          ocamlConfig.outputDir;
+        string outputDir = _config.outputDir.empty ? config.options.outputDir : _config.outputDir;
+        if (!exists(outputDir)) mkdirRecurse(outputDir);
         
-        if (!exists(outputDir))
-        {
-            mkdirRecurse(outputDir);
-        }
-        
-        string outputName = ocamlConfig.outputName.empty ? 
-                           target.name.split(":")[$ - 1] : 
-                           ocamlConfig.outputName;
-        
+        string outputName = _config.outputName.empty ? target.name.split(":")[$ - 1] : _config.outputName;
         string outputPath = buildPath(outputDir, outputName);
         
-        // Create action ID for this compilation
+        // Create action ID
         ActionId actionId;
         actionId.targetId = target.name;
         actionId.type = ActionType.Compile;
         actionId.subId = "ocamlopt";
         actionId.inputHash = FastHash.hashStrings(mlFiles.dup);
         
-        // Check if compilation is cached
+        // Check cache
         if (actionCache.isCached(actionId, mlFiles, metadata) && exists(outputPath))
         {
-            structuredLog.debug_("__cached_ocamlopt_compilation_").field("detail", "  [Cached] ocamlopt compilation: " ~ outputPath).emit();
+            structuredLog.debug_("cached_ocamlopt").field("output", outputPath).emit();
             result.success = true;
             result.outputs = [outputPath];
             return result;
         }
         
-        // Determine entry point
-        string entryFile = ocamlConfig.entry;
-        if (entryFile.empty && !mlFiles.empty)
-        {
-            // Look for main.ml or use first file
-            foreach (file; mlFiles)
-            {
-                if (baseName(file) == "main.ml")
-                {
-                    entryFile = file;
-                    break;
-                }
-            }
-            if (entryFile.empty)
-                entryFile = mlFiles[0];
-        }
-        
         // Build command
         string[] cmd = ["ocamlopt"];
         
-        // Add optimization flags
-        if (ocamlConfig.optimize != OptLevel.None)
-        {
-            cmd ~= "-O" ~ (cast(int)ocamlConfig.optimize).to!string;
-        }
+        if (_config.optimize != OptLevel.None)
+            cmd ~= "-O" ~ (cast(int)_config.optimize).to!string;
+        if (_config.debugInfo) cmd ~= "-g";
         
-        // Add debug info
-        if (ocamlConfig.debugInfo)
-        {
-            cmd ~= "-g";
-        }
-        
-        // Add source directories as include directories
+        // Add include directories
         bool[string] seenDirs;
         foreach (source; mlFiles)
         {
@@ -392,111 +352,55 @@ class OCamlHandler : BaseLanguageHandler
                 cmd ~= ["-I", dir];
             }
         }
-        
-        // Add include directories
-        foreach (inc; ocamlConfig.includeDirs)
-        {
-            cmd ~= ["-I", inc];
-        }
-        
-        // Add library directories
-        foreach (libDir; ocamlConfig.libDirs)
-        {
-            cmd ~= ["-L", libDir];
-        }
-        
-        // Add libraries
-        foreach (lib; ocamlConfig.libs)
-        {
-            cmd ~= ["-l", lib];
-        }
-        
-        // Add compiler flags
-        cmd ~= ocamlConfig.compilerFlags;
-        
+        foreach (inc; _config.includeDirs) cmd ~= ["-I", inc];
+        foreach (libDir; _config.libDirs) cmd ~= ["-L", libDir];
+        foreach (lib; _config.libs) cmd ~= ["-l", lib];
+        cmd ~= _config.compilerFlags;
         cmd ~= ["-o", outputPath];
         
-        // Add source files in dependency order (utils before main)
-        string[] nonMainFiles;
-        string[] mainFiles;
+        // Order source files (non-main first)
+        string[] nonMainFiles, mainFiles;
         foreach (file; mlFiles)
         {
-            if (baseName(file).startsWith("main."))
-                mainFiles ~= file;
-            else
-                nonMainFiles ~= file;
+            if (baseName(file).startsWith("main.")) mainFiles ~= file;
+            else nonMainFiles ~= file;
         }
         cmd ~= nonMainFiles;
         cmd ~= mainFiles;
         
-        // Execute compilation
         try
         {
             auto compileResult = execute(cmd);
             
-            bool success = (compileResult.status == 0);
-            
-            if (!success)
+            if (compileResult.status != 0)
             {
                 result.error = "ocamlopt compilation failed:\n" ~ compileResult.output;
-                
-                // Update cache with failure
-                actionCache.update(
-                    actionId,
-                    mlFiles.dup,
-                    [],
-                    metadata,
-                    false
-                );
-                
+                actionCache.update(actionId, mlFiles.dup, [], metadata, false);
+                if (incLinker !is null) incLinker.invalidate(outputPath);
                 return result;
-            }
-            
-            // Check for warnings
-            if (!compileResult.output.empty)
-            {
-                structuredLog.warning("compilation_outputn").field("detail", "Compilation output:\n" ~ compileResult.output).emit();
             }
             
             result.success = true;
             result.outputs = [outputPath];
+            actionCache.update(actionId, mlFiles.dup, [outputPath], metadata, true);
             
-            // Update cache with success
-            actionCache.update(
-                actionId,
-                mlFiles.dup,
-                [outputPath],
-                metadata,
-                true
-            );
-            
-            return result;
+            if (incLinker !is null)
+                incLinker.recordLink(outputPath, mlFiles.dup, _config.libs, _config.compilerFlags.join(" "), false);
         }
         catch (Exception e)
         {
             result.error = "Failed to execute ocamlopt: " ~ e.msg;
-            
-            // Update cache with failure
-            actionCache.update(
-                actionId,
-                mlFiles.dup,
-                [],
-                metadata,
-                false
-            );
-            
-            return result;
+            actionCache.update(actionId, mlFiles.dup, [], metadata, false);
         }
+        
+        return result;
     }
     
-    private LanguageBuildResult buildWithOCamlC(
-        in Target target,
-        in WorkspaceConfig config,
-        OCamlConfig ocamlConfig,
-        in string[] mlFiles
-    )
+    private CompiledLanguageResult buildWithOCamlC(
+        in Target target, in WorkspaceConfig config, in string[] mlFiles
+    ) @system
     {
-        LanguageBuildResult result;
+        CompiledLanguageResult result;
         
         if (!isOcamlCAvailable())
         {
@@ -504,79 +408,41 @@ class OCamlHandler : BaseLanguageHandler
             return result;
         }
         
-        structuredLog.debug_("building_with_ocamlc_bytecode_compiler").emit();
+        structuredLog.debug_("building_with_ocamlc").emit();
         
-        // Build metadata for cache validation
+        // Build metadata
         string[string] metadata;
         metadata["compiler"] = "ocamlc";
-        metadata["debugInfo"] = ocamlConfig.debugInfo.to!string;
-        metadata["includeDirs"] = ocamlConfig.includeDirs.join(",");
-        metadata["libs"] = ocamlConfig.libs.join(",");
-        metadata["compilerFlags"] = ocamlConfig.compilerFlags.join(" ");
+        metadata["debugInfo"] = _config.debugInfo.to!string;
         
         // Determine output file
-        string outputDir = ocamlConfig.outputDir.empty ? 
-                          config.options.outputDir : 
-                          ocamlConfig.outputDir;
+        string outputDir = _config.outputDir.empty ? config.options.outputDir : _config.outputDir;
+        if (!exists(outputDir)) mkdirRecurse(outputDir);
         
-        if (!exists(outputDir))
-        {
-            mkdirRecurse(outputDir);
-        }
-        
-        string outputName = ocamlConfig.outputName.empty ? 
-                           target.name.split(":")[$ - 1] : 
-                           ocamlConfig.outputName;
-        
-        // Bytecode executables typically have .byte extension
-        if (!outputName.endsWith(".byte"))
-            outputName ~= ".byte";
-        
+        string outputName = _config.outputName.empty ? target.name.split(":")[$ - 1] : _config.outputName;
+        if (!outputName.endsWith(".byte")) outputName ~= ".byte";
         string outputPath = buildPath(outputDir, outputName);
         
-        // Create action ID for this compilation
+        // Create action ID
         ActionId actionId;
         actionId.targetId = target.name;
         actionId.type = ActionType.Compile;
         actionId.subId = "ocamlc";
         actionId.inputHash = FastHash.hashStrings(mlFiles.dup);
         
-        // Check if compilation is cached
+        // Check cache
         if (actionCache.isCached(actionId, mlFiles, metadata) && exists(outputPath))
         {
-            structuredLog.debug_("__cached_ocamlc_compilation_").field("detail", "  [Cached] ocamlc compilation: " ~ outputPath).emit();
+            structuredLog.debug_("cached_ocamlc").field("output", outputPath).emit();
             result.success = true;
             result.outputs = [outputPath];
             return result;
         }
         
-        // Determine entry point
-        string entryFile = ocamlConfig.entry;
-        if (entryFile.empty && !mlFiles.empty)
-        {
-            // Look for main.ml or use first file
-            foreach (file; mlFiles)
-            {
-                if (baseName(file) == "main.ml")
-                {
-                    entryFile = file;
-                    break;
-                }
-            }
-            if (entryFile.empty)
-                entryFile = mlFiles[0];
-        }
-        
-        // Build command (similar to ocamlopt but for bytecode)
+        // Build command
         string[] cmd = ["ocamlc"];
+        if (_config.debugInfo) cmd ~= "-g";
         
-        // Add debug info
-        if (ocamlConfig.debugInfo)
-        {
-            cmd ~= "-g";
-        }
-        
-        // Add source directories as include directories
         bool[string] seenDirs;
         foreach (source; mlFiles)
         {
@@ -587,110 +453,48 @@ class OCamlHandler : BaseLanguageHandler
                 cmd ~= ["-I", dir];
             }
         }
-        
-        // Add include directories
-        foreach (inc; ocamlConfig.includeDirs)
-        {
-            cmd ~= ["-I", inc];
-        }
-        
-        // Add library directories
-        foreach (libDir; ocamlConfig.libDirs)
-        {
-            cmd ~= ["-L", libDir];
-        }
-        
-        // Add libraries
-        foreach (lib; ocamlConfig.libs)
-        {
-            cmd ~= ["-l", lib];
-        }
-        
-        // Add compiler flags
-        cmd ~= ocamlConfig.compilerFlags;
-        
+        foreach (inc; _config.includeDirs) cmd ~= ["-I", inc];
+        foreach (libDir; _config.libDirs) cmd ~= ["-L", libDir];
+        foreach (lib; _config.libs) cmd ~= ["-l", lib];
+        cmd ~= _config.compilerFlags;
         cmd ~= ["-o", outputPath];
         
-        // Add source files in dependency order (utils before main)
-        string[] nonMainFiles;
-        string[] mainFiles;
+        string[] nonMainFiles, mainFiles;
         foreach (file; mlFiles)
         {
-            if (baseName(file).startsWith("main."))
-                mainFiles ~= file;
-            else
-                nonMainFiles ~= file;
+            if (baseName(file).startsWith("main.")) mainFiles ~= file;
+            else nonMainFiles ~= file;
         }
         cmd ~= nonMainFiles;
         cmd ~= mainFiles;
         
-        // Execute compilation
         try
         {
             auto compileResult = execute(cmd);
             
-            bool success = (compileResult.status == 0);
-            
-            if (!success)
+            if (compileResult.status != 0)
             {
                 result.error = "ocamlc compilation failed:\n" ~ compileResult.output;
-                
-                // Update cache with failure
-                actionCache.update(
-                    actionId,
-                    mlFiles.dup,
-                    [],
-                    metadata,
-                    false
-                );
-                
+                actionCache.update(actionId, mlFiles.dup, [], metadata, false);
                 return result;
-            }
-            
-            // Check for warnings
-            if (!compileResult.output.empty)
-            {
-                structuredLog.warning("compilation_outputn").field("detail", "Compilation output:\n" ~ compileResult.output).emit();
             }
             
             result.success = true;
             result.outputs = [outputPath];
-            
-            // Update cache with success
-            actionCache.update(
-                actionId,
-                mlFiles.dup,
-                [outputPath],
-                metadata,
-                true
-            );
-            
-            return result;
+            actionCache.update(actionId, mlFiles.dup, [outputPath], metadata, true);
         }
         catch (Exception e)
         {
             result.error = "Failed to execute ocamlc: " ~ e.msg;
-            
-            // Update cache with failure
-            actionCache.update(
-                actionId,
-                mlFiles.dup,
-                [],
-                metadata,
-                false
-            );
-            
-            return result;
+            actionCache.update(actionId, mlFiles.dup, [], metadata, false);
         }
+        
+        return result;
     }
     
-    private LanguageBuildResult buildWithOCamlBuild(
-        in Target target,
-        in WorkspaceConfig config,
-        OCamlConfig ocamlConfig
-    )
+    private CompiledLanguageResult buildWithOCamlBuild(in Target target, in WorkspaceConfig config) @system
     {
-        LanguageBuildResult result;
+        CompiledLanguageResult result;
         
         if (!isOcamlBuildAvailable())
         {
@@ -700,39 +504,21 @@ class OCamlHandler : BaseLanguageHandler
         
         structuredLog.debug_("building_with_ocamlbuild").emit();
         
-        // Determine entry point
-        string entryFile = ocamlConfig.entry;
+        string entryFile = _config.entry;
         if (entryFile.empty && !target.sources.empty)
         {
-            // Look for main.ml
             foreach (source; target.sources)
-            {
-                if (baseName(source) == "main.ml")
-                {
-                    entryFile = source;
-                    break;
-                }
-            }
-            if (entryFile.empty)
-                entryFile = target.sources[0];
+                if (baseName(source) == "main.ml") { entryFile = source; break; }
+            if (entryFile.empty) entryFile = target.sources[0];
         }
         
-        // Build command
-        string[] cmd = ["ocamlbuild"];
-        
-        // Add native or bytecode target
-        string target_ext = ocamlConfig.outputType == OCamlOutputType.Bytecode ? ".byte" : ".native";
+        string target_ext = _config.outputType == OCamlOutputType.Bytecode ? ".byte" : ".native";
         string targetName = stripExtension(baseName(entryFile)) ~ target_ext;
         
-        cmd ~= targetName;
+        string[] cmd = ["ocamlbuild", targetName];
+        if (!_config.compilerFlags.empty)
+            cmd ~= ["-cflags", _config.compilerFlags.join(",")];
         
-        // Add flags
-        if (!ocamlConfig.compilerFlags.empty)
-        {
-            cmd ~= ["-cflags", ocamlConfig.compilerFlags.join(",")];
-        }
-        
-        // Execute ocamlbuild
         try
         {
             auto buildResult = execute(cmd);
@@ -743,224 +529,79 @@ class OCamlHandler : BaseLanguageHandler
                 return result;
             }
             
-            if (!buildResult.output.empty)
-            {
-                structuredLog.info("log_event").field("message", buildResult.output).emit();
-            }
-            
             result.success = true;
             result.outputs = [buildPath("_build", targetName)];
-            
-            return result;
         }
         catch (Exception e)
         {
             result.error = "Failed to execute ocamlbuild: " ~ e.msg;
-            return result;
         }
+        
+        return result;
     }
     
-    private OCamlConfig parseOCamlConfig(in Target target, in WorkspaceConfig config)
-    {
-        OCamlConfig ocamlConfig;
-        
-        // Try language-specific keys
-        string configKey = "";
-        if ("ocaml" in target.langConfig)
-            configKey = "ocaml";
-        else if ("ocamlConfig" in target.langConfig)
-            configKey = "ocamlConfig";
-        
-        if (!configKey.empty)
-        {
-            try
-            {
-                auto json = parseJSON(target.langConfig[configKey]);
-                ocamlConfig = OCamlConfig.fromJSON(json);
-            }
-            catch (Exception e)
-            {
-                structuredLog.warning("failed_to_parse_ocaml_config_using_defau").field("detail", "Failed to parse OCaml config, using defaults: " ~ e.msg).emit();
-            }
-        }
-        
-        // Apply target flags if not in langConfig
-        if (!target.flags.empty && configKey.empty)
-        {
-            ocamlConfig.compilerFlags ~= target.flags;
-        }
-        
-        return ocamlConfig;
-    }
+    // ===== Private Helpers =====
     
-    private Import[] parseOCamlImports(string filePath, string content)
+    private OCamlCompiler detectCompiler() @system
     {
-        Import[] imports;
-        
-        // Parse OCaml open statements and module references
-        // Simple regex-based parsing for now
-        size_t lineNum = 1;
-        foreach (line; content.lineSplitter)
-        {
-            string trimmed = line.strip;
-            
-            // Match: open ModuleName
-            if (trimmed.startsWith("open "))
-            {
-                string moduleName = trimmed[5 .. $].strip;
-                if (!moduleName.empty)
-                {
-                    // Remove any trailing semicolons or comments
-                    import std.string : indexOf;
-                    auto semicolon = moduleName.indexOf(';');
-                    if (semicolon >= 0)
-                        moduleName = moduleName[0 .. semicolon].strip;
-                    
-                    Import imp;
-                    imp.moduleName = moduleName;
-                    imp.kind = ImportKind.External;
-                    imp.location = SourceLocation(filePath, lineNum, 0);
-                    imports ~= imp;
-                }
-            }
-            lineNum++;
-        }
-        
-        return imports;
-    }
-    
-    private OCamlCompiler detectCompiler()
-    {
-        // Check for dune first (most modern)
         if (isDuneAvailable() && (exists("dune-project") || exists("dune")))
-        {
-            structuredLog.debug_("detected_dune_project").emit();
             return OCamlCompiler.Dune;
-        }
-        
-        // Check for ocamlbuild
         if (isOcamlBuildAvailable() && exists("_tags"))
-        {
-            structuredLog.debug_("detected_ocamlbuild_project").emit();
             return OCamlCompiler.OCamlBuild;
-        }
-        
-        // Prefer native compiler if available
         if (isOcamlOptAvailable())
-        {
-            structuredLog.debug_("using_ocamlopt_native_compiler").emit();
             return OCamlCompiler.OCamlOpt;
-        }
-        
-        // Fallback to bytecode compiler
         if (isOcamlCAvailable())
-        {
-            structuredLog.debug_("using_ocamlc_bytecode_compiler").emit();
             return OCamlCompiler.OCamlC;
-        }
-        
-        structuredLog.warning("no_ocaml_compiler_found").emit();
-        return OCamlCompiler.OCamlOpt; // Return something, error will be raised later
+        return OCamlCompiler.OCamlOpt;
     }
     
-    private bool isDuneAvailable()
+    private bool isDuneAvailable() @system
+    {
+        try { return execute(["dune", "--version"]).status == 0; }
+        catch (Exception) { return false; }
+    }
+    
+    private string getDuneVersion() @system
     {
         try
         {
             auto result = execute(["dune", "--version"]);
-            return result.status == 0;
+            return result.status == 0 ? result.output.strip : "unknown";
         }
-        catch (Exception)
-        {
-            return false;
-        }
+        catch (Exception) { return "unknown"; }
     }
     
-    private string getDuneVersion()
-    {
-        try
-        {
-            auto result = execute(["dune", "--version"]);
-            if (result.status == 0)
-                return result.output.strip;
-            return "unknown";
-        }
-        catch (Exception)
-        {
-            return "unknown";
-        }
-    }
-    
-    private bool isOcamlOptAvailable()
+    private string getOcamlVersion() @system
     {
         try
         {
             auto result = execute(["ocamlopt", "-version"]);
-            return result.status == 0;
+            return result.status == 0 ? result.output.strip : "unknown";
         }
-        catch (Exception)
-        {
-            return false;
-        }
+        catch (Exception) { return "unknown"; }
     }
     
-    private bool isOcamlCAvailable()
+    private bool isOcamlOptAvailable() @system
     {
-        try
-        {
-            auto result = execute(["ocamlc", "-version"]);
-            return result.status == 0;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
+        try { return execute(["ocamlopt", "-version"]).status == 0; }
+        catch (Exception) { return false; }
     }
     
-    private bool isOcamlBuildAvailable()
+    private bool isOcamlCAvailable() @system
     {
-        try
-        {
-            auto result = execute(["ocamlbuild", "-version"]);
-            return result.status == 0;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
+        try { return execute(["ocamlc", "-version"]).status == 0; }
+        catch (Exception) { return false; }
     }
     
-    private bool isOcamlFormatAvailable()
+    private bool isOcamlBuildAvailable() @system
     {
-        try
-        {
-            auto result = execute(["ocamlformat", "--version"]);
-            return result.status == 0;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
+        try { return execute(["ocamlbuild", "-version"]).status == 0; }
+        catch (Exception) { return false; }
     }
     
-    private void formatCode(in string[] files)
+    private bool isOcamlFormatAvailable() @system
     {
-        foreach (file; files)
-        {
-            try
-            {
-                auto result = execute(["ocamlformat", "--inplace", file]);
-                if (result.status != 0)
-                {
-                    structuredLog.warning("failed_to_format_").field("detail", "Failed to format " ~ file).emit();
-                }
-            }
-            catch (Exception e)
-            {
-                structuredLog.warning("failed_to_format_").field("detail", "Failed to format " ~ file ~ ": " ~ e.msg).emit();
-            }
-        }
+        try { return execute(["ocamlformat", "--version"]).status == 0; }
+        catch (Exception) { return false; }
     }
 }
-
-

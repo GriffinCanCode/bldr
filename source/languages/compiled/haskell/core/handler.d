@@ -1,15 +1,13 @@
 module languages.compiled.haskell.core.handler;
 
-import std.stdio;
-import std.process;
 import std.file;
 import std.path;
 import std.algorithm;
 import std.array;
 import std.json;
 import std.string;
-import languages.base.base;
-import languages.base.mixins;
+import std.regex;
+import languages.compiled.base;
 import languages.compiled.haskell.core.config;
 import languages.compiled.haskell.tooling.ghc;
 import languages.compiled.haskell.tooling.cabal;
@@ -19,363 +17,282 @@ import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.logging;
-import engine.caching.actions.action : ActionCache, ActionCacheConfig;
 
-/// Haskell build handler with GHC, Cabal, and Stack support and action-level caching
-class HaskellHandler : BaseLanguageHandler
+/// Haskell build handler with GHC, Cabal, and Stack support
+class HaskellHandler : BaseCompiledLanguageHandler
 {
-    mixin CachingHandlerMixin!"haskell";
+    private HaskellConfig _config;
     
-    protected override LanguageBuildResult buildImplWithContext(in BuildContext context)
+    this() { super(null); }
+    
+    // ===== Required Overrides =====
+    
+    override string languageName() const pure nothrow @safe => "Haskell";
+    
+    override string[] fileExtensions() const pure nothrow @safe => [".hs", ".lhs"];
+    
+    override bool detectToolchain() @system
     {
-        // Extract target and config from context for convenience
-        auto target = context.target;
-        auto config = context.config;
+        // Check for any available build tool
+        if (StackWrapper.isAvailable()) return true;
+        if (CabalWrapper.isAvailable()) return true;
+        return GHCWrapper.isAvailable();
+    }
+    
+    override string getToolchainVersion() @system
+    {
+        if (_config.buildTool == HaskellBuildTool.Stack && StackWrapper.isAvailable())
+            return "Stack " ~ StackWrapper.getVersion();
+        if (_config.buildTool == HaskellBuildTool.Cabal && CabalWrapper.isAvailable())
+            return "Cabal " ~ CabalWrapper.getVersion();
+        if (GHCWrapper.isAvailable())
+            return "GHC " ~ GHCWrapper.getVersion();
+        return "unknown";
+    }
+    
+    override void parseConfig(in Target target, in WorkspaceConfig config) @system
+    {
+        _config = HaskellConfig.init;
         
-        LanguageBuildResult result;
+        string configKey = "haskell" in target.langConfig ? "haskell" :
+                          ("hs" in target.langConfig ? "hs" : "");
         
-        structuredLog.debug_("building_haskell_target_").field("detail", "Building Haskell target: " ~ target.name).emit();
-        
-        // Parse Haskell configuration
-        HaskellConfig hsConfig = parseHaskellConfig(target, config);
-        
-        // Auto-detect build tool if needed
-        if (hsConfig.buildTool == HaskellBuildTool.Auto)
+        if (!configKey.empty)
         {
-            hsConfig.buildTool = detectBuildTool(config.root);
+            try { _config = HaskellConfig.fromJSON(parseJSON(target.langConfig[configKey])); }
+            catch (Exception e) { structuredLog.warning("failed_to_parse_haskell_config").field("error", e.msg).emit(); }
         }
         
-        // Validate sources
-        if (target.sources.empty && hsConfig.entry.empty)
-        {
-            result.error = "No Haskell source files specified";
-            return result;
-        }
+        if (_config.outputDir.empty)
+            _config.outputDir = config.options.outputDir;
+    }
+    
+    override FormatResult formatSources(in string[] sources) @system
+    {
+        FormatResult result;
+        result.success = true;
         
-        // Run HLint if requested
-        if (hsConfig.hlint && GHCWrapper.isHLintAvailable())
-        {
-            structuredLog.debug_("running_hlint").emit();
-            auto lintResult = runHLint(target, hsConfig);
-            if (lintResult.hadHLintIssues)
-            {
-                structuredLog.warning("hlint_found_issues").emit();
-                foreach (issue; lintResult.hlintIssues)
-                {
-                    structuredLog.warning("__").field("detail", "  " ~ issue).emit();
-                }
-            }
-        }
+        string[] hsFiles = sources.filter!(s => extension(s) == ".hs").array;
+        if (hsFiles.empty) return result;
         
-        // Run formatter if requested
-        if (hsConfig.ormolu && GHCWrapper.isOroluAvailable())
+        if (_config.ormolu && GHCWrapper.isOroluAvailable())
         {
             structuredLog.debug_("running_ormolu").emit();
-            runOrmolu(target, hsConfig);
+            GHCWrapper.runOrmolu(hsFiles);
         }
-        else if (hsConfig.fourmolu && GHCWrapper.isFourmoluAvailable())
+        else if (_config.fourmolu && GHCWrapper.isFourmoluAvailable())
         {
             structuredLog.debug_("running_fourmolu").emit();
-            runFourmolu(target, hsConfig);
-        }
-        
-        // Build based on target type and build tool
-        final switch (target.type)
-        {
-            case TargetType.Executable:
-                result = buildExecutable(target, config, hsConfig);
-                break;
-            case TargetType.Library:
-                result = buildLibrary(target, config, hsConfig);
-                break;
-            case TargetType.Test:
-                result = runTests(target, config, hsConfig);
-                break;
-            case TargetType.Custom:
-            case TargetType.Shell:
-                result = buildCustom(target, config, hsConfig);
-                break;
+            GHCWrapper.runFourmolu(hsFiles);
         }
         
         return result;
+    }
+    
+    override LintResult lintSources(in string[] sources) @system
+    {
+        LintResult result;
+        result.success = true;
+        
+        if (!_config.hlint || !GHCWrapper.isHLintAvailable())
+            return result;
+        
+        string[] hsFiles = sources.filter!(s => extension(s) == ".hs").array;
+        if (hsFiles.empty) return result;
+        
+        auto lintResult = GHCWrapper.runHLint(hsFiles);
+        result.success = lintResult.success;
+        result.hadIssues = !lintResult.hlintIssues.empty;
+        result.issues = lintResult.hlintIssues.dup;
+        
+        return result;
+    }
+    
+    override CompiledLanguageResult compileTarget(
+        in Target target,
+        in WorkspaceConfig config,
+        in string[] sources
+    ) @system
+    {
+        CompiledLanguageResult result;
+        
+        // Auto-detect build tool if needed
+        if (_config.buildTool == HaskellBuildTool.Auto)
+            _config.buildTool = detectBuildTool(config.root);
+        
+        // Auto-detect entry point
+        if (_config.entry.empty && !sources.empty)
+            _config.entry = findMainFile(sources);
+        
+        // Build based on target type and tool
+        final switch (target.type)
+        {
+            case TargetType.Library:
+                _config.mode = HaskellBuildMode.Library;
+                break;
+            case TargetType.Test:
+                _config.mode = HaskellBuildMode.Test;
+                break;
+            case TargetType.Custom:
+            case TargetType.Shell:
+                _config.mode = HaskellBuildMode.Custom;
+                break;
+            case TargetType.Executable:
+                _config.mode = HaskellBuildMode.Compile;
+                break;
+        }
+        
+        // Compile based on build tool
+        final switch (_config.buildTool)
+        {
+            case HaskellBuildTool.Auto:
+                result.error = "Build tool not resolved";
+                return result;
+            case HaskellBuildTool.GHC:
+                return buildWithGHC(target, config);
+            case HaskellBuildTool.Cabal:
+                return buildWithCabal(target, config);
+            case HaskellBuildTool.Stack:
+                return buildWithStack(target, config);
+        }
     }
     
     override string[] getOutputs(in Target target, in WorkspaceConfig config)
     {
-        HaskellConfig hsConfig = parseHaskellConfig(target, config);
-        
-        string[] outputs;
-        
         if (!target.outputPath.empty)
-        {
-            outputs ~= buildPath(config.options.outputDir, target.outputPath);
-        }
-        else
-        {
-            auto name = target.name.split(":")[$ - 1];
-            outputs ~= buildPath(config.options.outputDir, name);
-        }
-        
-        return outputs;
+            return [buildPath(config.options.outputDir, target.outputPath)];
+        return [buildPath(config.options.outputDir, target.name.split(":")[$ - 1])];
     }
     
     override Import[] analyzeImports(in string[] sources)
     {
-        Import[] allImports;
+        Import[] imports;
         
         foreach (source; sources)
         {
-            if (!exists(source) || !isFile(source))
-                continue;
+            if (!exists(source) || !isFile(source)) continue;
             
             try
             {
                 auto content = readText(source);
-                auto imports = parseHaskellImports(source, content);
-                allImports ~= imports;
+                auto importRe = regex(r"^\s*import\s+(?:qualified\s+)?([A-Z][A-Za-z0-9._]*)", "m");
+                size_t lineNum = 1;
+                
+                foreach (line; content.lineSplitter)
+                {
+                    auto match = line.matchFirst(importRe);
+                    if (!match.empty && match.length >= 2)
+                    {
+                        Import imp;
+                        imp.moduleName = match[1];
+                        imp.kind = ImportKind.External;
+                        imp.location = SourceLocation(source, lineNum, 0);
+                        imports ~= imp;
+                    }
+                    lineNum++;
+                }
             }
             catch (Exception e)
             {
-                structuredLog.warning("failed_to_analyze_imports_in_").field("detail", "Failed to analyze imports in " ~ source ~ ": " ~ e.msg).emit();
+                structuredLog.warning("failed_to_analyze_imports").field("file", source).field("error", e.msg).emit();
             }
         }
         
-        return allImports;
+        return imports;
     }
     
-    private LanguageBuildResult buildExecutable(
-        in Target target, 
-        in WorkspaceConfig config, 
-        HaskellConfig hsConfig
-    )
-    {
-        LanguageBuildResult result;
-        
-        // Auto-detect entry point if not specified
-        if (hsConfig.entry.empty && !target.sources.empty)
-        {
-            hsConfig.entry = findMainFile(target.sources);
-        }
-        
-        final switch (hsConfig.buildTool)
-        {
-            case HaskellBuildTool.Auto:
-                // Should not reach here, already resolved
-                result.error = "Build tool not resolved";
-                break;
-            case HaskellBuildTool.GHC:
-                result = buildWithGHC(target, config, hsConfig);
-                break;
-            case HaskellBuildTool.Cabal:
-                result = buildWithCabal(target, config, hsConfig);
-                break;
-            case HaskellBuildTool.Stack:
-                result = buildWithStack(target, config, hsConfig);
-                break;
-        }
-        
-        return result;
-    }
+    // ===== Private Helpers =====
     
-    private LanguageBuildResult buildLibrary(
-        in Target target, 
-        in WorkspaceConfig config, 
-        HaskellConfig hsConfig
-    )
+    private CompiledLanguageResult buildWithGHC(in Target target, in WorkspaceConfig config) @system
     {
-        LanguageBuildResult result;
-        hsConfig.mode = HaskellBuildMode.Library;
+        CompiledLanguageResult result;
         
-        // Libraries typically use Cabal or Stack
-        if (hsConfig.buildTool == HaskellBuildTool.GHC)
-        {
-            structuredLog.warning("direct_ghc_compilation_for_libraries_is_").emit();
-        }
-        
-        final switch (hsConfig.buildTool)
-        {
-            case HaskellBuildTool.Auto:
-                result.error = "Build tool not resolved";
-                break;
-            case HaskellBuildTool.GHC:
-                result = buildWithGHC(target, config, hsConfig);
-                break;
-            case HaskellBuildTool.Cabal:
-                result = buildWithCabal(target, config, hsConfig);
-                break;
-            case HaskellBuildTool.Stack:
-                result = buildWithStack(target, config, hsConfig);
-                break;
-        }
-        
-        return result;
-    }
-    
-    private LanguageBuildResult runTests(
-        in Target target, 
-        in WorkspaceConfig config, 
-        HaskellConfig hsConfig
-    )
-    {
-        LanguageBuildResult result;
-        hsConfig.mode = HaskellBuildMode.Test;
-        
-        final switch (hsConfig.buildTool)
-        {
-            case HaskellBuildTool.Auto:
-                result.error = "Build tool not resolved";
-                break;
-            case HaskellBuildTool.GHC:
-                result = buildWithGHC(target, config, hsConfig);
-                break;
-            case HaskellBuildTool.Cabal:
-                result = buildWithCabal(target, config, hsConfig);
-                break;
-            case HaskellBuildTool.Stack:
-                result = buildWithStack(target, config, hsConfig);
-                break;
-        }
-        
-        return result;
-    }
-    
-    private LanguageBuildResult buildCustom(
-        in Target target, 
-        in WorkspaceConfig config, 
-        HaskellConfig hsConfig
-    )
-    {
-        LanguageBuildResult result;
-        hsConfig.mode = HaskellBuildMode.Custom;
-        
-        // For custom targets, use the configured build tool
-        final switch (hsConfig.buildTool)
-        {
-            case HaskellBuildTool.Auto:
-                result.error = "Build tool not resolved";
-                break;
-            case HaskellBuildTool.GHC:
-                result = buildWithGHC(target, config, hsConfig);
-                break;
-            case HaskellBuildTool.Cabal:
-                result = buildWithCabal(target, config, hsConfig);
-                break;
-            case HaskellBuildTool.Stack:
-                result = buildWithStack(target, config, hsConfig);
-                break;
-        }
-        
-        return result;
-    }
-    
-    private LanguageBuildResult buildWithGHC(
-        in Target target,
-        in WorkspaceConfig config,
-        const HaskellConfig hsConfig
-    )
-    {
         if (!GHCWrapper.isAvailable())
         {
-            LanguageBuildResult result;
             result.error = "GHC not found. Install from: https://www.haskell.org/ghcup/";
             return result;
         }
         
-        structuredLog.debug_("using_ghc_").field("detail", "Using GHC: " ~ GHCWrapper.getVersion()).emit();
-        return GHCWrapper.compile(target, config, hsConfig, actionCache);
+        structuredLog.debug_("using_ghc").field("version", GHCWrapper.getVersion()).emit();
+        auto compileResult = GHCWrapper.compile(target, config, _config, actionCache);
+        
+        result.success = compileResult.success;
+        result.error = compileResult.error;
+        result.outputs = compileResult.outputs.dup;
+        result.outputHash = compileResult.outputHash;
+        result.hadWarnings = compileResult.hadWarnings;
+        result.warnings = compileResult.warnings.dup;
+        
+        return result;
     }
     
-    private LanguageBuildResult buildWithCabal(
-        in Target target,
-        in WorkspaceConfig config,
-        const HaskellConfig hsConfig
-    )
+    private CompiledLanguageResult buildWithCabal(in Target target, in WorkspaceConfig config) @system
     {
+        CompiledLanguageResult result;
+        
         if (!CabalWrapper.isAvailable())
         {
-            LanguageBuildResult result;
             result.error = "Cabal not found. Install from: https://www.haskell.org/ghcup/";
             return result;
         }
         
-        structuredLog.debug_("using_cabal_").field("detail", "Using Cabal: " ~ CabalWrapper.getVersion()).emit();
-        return CabalWrapper.build(target, config, hsConfig, actionCache);
+        structuredLog.debug_("using_cabal").field("version", CabalWrapper.getVersion()).emit();
+        auto compileResult = CabalWrapper.build(target, config, _config, actionCache);
+        
+        result.success = compileResult.success;
+        result.error = compileResult.error;
+        result.outputs = compileResult.outputs.dup;
+        result.outputHash = compileResult.outputHash;
+        result.hadWarnings = compileResult.hadWarnings;
+        result.warnings = compileResult.warnings.dup;
+        
+        return result;
     }
     
-    private LanguageBuildResult buildWithStack(
-        in Target target,
-        in WorkspaceConfig config,
-        const HaskellConfig hsConfig
-    )
+    private CompiledLanguageResult buildWithStack(in Target target, in WorkspaceConfig config) @system
     {
+        CompiledLanguageResult result;
+        
         if (!StackWrapper.isAvailable())
         {
-            LanguageBuildResult result;
             result.error = "Stack not found. Install from: https://docs.haskellstack.org/";
             return result;
         }
         
-        structuredLog.debug_("using_stack_").field("detail", "Using Stack: " ~ StackWrapper.getVersion()).emit();
-        return StackWrapper.build(target, config, hsConfig, actionCache);
+        structuredLog.debug_("using_stack").field("version", StackWrapper.getVersion()).emit();
+        auto compileResult = StackWrapper.build(target, config, _config, actionCache);
+        
+        result.success = compileResult.success;
+        result.error = compileResult.error;
+        result.outputs = compileResult.outputs.dup;
+        result.outputHash = compileResult.outputHash;
+        result.hadWarnings = compileResult.hadWarnings;
+        result.warnings = compileResult.warnings.dup;
+        
+        return result;
     }
     
-    private HaskellConfig parseHaskellConfig(in Target target, in WorkspaceConfig workspace)
+    private HaskellBuildTool detectBuildTool(string projectRoot) @system
     {
-        HaskellConfig config;
-        
-        // Try language-specific keys
-        string configKey = "";
-        if ("haskell" in target.langConfig)
-            configKey = "haskell";
-        else if ("hs" in target.langConfig)
-            configKey = "hs";
-        
-        if (!configKey.empty)
-        {
-            try
-            {
-                auto json = parseJSON(target.langConfig[configKey]);
-                config = HaskellConfig.fromJSON(json);
-            }
-            catch (Exception e)
-            {
-                structuredLog.warning("failed_to_parse_haskell_config_using_def").field("detail", "Failed to parse Haskell config, using defaults: " ~ e.msg).emit();
-            }
-        }
-        
-        // Set default output directory if not specified
-        if (config.outputDir.empty)
-        {
-            config.outputDir = workspace.options.outputDir;
-        }
-        
-        return config;
-    }
-    
-    private HaskellBuildTool detectBuildTool(string projectRoot)
-    {
-        // Check for stack.yaml
         if (exists(buildPath(projectRoot, "stack.yaml")))
         {
-            structuredLog.debug_("detected_stack_project_stackyaml_found").emit();
+            structuredLog.debug_("detected_stack_project").emit();
             return HaskellBuildTool.Stack;
         }
         
-        // Check for *.cabal files
         if (!dirEntries(projectRoot, "*.cabal", SpanMode.shallow).empty)
         {
-            structuredLog.debug_("detected_cabal_project_cabal_file_found").emit();
+            structuredLog.debug_("detected_cabal_project").emit();
             return HaskellBuildTool.Cabal;
         }
         
-        // Default to GHC for simple projects
-        structuredLog.debug_("no_build_tool_detected_using_ghc_directl").emit();
+        structuredLog.debug_("no_build_tool_using_ghc").emit();
         return HaskellBuildTool.GHC;
     }
     
-    private string findMainFile(in string[] sources)
+    private string findMainFile(in string[] sources) @system
     {
-        // Look for Main.hs or files with "main" in the name
+        // Look for Main.hs
         foreach (source; sources)
         {
             string base = baseName(source);
@@ -383,109 +300,30 @@ class HaskellHandler : BaseLanguageHandler
                 return source;
         }
         
-        // Look for any file with Main module
+        // Look for file with Main module
         foreach (source; sources)
         {
             if (extension(source) == ".hs" && hasMainModule(source))
                 return source;
         }
         
-        // Fallback to first .hs file
+        // Fallback
         foreach (source; sources)
-        {
-            if (extension(source) == ".hs")
-                return source;
-        }
+            if (extension(source) == ".hs") return source;
         
         return sources.length > 0 ? sources[0] : "";
     }
     
-    private bool hasMainModule(string filepath)
+    private bool hasMainModule(string filepath) @system
     {
-        if (!exists(filepath))
-            return false;
+        if (!exists(filepath)) return false;
         
         try
         {
             auto content = readText(filepath);
-            import std.regex;
             auto mainModuleRe = regex(r"^\s*module\s+Main\s", "m");
             return !content.matchFirst(mainModuleRe).empty;
         }
-        catch (Exception e)
-        {
-            return false;
-        }
-    }
-    
-    private HaskellCompileResult runHLint(in Target target, const HaskellConfig config)
-    {
-        HaskellCompileResult result;
-        
-        if (!GHCWrapper.isHLintAvailable())
-        {
-            result.success = true;
-            return result;
-        }
-        
-        string[] sources = target.sources.filter!(s => extension(s) == ".hs").array.dup;
-        if (sources.empty)
-        {
-            result.success = true;
-            return result;
-        }
-        
-        auto lintResult = GHCWrapper.runHLint(sources);
-        result.success = lintResult.success;
-        result.hadHLintIssues = !lintResult.hlintIssues.empty;
-        result.hlintIssues = lintResult.hlintIssues.dup;
-        
-        return result;
-    }
-    
-    private void runOrmolu(in Target target, const HaskellConfig config)
-    {
-        string[] sources = target.sources.filter!(s => extension(s) == ".hs").array.dup;
-        if (sources.empty)
-            return;
-        
-        GHCWrapper.runOrmolu(sources);
-    }
-    
-    private void runFourmolu(in Target target, const HaskellConfig config)
-    {
-        string[] sources = target.sources.filter!(s => extension(s) == ".hs").array.dup;
-        if (sources.empty)
-            return;
-        
-        GHCWrapper.runFourmolu(sources);
-    }
-    
-    private Import[] parseHaskellImports(string filepath, string content)
-    {
-        Import[] imports;
-        
-        import std.regex;
-        
-        // Match: import qualified? ModuleName (as Alias)? (hiding? (...))?
-        auto importRe = regex(r"^\s*import\s+(?:qualified\s+)?([A-Z][A-Za-z0-9._]*)", "m");
-        
-        size_t lineNum = 1;
-        foreach (line; content.lineSplitter)
-        {
-            auto match = line.matchFirst(importRe);
-            if (!match.empty && match.length >= 2)
-            {
-                Import imp;
-                imp.moduleName = match[1];
-                imp.kind = ImportKind.External; // Haskell imports are module-based
-                imp.location = SourceLocation(filepath, lineNum, 0);
-                imports ~= imp;
-            }
-            lineNum++;
-        }
-        
-        return imports;
+        catch (Exception) { return false; }
     }
 }
-
