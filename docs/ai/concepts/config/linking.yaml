@@ -1,14 +1,43 @@
 topic: linking
 category: concepts
-summary: "Linking - Static vs Dynamic linking"
+summary: "Linking - Static vs Dynamic linking with incremental support"
 definition: |
-  How Builder handles linking of binaries. Supports static linking for portability
-  and dynamic linking for speed/size.
+  How Builder handles linking of binaries. Supports static linking for portability,
+  dynamic linking for speed/size, and incremental linking for faster rebuild cycles.
 
 key_points:
   - "linkstatic: Force static linking"
   - "linkshared: Create shared library (.so/.dll)"
   - "alwayslink: Force inclusion of all symbols"
+  - "incrementalLinking: Enable incremental linking (ld.lld --incremental, MSVC /INCREMENTAL)"
+  - "Supported linkers: LLD, MSVC, GNU Gold, ld64 (limited)"
+
+incremental_linking:
+  description: |
+    Incremental linking tracks object file changes and enables partial re-linking
+    when only some objects have changed. This can reduce link times by 5-15x for
+    large projects with small changes.
+  
+  supported_languages:
+    - "C++ (g++/clang++ → ld.lld)"
+    - "Rust (rustc → ld.lld)"
+    - "Zig (zig → ld.lld)"
+    - "D (ldc2 → ld.lld)"
+    - "Swift (swiftc → ld64, limited)"
+    - "Kotlin/Native (kotlinc-native → LLVM)"
+    - "Scala Native (sbt/mill → LLVM)"
+    - "OCaml (ocamlopt → native)"
+    - "Haskell (ghc → native)"
+  
+  configuration: |
+    # In Builderspace file:
+    workspace("myproject") {
+        incrementalLinking: true;  // Enable globally
+        incremental: true;         // Incremental compilation
+    }
+    
+    # Or via environment:
+    export BUILDER_INCREMENTAL_LINK=true
 
 usage_examples:
   - description: "Static binary"
@@ -17,9 +46,18 @@ usage_examples:
         name = "tool",
         linkstatic = 1,
       )
+  
+  - description: "Incremental linking workspace"
+    code: |
+      workspace("cpp-project") {
+          incrementalLinking: true;
+          incremental: true;
+      }
 
-related: [cpp-support, artifact-management, languages]
+related: [cpp-support, artifact-management, languages, incremental-compilation]
 
 next_steps: |
+  - Enable incrementalLinking for large compiled projects
   - Prefer static linking for deployment
+  - Use incremental for development builds
 

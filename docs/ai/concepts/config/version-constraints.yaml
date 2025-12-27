@@ -1,0 +1,67 @@
+topic: version-constraints
+category: concepts
+summary: "Version Constraints - SemVer constraint syntax for dependencies"
+definition: |
+  Builder supports standard semver constraint syntax for specifying dependency versions.
+  Constraints can be exact versions, ranges, caret/tilde shorthand, or unions.
+
+key_points:
+  - "Exact: 1.2.3 or =1.2.3"
+  - "Caret: ^1.2.3 (>=1.2.3 <2.0.0 for major>0)"
+  - "Tilde: ~1.2.3 (>=1.2.3 <1.3.0)"
+  - "Ranges: >=1.0.0 <2.0.0"
+  - "Unions: >=1.0.0 <2.0.0 || >=3.0.0"
+  - "Wildcard: * or latest"
+
+syntax_table:
+  - syntax: "1.2.3"
+    meaning: "Exact version match"
+    example: "=1.2.3"
+  - syntax: "^1.2.3"
+    meaning: "Compatible with 1.2.3"
+    example: ">=1.2.3 <2.0.0"
+  - syntax: "~1.2.3"
+    meaning: "Approximately 1.2.3"
+    example: ">=1.2.3 <1.3.0"
+  - syntax: ">=1.0.0"
+    meaning: "At least 1.0.0"
+    example: ">=1.0.0"
+  - syntax: "<2.0.0"
+    meaning: "Less than 2.0.0"
+    example: "<2.0.0"
+  - syntax: "*"
+    meaning: "Any version"
+    example: ">=0.0.0"
+
+caret_semantics:
+  - constraint: "^1.2.3"
+    meaning: ">=1.2.3 <2.0.0 (major > 0)"
+  - constraint: "^0.2.3"
+    meaning: ">=0.2.3 <0.3.0 (major = 0, minor > 0)"
+  - constraint: "^0.0.3"
+    meaning: ">=0.0.3 <0.0.4 (major = minor = 0)"
+
+usage_examples:
+  - description: "Parse and check constraint"
+    code: |
+      auto caret = VersionConstraint.parse("^1.2.3").unwrap();
+      assert(caret.allows(SemVer.parse("1.9.9").unwrap()));
+      assert(!caret.allows(SemVer.parse("2.0.0").unwrap()));
+
+  - description: "Intersect constraints"
+    code: |
+      auto c1 = VersionConstraint.parse(">=1.0.0").unwrap();
+      auto c2 = VersionConstraint.parse("<2.0.0").unwrap();
+      auto result = c1.intersect(c2);
+
+  - description: "Union constraints"
+    code: |
+      auto union_ = VersionConstraint.parse(">=1.0.0 <2.0.0 || >=3.0.0").unwrap();
+
+related: [semver, dependency-management, package-sources]
+
+next_steps: |
+  - Use caret (^) for most dependencies - allows compatible updates
+  - Use tilde (~) for patch-only updates
+  - Use exact versions for pinning critical dependencies
+

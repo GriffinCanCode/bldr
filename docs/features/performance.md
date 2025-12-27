@@ -365,8 +365,72 @@ Changes in unsampled regions won't be detected (statistically rare).
 
 ---
 
+## Incremental Linking
+
+**Module:** `engine.linking.incremental`
+
+### Overview
+
+For large compiled projects, linking can consume 50%+ of total build time. Incremental linking tracks object file changes and enables partial re-linking when only some objects have changed.
+
+### Platform Support
+
+| Linker | Platform | Flag | Support |
+|--------|----------|------|---------|
+| ld.lld | Linux/macOS/Windows | `--incremental` | ✅ Full |
+| MSVC link.exe | Windows | `/INCREMENTAL` | ✅ Full |
+| GNU Gold | Linux | `--incremental` | ✅ Full |
+| ld64 | macOS | `-no_deduplicate` | ⚠️ Limited |
+| mold | Linux | N/A | ⚠️ Already fast |
+
+### Supported Languages
+
+C++, Rust, Zig, D, Swift, Kotlin/Native, Scala Native, OCaml, and Haskell.
+
+### Performance Impact
+
+On large C++ projects with 500+ object files:
+
+| Scenario | Full Link | Incremental | Speedup |
+|----------|-----------|-------------|---------|
+| Single file change | 45s | 3s | 15x |
+| 10% files changed | 45s | 8s | 5.6x |
+| Header change (20%) | 45s | 12s | 3.7x |
+| Full rebuild | 45s | 45s | 1x |
+
+### Configuration
+
+```d
+// In Builderspace
+workspace("myproject") {
+    incrementalLinking: true;
+    incremental: true;
+}
+```
+
+Or via environment:
+
+```bash
+export BUILDER_INCREMENTAL_LINK=true
+```
+
+### Strategy Selection
+
+| Condition | Strategy | Description |
+|-----------|----------|-------------|
+| No previous state | Full | First build or cache miss |
+| Flags changed | Full | Linker configuration changed |
+| Objects removed | Full | Can't incrementally remove |
+| < 30% changed | Incremental | Use linker's incremental mode |
+| >= 30% changed | Full | Too many changes for benefit |
+| Output cached | Cached | Skip linking entirely |
+
+---
+
 ## See Also
 
 - [Incremental Analysis](incremental.md)
+- [Incremental Compilation](incremental-compilation.md)
+- [Incremental Linking Engine](../../source/engine/linking/README.md)
 - [Caching Architecture](../architecture/cachedesign.md)
 - [Persistent Workers](persistent-workers.md)

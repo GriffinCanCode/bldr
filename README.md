@@ -16,6 +16,8 @@ Builder advances the state of build systems through novel architectural approach
 | LSP Implementation | ✅ Production | VS Code extension available |
 | Multi-Level Caching | ✅ Production | 3 tiers (target, action, remote/distributed) |
 | AST-Level Incremental | ✅ Production | Symbol-level dependency tracking, class/function granularity |
+| Incremental Linking | ✅ Production | Platform-native linker support (LLD, MSVC, Gold) for 9+ languages |
+| SemVer Constraint Solver | ✅ Production | PubGrub algorithm for multi-language dependency resolution |
 | Query Language | ✅ Production | Bazel-compatible bldrquery |
 | Build System Migration | ✅ Production | 11 systems supported |
 | Tier 1 DSL | ✅ Production | Variables, loops, conditionals, 30+ built-ins |
@@ -200,6 +202,8 @@ Three distinct cache tiers, each optimized for its domain:
 **Analysis:** Content-addressable cache reuses analysis for unchanged files. Savings: 5-10s on 10K-file monorepos.
 
 **Compilation:** File-level dependency tracking rebuilds only affected sources. Reduction: 70-99% of files skip recompilation.
+
+**Linking:** Incremental linking support for compiled languages (C++, Rust, Zig, D, Swift, Kotlin/Native, Scala Native, OCaml, Haskell). Platform-native linker support (ld.lld, MSVC, GNU Gold). Speedup: 5-15x for single-file changes.
 
 **Test Selection:** Dependency-aware test selection runs only affected tests. Typical: 90-99% of tests skipped.
 
@@ -466,6 +470,8 @@ target("tests") {
 |---------|-------|-------|-------|------|
 | Dynamic Build Graphs | ❌ | ❌ | ❌ | ✅ |
 | Cost Optimization | ❌ | ❌ | ❌ | ✅ |
+| Incremental Linking | ❌ | ❌ | ❌ | ✅ 9+ languages |
+| SemVer Solver | ❌ | ❌ | ❌ | ✅ PubGrub |
 | SIMD Serialization | ⚠️ Protobuf | ⚠️ bincode | ❌ | ✅ |
 | Three-Tier Caching | ❌ 2 tiers | ❌ 2 tiers | ❌ | ✅ |
 | Result Monads | ❌ Exceptions | ✅ Rust style | ❌ Codes | ✅ Advanced |

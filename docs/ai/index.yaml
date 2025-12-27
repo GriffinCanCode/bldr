@@ -298,6 +298,11 @@ concepts:
     file: "concepts/reference/security.yaml"
     summary: "Security - Supply chain security features"
 
+  semver:
+    file: "concepts/core/semver.yaml"
+    summary: "SemVer Constraint Solver - PubGrub algorithm for multi-language dependency resolution"
+    keywords: ["pubgrub", "version", "constraint", "npm", "cargo", "pip", "dependency", "resolution"]
+
   shell-support:
     file: "concepts/languages/shell-support.yaml"
     summary: "Shell Support - Shell scripts and tests"
@@ -343,6 +348,11 @@ concepts:
     file: "concepts/reference/verbose-output.yaml"
     summary: "Verbose mode output - detailed debug information with --verbose flag"
     keywords: ["debug", "logging", "output", "verbose", "quiet"]
+
+  version-constraints:
+    file: "concepts/config/version-constraints.yaml"
+    summary: "Version Constraints - SemVer constraint syntax (^, ~, ranges, unions)"
+    keywords: ["caret", "tilde", "range", "semver", "dependency", "version"]
 
   verification:
     file: "concepts/reference/verification.yaml"
@@ -500,6 +510,13 @@ aliases:
   supply-chain: "provenance"
   sbom: "provenance"
   in-toto: "provenance"
+  semver-solver: "semver"
+  pubgrub: "semver"
+  version-solver: "semver"
+  dependency-resolution: "semver"
+  version-range: "version-constraints"
+  caret-range: "version-constraints"
+  tilde-range: "version-constraints"
   speculative: "speculation"
   speculate: "speculation"
   lookahead: "speculation"

@@ -95,8 +95,12 @@ The engine automatically selects the optimal linking strategy:
 | Rust | rustc → ld.lld | ✅ Full |
 | Zig | zig → ld.lld | ✅ Full |
 | D | ldc2 → ld.lld | ✅ Full |
-| Go | go build (internal) | ⚠️ N/A (builtin) |
 | Swift | swiftc → ld64 | ⚠️ Limited |
+| Kotlin/Native | kotlinc-native → LLVM | ✅ Full |
+| Scala Native | sbt/mill → LLVM | ✅ Full |
+| OCaml | ocamlopt → native | ✅ Full |
+| Haskell | ghc → native | ✅ Full |
+| Go | go build (internal) | ⚠️ N/A (builtin) |
 
 ## Performance Impact
 
@@ -121,10 +125,20 @@ Priority (macOS):      ld.lld > ld64
 
 ## Configuration
 
-Environment variables:
+### Builderspace Configuration
+
+```d
+workspace("myproject") {
+    incrementalLinking: true;  // Enable/disable globally
+    incremental: true;         // Existing incremental compilation
+}
+```
+
+### Environment Variables
 
 - `BUILDER_LINKER`: Override linker path
 - `BUILDER_INCREMENTAL_LINK`: Enable/disable (`true`/`false`)
+- `BUILDER_INCREMENTAL`: Enable/disable incremental compilation
 
 ## Limitations
 

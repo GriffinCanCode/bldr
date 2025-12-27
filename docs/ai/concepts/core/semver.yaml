@@ -1,0 +1,101 @@
+topic: semver
+category: concepts
+summary: "SemVer Constraint Solver - PubGrub-based dependency resolution"
+definition: |
+  A complete semantic versioning constraint solver implementing the PubGrub algorithm
+  for multi-language dependency resolution. Supports npm, cargo, pip, and other
+  semver-based package managers with conflict-driven clause learning.
+
+key_points:
+  - "SemVer 2.0.0 compliant parsing and comparison"
+  - "PubGrub algorithm with conflict-driven clause learning"
+  - "Multi-language package sources (npm, cargo, pip)"
+  - "Version constraints: ^1.2.3, ~1.2.3, >=1.0.0 <2.0.0, ||"
+  - "Registry-backed sources for network resolution"
+  - "Caching and composite sources for cross-language resolution"
+
+architecture: |
+  ┌─────────────────────────────────────────────────────────────────┐
+  │                    SemVer Constraint Solver                      │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  ┌──────────┐    ┌──────────────┐    ┌────────────────────────┐ │
+  │  │ version  │───▶│  constraint  │───▶│        solver          │ │
+  │  │ (parse,  │    │  (ranges,    │    │  (PubGrub algorithm,   │ │
+  │  │ compare) │    │   unions)    │    │   conflict learning)   │ │
+  │  └──────────┘    └──────────────┘    └────────────────────────┘ │
+  │        │                │                       │               │
+  │        ▼                ▼                       ▼               │
+  │  ┌─────────────────────────────────────────────────────────────┐│
+  │  │                         source                              ││
+  │  │    IPackageSource → npm, cargo, pip, composite, memory      ││
+  │  └─────────────────────────────────────────────────────────────┘│
+  └─────────────────────────────────────────────────────────────────┘
+
+constraint_syntax:
+  exact: "=1.2.3, 1.2.3"
+  caret: "^1.2.3 (>=1.2.3 <2.0.0)"
+  tilde: "~1.2.3 (>=1.2.3 <1.3.0)"
+  range: ">=1.0.0 <2.0.0"
+  union: ">=1.0.0 <2.0.0 || >=3.0.0"
+  wildcard: "*, latest"
+
+package_sources:
+  - name: "npm"
+    registry: "registry.npmjs.org"
+    manifests: "package.json"
+  - name: "cargo"
+    registry: "crates.io"
+    manifests: "Cargo.toml"
+  - name: "pip"
+    registry: "pypi.org"
+    manifests: "pyproject.toml, requirements.txt"
+
+usage_examples:
+  - description: "Basic resolution"
+    code: |
+      import infrastructure.analysis.semver;
+      
+      auto source = new MemorySource("test");
+      source.addVersion("foo", "1.0.0");
+      source.addVersion("foo", "1.1.0", [
+          DependencyReq(PackageId("bar", "test"), VersionConstraint.parse("^1.0.0").unwrap())
+      ]);
+      source.addVersion("bar", "1.2.0");
+      
+      auto result = solve(source, "foo", "^1.0.0");
+      if (result.isOk)
+          foreach (pkg; result.unwrap().packages)
+              writeln(pkg.toString());  // foo@1.1.0, bar@1.2.0
+
+  - description: "Cross-language resolution"
+    code: |
+      auto composite = SourceFactory.all("/path/to/project");
+      auto solver = new PubGrubSolver(composite);
+      
+      auto result = solver.solve(
+          PackageId("my-app", "npm"),
+          VersionConstraint.parse("*").unwrap()
+      );
+
+  - description: "Parse version constraints"
+    code: |
+      auto caret = VersionConstraint.parse("^1.2.3").unwrap();
+      assert(caret.allows(SemVer.parse("1.9.9").unwrap()));
+      assert(!caret.allows(SemVer.parse("2.0.0").unwrap()));
+
+performance:
+  version_parse: "O(n)"
+  constraint_parse: "O(n)"
+  constraint_intersection: "O(r1 × r2)"
+  resolution_typical: "O(n × d)"
+  resolution_worst: "O(2^n)"
+  note: "PubGrub is dramatically faster than naive backtracking due to conflict-driven clause learning"
+
+related: [dependency-management, package-sources, version-constraints, npm-support, cargo-support, pip-support]
+
+next_steps: |
+  - Use solve() for one-shot dependency resolution
+  - Implement IPackageSource for custom package ecosystems
+  - Use CachedSource to reduce network requests
+  - Use CompositeSource for cross-language dependencies
+
