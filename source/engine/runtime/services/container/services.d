@@ -29,6 +29,7 @@ import infrastructure.errors;
 import infrastructure.di : IServiceContainer;
 import engine.workers : PersistentWorkerService, WorkerServiceConfig, initWorkerService, getWorkerService, shutdownWorkerService;
 import engine.runtime.services.speculation : SpeculationService;
+import infrastructure.utils.concurrency.parallel : shutdownSharedPool;
 
 /// Service container for dependency injection
 /// Implements IServiceContainer for formalized DI pattern.
@@ -545,6 +546,9 @@ final class BuildServices : IServiceContainer
         // Shutdown SIMD capabilities
         if (_simdCapabilities !is null)
             _simdCapabilities.shutdown();
+        
+        // Shutdown shared thread pool
+        shutdownSharedPool();
         
         structuredLog.debug_("services_shutdown_complete").emit();
     }

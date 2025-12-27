@@ -11,6 +11,51 @@ import infrastructure.utils.concurrency.balancer;
 import infrastructure.utils.concurrency.priority;
 import infrastructure.utils.concurrency.pool;
 
+/// Singleton thread pool for amortized parallel execution
+/// Lazily initialized, thread-safe via D's shared static initialization
+private __gshared ThreadPool sharedPool;
+private shared bool poolInitialized;
+
+/// Get singleton pool (lazy initialization)
+@system private ThreadPool getSharedPool(size_t workerCount)
+{
+    // Double-checked locking with atomic
+    if (!atomicLoad(poolInitialized))
+    {
+        synchronized
+        {
+            if (!atomicLoad(poolInitialized))
+            {
+                immutable workers = workerCount == 0 ? totalCPUs : workerCount;
+                sharedPool = new ThreadPool(workers);
+                atomicStore(poolInitialized, true);
+            }
+        }
+    }
+    return sharedPool;
+}
+
+/// Shutdown the shared pool (call on application exit)
+@system void shutdownSharedPool() nothrow
+{
+    if (atomicLoad(poolInitialized))
+    {
+        try
+        {
+            synchronized
+            {
+                if (atomicLoad(poolInitialized) && sharedPool !is null)
+                {
+                    sharedPool.shutdown();
+                    atomicStore(poolInitialized, false);
+                    sharedPool = null;
+                }
+            }
+        }
+        catch (Exception) {}
+    }
+}
+
 
 /// Execution mode for parallel operations
 enum ExecutionMode
@@ -47,6 +92,7 @@ struct ExecutionStats
 struct ParallelExecutor
 {
     /// Execute a function on items in parallel (simple mode - backward compatible)
+    /// Uses singleton pool for amortized thread creation overhead
     @system
     static R[] execute(T, R)(T[] items, R delegate(T) @system func, size_t maxParallelism)
     {
@@ -55,18 +101,13 @@ struct ParallelExecutor
         
         if (items.length == 1 || maxParallelism == 1)
         {
-            // Sequential execution
             R[] results;
             foreach (item; items)
                 results ~= func(item);
             return results;
         }
         
-        // Parallel execution using our ThreadPool for efficiency
-        auto pool = new ThreadPool(maxParallelism);
-        scope(exit) pool.shutdown();
-        
-        return pool.map(items, func);
+        return getSharedPool(maxParallelism).map(items, func);
     }
     
     /// Execute with automatic parallelism based on CPU count (backward compatible)
