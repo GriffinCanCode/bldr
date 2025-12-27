@@ -424,20 +424,24 @@ final class BuildServices : IServiceContainer
     ///   maxParallelism = Maximum parallel tasks (0 = auto)
     ///   enableCheckpoints = Enable checkpoint/resume functionality
     ///   enableRetries = Enable automatic retry on failure
-    ///   useWorkStealing = Use work-stealing scheduler (vs simple thread pool)
+    ///   useWorkStealing = Use work-stealing scheduler (default: true for better load balancing)
     ExecutionEngine createEngine(
         BuildGraph graph,
         size_t maxParallelism = 0,
         bool enableCheckpoints = true,
         bool enableRetries = true,
-        bool useWorkStealing = false)
+        bool useWorkStealing = true)
     {
         import engine.runtime.core.engine;
         import engine.runtime.services;
         
-        // Create scheduling service
+        // Create scheduling service - work-stealing provides better load balancing
         auto schedulingMode = useWorkStealing ? SchedulingMode.WorkStealing : SchedulingMode.ThreadPool;
         auto scheduling = new SchedulingService(schedulingMode);
+        
+        structuredLog.debug_("engine_scheduling_mode")
+            .field("mode", useWorkStealing ? "work_stealing" : "thread_pool")
+            .emit();
         
         // Create cache service
         auto cacheService = new CacheService(".builder-cache");
@@ -448,7 +452,11 @@ final class BuildServices : IServiceContainer
         // Create resilience service
         auto resilience = new ResilienceService(enableRetries, enableCheckpoints, ".");
         
-        // Create execution engine with service container (this implements IServiceContainer)
+        // Get speculation settings from config
+        bool enableSpeculation = _config.options.enableSpeculation;
+        size_t speculationThreshold = _config.options.speculationThreshold;
+        
+        // Create execution engine with service container and speculation config
         return new ExecutionEngine(
             graph,
             scheduling,
@@ -456,7 +464,10 @@ final class BuildServices : IServiceContainer
             observability,
             resilience,
             _registry,
-            this  // Pass self as IServiceContainer
+            this,  // Pass self as IServiceContainer
+            true,  // enableDynamicGraph
+            enableSpeculation,
+            speculationThreshold
         );
     }
     

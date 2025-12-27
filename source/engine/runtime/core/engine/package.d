@@ -50,7 +50,9 @@ final class ExecutionEngine
         IResilienceService resilience,
         IHandlerRegistry handlers,
         IServiceContainer services,
-        bool enableDynamicGraph = true
+        bool enableDynamicGraph = true,
+        bool enableSpeculation = true,
+        size_t speculationThreshold = 10
     ) @trusted
     {
         this.useDynamicGraph = enableDynamicGraph;
@@ -73,8 +75,9 @@ final class ExecutionEngine
             cache, observability, resilience, handlers, services
         );
         
-        // Initialize coordinator
+        // Initialize coordinator with speculation settings
         coordinator.initialize(&lifecycle, &executor);
+        coordinator.configureSpeculation(enableSpeculation, speculationThreshold);
         
         // Enable dynamic graph in coordinator if available
         if (enableDynamicGraph)

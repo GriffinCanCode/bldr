@@ -116,6 +116,13 @@ struct HelpCommand
         printOption("--clear", "Clear screen between builds in watch mode");
         terminal.writeln();
         
+        // Performance options
+        printSectionHeader("PERFORMANCE OPTIONS");
+        printOption("--work-stealing", "Work-stealing scheduler for load balancing (default: true)");
+        printOption("--speculation", "Speculative execution for critical path (default: true)");
+        printOption("--speculation-threshold <N>", "Min targets for speculation (default: 10)");
+        terminal.writeln();
+        
         // Zero-config mode highlight
         printHighlight("⚡ ZERO-CONFIG MODE", 
             "bldr can automatically detect and build projects without a Builderfile.\n" ~
@@ -445,6 +452,12 @@ struct HelpCommand
         printOption("-v, --verbose", "Show detailed build output");
         printOption("-g, --graph", "Display dependency graph before building");
         printOption("-m, --mode <MODE>", "Set CLI rendering mode");
+        terminal.writeln();
+        
+        printSectionHeader("PERFORMANCE OPTIONS");
+        printOption("--work-stealing", "Work-stealing scheduler (default: true)");
+        printOption("--speculation", "Speculative execution (default: true)");
+        printOption("--speculation-threshold <N>", "Min targets for speculation (default: 10)");
         terminal.writeln();
         
         printSectionHeader("RENDER MODES");

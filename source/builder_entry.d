@@ -52,8 +52,8 @@ int runBuilder(string[] args)
     // Install signal handlers for graceful shutdown on SIGINT/SIGTERM
     installSignalHandlers();
     
+    // Logging auto-initializes via shared static this()
     // SIMD now auto-initializes on first use (see utils.simd.dispatch)
-    Logger.initialize();
     
     // Show SIMD capabilities banner on startup (except for quiet commands)
     import infrastructure.utils.simd.detection : CPU;
@@ -78,6 +78,11 @@ int runBuilder(string[] args)
     long debounceMs = 300;
     bool remoteExecution = false;
     
+    // Performance optimization flags
+    bool workStealing = true;   // Work-stealing scheduler (default: enabled)
+    bool speculation = true;    // Speculative execution (default: enabled)
+    size_t speculationThreshold = 10;  // Min targets for speculation
+    
     // Economic optimization flags
     float budget = float.infinity;
     float timeLimit = float.infinity;
@@ -96,6 +101,9 @@ int runBuilder(string[] args)
         "clear", "Clear screen between builds in watch mode", &clearScreen,
         "debounce", "Debounce delay in milliseconds for watch mode", &debounceMs,
         "remote", "Enable remote execution on worker pool", &remoteExecution,
+        "work-stealing", "Work-stealing scheduler for load balancing (default: true)", &workStealing,
+        "speculation", "Speculative execution for critical path (default: true)", &speculation,
+        "speculation-threshold", "Min targets to enable speculation (default: 10)", &speculationThreshold,
         "budget", "Maximum budget in USD (e.g., --budget=5.00)", &budget,
         "time-limit", "Maximum time limit in seconds (e.g., --time-limit=120)", &timeLimit,
         "optimize", "Optimization mode: cost, time, balanced", &optimize,
@@ -125,7 +133,7 @@ int runBuilder(string[] args)
     if (args.length > 2)
         target = args[2];
     
-    Logger.setVerbose(verbose);
+    // Verbose mode is handled through CLI flags, structured logging level is set at init
     
     try
     {
@@ -159,7 +167,7 @@ int runBuilder(string[] args)
                             structuredLog.info("__optimization_mode_").field("detail", "  Optimization mode: " ~ optimize).emit();
                     }
                     
-                    buildCommand(target, showGraph, mode, remoteExecution, econConfig);
+                    buildCommand(target, showGraph, mode, remoteExecution, econConfig, workStealing, speculation, speculationThreshold);
                 }
                 break;
             case "test":
@@ -284,7 +292,10 @@ void buildCommand(
     in bool showGraph,
     in string modeStr,
     in bool remoteExecution = false,
-    EconomicsConfig econConfig = EconomicsConfig.init
+    EconomicsConfig econConfig = EconomicsConfig.init,
+    bool useWorkStealing = true,
+    bool enableSpeculation = true,
+    size_t speculationThreshold = 10
 ) @system
 {
     
@@ -363,8 +374,18 @@ void buildCommand(
     
     // Compute optimal build plan if economics enabled
     size_t maxParallelism = 0;  // Default: auto-detect
-    bool useWorkStealing = false;
+    // Apply CLI flags to config (CLI flags override environment defaults)
+    config.options.useWorkStealing = useWorkStealing;
+    config.options.enableSpeculation = enableSpeculation;
+    config.options.speculationThreshold = speculationThreshold;
     bool useRemoteExecution = false;
+    
+    // Log optimization settings
+    structuredLog.debug_("build_optimizations")
+        .field("work_stealing", useWorkStealing)
+        .field("speculation", enableSpeculation)
+        .field("speculation_threshold", speculationThreshold)
+        .emit();
     
     if (econConfig.enabled && services.economics !is null)
     {
@@ -573,7 +594,7 @@ void resumeCommand(in string modeStr) @system
     auto checkpointResult = checkpointManager.load();
     if (checkpointResult.isErr)
     {
-        structuredLog.error("failed_to_load_checkpoint_").field("detail", "Failed to load checkpoint: " ~ checkpointResult.unwrapErr()).emit();
+        structuredLog.error("failed_to_load_checkpoint_").field("detail", "Failed to load checkpoint: " ~ checkpointResult.unwrapErr().message()).emit();
         import core.stdc.stdlib : exit;
         exit(1);
     }

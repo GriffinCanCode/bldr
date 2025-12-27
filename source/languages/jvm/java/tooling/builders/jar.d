@@ -20,6 +20,9 @@ import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionId, ActionType;
 import engine.workers.integration : JavaWorkerIntegration, shouldUsePersistentWorker;
 
+// Async I/O threshold for batch hashing optimization  
+private enum size_t ASYNC_HASH_THRESHOLD = 8;
+
 /// Standard JAR builder with action-level caching for per-file compilation
 class JARBuilder : JavaBuilder
 {
@@ -174,6 +177,15 @@ class JARBuilder : JavaBuilder
         bool allSuccess = true;
         bool hasActionCache = actionCache !is null;
         
+        // Pre-compute hashes for all sources using async I/O (3-9x faster for cold cache)
+        string[string] sourceHashes;
+        if (sources.length > ASYNC_HASH_THRESHOLD)
+        {
+            auto hashes = FastHash.hashFilesAsync(sources.dup);
+            foreach (i, source; sources)
+                sourceHashes[source] = hashes[i];
+        }
+        
         foreach (source; sources)
         {
             string sourceBase = baseName(source, ".java");
@@ -183,7 +195,10 @@ class JARBuilder : JavaBuilder
             actionId.targetId = target.name;
             actionId.type = ActionType.Compile;
             actionId.subId = source;
-            actionId.inputHash = FastHash.hashFile(source);
+            // Use pre-computed hash if available, otherwise hash individually
+            actionId.inputHash = source in sourceHashes 
+                ? sourceHashes[source] 
+                : FastHash.hashFile(source);
             
             if (hasActionCache && actionCache.isCached(actionId, [source], metadata))
             {

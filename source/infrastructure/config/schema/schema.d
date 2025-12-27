@@ -587,6 +587,9 @@ struct BuildOptions
     bool incremental = true;
     bool incrementalLinking = true;  // Enable incremental linking (ld.lld --incremental, MSVC /INCREMENTAL)
     bool parallel = true;
+    bool useWorkStealing = true;     // Use work-stealing scheduler for better load balancing
+    bool enableSpeculation = true;   // Auto-enable speculation for builds >10 targets
+    size_t speculationThreshold = 10; // Min targets to auto-enable speculation
     size_t maxJobs = 0; // 0 = auto
     string cacheDir = ".builder-cache";
     string outputDir = "bin";
@@ -594,10 +597,11 @@ struct BuildOptions
     EconomicsConfig economics;
     DeterminismOptions determinism;
     
-    /// Load linking options from environment
+    /// Load options from environment
     static BuildOptions fromEnvironment() @safe
     {
         import std.process : environment;
+        import std.conv : to;
         
         BuildOptions opts;
         
@@ -609,6 +613,19 @@ struct BuildOptions
         
         auto verbose = environment.get("BUILDER_VERBOSE", "");
         opts.verbose = (verbose == "1" || verbose == "true");
+        
+        // Work-stealing scheduler (default: enabled for better load balancing)
+        auto workStealing = environment.get("BUILDER_WORK_STEALING", "true");
+        opts.useWorkStealing = (workStealing == "1" || workStealing == "true");
+        
+        // Speculative execution (default: enabled for critical path optimization)
+        auto speculation = environment.get("BUILDER_SPECULATION", "true");
+        opts.enableSpeculation = (speculation == "1" || speculation == "true");
+        
+        // Speculation threshold
+        auto threshold = environment.get("BUILDER_SPECULATION_THRESHOLD", "10");
+        try { opts.speculationThreshold = threshold.to!size_t; }
+        catch (Exception) { opts.speculationThreshold = 10; }
         
         return opts;
     }

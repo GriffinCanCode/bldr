@@ -13,6 +13,7 @@ import infrastructure.config.schema.schema;
 import languages.base.base;
 import engine.runtime.services : ISchedulingService, ICacheService, IObservabilityService, IResilienceService, IHandlerRegistry;
 import engine.runtime.services.scheduling : NodeBuildResult;
+import engine.runtime.services.speculation : SpeculationService, SpeculationPolicy;
 import frontend.cli.events.events;
 import infrastructure.telemetry.distributed.tracing : Span, SpanKind, SpanStatus;
 import infrastructure.utils.logging;
@@ -29,17 +30,28 @@ struct EngineCoordinator
     private enum size_t KB_PER_MB = 1024;
     private enum size_t MB_PER_GB = 1024;
     private enum size_t MAX_STAT_STRING_LENGTH = 4;
+    private enum size_t DEFAULT_SPECULATION_THRESHOLD = 10;  // Auto-enable speculation above this
     
     private EngineLifecycle* lifecycle;
     private EngineExecutor* executor;
     private DynamicBuildGraph dynamicGraph;  // Optional: null if not using dynamic graphs
     private DiscoveryExecutor discoveryExec;
+    private SpeculationService speculation;  // Optional: auto-enabled for large builds
+    private bool speculationEnabled;
+    private size_t speculationThreshold = DEFAULT_SPECULATION_THRESHOLD;
     
     /// Initialize coordinator with lifecycle and executor
     void initialize(EngineLifecycle* lifecycle, EngineExecutor* executor) @trusted
     {
         this.lifecycle = lifecycle;
         this.executor = executor;
+    }
+    
+    /// Configure speculation settings
+    void configureSpeculation(bool enabled, size_t threshold = DEFAULT_SPECULATION_THRESHOLD) @safe nothrow
+    {
+        this.speculationEnabled = enabled;
+        this.speculationThreshold = threshold;
     }
     
     /// Enable dynamic graph support (optional)
@@ -129,6 +141,12 @@ struct EngineCoordinator
         // Initialize scheduling
         scheduling.initialize(0); // 0 = auto-detect CPU count
         
+        // Auto-enable speculation for large builds (critical path optimization)
+        if (speculationEnabled && sorted.length >= speculationThreshold && speculation is null)
+        {
+            initializeSpeculation(graph, buildSpan);
+        }
+        
         // Publish build started event
         observability.publishEvent(new BuildStartedEvent(sorted.length, scheduling.workerCount(), sw.peek()));
         
@@ -137,6 +155,7 @@ struct EngineCoordinator
         
         structuredLog.debug_("max_parallelism_set")
             .field("jobs", scheduling.workerCount())
+            .field("speculation", speculation !is null ? "enabled" : "disabled")
             .emit();
         
         // Initialize pending dependency counters
@@ -308,6 +327,9 @@ struct EngineCoordinator
         // Flush caches
         cache.flush();
         
+        // Log speculation statistics
+        logSpeculationStats();
+        
         // Publish events and statistics
         publishCompletionEvents(sorted.length, built, cached, failed, sw.peek());
         
@@ -436,6 +458,65 @@ struct EngineCoordinator
                 .field("hit_rate", cacheStats.actionHitRate)
                 .field("successful_actions", cacheStats.successfulActions)
                 .field("failed_actions", cacheStats.failedActions)
+                .emit();
+        }
+    }
+    
+    /// Initialize speculation service for critical path optimization
+    private void initializeSpeculation(BuildGraph graph, Span buildSpan) @trusted
+    {
+        import engine.economics.estimator : CostEstimator, ExecutionHistory;
+        
+        auto observability = lifecycle.getObservability();
+        
+        try
+        {
+            // Create cost estimator with empty history (will improve over time)
+            auto history = new ExecutionHistory();
+            auto estimator = new CostEstimator(history);
+            
+            speculation = new SpeculationService(estimator, graph);
+            speculation.setPolicy(SpeculationPolicy.balanced());
+            speculation.analyzeGraph(graph);
+            
+            // Get candidates and start speculation
+            auto candidates = speculation.getCandidates(8);
+            foreach (candidate; candidates)
+                speculation.speculate(candidate);
+            
+            observability.setSpanAttribute(buildSpan, "speculation.enabled", "true");
+            observability.setSpanAttribute(buildSpan, "speculation.policy", "balanced");
+            observability.setSpanAttribute(buildSpan, "speculation.candidates", candidates.length.to!string);
+            
+            structuredLog.info("speculation_enabled")
+                .field("threshold", speculationThreshold)
+                .field("policy", "balanced")
+                .field("candidates", candidates.length)
+                .emit();
+        }
+        catch (Exception e)
+        {
+            structuredLog.warning("speculation_init_failed")
+                .field("error", e.msg)
+                .emit();
+            speculation = null;
+        }
+    }
+    
+    /// Log speculation statistics at end of build
+    private void logSpeculationStats() @trusted
+    {
+        if (speculation is null) return;
+        
+        auto stats = speculation.getStats();
+        if (stats.totalSpeculated > 0)
+        {
+            structuredLog.info("speculation_stats")
+                .field("speculated", stats.totalSpeculated)
+                .field("successful", stats.successful)
+                .field("aborted", stats.aborted)
+                .field("effectiveness", stats.effectiveness)
+                .field("time_saved_ms", stats.timeSaved.total!"msecs")
                 .emit();
         }
     }

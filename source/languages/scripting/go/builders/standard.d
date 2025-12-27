@@ -18,6 +18,9 @@ import infrastructure.utils.files.hash;
 import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionId, ActionType;
 
+// Async I/O threshold for batch hashing optimization  
+private enum size_t ASYNC_HASH_THRESHOLD = 8;
+
 /// Standard Go builder - uses go build command with action-level caching
 class StandardBuilder : GoBuilder
 {
@@ -219,12 +222,21 @@ class StandardBuilder : GoBuilder
             metadata["mod"] = modModeToString(config.modMode);
         metadata["targetFlags"] = target.flags.join(" ");
         
-        // Create action ID for Go build
+        // Create action ID for Go build - use async hashing for many sources
         ActionId actionId;
         actionId.targetId = target.name;
         actionId.type = ActionType.Compile;
         actionId.subId = "go_build";
-        actionId.inputHash = FastHash.hashStrings(sources);
+        // Use async hashing for better I/O throughput on cold cache
+        if (sources.length > ASYNC_HASH_THRESHOLD)
+        {
+            auto hashes = FastHash.hashFilesAsync(sources.dup);
+            actionId.inputHash = FastHash.hashStrings(hashes);
+        }
+        else
+        {
+            actionId.inputHash = FastHash.hashFiles(sources.dup);
+        }
         
         // Check if build is cached
         bool hasActionCache = actionCache !is null;
