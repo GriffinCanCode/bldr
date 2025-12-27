@@ -9,6 +9,8 @@ module engine.graph.core;
 /// - ValidationMode: Graph validation strategy (Immediate vs Deferred)
 /// - IncrementalTopoOrder: Incremental topological ordering for watch mode
 /// - IncrementalTopoStats: Statistics for incremental updates
+/// - IGraphReader: Read-only interface for zero-copy graph access
+/// - BuildGraphReader: Adapter for BuildGraph to implement IGraphReader
 /// 
 /// Thread Safety:
 /// - BuildNode uses atomic operations for status fields
@@ -20,7 +22,9 @@ module engine.graph.core;
 /// - Deferred validation: O(V+E) single topological sort
 /// - Depth calculation: O(V+E) total with memoization
 /// - Incremental topological sort: O(1) cache hit, O(affected) on changes
+/// - IGraphReader: Zero-copy access via mmap eliminates deserialization
 
 public import engine.graph.core.graph;
 public import engine.graph.core.incremental_topo;
+public import engine.graph.core.reader;
 

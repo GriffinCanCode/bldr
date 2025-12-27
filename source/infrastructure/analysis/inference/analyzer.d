@@ -88,10 +88,11 @@ class DependencyAnalyzer
         // Collect all configuration files for cache validation
         auto configFiles = collectConfigFiles();
         
-        // Try to load from cache first
-        auto cachedGraph = graphCache.get(configFiles);
-        if (cachedGraph !is null)
+        // Try to load from cache first (returns full BuildGraph when mutations needed)
+        auto cachedResult = graphCache.getGraph(configFiles);
+        if (cachedResult.isOk)
         {
+            auto cachedGraph = cachedResult.unwrap();
             sw.stop();
             structuredLog.info("loaded_dependency_graph_from_cache_").field("detail", "Loaded dependency graph from cache (" ~ 
                          sw.peek().total!"msecs".to!string ~ "ms)").emit();
