@@ -37,24 +37,71 @@ struct TSConfig
     TSTarget target = TSTarget.ES2020;
     TSModuleFormat moduleFormat = TSModuleFormat.CommonJS;
     TSModuleResolution moduleResolution = TSModuleResolution.Node;
+    
+    // Declaration options
     bool declaration = false;
     bool declarationMap = false;
+    
+    // Source map options
     bool sourceMap = false;
+    bool inlineSourceMap = false;
+    bool inlineSources = false;
+    
+    // Strict options
     bool strict = true;
+    bool alwaysStrict = false;
+    bool strictNullChecks = false;
+    bool strictFunctionTypes = false;
+    bool strictBindCallApply = false;
+    bool strictPropertyInitialization = false;
+    bool noImplicitAny = false;
+    bool noImplicitThis = false;
+    bool noImplicitReturns = false;
+    bool noFallthroughCasesInSwitch = false;
+    bool noUnusedLocals = false;
+    bool noUnusedParameters = false;
+    
+    // Interop options
     bool allowJs = false;
+    bool checkJs = false;
     bool esModuleInterop = true;
+    bool allowSyntheticDefaultImports = false;
+    bool forceConsistentCasingInFileNames = false;
+    bool resolveJsonModule = false;
+    
+    // Module options
     bool skipLibCheck = true;
     bool isolatedModules = false;
+    bool preserveConstEnums = false;
+    
+    // Emit options
+    bool removeComments = false;
+    bool importHelpers = false;
+    bool downlevelIteration = false;
+    bool noEmit = false;
+    bool noEmitOnError = false;
+    
+    // Decorator options
     bool experimentalDecorators = false;
     bool emitDecoratorMetadata = false;
+    
+    // JSX options
     TSXMode jsx = TSXMode.React;
     string jsxFactory = "React.createElement";
     string jsxFragmentFactory = "React.Fragment";
+    string jsxImportSource;
+    
+    // Build options
     bool minify = false;
     string[] external;
     string tsconfig;
     string packageManager = "npm";
     bool installDeps = false;
+    
+    // Path options
+    string baseUrl;
+    string[] typeRoots;
+    string[] types;
 }
 
 /// TypeScript compilation result

@@ -77,6 +77,64 @@ class JavaScriptHandler : BaseWebHandler
     override protected string getOutputName(string name, WebConfig config) const pure nothrow
         => config.format == WebModuleFormat.ESM ? name ~ ".mjs" : name ~ ".js";
     
+    /// Run JavaScript tests
+    override protected LanguageBuildResult runTests(in Target target, in WorkspaceConfig config, WebConfig webConfig)
+    {
+        LanguageBuildResult result;
+        
+        if (target.sources.empty)
+        {
+            result.error = "No source files specified for test target";
+            return result;
+        }
+        
+        // Install dependencies if needed
+        if (webConfig.installDeps)
+            installDependencies(target.sources, webConfig.packageManager);
+        
+        string[] cmd;
+        
+        // Try to detect test framework from package.json
+        string packageJsonPath = findPackageJson(target.sources);
+        if (!packageJsonPath.empty && exists(packageJsonPath))
+        {
+            auto testCmd = detectTestCommand(packageJsonPath);
+            if (!testCmd.empty) cmd = testCmd;
+        }
+        
+        // Fallback test runners
+        if (cmd.empty)
+        {
+            if (isCommandAvailable("vitest")) cmd = ["vitest", "run"];
+            else if (isCommandAvailable("jest")) cmd = ["jest"];
+            else if (isCommandAvailable("mocha")) cmd = ["mocha"];
+            else if (isCommandAvailable("npx")) cmd = ["npx", "vitest", "run"];
+            else if (isCommandAvailable("node")) cmd = ["node", "--test"];  // Node.js built-in test runner
+        }
+        
+        if (cmd.empty)
+        {
+            result.error = "No test runner found. Install vitest, jest, or mocha.";
+            return result;
+        }
+        
+        structuredLog.info("running_tests_with_").field("detail", cmd[0]).emit();
+        
+        auto testResult = execute(cmd);
+        
+        if (testResult.status != 0)
+        {
+            result.error = "Tests failed:\n" ~ testResult.output;
+            return result;
+        }
+        
+        result.success = true;
+        result.outputs = target.sources.dup;
+        result.outputHash = FastHash.hashStrings(target.sources);
+        structuredLog.info("tests_passed").emit();
+        return result;
+    }
+    
     override protected void parseLanguageSpecificConfig(ref WebConfig config, JSONValue json)
     {
         if (auto v = "mode" in json)

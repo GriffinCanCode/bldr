@@ -65,6 +65,15 @@ class ElmHandler : BaseWebHandler
         in Target target, in WorkspaceConfig config, WebConfig webConfig, string toolPath
     )
     {
+        // Install dependencies if requested
+        if (webConfig.installDeps && exists("elm.json"))
+        {
+            structuredLog.debug_("installing_elm_dependencies").emit();
+            auto installResult = installElmDependencies();
+            if (!installResult.success)
+                structuredLog.warning("failed_to_install_deps_").field("detail", installResult.error).emit();
+        }
+        
         // Run elm-format if requested
         if (format && isCommandAvailable("elm-format"))
         {
@@ -402,6 +411,34 @@ class ElmHandler : BaseWebHandler
         {
             structuredLog.warning("docs_failed_").field("detail", e.msg).emit();
         }
+    }
+    
+    /// Install Elm dependencies
+    private ElmReviewResult installElmDependencies()
+    {
+        ElmReviewResult result;
+        try
+        {
+            // elm install doesn't have a non-interactive mode, so we just verify elm.json exists
+            // Dependencies are automatically fetched on first build
+            if (exists("elm.json"))
+            {
+                result.success = true;
+            }
+            else
+            {
+                // Initialize if needed
+                auto initResult = execute(["elm", "init"]);
+                result.success = initResult.status == 0;
+                if (!result.success)
+                    result.error = initResult.output;
+            }
+        }
+        catch (Exception e)
+        {
+            result.error = "Failed to install dependencies: " ~ e.msg;
+        }
+        return result;
     }
 }
 
