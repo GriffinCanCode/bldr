@@ -1,0 +1,66 @@
+# Build outputs
+bin/
+.dub/
+*.o
+*.obj
+*.exe
+*.lst
+*.a
+*.dylib
+*.dylib.DSYM
+
+# Cache directories
+.builder-cache/
+.builder-telemetry/
+nimcache/
+
+# IDE caches
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+test_glob/
+*.test
+coverage/
+build.log
+
+# Generated docs
+docs/api/
+*.html
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+
+# Node
+node_modules/
+package-lock.json
+
+# Example build artifacts (these are demo outputs, not source)
+examples/**/bin/
+examples/**/build/
+examples/**/elm-stuff/
+examples/**/*.hi
+examples/**/*.cmi
+examples/**/*.cmo
+examples/**/*.cmx
+
+# Distribution binaries
+distribution/lsp/binaries/
+distribution/editors/vscode/*.vsix
+distribution/cratesio/target/
+

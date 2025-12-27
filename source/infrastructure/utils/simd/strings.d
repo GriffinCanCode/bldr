@@ -40,7 +40,7 @@ module infrastructure.utils.simd.strings;
 /// }
 /// ```
 
-extern(C) @system nothrow @nogc:
+extern(C) @system pure nothrow @nogc:
 
 /// SIMD capability levels for string operations
 enum StringSIMDLevel
@@ -80,7 +80,7 @@ bool simd_str_constant_time_equal(const(char)* a, size_t len_a, const(char)* b, 
 struct SIMDStrings
 {
     /// Get current SIMD capability level
-    @property static StringSIMDLevel simdLevel() @safe
+    @property static StringSIMDLevel simdLevel() @safe pure nothrow @nogc
     {
         return (() @trusted => str_get_simd_level())();
     }
@@ -93,13 +93,7 @@ struct SIMDStrings
     }
     
     /// Compare two strings for equality using SIMD
-    /// 
-    /// Safety: @system because:
-    /// 1. Validates inputs (null check, length check)
-    /// 2. Calls verified extern(C) simd_str_equal_len
-    /// 3. Read-only operation with no memory mutation
-    @system
-    static bool equal(scope const(char)[] a, scope const(char)[] b)
+    static bool equal(scope const(char)[] a, scope const(char)[] b) @system pure nothrow @nogc
     {
         if (a.length != b.length) return false;
         if (a.ptr is b.ptr) return true;
@@ -108,8 +102,7 @@ struct SIMDStrings
     }
     
     /// Check if string starts with prefix
-    @system
-    static bool startsWith(scope const(char)[] str, scope const(char)[] prefix)
+    static bool startsWith(scope const(char)[] str, scope const(char)[] prefix) @system pure nothrow @nogc
     {
         if (prefix.length > str.length) return false;
         if (prefix.length == 0) return true;
@@ -117,8 +110,7 @@ struct SIMDStrings
     }
     
     /// Check if string ends with suffix
-    @system
-    static bool endsWith(scope const(char)[] str, scope const(char)[] suffix)
+    static bool endsWith(scope const(char)[] str, scope const(char)[] suffix) @system pure nothrow @nogc
     {
         if (suffix.length > str.length) return false;
         if (suffix.length == 0) return true;
@@ -127,8 +119,7 @@ struct SIMDStrings
     
     /// Find first matching string in array
     /// Returns: Index of first match, or -1 if not found
-    @system
-    static ptrdiff_t findFirst(scope const(char)[] needle, scope const(char*)[] haystack)
+    static ptrdiff_t findFirst(scope const(char)[] needle, scope const(char*)[] haystack) @system pure nothrow @nogc
     {
         if (haystack.length == 0) return -1;
         immutable result = simd_str_find_first(needle.ptr, needle.length, haystack.ptr, haystack.length);
@@ -136,60 +127,51 @@ struct SIMDStrings
     }
     
     /// Find first matching string in array of D strings
-    @system
-    static ptrdiff_t findFirstD(scope const(char)[] needle, scope const(string)[] haystack)
+    static ptrdiff_t findFirstD(scope const(char)[] needle, scope const(string)[] haystack) @system
     {
         import std.algorithm : map;
         import std.array : array;
         
         if (haystack.length == 0) return -1;
         
-        // Convert D strings to C pointers
         auto ptrs = haystack.map!(s => s.ptr).array;
         immutable result = simd_str_find_first(needle.ptr, needle.length, ptrs.ptr, ptrs.length);
         return result == cast(size_t)-1 ? -1 : cast(ptrdiff_t) result;
     }
     
     /// Count matching strings in array
-    @system
-    static size_t countMatches(scope const(char)[] needle, scope const(char*)[] strings)
+    static size_t countMatches(scope const(char)[] needle, scope const(char*)[] strings) @system pure nothrow @nogc
     {
         if (strings.length == 0) return 0;
         return simd_str_count_matches(needle.ptr, needle.length, strings.ptr, strings.length);
     }
     
     /// Compare paths with normalization (handles trailing slashes)
-    @system
-    static bool pathEqual(scope const(char)[] a, scope const(char)[] b)
+    static bool pathEqual(scope const(char)[] a, scope const(char)[] b) @system pure nothrow @nogc
     {
         return simd_path_equal(a.ptr, a.length, b.ptr, b.length);
     }
     
     /// Find common prefix length between two paths (up to directory boundary)
-    @system
-    static size_t pathCommonPrefix(scope const(char)[] a, scope const(char)[] b)
+    static size_t pathCommonPrefix(scope const(char)[] a, scope const(char)[] b) @system pure nothrow @nogc
     {
         return simd_path_common_prefix(a.ptr, a.length, b.ptr, b.length);
     }
     
     /// Compare with precomputed hash (fast early-exit on hash mismatch)
-    @system
     static bool equalWithHash(scope const(char)[] a, ulong hashA, 
-                              scope const(char)[] b, ulong hashB)
+                              scope const(char)[] b, ulong hashB) @system pure nothrow @nogc
     {
         return simd_str_equal_with_hash(a.ptr, a.length, hashA, b.ptr, b.length, hashB);
     }
     
     /// Constant-time comparison (timing-attack resistant)
-    /// Use for security-sensitive comparisons (tokens, keys, etc.)
-    @system
-    static bool constantTimeEqual(scope const(char)[] a, scope const(char)[] b)
+    static bool constantTimeEqual(scope const(char)[] a, scope const(char)[] b) @system pure nothrow @nogc
     {
         return simd_str_constant_time_equal(a.ptr, a.length, b.ptr, b.length);
     }
     
     /// Batch equality check: compare needle against multiple strings
-    /// Returns array of booleans and count of matches
     @system
     static auto batchEqual(scope const(char)[] needle, 
                            scope const(char*)[] strings,
@@ -213,31 +195,25 @@ struct SIMDStrings
 }
 
 /// Check if SIMD string acceleration is active
-bool hasSIMDStrings() @safe nothrow @nogc
+bool hasSIMDStrings() @safe pure nothrow @nogc
 {
     return (() @trusted => str_get_simd_level() != StringSIMDLevel.None)();
 }
 
 /// Unit tests
-version(unittest) @system:
+version(unittest):
 
-unittest
+@("SIMDStrings - basic equality")
+@system unittest
 {
-    import std.stdio : writeln;
-    
-    writeln("SIMD Strings level: ", SIMDStrings.simdLevelName);
-    
-    // Test basic equality
     assert(SIMDStrings.equal("hello", "hello"));
     assert(!SIMDStrings.equal("hello", "world"));
     assert(!SIMDStrings.equal("hello", "hell"));
-    
-    writeln("Basic equality tests passed");
 }
 
-unittest
+@("SIMDStrings - long string comparison")
+@system unittest
 {
-    // Test long strings (triggers SIMD path)
     auto longStr1 = "this is a much longer string that exceeds 32 bytes for AVX2 testing purposes";
     auto longStr2 = "this is a much longer string that exceeds 32 bytes for AVX2 testing purposes";
     auto longStr3 = "this is a much longer string that exceeds 32 bytes for AVX2 testing DIFFERS";
@@ -246,40 +222,39 @@ unittest
     assert(!SIMDStrings.equal(longStr1, longStr3));
 }
 
-unittest
+@("SIMDStrings - prefix/suffix matching")
+@system unittest
 {
-    // Test prefix/suffix
     assert(SIMDStrings.startsWith("/usr/lib/libfoo.so", "/usr/lib"));
     assert(!SIMDStrings.startsWith("/usr/lib", "/usr/lib/"));
     assert(SIMDStrings.endsWith("/usr/lib/libfoo.so", ".so"));
     assert(!SIMDStrings.endsWith("/usr/lib/libfoo.so", ".a"));
 }
 
-unittest
+@("SIMDStrings - path comparison")
+@system unittest
 {
-    // Test path comparison
     assert(SIMDStrings.pathEqual("/usr/lib/", "/usr/lib"));
     assert(SIMDStrings.pathEqual("/usr/lib", "/usr/lib/"));
     assert(!SIMDStrings.pathEqual("/usr/lib", "/usr/local"));
 }
 
-unittest
+@("SIMDStrings - common prefix")
+@system unittest
 {
-    // Test common prefix
     auto prefix = SIMDStrings.pathCommonPrefix("/usr/lib/foo", "/usr/lib/bar");
-    assert(prefix == 9, "Expected /usr/lib/ (9 chars)");  // "/usr/lib/"
+    assert(prefix == 9, "Expected /usr/lib/ (9 chars)");
     
     prefix = SIMDStrings.pathCommonPrefix("/usr/local", "/usr/lib");
-    assert(prefix == 5, "Expected /usr/ (5 chars)");  // "/usr/"
+    assert(prefix == 5, "Expected /usr/ (5 chars)");
 }
 
-unittest
+@("SIMDStrings - constant-time comparison")
+@system unittest
 {
-    // Test constant-time comparison
     assert(SIMDStrings.constantTimeEqual("secret", "secret"));
     assert(!SIMDStrings.constantTimeEqual("secret", "DIFFER"));
     
-    // Long strings for SIMD path
     auto s1 = "a_very_long_secret_token_that_needs_constant_time_comparison_xyz";
     auto s2 = "a_very_long_secret_token_that_needs_constant_time_comparison_xyz";
     auto s3 = "a_very_long_secret_token_that_needs_constant_time_comparison_ABC";
@@ -288,18 +263,14 @@ unittest
     assert(!SIMDStrings.constantTimeEqual(s1, s3));
 }
 
-unittest
+@("SIMDStrings - hash-based comparison")
+@system unittest
 {
-    import std.stdio : writeln;
-    
-    // Test hash-based comparison
     immutable ulong h1 = 0xDEADBEEF;
     immutable ulong h2 = 0xDEADBEEF;
     immutable ulong h3 = 0xCAFEBABE;
     
     assert(SIMDStrings.equalWithHash("test", h1, "test", h2));
-    assert(!SIMDStrings.equalWithHash("test", h1, "test", h3));  // Hash mismatch
-    
-    writeln("SIMD String tests passed!");
+    assert(!SIMDStrings.equalWithHash("test", h1, "test", h3));
 }
 
