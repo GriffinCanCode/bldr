@@ -280,9 +280,11 @@ struct BuildVerifier
         HermeticityProof proof;
         proof.timestamp = Clock.currTime();
         
-        // Collect all input and output sets
-        foreach (node; graph.nodes.values)
+        // Collect all input and output sets (use _nodeArray for cache locality)
+        foreach (node; graph._nodeArray)
         {
+            if (node is null) continue;
+            
             // Add sources to input set
             foreach (source; node.target.sources)
                 proof.inputs.add(source);
@@ -290,6 +292,8 @@ struct BuildVerifier
             // Add output to output set
             if (node.target.outputPath.length > 0)
                 proof.outputs.add(node.target.outputPath);
+            
+            proof.hermeticTargets ~= node.id.toString();
         }
         
         // Prove I ∩ O = ∅ (disjoint input/output sets)
@@ -298,9 +302,6 @@ struct BuildVerifier
         // Prove network isolation (for hermetic builds)
         // Simplified: assume isolated unless explicitly configured otherwise
         proof.isolated = true;  // Would check NetworkPolicy in production
-        
-        // Track hermetic targets
-        proof.hermeticTargets = graph.nodes.keys;
         
         if (!proof.isValid)
             return BuildResult!HermeticityProof.err(
@@ -319,9 +320,13 @@ struct BuildVerifier
         DeterminismProof proof;
         proof.timestamp = Clock.currTime();
         
-        // Generate deterministic spec for each target
-        foreach (node; graph.nodes.values)
+        size_t nodeCount = 0;
+        // Generate deterministic spec for each target (use _nodeArray)
+        foreach (node; graph._nodeArray)
         {
+            if (node is null) continue;
+            nodeCount++;
+            
             DeterministicSpec spec;
             
             // Hash inputs (sources + dependencies)
@@ -342,7 +347,7 @@ struct BuildVerifier
         }
         
         // Proof is complete if all targets have specs
-        proof.complete = proof.specs.length == graph.nodes.length;
+        proof.complete = proof.specs.length == nodeCount;
         
         if (!proof.isValid)
             return BuildResult!DeterminismProof.err(
@@ -378,9 +383,13 @@ struct BuildVerifier
         RaceFreedomProof proof;
         proof.timestamp = Clock.currTime();
         
-        // Build happens-before relation from dependency edges
-        foreach (node; graph.nodes.values)
+        size_t nodeCount = 0;
+        // Build happens-before relation from dependency edges (use _nodeArray)
+        foreach (node; graph._nodeArray)
         {
+            if (node is null) continue;
+            nodeCount++;
+            
             foreach (depId; node.dependencyIds)
             {
                 HappensBefore hb;
@@ -392,7 +401,7 @@ struct BuildVerifier
         }
         
         // Verify proper ordering: all dependencies happen before dependents
-        proof.properlyOrdered = proof.happensBefore.length > 0 || graph.nodes.length == 1;
+        proof.properlyOrdered = proof.happensBefore.length > 0 || nodeCount == 1;
         
         // Verify atomic access: BuildNode uses atomic operations for shared state
         // This is a static property verified by code inspection
@@ -414,11 +423,13 @@ struct BuildVerifier
     /// Verify that all targets write to disjoint output sets
     private static bool verifyDisjointWrites(BuildGraph graph) @system
     {
-        // Build write-set for each target
+        // Build write-set for each target (use _nodeArray)
         PathSet[string] writeSets;
         
-        foreach (node; graph.nodes.values)
+        foreach (node; graph._nodeArray)
         {
+            if (node is null) continue;
+            
             PathSet writeSet;
             if (node.target.outputPath.length > 0)
                 writeSet.add(node.target.outputPath);

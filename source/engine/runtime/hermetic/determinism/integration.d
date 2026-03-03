@@ -14,7 +14,7 @@ import engine.runtime.hermetic.determinism.repair;
 import engine.runtime.hermetic.core.executor;
 import engine.runtime.hermetic.core.spec;
 import infrastructure.errors;
-import infrastructure.utils.logging : Logger, structuredLog;
+import infrastructure.utils.logging : structuredLog;
 
 /// Verification mode
 enum VerificationMode

@@ -5,6 +5,7 @@ import std.array;
 import std.string;
 import frontend.lsp.core.protocol;
 import infrastructure.config.workspace.ast : BuildFile, TargetDeclStmt, Field, Expr, IdentExpr, LiteralExpr, LiteralKind, ASTLocation = Location;
+import infrastructure.utils.simd.strings : SIMDStrings;
 
 /// Symbol information for quick lookups
 struct Symbol
@@ -132,10 +133,10 @@ struct Index
                     continue;
                 
                 string depName = str;
-                // Normalize
-                if (depName.startsWith(":"))
+                // Normalize - SIMD-accelerated prefix matching
+                if ((() @trusted => SIMDStrings.startsWith(depName, ":"))())
                     depName = depName[1 .. $];
-                else if (depName.startsWith("//"))
+                else if ((() @trusted => SIMDStrings.startsWith(depName, "//"))())
                 {
                     auto colonPos = depName.lastIndexOf(':');
                     if (colonPos != -1)

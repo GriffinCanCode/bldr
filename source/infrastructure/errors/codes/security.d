@@ -59,6 +59,14 @@ enum Security : int
     RateLimitSecurity = 19024,
     /// Suspicious activity
     SuspiciousActivity = 19025,
+    /// Command injection attempt
+    CommandInjection = 19026,
+    /// Invalid/unsafe command
+    InvalidCommand = 19027,
+    /// Path traversal attempt
+    PathTraversal = 19028,
+    /// Access denied (generic)
+    AccessDenied = 19029,
 }
 
 /// Namespace for security error utilities
@@ -82,7 +90,12 @@ struct SecurityErrors
             case Security.APIKeyInvalid:
             case Security.NetworkAccessDenied:
             case Security.FileSystemAccessDenied:
+            case Security.AccessDenied:
                 return Recoverability.User;
+            case Security.CommandInjection:
+            case Security.InvalidCommand:
+            case Security.PathTraversal:
+                return Recoverability.Fatal;
             default:
                 return Recoverability.Fatal;
         }
@@ -118,6 +131,10 @@ struct SecurityErrors
             case Security.APIKeyInvalid:          return "Invalid API key";
             case Security.RateLimitSecurity:      return "Security rate limit exceeded";
             case Security.SuspiciousActivity:     return "Suspicious activity detected";
+            case Security.CommandInjection:       return "Command injection attempt detected";
+            case Security.InvalidCommand:         return "Invalid/unsafe command";
+            case Security.PathTraversal:          return "Path traversal attempt detected";
+            case Security.AccessDenied:           return "Access denied";
         }
     }
 }

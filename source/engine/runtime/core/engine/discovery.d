@@ -162,8 +162,10 @@ struct DiscoveryMarker
     {
         auto graph = dynamicGraph.graph;
         
-        foreach (node; graph.nodes.values)
+        foreach (node; graph._nodeArray)
         {
+            if (node is null) continue;
+            
             // Mark protobuf targets
             if (node.target.language == TargetLanguage.Protobuf)
             {

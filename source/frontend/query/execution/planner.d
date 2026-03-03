@@ -337,7 +337,7 @@ BuildNode[] bfsWithPredicates(
     if (starts.empty) return [];
     
     BuildNode[] result;
-    bool[BuildNode] visited;
+    bool[uint] visited;  // Index-based for O(1) lookup
     
     struct Item { BuildNode node; int depth; }
     auto queue = DList!Item();
@@ -345,7 +345,7 @@ BuildNode[] bfsWithPredicates(
     foreach (start; starts) {
         if (start is null) continue;
         queue.insertBack(Item(start, 0));
-        visited[start] = true;
+        visited[start._nodeIndex] = true;
     }
     
     while (!queue.empty) {
@@ -367,15 +367,12 @@ BuildNode[] bfsWithPredicates(
         if (maxDepth != -1 && item.depth >= maxDepth)
             continue;
         
-        // Explore neighbors
-        foreach (depId; item.node.dependencyIds) {
-            auto depKey = depId.toString();
-            if (depKey !in graph.nodes) continue;
+        // Explore neighbors using indexed access
+        foreach (idx; item.node.dependencyIndices) {
+            auto neighbor = graph.getNodeByIndex(idx);
+            if (neighbor is null || neighbor._nodeIndex in visited) continue;
             
-            auto neighbor = graph.nodes[depKey];
-            if (neighbor in visited) continue;
-            
-            visited[neighbor] = true;
+            visited[neighbor._nodeIndex] = true;
             queue.insertBack(Item(neighbor, item.depth + 1));
         }
     }
@@ -395,7 +392,7 @@ BuildNode[] reverseBfsWithPredicates(
     if (starts.empty) return [];
     
     BuildNode[] result;
-    bool[BuildNode] visited;
+    bool[uint] visited;  // Index-based for O(1) lookup
     
     struct Item { BuildNode node; int depth; }
     auto queue = DList!Item();
@@ -403,7 +400,7 @@ BuildNode[] reverseBfsWithPredicates(
     foreach (start; starts) {
         if (start is null) continue;
         queue.insertBack(Item(start, 0));
-        visited[start] = true;
+        visited[start._nodeIndex] = true;
     }
     
     while (!queue.empty) {
@@ -418,15 +415,12 @@ BuildNode[] reverseBfsWithPredicates(
         if (maxDepth != -1 && item.depth >= maxDepth)
             continue;
         
-        // Explore dependents (reverse edges)
-        foreach (depId; item.node.dependentIds) {
-            auto depKey = depId.toString();
-            if (depKey !in graph.nodes) continue;
+        // Explore dependents using indexed access
+        foreach (idx; item.node.dependentIndices) {
+            auto neighbor = graph.getNodeByIndex(idx);
+            if (neighbor is null || neighbor._nodeIndex in visited) continue;
             
-            auto neighbor = graph.nodes[depKey];
-            if (neighbor in visited) continue;
-            
-            visited[neighbor] = true;
+            visited[neighbor._nodeIndex] = true;
             queue.insertBack(Item(neighbor, item.depth + 1));
         }
     }
@@ -452,7 +446,9 @@ BuildNode[] matchPatternWithPredicates(
         return id == pattern;
     }
     
-    foreach (node; graph.nodes.values) {
+    // Use _nodeArray for cache locality
+    foreach (node; graph._nodeArray) {
+        if (node is null) continue;
         if (!matchesPattern(node)) continue;
         if (predicates.all!(p => p.matches(node)))
             result ~= node;

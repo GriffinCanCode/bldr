@@ -7,7 +7,7 @@ import std.path;
 import std.algorithm;
 import std.array;
 import std.string;
-import std.conv : octal;
+import std.conv : to, octal;
 import languages.jvm.scala.tooling.builders.base;
 import languages.jvm.scala.core.config;
 import languages.jvm.scala.tooling.detection;
@@ -15,12 +15,37 @@ import infrastructure.config.schema.schema;
 import infrastructure.analysis.targets.types;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.logging;
+import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
+import engine.linking.incremental;
 
-/// Scala Native builder - compiles Scala to native binary via LLVM
+/// Scala Native builder - compiles Scala to native binary via LLVM with incremental linking
 class ScalaNativeBuilder : ScalaBuilder
 {
-    import engine.caching.actions.action : ActionCache;
-    this(ActionCache cache = null) {}
+    private ActionCache actionCache;
+    private IncrementalLinker incLinker;
+    private bool useIncrementalLink;
+    
+    this(ActionCache cache = null, bool enableIncrementalLink = true) @system
+    {
+        if (cache is null)
+        {
+            auto cacheConfig = ActionCacheConfig.fromEnvironment();
+            actionCache = new ActionCache(".builder-cache/actions/scala-native", cacheConfig);
+        }
+        else
+        {
+            actionCache = cache;
+        }
+        
+        // Initialize incremental linker (Scala Native uses LLVM -> LLD support)
+        incLinker = new IncrementalLinker(".builder-cache/linking/scala-native", actionCache);
+        useIncrementalLink = enableIncrementalLink && incLinker.isIncrementalAvailable();
+        
+        if (useIncrementalLink)
+            structuredLog.debug_("scala_native_incremental_link_enabled")
+                .field("linker", incLinker.getLinkerConfig().type.to!string)
+                .emit();
+    }
     
     override ScalaBuildResult build(
         in string[] sources,
@@ -40,15 +65,11 @@ class ScalaNativeBuilder : ScalaBuilder
         
         // Use sbt for Scala Native
         if (buildTool == ScalaBuildTool.SBT)
-        {
-            return buildWithSbt(target, config, workspace, result);
-        }
+            return buildWithSbt(target, config, workspace, sources, result);
         
         // Use Mill for Scala Native
         if (buildTool == ScalaBuildTool.Mill)
-        {
-            return buildWithMill(target, config, workspace, result);
-        }
+            return buildWithMill(target, config, workspace, sources, result);
         
         result.error = "Scala Native requires sbt or Mill build tool";
         return result;
@@ -74,12 +95,49 @@ class ScalaNativeBuilder : ScalaBuilder
         const Target target,
         const ScalaConfig config,
         const WorkspaceConfig workspace,
+        in string[] sources,
         ScalaBuildResult result
     )
     {
+        string outputPath = getOutputPath(target, workspace);
+        
+        // Build metadata for cache validation
+        string[string] metadata;
+        metadata["buildTool"] = "sbt";
+        metadata["scalaVersion"] = config.versionInfo.binaryVersion();
+        metadata["mode"] = "native";
+        
+        // Create action ID for compilation
+        ActionId actionId;
+        actionId.targetId = target.name;
+        actionId.type = ActionType.Compile;
+        actionId.subId = "sbt-nativeLink";
+        actionId.inputHash = FastHash.hashStrings(sources);
+        
+        // Check if compilation is cached
+        if (actionCache !is null && actionCache.isCached(actionId, sources, metadata) && exists(outputPath))
+        {
+            structuredLog.debug_("__cached_scala_native_sbt_").field("detail", "  [Cached] Scala Native (sbt): " ~ outputPath).emit();
+            result.success = true;
+            result.outputs = [outputPath];
+            result.outputHash = FastHash.hashFile(outputPath);
+            return result;
+        }
+        
+        // Analyze for incremental linking
+        auto linkAnalysis = incLinker.analyze(outputPath, sources, [], "");
+        bool doIncremental = useIncrementalLink && linkAnalysis.canIncrementalLink();
+        
+        if (doIncremental)
+            structuredLog.info("scala_native_incremental_link")
+                .field("output", baseName(outputPath))
+                .field("changed", linkAnalysis.changedObjects.length)
+                .field("total", sources.length)
+                .emit();
+        
         string[] cmd = ["sbt"];
         
-        // Scala Native link task
+        // Scala Native link task (incremental is handled by sbt-scala-native plugin)
         cmd ~= "nativeLink";
         
         structuredLog.info("running_sbt_nativelink").emit();
@@ -90,6 +148,9 @@ class ScalaNativeBuilder : ScalaBuilder
         if (res.status != 0)
         {
             result.error = "Scala Native compilation failed:\n" ~ res.output;
+            if (actionCache !is null)
+                actionCache.update(actionId, sources, [], metadata, false);
+            incLinker.invalidate(outputPath);
             return result;
         }
         
@@ -104,7 +165,6 @@ class ScalaNativeBuilder : ScalaBuilder
         }
         
         // Copy to output location
-        string outputPath = getOutputPath(target, workspace);
         string outputDir = dirName(outputPath);
         
         if (!exists(outputDir))
@@ -122,6 +182,11 @@ class ScalaNativeBuilder : ScalaBuilder
         result.outputs = [outputPath];
         result.outputHash = FastHash.hashFile(outputPath);
         
+        // Update caches
+        if (actionCache !is null)
+            actionCache.update(actionId, sources, [outputPath], metadata, true);
+        incLinker.recordLink(outputPath, sources, [], "", doIncremental);
+        
         return result;
     }
     
@@ -129,9 +194,46 @@ class ScalaNativeBuilder : ScalaBuilder
         const Target target,
         const ScalaConfig config,
         const WorkspaceConfig workspace,
+        in string[] sources,
         ScalaBuildResult result
     )
     {
+        string outputPath = getOutputPath(target, workspace);
+        
+        // Build metadata for cache validation
+        string[string] metadata;
+        metadata["buildTool"] = "mill";
+        metadata["scalaVersion"] = config.versionInfo.binaryVersion();
+        metadata["mode"] = "native";
+        
+        // Create action ID for compilation
+        ActionId actionId;
+        actionId.targetId = target.name;
+        actionId.type = ActionType.Compile;
+        actionId.subId = "mill-nativeLink";
+        actionId.inputHash = FastHash.hashStrings(sources);
+        
+        // Check if compilation is cached
+        if (actionCache !is null && actionCache.isCached(actionId, sources, metadata) && exists(outputPath))
+        {
+            structuredLog.debug_("__cached_scala_native_mill_").field("detail", "  [Cached] Scala Native (mill): " ~ outputPath).emit();
+            result.success = true;
+            result.outputs = [outputPath];
+            result.outputHash = FastHash.hashFile(outputPath);
+            return result;
+        }
+        
+        // Analyze for incremental linking
+        auto linkAnalysis = incLinker.analyze(outputPath, sources, [], "");
+        bool doIncremental = useIncrementalLink && linkAnalysis.canIncrementalLink();
+        
+        if (doIncremental)
+            structuredLog.info("scala_native_incremental_link")
+                .field("output", baseName(outputPath))
+                .field("changed", linkAnalysis.changedObjects.length)
+                .field("total", sources.length)
+                .emit();
+        
         string[] cmd = ["mill"];
         
         // Mill Scala Native task
@@ -145,6 +247,9 @@ class ScalaNativeBuilder : ScalaBuilder
         if (res.status != 0)
         {
             result.error = "Scala Native compilation failed:\n" ~ res.output;
+            if (actionCache !is null)
+                actionCache.update(actionId, sources, [], metadata, false);
+            incLinker.invalidate(outputPath);
             return result;
         }
         
@@ -159,7 +264,6 @@ class ScalaNativeBuilder : ScalaBuilder
         }
         
         // Copy to output location
-        string outputPath = getOutputPath(target, workspace);
         string outputDir = dirName(outputPath);
         
         if (!exists(outputDir))
@@ -176,6 +280,11 @@ class ScalaNativeBuilder : ScalaBuilder
         result.success = true;
         result.outputs = [outputPath];
         result.outputHash = FastHash.hashFile(outputPath);
+        
+        // Update caches
+        if (actionCache !is null)
+            actionCache.update(actionId, sources, [outputPath], metadata, true);
+        incLinker.recordLink(outputPath, sources, [], "", doIncremental);
         
         return result;
     }

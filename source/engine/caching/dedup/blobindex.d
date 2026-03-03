@@ -284,7 +284,8 @@ private:
         {
             auto msg = errMsg ? fromStringz(errMsg).idup : "Unknown error";
             sqlite3_free(errMsg);
-            throw new Exception("SQL error: " ~ msg);
+            throw Errors.cache("SQL error: " ~ msg, Cache.WriteFailed)
+                .withCommand("Clear cache", "bldr clean --cache").build();
         }
     }
     

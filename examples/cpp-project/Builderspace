@@ -6,5 +6,6 @@ workspace("cpp-example") {
     parallel: true;
     maxJobs: 8;
     incremental: true;
+    incrementalLinking: true;
     verbose: false;
 }

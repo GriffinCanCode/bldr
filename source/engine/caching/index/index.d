@@ -538,7 +538,8 @@ private:
         {
             auto msg = errMsg ? fromStringz(errMsg).idup : "Unknown error";
             sqlite3_free(errMsg);
-            throw new Exception("SQL error: " ~ msg ~ " (query: " ~ sql ~ ")");
+            throw Errors.cache("SQL error: " ~ msg ~ " (query: " ~ sql ~ ")", Cache.WriteFailed)
+                .withCommand("Clear cache", "bldr clean --cache").build();
         }
     }
     
@@ -547,7 +548,9 @@ private:
         sqlite3_stmt* stmt;
         auto rc = sqlite3_prepare_v2(db, sql.toStringz, cast(int)sql.length, &stmt, null);
         if (rc != SQLITE_OK)
-            throw new Exception("Failed to prepare: " ~ sql ~ " - " ~ fromStringz(sqlite3_errmsg(db)).idup);
+            throw Errors.cache("Failed to prepare SQL: " ~ sql ~ " - " ~ fromStringz(sqlite3_errmsg(db)).idup, 
+                Cache.LoadFailed)
+                .withCommand("Clear cache", "bldr clean --cache").build();
         return stmt;
     }
     

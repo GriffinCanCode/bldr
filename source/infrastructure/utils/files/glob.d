@@ -57,7 +57,8 @@ class GlobMatcher
         
         foreach (pattern; patterns)
         {
-            bool isNegation = pattern.startsWith("!");
+            // SIMD-accelerated prefix check for negation
+            bool isNegation = SIMDStrings.startsWith(pattern, "!");
             string cleanPattern = isNegation ? pattern[1 .. $] : pattern;
             
             auto matched = matchSingle(cleanPattern, baseDir);

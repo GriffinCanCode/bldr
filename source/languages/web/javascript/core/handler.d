@@ -16,6 +16,7 @@ import infrastructure.utils.files.hash;
 import infrastructure.utils.logging;
 import infrastructure.utils.process.checker : isCommandAvailable;
 import infrastructure.utils.security : execute;
+import infrastructure.utils.simd.strings : SIMDStrings;
 import engine.caching.actions.action;
 
 /// JavaScript build handler - leverages BaseWebHandler for common functionality
@@ -31,9 +32,12 @@ class JavaScriptHandler : BaseWebHandler
     override protected string toolkitNotFoundError() const pure nothrow =>
         "Node.js not found. Install from: https://nodejs.org/";
     
-    override protected string validateSources(const(string[]) sources, WebConfig config) const
+    /// SIMD-accelerated extension check for source validation
+    override protected string validateSources(const(string[]) sources, WebConfig config) const @trusted
     {
-        if (sources.any!(s => s.endsWith(".ts") || s.endsWith(".tsx") || s.endsWith(".mts") || s.endsWith(".cts")))
+        // SIMD-accelerated suffix checks for TypeScript extensions
+        if (sources.any!(s => SIMDStrings.endsWith(s, ".ts") || SIMDStrings.endsWith(s, ".tsx") || 
+                              SIMDStrings.endsWith(s, ".mts") || SIMDStrings.endsWith(s, ".cts")))
             return "JavaScript handler received TypeScript files. Use language: typescript instead.";
         return "";
     }
@@ -205,12 +209,14 @@ class JavaScriptHandler : BaseWebHandler
         return result;
     }
     
-    private LanguageBuildResult validateOnly(in Target target, in WorkspaceConfig config)
+    /// SIMD-accelerated source validation
+    private LanguageBuildResult validateOnly(in Target target, in WorkspaceConfig config) @trusted
     {
         LanguageBuildResult result;
         foreach (source; target.sources)
         {
-            if (source.endsWith(".ts") || source.endsWith(".tsx"))
+            // SIMD-accelerated suffix checks
+            if (SIMDStrings.endsWith(source, ".ts") || SIMDStrings.endsWith(source, ".tsx"))
             {
                 result.error = "JavaScript handler cannot validate TypeScript. Use language: typescript";
                 return result;

@@ -236,7 +236,9 @@ final class AnalysisCache : IAnalysisCache
         // Version
         immutable version_ = data[offset++];
         if (version_ != 1)
-            throw new Exception("Unsupported analysis cache version");
+            throw Errors.cache("Unsupported analysis cache version", Cache.Corrupted)
+                .withSuggestion("Cache was created by incompatible bldr version")
+                .withCommand("Clear cache", "bldr clean --cache").build();
         
         // Path
         analysis.path = readString(data, offset);

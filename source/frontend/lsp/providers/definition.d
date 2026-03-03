@@ -6,6 +6,7 @@ import std.string;
 import frontend.lsp.core.protocol;
 import frontend.lsp.workspace.workspace;
 import infrastructure.config.workspace.ast : BuildFile, TargetDeclStmt, ASTLocation = Location;
+import infrastructure.utils.simd.strings : SIMDStrings;
 
 /// Go-to-definition provider
 struct DefinitionProvider
@@ -32,10 +33,10 @@ struct DefinitionProvider
         // Normalize symbol for lookup
         string targetName = symbol;
         
-        // Strip dependency prefix markers
-        if (targetName.startsWith(":"))
+        // Strip dependency prefix markers - SIMD-accelerated
+        if ((() @trusted => SIMDStrings.startsWith(targetName, ":"))())
             targetName = targetName[1 .. $];
-        else if (targetName.startsWith("//"))
+        else if ((() @trusted => SIMDStrings.startsWith(targetName, "//"))())
         {
             // Extract just the target name from full path
             auto colonPos = targetName.lastIndexOf(':');
@@ -43,8 +44,9 @@ struct DefinitionProvider
                 targetName = targetName[colonPos + 1 .. $];
         }
         
-        // Check if it's a target reference
-        if (symbol.startsWith(":") || symbol.startsWith("//"))
+        // Check if it's a target reference - SIMD-accelerated
+        if ((() @trusted => SIMDStrings.startsWith(symbol, ":"))() || 
+            (() @trusted => SIMDStrings.startsWith(symbol, "//"))())
         {
             return workspace.findDefinition(targetName);
         }

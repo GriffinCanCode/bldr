@@ -11,12 +11,32 @@ import std.conv;
 import languages.compiled.haskell.core.config;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.logging;
-import engine.caching.actions.action : ActionCache, ActionId, ActionType;
+import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
 import infrastructure.utils.files.hash : FastHash;
+import engine.linking.incremental;
 
-/// GHC compiler wrapper with action-level caching
+// Module-level incremental linker for GHC (lazy initialized)
+private __gshared IncrementalLinker ghcIncLinker;
+private __gshared bool ghcIncLinkerInitialized;
+
+/// GHC compiler wrapper with action-level caching and incremental linking
 struct GHCWrapper
 {
+    /// Get or initialize the incremental linker for GHC
+    private static IncrementalLinker getIncLinker(ActionCache actionCache) @system
+    {
+        if (!ghcIncLinkerInitialized)
+        {
+            ghcIncLinker = new IncrementalLinker(".builder-cache/linking/haskell", actionCache);
+            ghcIncLinkerInitialized = true;
+            
+            if (ghcIncLinker.isIncrementalAvailable())
+                structuredLog.debug_("haskell_incremental_link_enabled")
+                    .field("linker", ghcIncLinker.getLinkerConfig().type.to!string)
+                    .emit();
+        }
+        return ghcIncLinker;
+    }
     /// Check if GHC is available
     static bool isAvailable() nothrow
     {
@@ -98,7 +118,7 @@ struct GHCWrapper
         }
     }
     
-    /// Compile with GHC with action-level caching
+    /// Compile with GHC with action-level caching and incremental linking
     static LanguageBuildResult compile(
         in Target target,
         in WorkspaceConfig config,
@@ -119,9 +139,7 @@ struct GHCWrapper
         
         // Add config files that affect compilation
         foreach (cabalFile; dirEntries(config.root, "*.cabal", SpanMode.shallow))
-        {
             inputFiles ~= cabalFile.name;
-        }
         
         // Build metadata for cache validation
         string[string] metadata;
@@ -161,6 +179,22 @@ struct GHCWrapper
             return result;
         }
         
+        // Initialize incremental linker
+        auto incLinker = getIncLinker(actionCache);
+        bool useIncrementalLink = incLinker !is null && incLinker.isIncrementalAvailable();
+        
+        // Analyze for incremental linking
+        string linkerFlagsStr = hsConfig.ghcOptions.join(" ") ~ " " ~ hsConfig.customFlags.join(" ");
+        auto linkAnalysis = incLinker.analyze(outputPath, inputFiles, hsConfig.packages, linkerFlagsStr);
+        bool doIncremental = useIncrementalLink && linkAnalysis.canIncrementalLink();
+        
+        if (doIncremental)
+            structuredLog.info("haskell_incremental_link")
+                .field("output", baseName(outputPath))
+                .field("changed", linkAnalysis.changedObjects.length)
+                .field("total", inputFiles.length)
+                .emit();
+        
         string[] args = ["ghc"];
         
         // Optimization level
@@ -180,19 +214,13 @@ struct GHCWrapper
         
         // Language extensions
         foreach (ext; hsConfig.extensions)
-        {
             args ~= "-X" ~ ext;
-        }
         
         // Warnings
         if (hsConfig.warnings)
-        {
             args ~= "-Wall";
-        }
         if (hsConfig.werror)
-        {
             args ~= "-Werror";
-        }
         
         // Profiling
         if (hsConfig.profiling)
@@ -203,33 +231,23 @@ struct GHCWrapper
         
         // Threaded runtime
         if (hsConfig.threaded)
-        {
             args ~= "-threaded";
-        }
         
         // Static linking
         if (hsConfig.static_)
-        {
             args ~= "-static";
-        }
         
         // Dynamic linking
         if (hsConfig.dynamic)
-        {
             args ~= "-dynamic";
-        }
         
         // Include directories
         foreach (dir; hsConfig.includeDirs)
-        {
             args ~= "-i" ~ dir;
-        }
         
         // Library directories
         foreach (dir; hsConfig.libDirs)
-        {
             args ~= "-L" ~ dir;
-        }
         
         // Packages
         foreach (pkg; hsConfig.packages)
@@ -238,19 +256,24 @@ struct GHCWrapper
             args ~= pkg;
         }
         
+        // Add incremental linker flags via -optl (GHC passes to linker)
+        if (doIncremental)
+        {
+            auto incFlags = incLinker.getLinkerFlags(linkAnalysis);
+            foreach (flag; incFlags)
+                args ~= "-optl" ~ flag;
+        }
+        
         // GHC options
         args ~= hsConfig.ghcOptions;
         
         // Custom flags
         args ~= hsConfig.customFlags;
         
-        // Output directory (already computed above for caching)
+        // Output directory
         if (!exists(outputDir))
-        {
             mkdirRecurse(outputDir);
-        }
         
-        // Output path (already computed above)
         args ~= "-o";
         args ~= outputPath;
         
@@ -258,14 +281,11 @@ struct GHCWrapper
         final switch (hsConfig.mode)
         {
             case HaskellBuildMode.Compile:
-                // Default executable compilation
                 break;
             case HaskellBuildMode.Library:
-                // For libraries, we'd typically use Cabal
                 structuredLog.warning("library_compilation_with_ghc_directly_is").emit();
                 break;
             case HaskellBuildMode.Test:
-                // Tests are usually managed by Cabal/Stack
                 break;
             case HaskellBuildMode.Doc:
                 result.error = "Documentation generation requires Cabal or Haddock";
@@ -281,7 +301,6 @@ struct GHCWrapper
         string mainFile = hsConfig.entry.empty ? "" : hsConfig.entry;
         if (mainFile.empty && !target.sources.empty)
         {
-            // Find main file
             foreach (src; target.sources)
             {
                 if (extension(src) == ".hs")
@@ -304,41 +323,26 @@ struct GHCWrapper
         structuredLog.debug_("compiling_with_ghc_").field("detail", "Compiling with GHC: " ~ mainFile).emit();
         structuredLog.debug_("__command_").field("detail", "  Command: " ~ args.join(" ")).emit();
         
-        bool success = false;
-        
         try
         {
             auto execResult = execute(args, null, Config.none, size_t.max, config.root);
-            
-            success = (execResult.status == 0);
+            bool success = (execResult.status == 0);
             
             if (success)
             {
                 result.success = true;
                 result.outputs = [outputPath];
                 
-                // Hash the output
                 if (exists(outputPath))
-                {
                     result.outputHash = FastHash.hashFile(outputPath);
-                }
                 
                 if (!execResult.output.empty)
-                {
                     structuredLog.debug_("ghc_output_").field("detail", "GHC output: " ~ execResult.output).emit();
-                }
                 
-                // Update cache with success
+                // Update caches
                 if (actionCache !is null)
-                {
-                    actionCache.update(
-                        actionId,
-                        inputFiles,
-                        [outputPath],
-                        metadata,
-                        true
-                    );
-                }
+                    actionCache.update(actionId, inputFiles, [outputPath], metadata, true);
+                incLinker.recordLink(outputPath, inputFiles, hsConfig.packages, linkerFlagsStr, doIncremental);
             }
             else
             {
@@ -346,17 +350,9 @@ struct GHCWrapper
                 structuredLog.error("ghc_compilation_failed").emit();
                 structuredLog.error("log_event").field("message", execResult.output).emit();
                 
-                // Update cache with failure
                 if (actionCache !is null)
-                {
-                    actionCache.update(
-                        actionId,
-                        inputFiles,
-                        [],
-                        metadata,
-                        false
-                    );
-                }
+                    actionCache.update(actionId, inputFiles, [], metadata, false);
+                incLinker.invalidate(outputPath);
             }
         }
         catch (Exception e)
@@ -364,17 +360,8 @@ struct GHCWrapper
             result.error = "GHC execution failed: " ~ e.msg;
             structuredLog.error("log_event").field("message", result.error).emit();
             
-            // Update cache with failure
             if (actionCache !is null)
-            {
-                actionCache.update(
-                    actionId,
-                    inputFiles,
-                    [],
-                    metadata,
-                    false
-                );
-            }
+                actionCache.update(actionId, inputFiles, [], metadata, false);
         }
         
         return result;

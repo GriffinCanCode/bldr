@@ -110,8 +110,8 @@ final class GraphExtension
         {
             auto targetKey = target.id.toString();
             
-            // Skip if already exists
-            if (targetKey in graph.nodes)
+            // Skip if already exists using indexed lookup
+            if (graph.hasKey(targetKey))
                 continue;
             
             auto addResult = graph.addTarget(target);
@@ -121,14 +121,15 @@ final class GraphExtension
             // Track as discovered
             discoveredTargets[targetKey] = true;
             
-            // Get the newly added node
-            if (targetKey in graph.nodes)
-                newNodes ~= graph.nodes[targetKey];
+            // Get the newly added node using indexed lookup
+            auto node = graph.getNodeByKey(targetKey);
+            if (node !is null)
+                newNodes ~= node;
         }
         
         // 2. Add dependencies from origin target to new dependents
         auto originKey = discovery.originTarget.toString();
-        if (originKey in graph.nodes)
+        if (graph.hasKey(originKey))
         {
             foreach (dependentId; discovery.discoveredDependents)
             {
@@ -136,7 +137,7 @@ final class GraphExtension
                 
                 // Add edge: dependent depends on origin
                 // This means origin must build before dependent
-                if (dependentKey in graph.nodes)
+                if (graph.hasKey(dependentKey))
                 {
                     auto addDepResult = graph.addDependency(dependentKey, originKey);
                     if (addDepResult.isErr)

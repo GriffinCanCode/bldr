@@ -10,7 +10,7 @@ import std.string : toStringz, fromStringz;
 import core.sync.mutex : Mutex;
 import engine.caching.index.sqlite;
 import infrastructure.config.schema.schema : Target, TargetId, TargetType, TargetLanguage, WorkspaceConfig, BuildOptions;
-import infrastructure.errors;
+import infrastructure.errors : BuildError, BuildResult, Err, Ok, Errors, Cache;
 
 /// SQLite-backed configuration cache for sub-millisecond lookups
 /// 
@@ -445,7 +445,9 @@ private:
         {
             auto msg = errMsg ? fromStringz(errMsg).idup : "Unknown error";
             sqlite3_free(errMsg);
-            throw new Exception("SQL error: " ~ msg ~ " (query: " ~ sql ~ ")");
+            throw Errors.cache("SQL error: " ~ msg ~ " (query: " ~ sql ~ ")", Cache.WriteFailed)
+                .withSuggestion("Database query failed - cache may be corrupted")
+                .withCommand("Clear cache", "bldr clean --cache").build();
         }
     }
     
@@ -454,7 +456,10 @@ private:
         sqlite3_stmt* stmt;
         auto rc = sqlite3_prepare_v2(db, sql.toStringz, cast(int)sql.length, &stmt, null);
         if (rc != SQLITE_OK)
-            throw new Exception("Failed to prepare: " ~ sql ~ " - " ~ fromStringz(sqlite3_errmsg(db)).idup);
+            throw Errors.cache("Failed to prepare SQL: " ~ sql ~ " - " ~ fromStringz(sqlite3_errmsg(db)).idup, 
+                Cache.LoadFailed)
+                .withSuggestion("Database query preparation failed")
+                .withCommand("Clear cache", "bldr clean --cache").build();
         return stmt;
     }
     

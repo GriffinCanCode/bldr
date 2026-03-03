@@ -37,9 +37,8 @@ BuildNode[] bfs(BuildGraph graph, BuildNode[] starts, int maxDepth = -1) @system
         return [];
     
     BuildNode[] result;
-    bool[BuildNode] visited;
+    bool[uint] visited;  // Index-based for O(1) lookup
     
-    // Use DList as efficient queue (O(1) front insertion/removal)
     auto queue = DList!BfsItem();
     
     foreach (start; starts)
@@ -47,7 +46,7 @@ BuildNode[] bfs(BuildGraph graph, BuildNode[] starts, int maxDepth = -1) @system
         if (start is null)
             continue;
         queue.insertBack(BfsItem(start, 0));
-        visited[start] = true;
+        visited[start._nodeIndex] = true;
     }
     
     while (!queue.empty)
@@ -60,22 +59,17 @@ BuildNode[] bfs(BuildGraph graph, BuildNode[] starts, int maxDepth = -1) @system
         
         result ~= node;
         
-        // Check depth limit
         if (maxDepth != -1 && depth >= maxDepth)
             continue;
         
-        // Explore neighbors
-        foreach (depId; node.dependencyIds)
+        // Use indexed access for neighbors
+        foreach (idx; node.dependencyIndices)
         {
-            auto depKey = depId.toString();
-            if (depKey !in graph.nodes)
+            auto neighbor = graph.getNodeByIndex(idx);
+            if (neighbor is null || neighbor._nodeIndex in visited)
                 continue;
             
-            auto neighbor = graph.nodes[depKey];
-            if (neighbor in visited)
-                continue;
-            
-            visited[neighbor] = true;
+            visited[neighbor._nodeIndex] = true;
             queue.insertBack(BfsItem(neighbor, depth + 1));
         }
     }
@@ -93,24 +87,24 @@ BuildNode[] dfs(BuildGraph graph, BuildNode[] starts, int maxDepth = -1) @system
         return [];
     
     BuildNode[] result;
-    bool[BuildNode] visited;
+    bool[uint] visited;  // Index-based for O(1) lookup
     
     void visit(BuildNode node, int depth) @system
     {
-        if (node is null || node in visited)
+        if (node is null || node._nodeIndex in visited)
             return;
         
-        visited[node] = true;
+        visited[node._nodeIndex] = true;
         result ~= node;
         
         if (maxDepth != -1 && depth >= maxDepth)
             return;
         
-        foreach (depId; node.dependencyIds)
+        foreach (idx; node.dependencyIndices)
         {
-            auto depKey = depId.toString();
-            if (depKey in graph.nodes)
-                visit(graph.nodes[depKey], depth + 1);
+            auto dep = graph.getNodeByIndex(idx);
+            if (dep !is null)
+                visit(dep, depth + 1);
         }
     }
     
@@ -129,7 +123,7 @@ BuildNode[] reverseBfs(BuildGraph graph, BuildNode[] starts, int maxDepth = -1) 
         return [];
     
     BuildNode[] result;
-    bool[BuildNode] visited;
+    bool[uint] visited;  // Index-based for O(1) lookup
     auto queue = DList!BfsItem();
     
     foreach (start; starts)
@@ -137,7 +131,7 @@ BuildNode[] reverseBfs(BuildGraph graph, BuildNode[] starts, int maxDepth = -1) 
         if (start is null)
             continue;
         queue.insertBack(BfsItem(start, 0));
-        visited[start] = true;
+        visited[start._nodeIndex] = true;
     }
     
     while (!queue.empty)
@@ -153,18 +147,14 @@ BuildNode[] reverseBfs(BuildGraph graph, BuildNode[] starts, int maxDepth = -1) 
         if (maxDepth != -1 && depth >= maxDepth)
             continue;
         
-        // Explore dependents (reverse edges)
-        foreach (depId; node.dependentIds)
+        // Explore dependents (reverse edges) using indexed access
+        foreach (idx; node.dependentIndices)
         {
-            auto depKey = depId.toString();
-            if (depKey !in graph.nodes)
+            auto neighbor = graph.getNodeByIndex(idx);
+            if (neighbor is null || neighbor._nodeIndex in visited)
                 continue;
             
-            auto neighbor = graph.nodes[depKey];
-            if (neighbor in visited)
-                continue;
-            
-            visited[neighbor] = true;
+            visited[neighbor._nodeIndex] = true;
             queue.insertBack(BfsItem(neighbor, depth + 1));
         }
     }
@@ -184,13 +174,13 @@ BuildNode[] shortestPath(BuildGraph graph, BuildNode from, BuildNode to) @system
     if (from is to)
         return [from];
     
-    // BFS with parent tracking
-    BuildNode[BuildNode] parent;
-    bool[BuildNode] visited;
+    // BFS with parent tracking using index-based maps
+    uint[uint] parentIdx;  // nodeIndex → parentNodeIndex
+    bool[uint] visited;
     auto queue = DList!BuildNode();
     
     queue.insertBack(from);
-    visited[from] = true;
+    visited[from._nodeIndex] = true;
     
     while (!queue.empty)
     {
@@ -199,29 +189,28 @@ BuildNode[] shortestPath(BuildGraph graph, BuildNode from, BuildNode to) @system
         
         if (node is to)
         {
-            // Reconstruct path
+            // Reconstruct path using indices
             BuildNode[] path;
             auto current = to;
             while (current !is null)
             {
                 path = current ~ path;
-                current = (current in parent) ? parent[current] : null;
+                if (auto pIdx = current._nodeIndex in parentIdx)
+                    current = graph.getNodeByIndex(*pIdx);
+                else
+                    current = null;
             }
             return path;
         }
         
-        foreach (depId; node.dependencyIds)
+        foreach (idx; node.dependencyIndices)
         {
-            auto depKey = depId.toString();
-            if (depKey !in graph.nodes)
+            auto neighbor = graph.getNodeByIndex(idx);
+            if (neighbor is null || neighbor._nodeIndex in visited)
                 continue;
             
-            auto neighbor = graph.nodes[depKey];
-            if (neighbor in visited)
-                continue;
-            
-            visited[neighbor] = true;
-            parent[neighbor] = node;
+            visited[neighbor._nodeIndex] = true;
+            parentIdx[neighbor._nodeIndex] = node._nodeIndex;
             queue.insertBack(neighbor);
         }
     }
@@ -240,16 +229,16 @@ BuildNode[] allPaths(BuildGraph graph, BuildNode from, BuildNode to) @system
         return [];
     
     BuildNode[] allNodesInPaths;
-    bool[BuildNode] globalVisited;
+    bool[uint] globalVisited;  // Index-based
     BuildNode[] currentPath;
-    bool[BuildNode] pathVisited;
+    bool[uint] pathVisited;    // Index-based
     
     void dfsAllPaths(BuildNode node) @system
     {
         if (node is null)
             return;
         
-        pathVisited[node] = true;
+        pathVisited[node._nodeIndex] = true;
         currentPath ~= node;
         
         if (node is to)
@@ -257,30 +246,26 @@ BuildNode[] allPaths(BuildGraph graph, BuildNode from, BuildNode to) @system
             // Found a path - mark all nodes in this path
             foreach (pathNode; currentPath)
             {
-                if (pathNode !in globalVisited)
+                if (pathNode._nodeIndex !in globalVisited)
                 {
-                    globalVisited[pathNode] = true;
+                    globalVisited[pathNode._nodeIndex] = true;
                     allNodesInPaths ~= pathNode;
                 }
             }
         }
         else
         {
-            // Continue searching
-            foreach (depId; node.dependencyIds)
+            // Continue searching using indexed access
+            foreach (idx; node.dependencyIndices)
             {
-                auto depKey = depId.toString();
-                if (depKey !in graph.nodes)
-                    continue;
-                
-                auto neighbor = graph.nodes[depKey];
-                if (neighbor !in pathVisited)
+                auto neighbor = graph.getNodeByIndex(idx);
+                if (neighbor !is null && neighbor._nodeIndex !in pathVisited)
                     dfsAllPaths(neighbor);
             }
         }
         
         currentPath = currentPath[0 .. $ - 1];
-        pathVisited.remove(node);
+        pathVisited.remove(node._nodeIndex);
     }
     
     dfsAllPaths(from);
@@ -300,15 +285,15 @@ BuildNode[] somePath(BuildGraph graph, BuildNode from, BuildNode to) @system
         return [from];
     
     BuildNode[] path;
-    bool[BuildNode] visited;
+    bool[uint] visited;  // Index-based
     bool found = false;
     
     void dfs(BuildNode node) @system
     {
-        if (found || node is null || node in visited)
+        if (found || node is null || node._nodeIndex in visited)
             return;
         
-        visited[node] = true;
+        visited[node._nodeIndex] = true;
         path ~= node;
         
         if (node is to)
@@ -317,12 +302,12 @@ BuildNode[] somePath(BuildGraph graph, BuildNode from, BuildNode to) @system
             return;
         }
         
-        foreach (depId; node.dependencyIds)
+        foreach (idx; node.dependencyIndices)
         {
-            auto depKey = depId.toString();
-            if (depKey in graph.nodes)
+            auto dep = graph.getNodeByIndex(idx);
+            if (dep !is null)
             {
-                dfs(graph.nodes[depKey]);
+                dfs(dep);
                 if (found)
                     return;
             }
@@ -349,16 +334,18 @@ BuildNode[] matchPattern(BuildGraph graph, string pattern) @system
     
     if (pattern == "//...")
     {
-        // All targets
-        return graph.nodes.values.array;
+        // All targets - iterate _nodeArray for cache locality
+        foreach (node; graph._nodeArray)
+            if (node !is null)
+                result ~= node;
     }
     else if (pattern.endsWith("..."))
     {
         // All targets in a path: //path/...
         string prefix = pattern[0 .. $ - 3];
-        foreach (node; graph.nodes.values)
+        foreach (node; graph._nodeArray)
         {
-            if (node.idString.startsWith(prefix))
+            if (node !is null && node.idString.startsWith(prefix))
                 result ~= node;
         }
     }
@@ -366,17 +353,18 @@ BuildNode[] matchPattern(BuildGraph graph, string pattern) @system
     {
         // All targets in a specific directory: //path:*
         string prefix = pattern[0 .. $ - 1];
-        foreach (node; graph.nodes.values)
+        foreach (node; graph._nodeArray)
         {
-            if (node.idString.startsWith(prefix))
+            if (node !is null && node.idString.startsWith(prefix))
                 result ~= node;
         }
     }
     else
     {
-        // Specific target: //path:target
-        if (pattern in graph.nodes)
-            result ~= graph.nodes[pattern];
+        // Specific target: //path:target - use indexed lookup
+        auto node = graph.getNodeByKey(pattern);
+        if (node !is null)
+            result ~= node;
     }
     
     return result;
@@ -446,7 +434,8 @@ BuildNode[] getSiblings(BuildGraph graph, BuildNode[] targets) @system
     if (targets.empty)
         return [];
     
-    bool[BuildNode] result;
+    bool[uint] result;  // Index-based
+    BuildNode[] resultNodes;
     
     foreach (target; targets)
     {
@@ -461,14 +450,17 @@ BuildNode[] getSiblings(BuildGraph graph, BuildNode[] targets) @system
         
         string directory = targetId[0 .. colonPos];
         
-        // Find all targets with same directory prefix
-        foreach (node; graph.nodes.values)
+        // Find all targets with same directory prefix using _nodeArray
+        foreach (node; graph._nodeArray)
         {
-            if (node.idString.startsWith(directory ~ ":"))
-                result[node] = true;
+            if (node !is null && node._nodeIndex !in result && node.idString.startsWith(directory ~ ":"))
+            {
+                result[node._nodeIndex] = true;
+                resultNodes ~= node;
+            }
         }
     }
     
-    return result.keys;
+    return resultNodes;
 }
 

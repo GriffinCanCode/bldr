@@ -187,12 +187,13 @@ class WatchModeWithDiscovery
         clearOldDiscoveries(targetIds);
         stats.rediscoveredTargets = targetIds.length;
         
-        // 2. Re-run discovery phase for affected targets
+        // 2. Re-run discovery phase for affected targets using indexed lookup
         BuildNode[] nodesToRediscover;
         foreach (targetId; targetIds)
         {
-            if (targetId in dynamicGraph.graph.nodes)
-                nodesToRediscover ~= dynamicGraph.graph.nodes[targetId];
+            auto node = dynamicGraph.graph.getNodeByKey(targetId);
+            if (node !is null)
+                nodesToRediscover ~= node;
         }
         
         if (nodesToRediscover.empty)

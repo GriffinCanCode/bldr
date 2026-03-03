@@ -316,11 +316,15 @@ class WorkspaceManager
         return results;
     }
     
-    private string normalizeDep(string dep) const
+    /// Normalize dependency reference for lookup
+    /// SIMD-accelerated prefix matching for better performance
+    private string normalizeDep(string dep) const @trusted
     {
-        if (dep.startsWith(":"))
+        import infrastructure.utils.simd.strings : SIMDStrings;
+        
+        if (SIMDStrings.startsWith(dep, ":"))
             return dep[1 .. $];
-        if (dep.startsWith("//"))
+        if (SIMDStrings.startsWith(dep, "//"))
         {
             auto colonPos = dep.lastIndexOf(':');
             if (colonPos != -1)

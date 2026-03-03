@@ -5,6 +5,7 @@ workspace("d-hello") {
     parallel: true;
     maxJobs: 0;
     incremental: true;
+    incrementalLinking: true;
     verbose: false;
     
     env: {

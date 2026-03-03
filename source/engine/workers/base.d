@@ -15,6 +15,24 @@ import engine.workers.pool;
 import infrastructure.errors;
 import infrastructure.utils.logging;
 
+/// Helper struct for structured log fields
+struct LogFields
+{
+    string[string] pairs;
+    
+    static LogFields init() @safe => LogFields.init;
+    
+    static LogFields of(T...)(T args) @safe
+    {
+        LogFields f;
+        static foreach (i; 0 .. T.length / 2)
+        {
+            f.pairs[args[i * 2]] = args[i * 2 + 1].to!string;
+        }
+        return f;
+    }
+}
+
 /// Base Persistent Worker Factory
 /// 
 /// Abstract base class providing common functionality for all persistent worker types.

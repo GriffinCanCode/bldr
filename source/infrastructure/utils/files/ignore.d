@@ -674,27 +674,27 @@ class UserIgnorePatterns
                 // Strip whitespace
                 line = line.strip();
                 
-                // Skip empty lines and comments
-                if (line.empty || line.startsWith("#"))
+                // Skip empty lines and comments (SIMD prefix check)
+                if (line.empty || SIMDStrings.startsWith(line, "#"))
                     continue;
                 
-                // Handle negation patterns (!)
+                // Handle negation patterns (!) - SIMD prefix check
                 bool isNegated = false;
-                if (line.startsWith("!"))
+                if (SIMDStrings.startsWith(line, "!"))
                 {
                     isNegated = true;
-                    line = line[1 .. $].strip();  // Remove ! and re-strip
+                    line = line[1 .. $].strip();
                     
                     if (line.empty)
                         continue;
                 }
                 
-                // Directory pattern (ends with /)
-                if (line.endsWith("/"))
+                // Directory pattern (ends with /) - SIMD suffix check
+                if (SIMDStrings.endsWith(line, "/"))
                 {
                     string dirName = line[0 .. $-1];
                     // Remove leading slash if present
-                    if (dirName.startsWith("/"))
+                    if (SIMDStrings.startsWith(dirName, "/"))
                         dirName = dirName[1 .. $];
                     
                     if (!dirName.empty)
@@ -713,8 +713,8 @@ class UserIgnorePatterns
                 else
                 {
                     // File or glob pattern
-                    // Remove leading slash if present
-                    if (line.startsWith("/"))
+                    // Remove leading slash if present (SIMD prefix check)
+                    if (SIMDStrings.startsWith(line, "/"))
                         line = line[1 .. $];
                     
                     if (!line.empty)
@@ -745,13 +745,15 @@ class UserIgnorePatterns
     }
     
     /// Check if a directory should be ignored
-    bool shouldIgnoreDirectory(string dirPath)
+    /// SIMD-accelerated exact match comparisons
+    bool shouldIgnoreDirectory(string dirPath) @trusted
     {
         immutable dirName = baseName(dirPath);
         
-        // First check if it's negated (negation takes precedence)
-        if (negatedDirectories.canFind(dirName))
-            return false;
+        // First check if it's negated (SIMD exact match)
+        foreach (neg; negatedDirectories)
+            if (SIMDStrings.equal(dirName, neg))
+                return false;
         
         // Check negated glob patterns (for directories)
         foreach (pattern; negatedDirectories)
@@ -767,10 +769,10 @@ class UserIgnorePatterns
                 return false;
         }
         
-        // Check directory patterns (exact match or glob)
+        // Check directory patterns (SIMD exact match first, then glob)
         foreach (pattern; directories)
         {
-            if (pattern == dirName || matchesGlobPattern(dirName, pattern))
+            if (SIMDStrings.equal(pattern, dirName) || matchesGlobPattern(dirName, pattern))
                 return true;
         }
         
@@ -808,7 +810,8 @@ class UserIgnorePatterns
     
     /// Simple glob pattern matching for ignore files
     /// Supports: *, ?, **
-    private bool matchesGlobPattern(string text, string pattern)
+    /// SIMD-accelerated prefix/suffix checks
+    private bool matchesGlobPattern(string text, string pattern) @trusted
     {
         // Handle ** (matches any number of directories)
         if (pattern.canFind("**"))
@@ -817,10 +820,10 @@ class UserIgnorePatterns
             auto parts = pattern.split("**");
             if (parts.length >= 2)
             {
-                // Check prefix and suffix
-                if (!parts[0].empty && !text.startsWith(parts[0].stripRight("/")))
+                // SIMD-accelerated prefix/suffix checks
+                if (!parts[0].empty && !SIMDStrings.startsWith(text, parts[0].stripRight("/")))
                     return false;
-                if (parts.length > 1 && !parts[$-1].empty && !text.endsWith(parts[$-1].stripLeft("/")))
+                if (parts.length > 1 && !parts[$-1].empty && !SIMDStrings.endsWith(text, parts[$-1].stripLeft("/")))
                     return false;
                 return true;
             }
