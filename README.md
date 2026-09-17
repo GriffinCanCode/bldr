@@ -65,6 +65,8 @@ target("tests") {
 }
 ```
 
+Save this as `Builderfile` in the project root.
+
 ## Documentation
 
 - [Architecture](docs/architecture/overview.md)
