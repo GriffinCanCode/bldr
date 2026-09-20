@@ -17,4 +17,4 @@ name = "bldr"
 path = "src/main.rs"
 
 [dependencies]
-dirs = "5"
+dirs = "7"
