@@ -1,0 +1,78 @@
+name: Language support
+description: Request a new language handler, or report a gap in an existing one
+labels: [enhancement, language]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        bldr ships 32 language handlers. Check the handlers under
+        `source/languages/` and the projects under `examples/` before filing —
+        the language may already be supported.
+
+  - type: input
+    id: language
+    attributes:
+      label: Language
+      placeholder: "Crystal, Julia, Fortran, …"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Request type
+      options:
+        - New language — not supported at all
+        - Existing handler is missing something
+    validations:
+      required: true
+
+  - type: textarea
+    id: gap
+    attributes:
+      label: What is missing
+      description: >
+        For an existing handler, what it fails to do. For a new language, what
+        a minimal working build would need to cover.
+    validations:
+      required: true
+
+  - type: input
+    id: toolchain
+    attributes:
+      label: Compiler or interpreter
+      description: The toolchain bldr would have to drive, and how it is invoked
+      placeholder: "crystal build, with shards for dependencies"
+
+  - type: input
+    id: packagemanager
+    attributes:
+      label: Package manager
+      description: How dependencies are declared and resolved, if applicable
+      placeholder: "shards / Pkg.jl / none"
+
+  - type: textarea
+    id: deps
+    attributes:
+      label: Dependency discovery
+      description: >
+        How imports are written, and whether dependencies can be determined by
+        reading source files. This is what dictates how much of bldr's dynamic
+        graph the handler can use.
+
+  - type: dropdown
+    id: incremental
+    attributes:
+      label: Incremental compilation
+      description: Does the toolchain support compiling a subset and relinking?
+      options:
+        - "Yes — per-file or per-module"
+        - "No — whole-program only"
+        - Not sure
+
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I would be willing to write this handler (see CONTRIBUTING.md → Adding a New Language)

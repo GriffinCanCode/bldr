@@ -3,7 +3,8 @@ class Bldr < Formula
   homepage "https://github.com/GriffinCanCode/bldr"
   url "https://github.com/GriffinCanCode/bldr/archive/refs/tags/v2.0.3.tar.gz"
   sha256 "f8c3808984cb1e6a7c102a60d396398e0301e36134988aefd02b460279b7b31c"
-  license "MIT"
+  # Griffin License v1.0 — no SPDX identifier exists for it.
+  license :cannot_represent
   head "https://github.com/GriffinCanCode/bldr.git", branch: "master"
 
   depends_on "ldc" => :build

@@ -1,0 +1,64 @@
+name: Feature request
+description: Propose new functionality or a change to how something works
+labels: [enhancement]
+body:
+  - type: textarea
+    id: usecase
+    attributes:
+      label: Use case
+      description: >
+        What are you trying to do that bldr makes hard or impossible? Describe
+        the problem before the solution — it often changes what the right
+        solution is.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: >
+        How you picture it working. If it touches the Builderfile DSL or the
+        CLI, sketch the syntax.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: >
+        Workarounds you tried, and how other build systems handle this if you
+        know.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Build execution / scheduling
+        - Caching (target, action, or distributed)
+        - Builderfile DSL
+        - Language support
+        - Dependency discovery / analysis
+        - Sandboxing / hermeticity
+        - LSP or VS Code extension
+        - Query (bldrquery)
+        - Migration from another build system
+        - CLI / developer experience
+
+  - type: dropdown
+    id: breaking
+    attributes:
+      label: Would this break existing projects?
+      options:
+        - "No — additive only"
+        - "Yes — changes Builderfile syntax, CLI flags, or cache format"
+        - Not sure
+
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I would be willing to implement this

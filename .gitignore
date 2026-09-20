@@ -1,42 +1,44 @@
-# Build outputs
+# ─── Build outputs ───────────────────────────────────────────────────────────
 bin/
 .dub/
 *.o
 *.obj
 *.exe
 *.lst
+*.a
+*.dylib
+/*.dylib.DSYM
 .venv/
 
-# Cache
+# ─── Caches and local state ──────────────────────────────────────────────────
 .builder-cache/
 .builder-telemetry/
+.builder-verify/
+.test-telemetry/
+nimcache/
 
-# IDE
+# ─── IDE and editor ──────────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# OS
+# ─── OS ──────────────────────────────────────────────────────────────────────
 .DS_Store
-nimcache/
 Thumbs.db
-*.a
-*.dylib
-/*.dylib.DSYM
 
-# Test artifacts
+# ─── Test artifacts ──────────────────────────────────────────────────────────
 test_glob/
 *.test
 coverage/
 build.log
 
-# Generated documentation
+# ─── Generated documentation ─────────────────────────────────────────────────
 docs/api/
 *.html
 
-# Python
+# ─── Python ──────────────────────────────────────────────────────────────────
 __pycache__/
 *.pyc
 *.pyo
@@ -46,6 +48,26 @@ __pycache__/
 dist/
 build/
 
-# Node
+# ─── Node ────────────────────────────────────────────────────────────────────
 node_modules/
 package-lock.json
+
+# ─── Example project outputs ─────────────────────────────────────────────────
+# Examples are demonstrations, not builds we ship. A few of these artifacts
+# were committed before this section existed and remain tracked; these rules
+# stop new ones from accumulating.
+examples/**/bin/
+examples/**/build/
+examples/**/elm-stuff/
+examples/**/*.hi
+examples/**/*.cmi
+examples/**/*.cmo
+examples/**/*.cmx
+
+# ─── Packaging ───────────────────────────────────────────────────────────────
+distribution/cratesio/target/
+
+# Built LSP servers are release upload artifacts, not sources. The README
+# describing the layout stays tracked.
+distribution/lsp/binaries/*
+!distribution/lsp/binaries/README.md

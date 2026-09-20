@@ -1,0 +1,73 @@
+; bldr — editor and formatter defaults
+; `make fmt` runs `dfmt -i`, and dfmt reads its dfmt_* settings from this file.
+; Values below describe the tree as it is today; changing one reformats the repo.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.d]
+max_line_length = 120
+dfmt_brace_style = allman
+dfmt_soft_max_line_length = 100
+dfmt_keep_line_breaks = true
+dfmt_space_after_cast = false
+dfmt_selective_import_space = true
+dfmt_split_operator_at_line_end = false
+dfmt_compact_labeled_statements = true
+dfmt_template_constraint_style = conditional_newline_indent
+
+[*.{c,h}]
+max_line_length = 100
+
+; The vendored BLAKE3 port keeps upstream's two-space style so diffs against
+; BLAKE3-team/BLAKE3 stay readable. See NOTICE.
+[source/infrastructure/utils/crypto/c/blake3*.{c,h}]
+indent_size = 2
+
+[*.{json,js,jsx,ts,tsx,css,html,yml,yaml,proto}]
+indent_size = 2
+
+; dub manifests are four-space throughout, unlike the rest of the JSON.
+[**/dub.json]
+indent_size = 4
+
+; gofmt emits tabs and is not configurable.
+[*.go]
+indent_style = tab
+
+[*.rb]
+indent_size = 2
+
+[*.{py,rs,toml}]
+indent_size = 4
+
+[*.sh]
+indent_size = 4
+
+[*.md]
+; Two trailing spaces are a hard line break in Markdown.
+trim_trailing_whitespace = false
+
+[{Makefile,makefile,*.mk,Makefile.*}]
+indent_style = tab
+
+[*.{bat,cmd,ps1}]
+end_of_line = crlf
+
+; Example projects follow their own ecosystems' conventions, and generated
+; API docs are not hand-edited. Leave both to their own tooling.
+[examples/**]
+indent_size = unset
+max_line_length = unset
+
+[docs/api/**]
+indent_size = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset

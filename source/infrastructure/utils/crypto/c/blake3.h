@@ -1,5 +1,18 @@
-/* BLAKE3 C API - Header */
-/* Based on official BLAKE3 implementation: https://github.com/BLAKE3-team/BLAKE3 */
+/* BLAKE3 C API - Header
+ *
+ * Ported from the official BLAKE3 reference implementation:
+ *   https://github.com/BLAKE3-team/BLAKE3
+ *
+ * Copyright (c) 2019-2020 Jack O'Connor, Jean-Philippe Aumasson,
+ *                         Samuel Neves, Zooko Wilcox-O'Hearn
+ *
+ * Upstream is triple-licensed; bldr redistributes under CC0-1.0:
+ *   CC0-1.0 OR Apache-2.0 OR Apache-2.0 WITH LLVM-exception
+ *
+ * This file is third-party code. The surrounding project is under the
+ * Griffin License v1.0, which does not apply here. See NOTICE at the
+ * repository root.
+ */
 
 #ifndef BLAKE3_H
 #define BLAKE3_H

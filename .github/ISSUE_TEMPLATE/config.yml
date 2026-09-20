@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or idea
+    url: https://github.com/GriffinCanCode/bldr/discussions
+    about: Usage questions and open-ended design discussion belong in Discussions.
+  - name: Security vulnerability
+    url: https://github.com/GriffinCanCode/bldr/security/advisories/new
+    about: Report privately. Never in a public issue.
+  - name: Documentation
+    url: https://github.com/GriffinCanCode/bldr/tree/master/docs
+    about: Architecture notes, the DSL specification, feature docs, and user guides.

@@ -1,0 +1,17 @@
+# Vendored BLAKE3 port — see NOTICE.
+#
+# Upstream (BLAKE3-team/BLAKE3) formats at two spaces. Keeping that here means
+# a diff against upstream shows real changes instead of reindentation. The
+# repository style lives in the root .clang-format; do not inherit it.
+
+Language: Cpp
+BasedOnStyle: LLVM
+
+IndentWidth: 2
+TabWidth: 2
+UseTab: Never
+ColumnLimit: 80
+
+BreakBeforeBraces: Attach
+PointerAlignment: Right
+SortIncludes: Never

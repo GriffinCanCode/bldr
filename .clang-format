@@ -1,0 +1,50 @@
+# bldr — C formatting for the hand-written SIMD, crypto, and serialization
+# sources under source/infrastructure/utils/*/c/.
+#
+# Tuned to fit the existing tree rather than to impose a new house style: of
+# the plausible settings combinations, this one produces the smallest diff
+# against what is already checked in.
+#
+# The C sources have never been machine-formatted and are not internally
+# consistent (guard clauses are one line in gear_simd.c and two in
+# bloom_simd.c), so running clang-format over them still rewrites roughly a
+# tenth of the lines. That is why `make fmt` does not invoke it — use the
+# explicit `make fmt-c` target so the reformat lands as its own commit
+# instead of inside someone's feature diff.
+#
+# The vendored BLAKE3 port has its own .clang-format beside it and is excluded
+# from `make fmt-c`.
+
+Language: Cpp
+BasedOnStyle: LLVM
+
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 100
+
+BreakBeforeBraces: Attach
+PointerAlignment: Left
+DerivePointerAlignment: false
+
+# Long intrinsic calls break after the open paren and then pack arguments,
+# rather than putting one argument per line.
+AlignAfterOpenBracket: AlwaysBreak
+BinPackArguments: true
+BinPackParameters: true
+
+AlignEscapedNewlines: Left
+AlignTrailingComments: true
+SpacesBeforeTrailingComments: 2
+
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: Inline
+
+IndentCaseLabels: true
+IndentPPDirectives: None
+SpaceAfterCStyleCast: false
+
+SortIncludes: Never
+MaxEmptyLinesToKeep: 1

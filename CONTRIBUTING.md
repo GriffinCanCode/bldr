@@ -179,11 +179,17 @@ Builder/
    - **Private Members**: Prefix with `_` (e.g., `_privateField`)
 
 5. **Code Style**
+
+   Settings live in `.editorconfig`, which `dfmt` reads — `make fmt` applies
+   them, so you should not have to format by hand.
+
    ```d
    // Use 4 spaces for indentation (no tabs)
-   // Opening braces on same line
-   void function() {
-       if (condition) {
+   // Allman braces: opening brace on its own line
+   void function()
+   {
+       if (condition)
+       {
            doSomething();
        }
    }

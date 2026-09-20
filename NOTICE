@@ -1,0 +1,185 @@
+================================================================================
+                          bldr — THIRD-PARTY NOTICES
+================================================================================
+
+bldr is distributed under the Griffin License v1.0 (see LICENSE). That license
+covers the original work only. The components below are the work of others,
+carry their own terms, and are listed here so that anyone redistributing bldr
+knows what they are also redistributing.
+
+Three categories, and the distinction matters legally:
+
+  VENDORED   Third-party source that lives in this repository and ships in the
+             tarball. Their licenses travel with this repository.
+  LINKED     Libraries bldr links against but does not redistribute. The user
+             installs these; their licenses apply to the user's binary.
+  DERIVED    Original bldr code implementing a published algorithm or wire
+             format. No third-party code was copied, but credit is owed.
+
+================================================================================
+VENDORED
+================================================================================
+
+--------------------------------------------------------------------------------
+BLAKE3 — portable reference port
+--------------------------------------------------------------------------------
+Upstream:  https://github.com/BLAKE3-team/BLAKE3
+Authors:   Jack O'Connor, Jean-Philippe Aumasson, Samuel Neves, Zooko
+           Wilcox-O'Hearn
+License:   CC0-1.0 OR Apache-2.0 OR Apache-2.0 WITH LLVM-exception
+           (upstream is triple-licensed; any one may be chosen)
+
+Files:
+  source/infrastructure/utils/crypto/c/blake3.c
+  source/infrastructure/utils/crypto/c/blake3.h
+  source/infrastructure/utils/crypto/c/blake3_impl.h
+
+These are a port of upstream's portable C implementation. Upstream's two-space
+formatting is preserved deliberately so that diffs against BLAKE3-team/BLAKE3
+show behavioral changes rather than reindentation; see the .clang-format beside
+them.
+
+--------------------------------------------------------------------------------
+Bazel Remote Execution API (REAPI) v2 — wire-compatible protocol definitions
+--------------------------------------------------------------------------------
+Upstream:  https://github.com/bazelbuild/remote-apis
+Copyright: The Bazel Authors
+License:   Apache-2.0
+
+Files:
+  source/engine/distributed/protocol/proto/reapi_compat.proto
+
+Declares `package build.bazel.remote.execution.v2` and the upstream
+`go_package` option because wire and namespace compatibility is the entire
+point: it lets bldr talk to existing RE infrastructure (BuildBuddy, BuildBarn,
+and similar). Message shapes follow the upstream schema. bldr substitutes
+BLAKE3 where REAPI conventionally uses SHA-256.
+
+================================================================================
+LINKED
+================================================================================
+
+These are declared in dub.json under `libs` and resolved from the host system
+at link time. bldr does not redistribute them.
+
+--------------------------------------------------------------------------------
+tree-sitter                                                       License: MIT
+--------------------------------------------------------------------------------
+https://github.com/tree-sitter/tree-sitter — Copyright (c) 2018 Max Brunsfeld
+
+Incremental parsing library backing bldr's AST-level dependency analysis.
+
+Language grammars are NOT vendored. `build-grammars.sh` clones each grammar
+repository at build time, so each grammar's own license applies to the artifact
+produced on the build machine, not to this repository. The grammars bldr knows
+how to build:
+
+  tree-sitter/*                c, c-sharp, cpp, css, go, haskell, java,
+                               javascript, ocaml, php, python, ruby, rust,
+                               scala, swift, typescript
+  Azganoth/, tree-sitter-grammars/   lua
+  Nsidorenco/                  fsharp
+  alaviss/                     nim
+  elixir-lang/                 elixir
+  elm-tooling/                 elm
+  fwcd/                        kotlin
+  gdamore/                     d
+  maxxnino/                    zig
+  r-lib/                       r
+  tree-sitter-perl/            perl
+  yusdacra/                    protobuf
+
+Canonical URLs live in source/infrastructure/parsing/treesitter/grammars/.
+
+--------------------------------------------------------------------------------
+SQLite                                              License: Public domain
+--------------------------------------------------------------------------------
+https://www.sqlite.org — D. Richard Hipp and contributors
+
+Backs the cache index, blob index, and graph persistence layers. SQLite is
+dedicated to the public domain; no attribution is required. It is recorded here
+for completeness of the dependency inventory.
+
+--------------------------------------------------------------------------------
+Zstandard (libzstd)                       License: BSD-3-Clause OR GPL-2.0-only
+--------------------------------------------------------------------------------
+https://github.com/facebook/zstd — Copyright (c) Meta Platforms, Inc.
+
+Reached through FFI bindings for artifact, CAS, gRPC, and checkpoint
+compression, including the shared-dictionary path. Upstream is dual-licensed;
+bldr relies on the BSD-3-Clause grant.
+
+--------------------------------------------------------------------------------
+LZ4 (liblz4)                                            License: BSD-2-Clause
+--------------------------------------------------------------------------------
+https://github.com/lz4/lz4 — Copyright (c) Yann Collet
+
+Reached through FFI bindings for fast-path compression. The library itself is
+BSD-2-Clause; upstream's command-line programs are GPL-2.0 and are not used.
+
+================================================================================
+DERIVED — published algorithms, independently implemented
+================================================================================
+
+No third-party code was copied for any of the following. Each is bldr's own
+implementation of a published design, credited to its authors.
+
+BLAKE3 SIMD kernels
+  source/infrastructure/utils/simd/c/blake3_{avx2,avx512,sse2,sse41,neon}.c
+  source/infrastructure/utils/simd/c/blake3_dispatch.c
+  Written against the BLAKE3 specification (O'Connor, Aumasson, Neves,
+  Wilcox-O'Hearn, 2020) rather than transliterated from upstream's kernels.
+  The IV and message-schedule constants are from the specification.
+  https://github.com/BLAKE3-team/BLAKE3-specs
+
+Chase-Lev work-stealing deque
+  source/infrastructure/utils/concurrency/deque.d
+  Chase, D. and Lev, Y. "Dynamic Circular Work-Stealing Deque." SPAA 2005.
+  Memory ordering follows Lê, N. M., Pop, A., Cohen, A., and Zappa Nardelli, F.
+  "Correct and Efficient Work-Stealing for Weak Memory Models." PPoPP 2013.
+
+FastCDC content-defined chunking / Gear rolling hash
+  source/infrastructure/utils/files/cdc.d
+  source/infrastructure/utils/simd/gear.d
+  Xia, W. et al. "FastCDC: A Fast and Efficient Content-Defined Chunking
+  Approach for Data Deduplication." USENIX ATC 2016.
+
+Jump consistent hashing
+  source/engine/distributed/coordinator/hash.d
+  Lamping, J. and Veach, E. "A Fast, Minimal Memory, Consistent Hash
+  Algorithm." Google, 2014. arXiv:1406.2294
+
+Bloom filters
+  source/infrastructure/utils/simd/c/bloom.c, bloom_simd.c
+  Bloom, B. H. "Space/Time Trade-offs in Hash Coding with Allowable Errors."
+  CACM 13(7), 1970.
+
+Merkle trees
+  source/infrastructure/utils/crypto/merkle.d
+  Merkle, R. C. "A Digital Signature Based on a Conventional Encryption
+  Function." CRYPTO 1987.
+
+================================================================================
+DESIGN INFLUENCE
+================================================================================
+
+No code or specification is shared with these projects. They shaped bldr's
+design and are named because the resemblance is deliberate, not accidental.
+
+  Bazel        Toolchain resolution model; `bldr query` follows Bazel's query
+               language so existing queries transfer. Target label syntax
+               (//path/to:target) is Bazel's.
+  Rust         Target triple format used by the cross-compilation layer.
+  LLVM         Platform and target abstractions.
+  Zig          Cross-compilation model — toolchains as data, not as a
+               separately installed cross-compiler per target.
+  Buck2        Dynamic build graphs, where actions discover dependencies at
+               runtime instead of requiring a code-generation pass.
+
+Further detail: source/infrastructure/toolchain/README.md
+
+================================================================================
+
+Corrections and omissions: please open an issue at
+https://github.com/GriffinCanCode/bldr/issues — an attribution gap is treated
+as a bug.

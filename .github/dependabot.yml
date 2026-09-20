@@ -1,0 +1,31 @@
+# D dependencies are not covered: dub.json declares no dub packages, and every
+# native library (tree-sitter, sqlite3, zstd, lz4) is linked from the host
+# rather than pinned here. See NOTICE.
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore"
+
+  # VS Code extension — the only real npm surface in the repository.
+  - package-ecosystem: npm
+    directory: /tools/vscode/builder-lang
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore"
+    groups:
+      dev-dependencies:
+        dependency-type: development
+
+  # crates.io publishing shim.
+  - package-ecosystem: cargo
+    directory: /distribution/cratesio
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore"

@@ -1,6 +1,15 @@
 // Bazel Remote Execution API (REAPI) compatibility definitions
 // Wire-compatible with build.bazel.remote.execution.v2
 // Enables Builder to work with existing RE infrastructure (BuildBuddy, BuildBarn, etc.)
+//
+// Schema derived from https://github.com/bazelbuild/remote-apis
+// Copyright The Bazel Authors. Licensed under the Apache License, Version 2.0:
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// The package and go_package names below intentionally match upstream: wire and
+// namespace compatibility is what lets bldr speak to existing RE services.
+// This file is third-party-derived; the Griffin License v1.0 covering the rest
+// of the repository does not apply to it. See NOTICE at the repository root.
 
 syntax = "proto3";
 

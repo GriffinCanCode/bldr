@@ -1,0 +1,105 @@
+name: Bug report
+description: Something builds wrong, crashes, or behaves differently than documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If this is a security vulnerability, stop and use
+        [Security Advisories](https://github.com/GriffinCanCode/bldr/security/advisories/new)
+        instead.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happens
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: >
+        The smallest project that shows the problem. A `Builderfile` and the
+        command you ran is usually enough.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: >
+        Relevant log output or the error message. `bldr build --verbose` gives
+        more detail, and `bldr explain` covers the built-in topics if the error
+        points at one.
+      render: shell
+
+  - type: input
+    id: version
+    attributes:
+      label: bldr version
+      description: Output of `bldr --version`
+      placeholder: "bldr version 2.0.3"
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: OS and architecture
+      placeholder: "macOS 15.2 arm64 / Ubuntu 24.04 x86_64"
+    validations:
+      required: true
+
+  - type: input
+    id: compiler
+    attributes:
+      label: D compiler
+      description: Which compiler built bldr, and its version
+      placeholder: "ldc2 1.40.0"
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Where you think the problem lives. Guessing is fine.
+      options:
+        - Build execution / scheduling
+        - Caching (target, action, or distributed)
+        - Builderfile DSL / parsing
+        - A specific language handler
+        - Dependency discovery / analysis
+        - Sandboxing / hermeticity
+        - LSP or VS Code extension
+        - Query (bldrquery)
+        - Migration from another build system
+        - Not sure
+
+  - type: input
+    id: language
+    attributes:
+      label: Language
+      description: If a specific language handler is involved, which one
+      placeholder: "C++, Rust, Go, …"
+
+  - type: dropdown
+    id: regression
+    attributes:
+      label: Did this work before?
+      options:
+        - Never worked
+        - Worked in an earlier version
+        - Not sure
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before filing
+      options:
+        - label: I searched existing issues
+          required: true
+        - label: I can reproduce this after `bldr clean` (or `make clean`)

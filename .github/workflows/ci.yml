@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build · ${{ matrix.os }} · ${{ matrix.compiler }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            compiler: ldc-latest
+          - os: macos-latest
+            compiler: ldc-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # tree-sitter, sqlite3, zstd and lz4 are linked from the host, not
+      # vendored — see the `libs` array in dub.json and NOTICE.
+      - name: Install system libraries (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libtree-sitter-dev libsqlite3-dev libzstd-dev liblz4-dev
+
+      - name: Install system libraries (macOS)
+        if: runner.os == 'macOS'
+        run: brew install tree-sitter zstd lz4
+
+      - uses: dlang-community/setup-dlang@v2
+        with:
+          compiler: ${{ matrix.compiler }}
+
+      - name: Cache dub packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.dub
+          key: dub-${{ matrix.os }}-${{ hashFiles('dub.json') }}
+          restore-keys: dub-${{ matrix.os }}-
+
+      # `make build` runs build-c first: the SIMD, BLAKE3 and serialization
+      # objects in bin/obj are inputs to the D link, so they cannot be skipped.
+      - name: Build
+        run: make build
+
+      - name: Build LSP server
+        run: make build-lsp
+
+      - name: Smoke test the binary
+        run: |
+          ./bin/bldr --version
+          ./bin/bldr --help
+
+  test:
+    name: test · ubuntu-latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libtree-sitter-dev libsqlite3-dev libzstd-dev liblz4-dev
+
+      - uses: dlang-community/setup-dlang@v2
+        with:
+          compiler: ldc-latest
+
+      - name: Cache dub packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.dub
+          key: dub-test-ubuntu-${{ hashFiles('dub.json') }}
+          restore-keys: dub-test-ubuntu-
+
+      - name: Build C libraries
+        run: make build-c
+
+      - name: Run tests
+        run: dub test
+
+  format:
+    name: format · dfmt
+    runs-on: ubuntu-latest
+    # Non-blocking on purpose. `.editorconfig` was written to describe the tree
+    # as it already is, but it has never been enforced, so some drift is
+    # expected. Run `make fmt`, commit the result, then delete this line to
+    # turn formatting into a hard gate.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dlang-community/setup-dlang@v2
+        with:
+          compiler: ldc-latest
+
+      - name: Check D formatting
+        run: |
+          dub fetch dfmt
+          dub run dfmt -- --inplace source tests
+          git diff --exit-code --stat -- source tests
+
+  lint:
+    name: lint · shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ShellCheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends shellcheck
+          # Examples ship intentionally minimal scripts; lint our own tooling.
+          find tools tests -name '*.sh' -print0 | xargs -0 -r shellcheck --severity=error

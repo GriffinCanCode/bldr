@@ -1,6 +1,6 @@
 # Builder Makefile
 
-.PHONY: all build build-c build-lsp lsp test tests examples clean install install-lsp help tsan test-tsan extension ext ext-full
+.PHONY: all build build-c build-lsp lsp test tests examples clean install install-lsp help tsan test-tsan extension ext ext-full fmt fmt-c
 
 all: build
 
@@ -120,10 +120,25 @@ test-tsan:
 	@echo "Note: This will detect data races and threading issues"
 	@./tools/run-tsan-tests.sh
 
-# Format code
+# Format D code (style lives in .editorconfig, which dfmt reads)
 fmt:
 	@echo "Formatting code..."
 	@find source tests -name "*.d" -exec dfmt -i {} \;
+
+# Format C code (style lives in .clang-format)
+# Kept separate from `fmt` on purpose: the C sources have never been
+# machine-formatted, so the first run rewrites a large fraction of them. Run
+# this deliberately and commit it on its own. The vendored BLAKE3 port is
+# excluded so diffs against upstream stay readable — see NOTICE.
+fmt-c:
+	@if clang-format --version >/dev/null 2>&1; then \
+		echo "Formatting C sources..."; \
+		find source \( -name "*.c" -o -name "*.h" \) \
+			-not -path "*/crypto/c/blake3*" -print0 | xargs -0 clang-format -i; \
+	else \
+		echo "clang-format not found; install LLVM to format C sources"; \
+		exit 1; \
+	fi
 
 # Generate documentation
 docs:
@@ -207,7 +222,8 @@ help:
 	@echo "  make ext-full          - Full extension build with LSP server"
 	@echo "  make extension         - Package VS Code extension with LSP"
 	@echo "  make install-extension - Build and install VS Code extension"
-	@echo "  make fmt               - Format code"
+	@echo "  make fmt               - Format D code"
+	@echo "  make fmt-c             - Format C code (large first-run diff)"
 	@echo "  make docs              - Generate DDoc documentation"
 	@echo "  make docs-open         - Generate and open documentation"
 	@echo "  make docs-serve        - Serve documentation on localhost:8000"

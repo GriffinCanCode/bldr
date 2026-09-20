@@ -1,0 +1,18 @@
+# Every path falls through to the default owner unless a later rule overrides.
+# Last matching rule wins, so order matters.
+
+*                                               @GriffinCanCode
+
+# Third-party code. Changes here are license-relevant: edits must stay
+# consistent with NOTICE, and reformatting the vendored BLAKE3 port destroys
+# the diff against upstream.
+/NOTICE                                         @GriffinCanCode
+/LICENSE                                        @GriffinCanCode
+/source/infrastructure/utils/crypto/c/          @GriffinCanCode
+/source/engine/distributed/protocol/proto/      @GriffinCanCode
+
+# Build, packaging and CI plumbing.
+/Makefile                                       @GriffinCanCode
+/dub.json                                       @GriffinCanCode
+/.github/                                       @GriffinCanCode
+/distribution/                                  @GriffinCanCode
