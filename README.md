@@ -1,8 +1,8 @@
 # bldr
 
-High-performance build system for polyglot monorepos. Runtime dependency discovery, lock-free parallel execution, incremental compilation. Built in D.
+This is my personal high-performance build system for the polyglot monorepos I frequently torture myself with. Featuring: runtime dependency discovery, lock-free parallel execution, incremental compilation; built entirely in D because it was fun to do.  
 
-## Key Features
+## Stuff I Wasted Time Doing During My Last Job:
 
 - **Dynamic Build Graphs** — Actions discover dependencies at runtime, eliminating code generation friction
 - **32 Language Handlers** — C/C++, Rust, Go, D, Zig, Python, TypeScript, Java, Kotlin, Scala, and more
@@ -13,6 +13,8 @@ High-performance build system for polyglot monorepos. Runtime dependency discove
 - **Query Language** — Bazel-compatible `bldrquery` for dependency exploration
 - **Migration Tools** — Import from Bazel, CMake, Maven, Gradle, Cargo, npm, and more
 
+
+
 ## Installation
 
 ```bash
@@ -22,6 +24,8 @@ brew install ldc dub && git clone https://github.com/GriffinCanCode/bldr.git && 
 # Linux  
 sudo apt install ldc dub && git clone https://github.com/GriffinCanCode/bldr.git && cd bldr && dub build --build=release
 ```
+
+
 
 ## Quick Start
 
@@ -37,6 +41,8 @@ bldr migrate --auto CMakeLists.txt     # Migrate from other build systems
 bldr explain list                      # Built-in documentation topics
 bldr explain testing                   # Read one topic
 ```
+
+
 
 ## Builderfile Example
 
@@ -75,15 +81,7 @@ Save this as `Builderfile` in the project root.
 - [User Guides](docs/user-guides/)
 - [Examples](examples/)
 
-## Status
-
-| Component | Status |
-|-----------|--------|
-| Core Engine | ✅ Production |
-| Language Handlers | ✅ Production |
-| LSP / VS Code | ✅ Production |
-| Distributed Execution | ⚠️ Beta |
-| Plugin System | ⚠️ Beta |
+*Do not speak to me about the website, I vibe-coded it overnight, but it's fun to look at.*
 
 ## License
 
