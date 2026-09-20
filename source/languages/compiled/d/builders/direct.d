@@ -16,6 +16,7 @@ import infrastructure.utils.files.hash;
 import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
 import engine.linking.incremental;
+import languages.base.linking : LinkClosure, linkClosure, dLinkArgs;
 
 /// Direct compiler invocation builder (dmd/ldc/gdc) with action-level caching and incremental linking
 class DirectCompilerBuilder : DBuilder
@@ -25,6 +26,8 @@ class DirectCompilerBuilder : DBuilder
     private ActionCache actionCache;
     private IncrementalLinker incLinker;
     private bool useIncrementalLink;
+    /// Libraries reachable through this target's `deps`, in link order
+    private LinkClosure depLinks;
     
     this(DConfig config, ActionCache cache = null, bool enableIncrementalLink = true) @system
     {
@@ -87,15 +90,35 @@ class DirectCompilerBuilder : DBuilder
         if (!config.compilerConfig.importPaths.empty)
             metadata["importPaths"] = config.compilerConfig.importPaths.join(",");
         
+        depLinks = linkClosure(target, workspace);
+        
+        // A predicted dependency artifact that is not on disk is skipped
+        // rather than handed to the compiler: `deps` meant build order only
+        // until now, so a target this builder cannot resolve has to keep
+        // building as it did before. The warning is the diagnostic.
+        foreach (missing; depLinks.absent)
+            structuredLog.warning("d_dep_link_artifact_missing")
+                .field("target", target.name)
+                .field("dependency", missing)
+                .emit();
+        
+        auto depArgs = dLinkArgs(depLinks);
+        metadata["depLibs"] = depArgs.join(" ");
+        
+        // The D compilers compile and link in one invocation, so the
+        // dependency archives are inputs to it as much as the sources are;
+        // otherwise a rebuilt dependency hides behind a cache hit.
+        auto inputs = sources.dup ~ depLinks.artifacts();
+        
         // Create action ID for this compilation
         ActionId actionId;
         actionId.targetId = target.name;
         actionId.type = ActionType.Compile;
         actionId.subId = "full_compile";
-        actionId.inputHash = FastHash.hashStrings(sources.dup);
+        actionId.inputHash = FastHash.hashStrings(inputs);
         
         // Check if this compilation is cached
-        if (actionCache.isCached(actionId, sources, metadata) && exists(outputPath))
+        if (actionCache.isCached(actionId, inputs, metadata) && exists(outputPath))
         {
             structuredLog.debug_("__cached_d_compilation_").field("detail", "  [Cached] D compilation: " ~ outputPath).emit();
             result.success = true;
@@ -106,6 +129,12 @@ class DirectCompilerBuilder : DBuilder
         
         // Build command based on compiler
         string[] cmd = buildCompilerCommand(sources, outputPath, config);
+        
+        // Dependencies follow the source files, so that the linker has seen
+        // every symbol reference before it reads the archive that defines it.
+        cmd ~= depArgs;
+        foreach (dir; depLinks.includeDirs())
+            cmd ~= "-I" ~ dir;
         
         structuredLog.debug_("compiler_command_").field("detail", "Compiler command: " ~ cmd.join(" ")).emit();
         
@@ -131,7 +160,7 @@ class DirectCompilerBuilder : DBuilder
             // Update cache with failure
             actionCache.update(
                 actionId,
-                sources,
+                inputs,
                 [],
                 metadata,
                 false
@@ -151,7 +180,7 @@ class DirectCompilerBuilder : DBuilder
             // Update cache with failure
             actionCache.update(
                 actionId,
-                sources,
+                inputs,
                 [],
                 metadata,
                 false
@@ -166,7 +195,7 @@ class DirectCompilerBuilder : DBuilder
         // Update cache with success
         actionCache.update(
             actionId,
-            sources,
+            inputs,
             [outputPath],
             metadata,
             true

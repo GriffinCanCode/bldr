@@ -355,7 +355,10 @@ private WarningLevel parseWarningLevel(string s)
     }
 }
 
-private OutputType parseOutputType(string s)
+/// Parse an `outputType` value from a language block.
+/// Shared with `languages.base.linking`, which has to classify a dependency's
+/// output the same way the dependency's own handler will.
+OutputType parseOutputType(string s)
 {
     switch (s.toLower)
     {

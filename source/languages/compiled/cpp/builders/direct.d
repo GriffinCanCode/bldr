@@ -20,6 +20,7 @@ import infrastructure.utils.logging;
 import engine.caching.actions.action : ActionCache, ActionCacheConfig, ActionId, ActionType;
 import engine.caching.modules.bmi : BMICache, BMICacheConfig;
 import engine.linking.incremental;
+import languages.base.linking;
 
 /// Direct compiler builder - compiles without external build system with action-level caching and incremental linking
 class DirectBuilder : BaseCppBuilder
@@ -30,6 +31,8 @@ class DirectBuilder : BaseCppBuilder
     private ModuleBuilder moduleBuilder;
     private IncrementalLinker incLinker;
     private bool useIncrementalLink;
+    /// Libraries reachable through this target's `deps`, in link order
+    private LinkClosure depLinks;
     
     this(CppConfig config, ActionCache cache = null, BMICache bmiCacheParam = null, bool enableIncrementalLink = true) @system
     {
@@ -129,6 +132,9 @@ class DirectBuilder : BaseCppBuilder
         }
         
         structuredLog.debug_("direct_compilation_with_").field("detail", "Direct compilation with " ~ toolchain.name ~ " v" ~ compiler.version_.toString()).emit();
+        
+        depLinks = linkClosure(target, workspace);
+        reportDepLinks(target);
         
         // Separate C, C++, and module files
         string[] cppFiles;
@@ -305,6 +311,34 @@ class DirectBuilder : BaseCppBuilder
         }
     }
     
+    /// Report what `deps` contributed to the link line.
+    ///
+    /// A predicted artifact that is not on disk is skipped rather than passed
+    /// to the linker: `deps` meant build-order only for every release up to
+    /// now, so a target whose dependency this builder cannot locate has to
+    /// keep building exactly as it did before. The warning is the diagnostic —
+    /// without it the failure mode is an undefined symbol with no stated cause.
+    private void reportDepLinks(in Target target) @system
+    {
+        if (!depLinks.empty)
+            structuredLog.debug_("cpp_dep_link_closure")
+                .field("target", target.name)
+                .field("libraries", depLinks.artifacts().join(" "))
+                .emit();
+        
+        foreach (label; depLinks.unresolved)
+            structuredLog.debug_("cpp_dep_link_unresolved")
+                .field("target", target.name)
+                .field("dep", label)
+                .emit();
+        
+        foreach (missing; depLinks.absent)
+            structuredLog.warning("cpp_dep_link_artifact_missing")
+                .field("target", target.name)
+                .field("dependency", missing)
+                .emit();
+    }
+    
     /// Get BMI cache for C++20 modules
     BMICache getBMICache() @safe => bmiCache;
     
@@ -346,6 +380,11 @@ class DirectBuilder : BaseCppBuilder
         }
         
         auto flags = buildCompilerFlags(config, isCpp);
+        
+        // A library dependency's headers have to be reachable from the
+        // dependent's sources, or it links against symbols it cannot declare.
+        foreach (dir; depLinks.includeDirs())
+            flags ~= "-I" ~ dir;
         
         // Build metadata for cache validation
         string[string] metadata;
@@ -489,6 +528,9 @@ class DirectBuilder : BaseCppBuilder
         
         // A static library is archived, not linked: driving it through the
         // linker looks for an entry point and fails with an undefined _main.
+        // Its own dependencies are deliberately not folded in either — an
+        // archive cannot record them, so the transitive closure reaches the
+        // final binary instead, which is where they can actually be resolved.
         if (config.outputType == OutputType.StaticLib)
             return archiveObjects(objects, outputFile, target);
         
@@ -515,27 +557,40 @@ class DirectBuilder : BaseCppBuilder
         
         auto linkerFlags = buildLinkerFlags(config);
         string linkerFlagsStr = linkerFlags.join(" ");
+        auto depArgs = cFamilyLinkArgs(depLinks);
+        
+        // The link depends on every dependency archive as much as on the
+        // objects, so both feed cache validation; otherwise a rebuilt
+        // dependency leaves a stale binary behind a cache hit.
+        auto linkInputs = objects ~ depLinks.artifacts();
         
         string[string] metadata;
         metadata["linker"] = linker;
         metadata["linkerFlags"] = linkerFlagsStr;
+        metadata["depLibs"] = depArgs.join(" ");
         metadata["isCpp"] = isCpp.to!string;
         
         ActionId actionId;
         actionId.targetId = target.name;
         actionId.type = ActionType.Link;
         actionId.subId = baseName(outputFile);
-        actionId.inputHash = FastHash.hashStrings(objects);
+        actionId.inputHash = FastHash.hashStrings(linkInputs);
         
-        if (actionCache.isCached(actionId, objects, metadata) && exists(outputFile))
+        if (actionCache.isCached(actionId, linkInputs, metadata) && exists(outputFile))
         {
             structuredLog.debug_("__cached_linking_").field("detail", "  [Cached] Linking: " ~ outputFile).emit();
             result.success = true;
             return result;
         }
         
+        // The incremental linker decides from the object set alone, so the
+        // dependency fingerprint rides along in its flag key — a changed
+        // archive under unchanged objects still forces a full relink.
+        string linkKey = linkerFlagsStr ~ " " ~ depArgs.join(" ") ~ " " ~ depLinks.fingerprint();
+        auto linkLibs = config.libs ~ depLinks.libNames();
+        
         // Analyze for incremental linking opportunity
-        auto linkAnalysis = incLinker.analyze(outputFile, objects, config.libs, linkerFlagsStr);
+        auto linkAnalysis = incLinker.analyze(outputFile, objects, linkLibs, linkKey);
         bool doIncremental = useIncrementalLink && linkAnalysis.canIncrementalLink();
         
         if (doIncremental)
@@ -561,6 +616,13 @@ class DirectBuilder : BaseCppBuilder
             cmd ~= incLinker.getLinkerFlags(linkAnalysis);
         
         cmd ~= objects;
+        
+        // Dependencies go after this target's own objects and before the
+        // declared libraries: the linker resolves left to right, so a symbol
+        // must be needed before the archive that defines it is read, and a
+        // dependency may in turn need a library declared on this target.
+        cmd ~= depArgs;
+        
         cmd ~= linkerFlags;
         
         // Add library paths and libraries
@@ -579,7 +641,7 @@ class DirectBuilder : BaseCppBuilder
         if (res.status != 0)
         {
             result.error = "Linking failed: " ~ res.output;
-            actionCache.update(actionId, objects, [], metadata, false);
+            actionCache.update(actionId, linkInputs, [], metadata, false);
             incLinker.invalidate(outputFile);
             return result;
         }
@@ -591,8 +653,8 @@ class DirectBuilder : BaseCppBuilder
         }
         
         // Record successful link
-        actionCache.update(actionId, objects, [outputFile], metadata, true);
-        incLinker.recordLink(outputFile, objects, config.libs, linkerFlagsStr, doIncremental);
+        actionCache.update(actionId, linkInputs, [outputFile], metadata, true);
+        incLinker.recordLink(outputFile, objects, linkLibs, linkKey, doIncremental);
         
         result.success = true;
         return result;

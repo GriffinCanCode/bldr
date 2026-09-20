@@ -5,6 +5,9 @@ import std.string;
 import std.algorithm;
 import std.array;
 import std.conv;
+import languages.base.config : parseOutputType;
+import languages.base.linking : artifactFileName;
+import languages.base.types : NeutralOutputType = OutputType;
 
 /// C++ standard versions
 enum CppStandard
@@ -127,29 +130,38 @@ enum OutputType
     HeaderOnly
 }
 
-/// Platform-correct artifact file name for an output type
-/// Single definition so the handler and the builders cannot disagree about
-/// what a target's artifact is called.
-string defaultOutputName(string base, OutputType type) pure nothrow @safe
+/// Neutral view of the C++ output type, so that artifact naming and the
+/// dependency link closure share one vocabulary.
+NeutralOutputType toNeutral(OutputType type) pure nothrow @safe
 {
     final switch (type)
     {
-        case OutputType.Executable:
-            version(Windows) return base ~ ".exe";
-            else return base;
-        case OutputType.StaticLib:
-            version(Windows) return base ~ ".lib";
-            else return "lib" ~ base ~ ".a";
-        case OutputType.SharedLib:
-            version(Windows) return base ~ ".dll";
-            else version(OSX) return "lib" ~ base ~ ".dylib";
-            else return "lib" ~ base ~ ".so";
-        case OutputType.Object:
-            return base ~ ".o";
-        case OutputType.HeaderOnly:
-            return base;
+        case OutputType.Executable: return NeutralOutputType.Executable;
+        case OutputType.StaticLib:  return NeutralOutputType.StaticLib;
+        case OutputType.SharedLib:  return NeutralOutputType.SharedLib;
+        case OutputType.Object:     return NeutralOutputType.Object;
+        case OutputType.HeaderOnly: return NeutralOutputType.HeaderOnly;
     }
 }
+
+/// Inverse of `toNeutral`, for reading an `outputType` the DSL declares.
+OutputType fromNeutral(NeutralOutputType type) pure nothrow @safe
+{
+    final switch (type)
+    {
+        case NeutralOutputType.Executable: return OutputType.Executable;
+        case NeutralOutputType.StaticLib:  return OutputType.StaticLib;
+        case NeutralOutputType.SharedLib:  return OutputType.SharedLib;
+        case NeutralOutputType.Object:     return OutputType.Object;
+        case NeutralOutputType.HeaderOnly: return OutputType.HeaderOnly;
+    }
+}
+
+/// Platform-correct artifact file name for an output type
+/// Single definition so the handler, the builders, and the dependency link
+/// closure cannot disagree about what a target's artifact is called.
+string defaultOutputName(string base, OutputType type) pure nothrow @safe
+    => artifactFileName(base, toNeutral(type));
 
 /// Sanitizer options
 enum Sanitizer
@@ -850,6 +862,15 @@ struct CppConfig
         }
         if ("entry" in json) config.entry = json["entry"].str;
         if ("output" in json) config.output = json["output"].str;
+        
+        // Output type. A dependent's link line classifies this target from the
+        // same declaration, so a `shared` here has to actually produce a
+        // shared library rather than falling through to the static default.
+        if ("outputType" in json || "output_type" in json)
+        {
+            string key = "outputType" in json ? "outputType" : "output_type";
+            config.outputType = fromNeutral(parseOutputType(json[key].str));
+        }
         if ("objDir" in json || "obj_dir" in json)
         {
             string key = "objDir" in json ? "objDir" : "obj_dir";

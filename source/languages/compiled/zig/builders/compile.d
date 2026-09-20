@@ -17,6 +17,7 @@ import infrastructure.utils.files.hash;
 import infrastructure.utils.logging;
 import engine.caching.actions.action;
 import engine.linking.incremental;
+import languages.base.linking : LinkClosure, linkClosure, zigLinkArgs;
 
 /// Builder using direct zig compile commands with action-level caching and incremental linking
 class CompileBuilder : ZigBuilder
@@ -24,6 +25,8 @@ class CompileBuilder : ZigBuilder
     private ActionCache actionCache;
     private IncrementalLinker incLinker;
     private bool useIncrementalLink;
+    /// Libraries reachable through this target's `deps`, in link order
+    private LinkClosure depLinks;
     
     this(ActionCache cache = null, bool enableIncrementalLink = true) @system
     {
@@ -60,6 +63,18 @@ class CompileBuilder : ZigBuilder
             result.error = "No source files specified";
             return result;
         }
+        
+        depLinks = linkClosure(target, workspace);
+        
+        // A predicted dependency artifact that is not on disk is skipped
+        // rather than handed to the linker: `deps` meant build order only
+        // until now, so a target this builder cannot resolve has to keep
+        // building as it did before. The warning is the diagnostic.
+        foreach (missing; depLinks.absent)
+            structuredLog.warning("zig_dep_link_artifact_missing")
+                .field("target", target.name)
+                .field("dependency", missing)
+                .emit();
         
         // Determine entry point
         string entryPoint = config.entry.empty ? sources[0] : config.entry;
@@ -180,15 +195,21 @@ class CompileBuilder : ZigBuilder
         metadata["pic"] = config.pic.to!string;
         metadata["cflags"] = config.cflags.join(" ");
         
+        // This path compiles and links in one zig invocation, so the
+        // dependency archives are inputs to it as much as the sources are;
+        // otherwise a rebuilt dependency hides behind a cache hit.
+        auto inputs = sources ~ depLinks.artifacts();
+        metadata["depLibs"] = zigLinkArgs(depLinks).join(" ");
+        
         // Create action ID for compilation
         ActionId actionId;
         actionId.targetId = target.name;
         actionId.type = ActionType.Compile;
         actionId.subId = baseName(outputPath);
-        actionId.inputHash = FastHash.hashStrings(sources);
+        actionId.inputHash = FastHash.hashStrings(inputs);
         
         // Check if compilation is cached
-        if (actionCache.isCached(actionId, sources, metadata) && exists(outputPath))
+        if (actionCache.isCached(actionId, inputs, metadata) && exists(outputPath))
         {
             structuredLog.debug_("__cached_zig_compilation_").field("detail", "  [Cached] Zig compilation: " ~ outputPath).emit();
             result.success = true;
@@ -268,6 +289,13 @@ class CompileBuilder : ZigBuilder
         {
             cmd ~= "-mcpu=" ~ config.target.customFeatures;
         }
+        
+        // Dependencies come before the declared C libraries: the linker
+        // resolves archives in one left-to-right pass, and a dependency may
+        // itself need a library this target declares.
+        cmd ~= zigLinkArgs(depLinks);
+        foreach (dir; depLinks.includeDirs())
+            cmd ~= "-I" ~ dir;
         
         // Add C include directories
         foreach (inc; config.cIncludeDirs)
@@ -421,7 +449,7 @@ class CompileBuilder : ZigBuilder
             // Update cache with failure
             actionCache.update(
                 actionId,
-                sources,
+                inputs,
                 [],
                 metadata,
                 false
@@ -443,7 +471,7 @@ class CompileBuilder : ZigBuilder
         // Update cache with success
         actionCache.update(
             actionId,
-            sources,
+            inputs,
             [outputPath],
             metadata,
             true
@@ -653,22 +681,35 @@ class CompileBuilder : ZigBuilder
         metadata["lto"] = config.lto.to!string;
         metadata["sysLibs"] = config.sysLibs.join(" ");
         
+        auto depArgs = zigLinkArgs(depLinks);
+        metadata["depLibs"] = depArgs.join(" ");
+        
+        // The link depends on every dependency archive as much as on the
+        // objects, so both feed cache validation; otherwise a rebuilt
+        // dependency leaves a stale binary behind a cache hit.
+        auto linkInputs = objectFiles ~ depLinks.artifacts();
+        
         ActionId actionId;
         actionId.targetId = target.name;
         actionId.type = ActionType.Link;
         actionId.subId = baseName(outputPath);
-        actionId.inputHash = FastHash.hashStrings(objectFiles);
+        actionId.inputHash = FastHash.hashStrings(linkInputs);
         
         // Check action cache first
-        if (actionCache.isCached(actionId, objectFiles, metadata) && exists(outputPath))
+        if (actionCache.isCached(actionId, linkInputs, metadata) && exists(outputPath))
         {
             structuredLog.debug_("__cached_linking_").field("detail", "  [Cached] Linking: " ~ outputPath).emit();
             result.success = true;
             return result;
         }
         
+        // The incremental linker decides from the object set alone, so the
+        // dependency fingerprint rides along in its flag key — a changed
+        // archive under unchanged objects still forces a full relink.
+        string linkKey = depArgs.join(" ") ~ " " ~ depLinks.fingerprint();
+        
         // Analyze for incremental linking
-        auto linkAnalysis = incLinker.analyze(outputPath, objectFiles, config.sysLibs, "");
+        auto linkAnalysis = incLinker.analyze(outputPath, objectFiles, config.sysLibs ~ depLinks.libNames(), linkKey);
         bool doIncremental = useIncrementalLink && linkAnalysis.canIncrementalLink();
         
         if (doIncremental)
@@ -689,6 +730,12 @@ class CompileBuilder : ZigBuilder
         }
         
         cmd ~= objectFiles;
+        
+        // Dependencies go after this target's own objects: the linker
+        // resolves left to right, so a symbol must be needed before the
+        // archive that defines it is read.
+        cmd ~= depArgs;
+        
         cmd ~= ["-femit-bin=" ~ outputPath];
         
         if (config.target.isCross())
@@ -736,14 +783,14 @@ class CompileBuilder : ZigBuilder
         if (res.status != 0)
         {
             result.error = "Linking failed: " ~ res.output;
-            actionCache.update(actionId, objectFiles, [], metadata, false);
+            actionCache.update(actionId, linkInputs, [], metadata, false);
             incLinker.invalidate(outputPath);
             return result;
         }
         
         // Record successful link
-        actionCache.update(actionId, objectFiles, [outputPath], metadata, true);
-        incLinker.recordLink(outputPath, objectFiles, config.sysLibs, "", doIncremental);
+        actionCache.update(actionId, linkInputs, [outputPath], metadata, true);
+        incLinker.recordLink(outputPath, objectFiles, config.sysLibs ~ depLinks.libNames(), linkKey, doIncremental);
         
         result.success = true;
         return result;

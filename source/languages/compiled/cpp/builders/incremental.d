@@ -23,6 +23,7 @@ import infrastructure.analysis.ast.parser;
 import infrastructure.utils.files.hash;
 import infrastructure.utils.logging;
 import infrastructure.errors;
+import languages.base.linking;
 
 /// Incremental C++ builder with AST-level dependency tracking and incremental linking
 /// Only recompiles files/symbols affected by changes, uses platform-optimal linker
@@ -38,6 +39,8 @@ class IncrementalCppBuilder : BaseCppBuilder
     private CppDependencyAnalyzer analyzer;
     private bool useASTLevel;
     private bool useIncrementalLink;
+    /// Libraries reachable through this target's `deps`, in link order
+    private LinkClosure depLinks;
     
     this(CppConfig config, ActionCache actionCache = null, DependencyCache depCache = null, 
          bool enableASTLevel = true, bool enableIncrementalLink = true)
@@ -129,6 +132,18 @@ class IncrementalCppBuilder : BaseCppBuilder
         }
         
         structuredLog.info("incremental_c_compilation_with_").field("detail", "Incremental C++ compilation with " ~ toolchain.name).emit();
+        
+        depLinks = linkClosure(target, workspace);
+        
+        // A predicted dependency artifact that is not on disk is skipped
+        // rather than handed to the linker: `deps` meant build order only
+        // until now, so a target this builder cannot resolve has to keep
+        // building as it did before. The warning is the diagnostic.
+        foreach (missing; depLinks.absent)
+            structuredLog.warning("cpp_dep_link_artifact_missing")
+                .field("target", target.name)
+                .field("dependency", missing)
+                .emit();
         
         // Separate C and C++ files
         string[] cppFiles;
@@ -251,6 +266,11 @@ class IncrementalCppBuilder : BaseCppBuilder
         string compiler = compilerTool.path;
         
         auto flags = buildCompilerFlags(config, isCpp);
+        
+        // A library dependency's headers have to be reachable from the
+        // dependent's sources, or it links against symbols it cannot declare.
+        foreach (dir; depLinks.includeDirs())
+            flags ~= "-I" ~ dir;
         
         // Build metadata for cache
         string[string] baseMetadata;
@@ -455,10 +475,18 @@ class IncrementalCppBuilder : BaseCppBuilder
         string linker = linkerTool.path;
         auto linkerFlags = buildLinkerFlags(config);
         string linkerFlagsStr = linkerFlags.join(" ");
+        auto depArgs = cFamilyLinkArgs(depLinks);
+        
+        // The incremental linker decides from the object set alone, and this
+        // path returns early on "nothing changed". The dependency fingerprint
+        // rides along in its flag key so that a rebuilt archive under
+        // unchanged objects cannot be mistaken for nothing changing.
+        string linkKey = linkerFlagsStr ~ " " ~ depArgs.join(" ") ~ " " ~ depLinks.fingerprint();
+        auto linkLibs = config.libs ~ depLinks.libNames();
         
         // Analyze for incremental linking opportunity
         auto linkAnalysis = incLinker.analyze(
-            outputFile, objects, config.libs, linkerFlagsStr
+            outputFile, objects, linkLibs, linkKey
         );
         
         // Check if fully cached
@@ -488,6 +516,13 @@ class IncrementalCppBuilder : BaseCppBuilder
         }
         
         cmd ~= objects;
+        
+        // Dependencies go after this target's own objects and before the
+        // declared libraries: the linker resolves left to right, so a symbol
+        // must be needed before the archive that defines it is read, and a
+        // dependency may in turn need a library declared on this target.
+        cmd ~= depArgs;
+        
         cmd ~= linkerFlags;
         
         // Add library paths and libraries
@@ -518,7 +553,7 @@ class IncrementalCppBuilder : BaseCppBuilder
         
         // Record successful link for future incremental builds
         incLinker.recordLink(
-            outputFile, objects, config.libs, linkerFlagsStr,
+            outputFile, objects, linkLibs, linkKey,
             linkAnalysis.canIncrementalLink()
         );
         

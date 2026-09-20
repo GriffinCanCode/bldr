@@ -31,6 +31,23 @@ languages/
 | `BaseCompiledLanguageHandler` | `compiled/base.d` | C++, D, Rust, Zig, Swift, etc. |
 | `BaseScriptingHandler` | `scripting/base.d` | Python, Ruby, Go, PHP, Lua, etc. |
 
+### Dependency Linking
+
+`base/linking.d` turns a target's `deps` into a link line. It resolves the
+transitive set of library dependencies, orders them dependents-first for the
+linker's single left-to-right pass, and classifies each as static or shared
+from the dependency's own declared output type.
+
+The closure is language-neutral; each toolchain family spells it in its own
+dialect — `cFamilyLinkArgs` for gcc/clang, `zigLinkArgs`, `dLinkArgs`. Wired
+into the C/C++, D and Zig builders. Rust, Nim and Go still treat `deps` as
+ordering only.
+
+`base/linking.d` also owns `artifactFileName`, the one definition of what a
+target's artifact is called — a builder naming its output differently from what
+the closure predicts would have a dependent link against a path that nothing
+produces.
+
 ### Language Registry
 
 The `registry.d` module is the single source of truth for:

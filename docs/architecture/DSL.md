@@ -81,6 +81,60 @@ deps: [
 ];
 ```
 
+A dep does two things.
+
+It orders the build: the dependency is built to completion first, and a change
+to it invalidates the dependent's cache.
+
+It also contributes to the link line, for the compiled languages that have one
+(C, C++, D, Zig). A dep on a `library` target adds that library's artifact to
+the dependent's link command and its `includes` to the dependent's include
+path. Deps on anything else — an `executable`, a `custom` codegen step — are
+ordering edges only.
+
+The rules the link closure follows:
+
+- **Transitive.** A static archive records nothing about its own dependencies,
+  so the whole reachable set of libraries lands on the final binary's link
+  line. Naming the direct dep is enough; you do not repeat its deps.
+- **Ordered.** Libraries are emitted dependents-first, because the linker reads
+  each archive once, left to right.
+- **Static or shared by the dependency's own declaration.** A library is linked
+  statically unless it declares otherwise; `outputType: shared` on the
+  *dependency* makes it a shared library, links it by name, and records an
+  rpath so the dependent can start.
+- **Stops at non-libraries.** A library reached only through an executable dep
+  is not linked.
+
+```d
+target("core") {
+    type: library;
+    language: cpp;
+    sources: ["core/*.cpp"];
+    includes: ["core/include"];    // visible to anything that deps on :core
+}
+
+target("plugin") {
+    type: library;
+    language: cpp;
+    sources: ["plugin/*.cpp"];
+    deps: [":core"];
+    cpp: { outputType: shared; }   // dependents link -lplugin + rpath
+}
+
+target("app") {
+    type: executable;
+    language: cpp;
+    sources: ["main.cpp"];
+    deps: [":plugin"];             // :core arrives transitively
+}
+```
+
+If a dependency's artifact is not where bldr expects it — a library built by a
+delegated build system such as CMake, say — it is left off the link line and
+reported as `dep_link_artifact_missing` rather than failing the build, so a
+workspace that relied on `deps` for ordering alone keeps building.
+
 **`flags`** - Compiler/build flags
 ```d
 flags: ["-O2"];
