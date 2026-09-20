@@ -20,7 +20,7 @@ import engine.distributed.protocol.messages;
 import engine.distributed.protocol.transport;
 import engine.graph.core.graph : BuildGraph;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Fault injection types
 enum FaultType
@@ -169,7 +169,7 @@ class MockWorker
             // Check if crashed
             if (atomicLoad(crashed))
             {
-                Logger.info("MockWorker " ~ id.toString() ~ " crashed");
+                structuredLog.info("MockWorker " ~ id.toString() ~ " crashed").emit();
                 return;
             }
             
@@ -184,14 +184,14 @@ class MockWorker
             if (shouldInjectFault(FaultType.NetworkDelay))
             {
                 auto delay = getFaultDelay(FaultType.NetworkDelay);
-                Logger.info("MockWorker injecting network delay: " ~ delay.total!"msecs".to!string ~ "ms");
+                structuredLog.info("MockWorker injecting network delay: " ~ delay.total!"msecs".to!string ~ "ms").emit();
                 Thread.sleep(delay);
             }
             
             // Inject worker hang fault
             if (shouldInjectFault(FaultType.WorkerHang))
             {
-                Logger.info("MockWorker hanging...");
+                structuredLog.info("MockWorker hanging...").emit();
                 Thread.sleep(30.seconds);  // Hang for 30 seconds
             }
             
@@ -346,7 +346,7 @@ unittest
     
     // Actions should still complete via other workers
     auto stats = coordinator.getStats();
-    Logger.info("Stats after partition - pending: " ~ stats.pendingActions.to!string);
+    structuredLog.info("Stats after partition - pending: " ~ stats.pendingActions.to!string).emit();
     
     // Restore partition
     worker0.restore();
@@ -376,7 +376,7 @@ unittest
     
     // Coordinator should detect failure
     auto afterCrashStats = coordinator.getStats();
-    Logger.info("Workers after crash - healthy: " ~ afterCrashStats.healthyWorkerCount.to!string);
+    structuredLog.info("Workers after crash - healthy: " ~ afterCrashStats.healthyWorkerCount.to!string).emit();
     
     // Work should be reassigned to remaining workers
     Assert.isTrue(afterCrashStats.healthyWorkerCount < initialWorkers, 
@@ -421,7 +421,7 @@ unittest
     
     // System should recover and continue with remaining workers
     auto stats = coordinator.getStats();
-    Logger.info("After mass failure - healthy: " ~ stats.healthyWorkerCount.to!string);
+    structuredLog.info("After mass failure - healthy: " ~ stats.healthyWorkerCount.to!string).emit();
     Assert.isTrue(stats.healthyWorkerCount >= 2, "Some workers should remain healthy");
 }
 
@@ -464,7 +464,7 @@ unittest
     
     // Verify delays were injected
     auto faultCount = worker0.getFaultCount();
-    Logger.info("Network delays injected: " ~ faultCount.to!string);
+    structuredLog.info("Network delays injected: " ~ faultCount.to!string).emit();
     Assert.isTrue(faultCount > 0, "Network delays should be injected");
 }
 
@@ -507,7 +507,7 @@ unittest
     Thread.sleep(7.seconds);
     
     auto stats = coordinator.getStats();
-    Logger.info("Stats with hanging worker - executing: " ~ stats.executingActions.to!string);
+    structuredLog.info("Stats with hanging worker - executing: " ~ stats.executingActions.to!string).emit();
     
     // System should continue despite hung worker
     Assert.isTrue(true, "System handles hung worker");
@@ -554,8 +554,8 @@ unittest
     Thread.sleep(3.seconds);
     
     auto stats = coordinator.getStats();
-    Logger.info("After cascade - healthy: " ~ stats.healthyWorkerCount.to!string);
-    Logger.info("After cascade - pending: " ~ stats.pendingActions.to!string);
+    structuredLog.info("After cascade - healthy: " ~ stats.healthyWorkerCount.to!string).emit();
+    structuredLog.info("After cascade - pending: " ~ stats.pendingActions.to!string).emit();
     
     Assert.isTrue(stats.healthyWorkerCount >= 1, "At least one worker should survive");
 }
@@ -603,7 +603,7 @@ unittest
     
     // Workers should rejoin and accept work
     auto stats = coordinator.getStats();
-    Logger.info("After healing - workers: " ~ stats.healthyWorkerCount.to!string);
+    structuredLog.info("After healing - workers: " ~ stats.healthyWorkerCount.to!string).emit();
     
     Assert.isTrue(true, "System recovers from network partition");
 }
@@ -633,7 +633,7 @@ unittest
     
     // System should remain stable despite flapping
     auto stats = coordinator.getStats();
-    Logger.info("After flapping - system stable");
+    structuredLog.info("After flapping - system stable").emit();
     
     Assert.isTrue(true, "System handles flapping worker");
 }
@@ -676,8 +676,8 @@ unittest
     Thread.sleep(4.seconds);
     
     auto stats = coordinator.getStats();
-    Logger.info("Load test - pending: " ~ stats.pendingActions.to!string);
-    Logger.info("Load test - executing: " ~ stats.executingActions.to!string);
+    structuredLog.info("Load test - pending: " ~ stats.pendingActions.to!string).emit();
+    structuredLog.info("Load test - executing: " ~ stats.executingActions.to!string).emit();
     
     // Remaining workers should handle redistributed load
     Assert.isTrue(stats.healthyWorkerCount >= 2, "Remaining workers handle load");
@@ -711,7 +711,7 @@ unittest
     
     // Action should timeout and be retried or failed
     auto stats = coordinator.getStats();
-    Logger.info("Timeout test - failed: " ~ stats.failedActions.to!string);
+    structuredLog.info("Timeout test - failed: " ~ stats.failedActions.to!string).emit();
     
     Assert.isTrue(true, "System handles timeouts");
 }

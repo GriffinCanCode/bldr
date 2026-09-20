@@ -3,6 +3,8 @@ module tests.unit.languages.javascript;
 import std.stdio;
 import std.file;
 import std.path;
+import std.json : parseJSON;
+import languages.web.base : WebConfig, WebModuleFormat, WebPlatform, parseWebConfig;
 import languages.web.javascript;
 import languages.web.javascript.bundlers;
 import infrastructure.config.schema.schema;
@@ -11,14 +13,40 @@ import tests.harness;
 import tests.fixtures;
 import tests.mocks;
 
+/// Parse the shared web config keys exactly as the handler does.
+private WebConfig parseWeb(string json)
+{
+    WebConfig config;
+    parseWebConfig(config, parseJSON(json));
+    return config;
+}
+
+/// Drives the full JSON -> config path from outside the handler.
+/// `parseWebConfig` owns the shared web keys; `parseLanguageSpecificConfig` owns
+/// the JavaScript-only `mode`/`bundler` keys and records them on the handler,
+/// so the parsed values are read back through introspection.
+private final class JSConfigProbe : JavaScriptHandler
+{
+    WebConfig parse(string json)
+    {
+        WebConfig config;
+        auto j = parseJSON(json);
+        parseWebConfig(config, j);
+        parseLanguageSpecificConfig(config, j);
+        return config;
+    }
+    
+    JSBuildMode mode() => __traits(getMember, this, "jsMode");
+    BundlerType bundler() => __traits(getMember, this, "bundlerType");
+}
+
 /// Test JavaScript bundler configuration parsing
 unittest
 {
     writeln("Testing JavaScript config parsing...");
     
-    import std.json;
-    
-    auto json = parseJSON(`{
+    auto probe = new JSConfigProbe();
+    auto config = probe.parse(`{
         "mode": "bundle",
         "bundler": "esbuild",
         "entry": "src/main.js",
@@ -29,13 +57,11 @@ unittest
         "target": "es2020"
     }`);
     
-    auto config = JSConfig.fromJSON(json);
-    
-    assert(config.mode == JSBuildMode.Bundle);
-    assert(config.bundler == BundlerType.ESBuild);
+    assert(probe.mode() == JSBuildMode.Bundle);
+    assert(probe.bundler() == BundlerType.ESBuild);
     assert(config.entry == "src/main.js");
-    assert(config.platform == Platform.Browser);
-    assert(config.format == OutputFormat.ESM);
+    assert(config.platform == WebPlatform.Browser);
+    assert(config.format == WebModuleFormat.ESM);
     assert(config.minify == true);
     assert(config.sourcemap == true);
     assert(config.target == "es2020");
@@ -174,27 +200,17 @@ unittest
 {
     writeln("Testing output format conversions...");
     
-    import std.json;
-    
     // Test ESM
-    auto esmJson = parseJSON(`{"format":"esm"}`);
-    auto esmConfig = JSConfig.fromJSON(esmJson);
-    assert(esmConfig.format == OutputFormat.ESM);
+    assert(parseWeb(`{"format":"esm"}`).format == WebModuleFormat.ESM);
     
     // Test CommonJS
-    auto cjsJson = parseJSON(`{"format":"cjs"}`);
-    auto cjsConfig = JSConfig.fromJSON(cjsJson);
-    assert(cjsConfig.format == OutputFormat.CommonJS);
+    assert(parseWeb(`{"format":"cjs"}`).format == WebModuleFormat.CommonJS);
     
     // Test IIFE
-    auto iifeJson = parseJSON(`{"format":"iife"}`);
-    auto iifeConfig = JSConfig.fromJSON(iifeJson);
-    assert(iifeConfig.format == OutputFormat.IIFE);
+    assert(parseWeb(`{"format":"iife"}`).format == WebModuleFormat.IIFE);
     
     // Test UMD
-    auto umdJson = parseJSON(`{"format":"umd"}`);
-    auto umdConfig = JSConfig.fromJSON(umdJson);
-    assert(umdConfig.format == OutputFormat.UMD);
+    assert(parseWeb(`{"format":"umd"}`).format == WebModuleFormat.UMD);
     
     writeln("✓ Output format conversions work correctly");
 }
@@ -204,22 +220,14 @@ unittest
 {
     writeln("Testing platform detection...");
     
-    import std.json;
-    
     // Test browser
-    auto browserJson = parseJSON(`{"platform":"browser"}`);
-    auto browserConfig = JSConfig.fromJSON(browserJson);
-    assert(browserConfig.platform == Platform.Browser);
+    assert(parseWeb(`{"platform":"browser"}`).platform == WebPlatform.Browser);
     
     // Test node
-    auto nodeJson = parseJSON(`{"platform":"node"}`);
-    auto nodeConfig = JSConfig.fromJSON(nodeJson);
-    assert(nodeConfig.platform == Platform.Node);
+    assert(parseWeb(`{"platform":"node"}`).platform == WebPlatform.Node);
     
     // Test neutral
-    auto neutralJson = parseJSON(`{"platform":"neutral"}`);
-    auto neutralConfig = JSConfig.fromJSON(neutralJson);
-    assert(neutralConfig.platform == Platform.Neutral);
+    assert(parseWeb(`{"platform":"neutral"}`).platform == WebPlatform.Neutral);
     
     writeln("✓ Platform detection works correctly");
 }
@@ -229,14 +237,10 @@ unittest
 {
     writeln("Testing JSX configuration...");
     
-    import std.json;
-    
-    auto jsxJson = parseJSON(`{
+    auto config = parseWeb(`{
         "jsx": true,
         "jsxFactory": "h"
     }`);
-    
-    auto config = JSConfig.fromJSON(jsxJson);
     
     assert(config.jsx == true);
     assert(config.jsxFactory == "h");
@@ -249,13 +253,9 @@ unittest
 {
     writeln("Testing external dependencies...");
     
-    import std.json;
-    
-    auto extJson = parseJSON(`{
+    auto config = parseWeb(`{
         "external": ["react", "react-dom", "lodash"]
     }`);
-    
-    auto config = JSConfig.fromJSON(extJson);
     
     assert(config.external.length == 3);
     assert(config.external[0] == "react");
@@ -298,16 +298,17 @@ unittest
 {
     writeln("\x1b[36m[TEST]\x1b[0m languages.javascript - Invalid config handling");
     
-    import std.json;
     import std.exception : collectException;
     
     auto tempDir = scoped(new TempDir("js-config-test"));
     tempDir.createFile("app.js", "console.log('test');");
     
     // Test with invalid bundler type
-    auto invalidJson = parseJSON(`{"bundler": "invalid_bundler_xyz"}`);
-    auto exception = collectException(JSConfig.fromJSON(invalidJson));
+    auto probe = new JSConfigProbe();
+    auto exception = collectException(probe.parse(`{"bundler": "invalid_bundler_xyz"}`));
     // Config parsing should handle invalid values gracefully
+    Assert.isNull(exception);
+    Assert.equal(probe.bundler(), BundlerType.Auto);
     
     writeln("\x1b[32m  ✓ JavaScript invalid config handled\x1b[0m");
 }
@@ -371,22 +372,20 @@ unittest
 {
     writeln("Testing bundler mode detection...");
     
-    import std.json;
-    
     // Test node mode
-    auto nodeJson = parseJSON(`{"mode":"node"}`);
-    auto nodeConfig = JSConfig.fromJSON(nodeJson);
-    assert(nodeConfig.mode == JSBuildMode.Node);
+    auto nodeProbe = new JSConfigProbe();
+    nodeProbe.parse(`{"mode":"node"}`);
+    assert(nodeProbe.mode() == JSBuildMode.Node);
     
     // Test bundle mode
-    auto bundleJson = parseJSON(`{"mode":"bundle"}`);
-    auto bundleConfig = JSConfig.fromJSON(bundleJson);
-    assert(bundleConfig.mode == JSBuildMode.Bundle);
+    auto bundleProbe = new JSConfigProbe();
+    bundleProbe.parse(`{"mode":"bundle"}`);
+    assert(bundleProbe.mode() == JSBuildMode.Bundle);
     
     // Test library mode
-    auto libJson = parseJSON(`{"mode":"library"}`);
-    auto libConfig = JSConfig.fromJSON(libJson);
-    assert(libConfig.mode == JSBuildMode.Library);
+    auto libProbe = new JSConfigProbe();
+    libProbe.parse(`{"mode":"library"}`);
+    assert(libProbe.mode() == JSBuildMode.Library);
     
     writeln("✓ Bundler mode detection works correctly");
 }

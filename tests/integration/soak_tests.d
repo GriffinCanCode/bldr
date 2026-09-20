@@ -19,7 +19,7 @@ import core.memory : GC;
 import tests.harness;
 import tests.fixtures;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 // =============================================================================
 // SOAK TEST INFRASTRUCTURE

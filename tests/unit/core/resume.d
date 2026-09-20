@@ -245,7 +245,7 @@ unittest
     auto result = planner.plan(checkpoint, graph2);
     
     assert(result.isErr);
-    assert(result.unwrapErr() == "Checkpoint invalid for current graph");
+    assert(result.unwrapErr().message() == "Checkpoint invalid for current graph");
     
     writeln("✓ Invalid checkpoint handling tests passed");
 }
@@ -268,7 +268,7 @@ unittest
     
     auto result = planner.plan(checkpoint, graph);
     assert(result.isErr);
-    assert(result.unwrapErr() == "Checkpoint too old");
+    assert(result.unwrapErr().message() == "Checkpoint too old");
     
     writeln("✓ Stale checkpoint detection tests passed");
 }

@@ -20,7 +20,7 @@ User interfaces and developer tools
 - **testframework/** - Test execution and reporting
 
 ### 🌐 [languages/](languages/)
-Multi-language support (17+ languages)
+Multi-language support (32 handlers registered in `engine/runtime/services/registry/handler.d`)
 - Compiled languages (C, C++, D, Rust, Go, Zig, etc.)
 - Scripting languages (Python, Ruby, Perl, PHP, Lua, R)
 - JVM languages (Java, Kotlin, Scala)
@@ -76,7 +76,9 @@ This structure allows for clean imports and modular architecture while maintaini
 
 ## Building
 
-The source is built using the Builder system itself. See the root `Builderfile` for build configuration.
+bldr is not yet self-hosting: it is built with dub. See the root `dub.json` for
+build configuration and the `Makefile` for the C/SIMD objects it links against
+(`make build`).
 
 ## Testing
 

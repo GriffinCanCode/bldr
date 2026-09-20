@@ -17,7 +17,7 @@ import engine.distributed.coordinator.coordinator;
 import engine.distributed.coordinator.registry;
 import engine.distributed.protocol.protocol;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Network chaos types
 enum NetworkChaosType
@@ -100,19 +100,19 @@ class ChaoticNetwork
         final switch (config.type)
         {
             case NetworkChaosType.PacketLoss:
-                Logger.info("CHAOS: Packet loss " ~ from ~ " -> " ~ to);
+                structuredLog.info("CHAOS: Packet loss " ~ from ~ " -> " ~ to).emit();
                 atomicOp!"+="(packetsDropped, 1);
                 return false;  // Drop packet
             
             case NetworkChaosType.Latency:
-                Logger.info("CHAOS: Network latency " ~ config.delay.total!"msecs".to!string ~ "ms");
+                structuredLog.info("CHAOS: Network latency " ~ config.delay.total!"msecs".to!string ~ "ms").emit();
                 atomicOp!"+="(packetsDelayed, 1);
                 Thread.sleep(config.delay);
                 return true;
             
             case NetworkChaosType.Jitter:
                 auto jitter = uniform(0, config.delay.total!"msecs", rng);
-                Logger.info("CHAOS: Network jitter " ~ jitter.to!string ~ "ms");
+                structuredLog.info("CHAOS: Network jitter " ~ jitter.to!string ~ "ms").emit();
                 atomicOp!"+="(packetsDelayed, 1);
                 Thread.sleep(msecs(jitter));
                 return true;
@@ -120,24 +120,24 @@ class ChaoticNetwork
             case NetworkChaosType.Bandwidth:
                 // Simulate bandwidth limitation with delay
                 auto bandwidth_delay = (data.length * 8) / (config.multiplier * 1000);  // Simplified
-                Logger.info("CHAOS: Bandwidth limit " ~ bandwidth_delay.to!string ~ "ms");
+                structuredLog.info("CHAOS: Bandwidth limit " ~ bandwidth_delay.to!string ~ "ms").emit();
                 atomicOp!"+="(packetsDelayed, 1);
                 Thread.sleep(msecs(cast(long)bandwidth_delay));
                 return true;
             
             case NetworkChaosType.Reordering:
-                Logger.info("CHAOS: Packet reordering");
+                structuredLog.info("CHAOS: Packet reordering").emit();
                 // Delay this packet to reorder it
                 Thread.sleep(uniform(0, 500, rng).msecs);
                 return true;
             
             case NetworkChaosType.Duplication:
-                Logger.info("CHAOS: Packet duplication");
+                structuredLog.info("CHAOS: Packet duplication").emit();
                 // In real implementation, would send duplicate
                 return true;
             
             case NetworkChaosType.Corruption:
-                Logger.info("CHAOS: Packet corruption");
+                structuredLog.info("CHAOS: Packet corruption").emit();
                 atomicOp!"+="(packetsCorrupted, 1);
                 // Corrupt random bytes
                 if (data.length > 0)
@@ -148,12 +148,12 @@ class ChaoticNetwork
                 return true;
             
             case NetworkChaosType.BlackHole:
-                Logger.info("CHAOS: Black hole - silent drop");
+                structuredLog.info("CHAOS: Black hole - silent drop").emit();
                 atomicOp!"+="(packetsDropped, 1);
                 return false;
             
             case NetworkChaosType.SplitBrain:
-                Logger.info("CHAOS: Split-brain partition");
+                structuredLog.info("CHAOS: Split-brain partition").emit();
                 atomicOp!"+="(packetsDropped, 1);
                 return false;
             
@@ -161,7 +161,7 @@ class ChaoticNetwork
                 // Drop only one direction
                 if (from < to)  // Deterministic asymmetry
                 {
-                    Logger.info("CHAOS: Asymmetric partition " ~ from ~ " -> " ~ to);
+                    structuredLog.info("CHAOS: Asymmetric partition " ~ from ~ " -> " ~ to).emit();
                     atomicOp!"+="(packetsDropped, 1);
                     return false;
                 }
@@ -266,8 +266,8 @@ unittest
             successCount++;
     }
     
-    Logger.info("Packets delivered: " ~ successCount.to!string ~ "/" ~ totalPackets.to!string);
-    Logger.info("Packets dropped: " ~ network.getPacketsDropped().to!string);
+    structuredLog.info("Packets delivered: " ~ successCount.to!string ~ "/" ~ totalPackets.to!string).emit();
+    structuredLog.info("Packets dropped: " ~ network.getPacketsDropped().to!string).emit();
     
     // Should lose approximately 30% (with some variance)
     Assert.isTrue(successCount > 50 && successCount < 90, "Should have ~70% delivery rate");
@@ -309,8 +309,8 @@ unittest
     
     auto elapsed = MonoTime.currTime - startTime;
     
-    Logger.info("10 packets took " ~ elapsed.total!"msecs".to!string ~ "ms");
-    Logger.info("Packets delayed: " ~ network.getPacketsDelayed().to!string);
+    structuredLog.info("10 packets took " ~ elapsed.total!"msecs".to!string ~ "ms").emit();
+    structuredLog.info("Packets delayed: " ~ network.getPacketsDelayed().to!string).emit();
     
     // Should have measurable delay
     Assert.isTrue(elapsed.total!"msecs" > 100, "Should have network delay");
@@ -347,8 +347,8 @@ unittest
             corruptedCount++;
     }
     
-    Logger.info("Corrupted packets: " ~ corruptedCount.to!string ~ "/50");
-    Logger.info("Network reported corrupted: " ~ network.getPacketsCorrupted().to!string);
+    structuredLog.info("Corrupted packets: " ~ corruptedCount.to!string ~ "/50").emit();
+    structuredLog.info("Network reported corrupted: " ~ network.getPacketsCorrupted().to!string).emit();
     
     Assert.isTrue(corruptedCount > 0, "Should have corrupted packets");
     Assert.equal(corruptedCount, network.getPacketsCorrupted(), "Counts should match");
@@ -431,8 +431,8 @@ unittest
     bool forward = network.processPacket(data1, "worker1", "worker2");
     bool backward = network.processPacket(data2, "worker2", "worker1");
     
-    Logger.info("Forward (worker1 -> worker2): " ~ (forward ? "delivered" : "dropped"));
-    Logger.info("Backward (worker2 -> worker1): " ~ (backward ? "delivered" : "dropped"));
+    structuredLog.info("Forward (worker1 -> worker2): " ~ (forward ? "delivered" : "dropped")).emit();
+    structuredLog.info("Backward (worker2 -> worker1): " ~ (backward ? "delivered" : "dropped")).emit();
     
     // One direction should fail, other should succeed
     Assert.isTrue(forward != backward, "Should be asymmetric");
@@ -462,7 +462,7 @@ unittest
     bool delivered = network.processPacket(largeData, "worker1", "coordinator");
     auto elapsed = MonoTime.currTime - startTime;
     
-    Logger.info("10KB packet took " ~ elapsed.total!"msecs".to!string ~ "ms");
+    structuredLog.info("10KB packet took " ~ elapsed.total!"msecs".to!string ~ "ms").emit();
     
     Assert.isTrue(delivered, "Should deliver packet");
     Assert.isTrue(elapsed.total!"msecs" > 100, "Should be bandwidth-limited");
@@ -512,7 +512,7 @@ unittest
         }
     }
     
-    Logger.info("Delivery times (variance indicates reordering): " ~ deliveryOrder.to!string);
+    structuredLog.info("Delivery times (variance indicates reordering): " ~ deliveryOrder.to!string).emit();
     
     writeln("  \x1b[32m✓ Packet reordering test passed\x1b[0m");
 }
@@ -541,8 +541,8 @@ unittest
             successCount++;
     }
     
-    Logger.info("Black hole: " ~ successCount.to!string ~ "/10 packets delivered");
-    Logger.info("Packets dropped: " ~ network.getPacketsDropped().to!string);
+    structuredLog.info("Black hole: " ~ successCount.to!string ~ "/10 packets delivered").emit();
+    structuredLog.info("Packets dropped: " ~ network.getPacketsDropped().to!string).emit();
     
     // All packets should be silently dropped
     Assert.equal(successCount, 0, "Black hole should drop all packets");
@@ -581,13 +581,13 @@ unittest
     
     auto elapsed = MonoTime.currTime - startTime;
     
-    Logger.info("Results:");
-    Logger.info("  Total packets: " ~ totalPackets.to!string);
-    Logger.info("  Delivered: " ~ successCount.to!string);
-    Logger.info("  Dropped: " ~ network.getPacketsDropped().to!string);
-    Logger.info("  Delayed: " ~ network.getPacketsDelayed().to!string);
-    Logger.info("  Corrupted: " ~ network.getPacketsCorrupted().to!string);
-    Logger.info("  Time: " ~ elapsed.total!"msecs".to!string ~ "ms");
+    structuredLog.info("Results:").emit();
+    structuredLog.info("  Total packets: " ~ totalPackets.to!string).emit();
+    structuredLog.info("  Delivered: " ~ successCount.to!string).emit();
+    structuredLog.info("  Dropped: " ~ network.getPacketsDropped().to!string).emit();
+    structuredLog.info("  Delayed: " ~ network.getPacketsDelayed().to!string).emit();
+    structuredLog.info("  Corrupted: " ~ network.getPacketsCorrupted().to!string).emit();
+    structuredLog.info("  Time: " ~ elapsed.total!"msecs".to!string ~ "ms").emit();
     
     // Should deliver most packets despite chaos
     Assert.isTrue(successCount > totalPackets / 2, "Should deliver majority of packets");
@@ -618,7 +618,7 @@ unittest
                   "Should be partitioned");
     
     // Heal partition
-    Logger.info("Healing partition...");
+    structuredLog.info("Healing partition...").emit();
     partition.heal();
     
     // Verify healing

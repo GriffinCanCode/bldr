@@ -11,6 +11,7 @@ import infrastructure.analysis.targets.types;
 import infrastructure.analysis.caching.interface_;
 import infrastructure.analysis.tracking.interface_;
 import infrastructure.analysis.incremental.interface_;
+import infrastructure.analysis.resolution.resolver : DependencyResolver;
 import infrastructure.config.schema.schema;
 import infrastructure.utils.logging;
 import infrastructure.utils.files.hash;
@@ -25,6 +26,7 @@ final class IncrementalAnalyzer : IIncrementalAnalyzer
     private IAnalysisCache cache;
     private IFileChangeTracker tracker;
     private WorkspaceConfig _config;
+    private DependencyResolver resolver;
     
     // Metrics
     private size_t filesReanalyzed;
@@ -41,6 +43,7 @@ final class IncrementalAnalyzer : IIncrementalAnalyzer
         this._config = config;
         this.cache = cache;
         this.tracker = tracker;
+        this.resolver = new DependencyResolver(config);
     }
     
     /// Analyze target with incremental optimization
@@ -124,13 +127,18 @@ final class IncrementalAnalyzer : IIncrementalAnalyzer
         result.files = analyses;
         result.dependencies = [];
         
-        // Add explicit dependencies
+        // Add explicit dependencies.
+        // This path returns instead of falling through to the full analyzer, so
+        // it has to resolve labels itself: a relative ":core" must become
+        // "//pkg:core" to match the graph's keys, or the edge is dropped and the
+        // target builds before its dependency.
+        immutable fromId = target.id.toString();
         foreach (dep; target.deps)
         {
-            // Dependencies are already resolved by the full analyzer
-            if (!result.dependencies.canFind!(d => d.targetName == dep))
+            auto resolved = resolver.resolve(dep, fromId);
+            if (!resolved.empty && !result.dependencies.canFind!(d => d.targetName == resolved))
             {
-                result.dependencies ~= Dependency.direct(dep, dep);
+                result.dependencies ~= Dependency.direct(resolved, dep);
             }
         }
         
@@ -261,9 +269,13 @@ final class IncrementalAnalyzer : IIncrementalAnalyzer
         
         if (reduction > 0)
         {
+            import std.format : format;
+            
+            // Format, don't slice: to!string of a whole number like 100 is
+            // shorter than the fixed window this used to take.
             structuredLog.info("incremental_analysis_").field("detail", "Incremental analysis: " ~
                           saved.to!string ~ "/" ~ totalFiles.to!string ~
-                          " files cached (" ~ reduction.to!string[0..4] ~ "% reduction)").emit();
+                          format(" files cached (%.1f%% reduction)", reduction)).emit();
         }
     }
 }

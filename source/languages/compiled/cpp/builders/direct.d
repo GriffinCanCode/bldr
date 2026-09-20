@@ -158,7 +158,8 @@ class DirectBuilder : BaseCppBuilder
         else if (outputFile.empty)
         {
             auto name = target.name.split(":")[$ - 1];
-            outputFile = buildPath(workspace.options.outputDir, name);
+            outputFile = buildPath(workspace.options.outputDir,
+                                   defaultOutputName(name, config.outputType));
         }
         
         // Ensure output directory exists
@@ -425,6 +426,56 @@ class DirectBuilder : BaseCppBuilder
         return result;
     }
     
+    /// Archive object files into a static library, with action-level caching
+    private CppCompileResult archiveObjects(
+        string[] objects,
+        string outputFile,
+        in Target target
+    )
+    {
+        CppCompileResult result;
+        
+        string[string] metadata;
+        metadata["archiver"] = "ar";
+        
+        ActionId actionId;
+        actionId.targetId = target.name;
+        actionId.type = ActionType.Link;
+        actionId.subId = baseName(outputFile);
+        actionId.inputHash = FastHash.hashStrings(objects);
+        
+        if (actionCache.isCached(actionId, objects, metadata) && exists(outputFile))
+        {
+            structuredLog.debug_("__cached_archiving_").field("detail", "  [Cached] Archiving: " ~ outputFile).emit();
+            result.success = true;
+            return result;
+        }
+        
+        // ar appends to an existing archive, so a stale one would keep objects
+        // from a previous build that no longer have sources.
+        if (exists(outputFile))
+            remove(outputFile);
+        
+        auto cmd = ["ar", "rcs", outputFile] ~ objects;
+        
+        structuredLog.debug_("archiving_").field("detail", "Archiving: " ~ outputFile).emit();
+        structuredLog.debug_("__command_").field("detail", "  Command: " ~ cmd.join(" ")).emit();
+        
+        auto res = execute(cmd);
+        
+        if (res.status != 0)
+        {
+            result.error = "Archiving failed: " ~ res.output;
+            actionCache.update(actionId, objects, [], metadata, false);
+            return result;
+        }
+        
+        actionCache.update(actionId, objects, [outputFile], metadata, true);
+        
+        result.success = true;
+        return result;
+    }
+    
     /// Link object files to final output with action-level caching and incremental linking
     private CppCompileResult linkObjects(
         string[] objects,
@@ -435,6 +486,18 @@ class DirectBuilder : BaseCppBuilder
     )
     {
         CppCompileResult result;
+        
+        // A static library is archived, not linked: driving it through the
+        // linker looks for an entry point and fails with an undefined _main.
+        if (config.outputType == OutputType.StaticLib)
+            return archiveObjects(objects, outputFile, target);
+        
+        // Object-only output stops after compilation; the objects are the result.
+        if (config.outputType == OutputType.Object)
+        {
+            result.success = true;
+            return result;
+        }
         
         auto comp = toolchain.compiler();
         if (comp is null)
@@ -484,6 +547,13 @@ class DirectBuilder : BaseCppBuilder
         
         // Build link command
         string[] cmd = [linker];
+        
+        if (config.outputType == OutputType.SharedLib)
+        {
+            version(OSX) cmd ~= "-dynamiclib";
+            else cmd ~= "-shared";
+        }
+        
         cmd ~= ["-o", outputFile];
         
         // Add incremental flags if beneficial

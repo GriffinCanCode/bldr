@@ -10,7 +10,7 @@ import engine.caching.incremental.ast_dependency;
 import engine.compilation.incremental.ast_engine;
 import infrastructure.analysis.ast.parser;
 // import languages.compiled.cpp.analysis.ast_parser;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import infrastructure.errors;
 
 /// Test AST-level incremental compilation

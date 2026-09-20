@@ -286,12 +286,14 @@ struct EngineCoordinator
                     // Enqueue ready dependents
                     foreach (dependentId; node.dependentIds)
                     {
-                        auto dependent = graph.getNode(dependentId);
+                        // getNodeById, not getNode: discovery can add nodes mid-build
+                        // and rehash the map, invalidating interior AA pointers.
+                        auto dependent = graph.getNodeById(dependentId);
                         if (dependent !is null)
                         {
                             immutable remaining = dependent.decrementPendingDeps();
                             if (remaining == 0)
-                                scheduling.submit(*dependent);
+                                scheduling.submit(dependent);
                         }
                     }
                 }
@@ -307,7 +309,7 @@ struct EngineCoordinator
                     // Mark all dependents as failed (cascading failure)
                     foreach (dependentId; node.dependentIds)
                     {
-                        auto dependent = graph.getNode(dependentId);
+                        auto dependent = graph.getNodeById(dependentId);
                         if (dependent !is null && dependent.status == BuildStatus.Pending)
                         {
                             dependent.status = BuildStatus.Failed;

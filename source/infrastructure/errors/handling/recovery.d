@@ -238,28 +238,28 @@ unittest
     
     // First retry should succeed
     assert(strategy.recover(cacheError));
-    assert(strategy.getAttemptCount(Cache.LoadFailed) == 1);
+    assert(strategy.getAttemptCount(ErrorCode.CacheLoadFailed) == 1);
     
     // Second retry should succeed
     assert(strategy.recover(cacheError));
-    assert(strategy.getAttemptCount(Cache.LoadFailed) == 2);
+    assert(strategy.getAttemptCount(ErrorCode.CacheLoadFailed) == 2);
     
     // Third retry should succeed
     assert(strategy.recover(cacheError));
-    assert(strategy.getAttemptCount(Cache.LoadFailed) == 3);
+    assert(strategy.getAttemptCount(ErrorCode.CacheLoadFailed) == 3);
     
     // Fourth retry should fail (max attempts reached)
     assert(!strategy.recover(cacheError));
-    assert(strategy.getAttemptCount(Cache.LoadFailed) == 0);  // Counter reset
+    assert(strategy.getAttemptCount(ErrorCode.CacheLoadFailed) == 0);  // Counter reset
     
     // Test reset functionality
     strategy.reset();
     auto newError = new CacheError("Another cache error", Cache.LoadFailed);
     assert(strategy.recover(newError));
-    assert(strategy.getAttemptCount(Cache.LoadFailed) == 1);
+    assert(strategy.getAttemptCount(ErrorCode.CacheLoadFailed) == 1);
     
     // Test non-recoverable error
-    auto parseError = new ParseError("test.txt", "Syntax error", Parse.Failed);
+    auto parseError = new ParseError("test.txt", "Syntax error", ErrorCode.ParseFailed);
     assert(!strategy.recover(parseError));  // Parse errors are not recoverable
     
     writeln("RetryStrategy tests passed!");
@@ -274,8 +274,8 @@ unittest
     auto manager = createDefaultRecoveryManager();
     
     // Test that default strategies are registered
-    assert(manager.getStrategy(Build.Timeout) !is null);
-    assert(manager.getStrategy(Cache.LoadFailed) !is null);
+    assert(manager.getStrategy(ErrorCode.BuildTimeout) !is null);
+    assert(manager.getStrategy(ErrorCode.CacheLoadFailed) !is null);
     
     // Test recovery attempt
     auto cacheError = new CacheError("Cache error", Cache.LoadFailed);

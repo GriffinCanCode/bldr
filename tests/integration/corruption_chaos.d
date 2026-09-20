@@ -16,7 +16,7 @@ import core.sync.mutex : Mutex;
 import tests.harness : Assert;
 import tests.fixtures : TempDir;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Corruption chaos types
 enum CorruptionType
@@ -157,13 +157,13 @@ class FileCorruptor
         }
         catch (Exception e)
         {
-            Logger.warning("Corruption failed: " ~ e.msg);
+            structuredLog.warning("Corruption failed: " ~ e.msg).emit();
         }
     }
     
     private void corruptFileContents(string filepath) @system
     {
-        Logger.info("CHAOS: Corrupting file contents - " ~ filepath);
+        structuredLog.info("CHAOS: Corrupting file contents - " ~ filepath).emit();
         
         if (!exists(filepath))
             return;
@@ -185,7 +185,7 @@ class FileCorruptor
     
     private void truncateFile(string filepath) @system
     {
-        Logger.info("CHAOS: Truncating file - " ~ filepath);
+        structuredLog.info("CHAOS: Truncating file - " ~ filepath).emit();
         
         if (!exists(filepath))
             return;
@@ -201,7 +201,7 @@ class FileCorruptor
     
     private void deleteFile(string filepath) @system
     {
-        Logger.info("CHAOS: Deleting file - " ~ filepath);
+        structuredLog.info("CHAOS: Deleting file - " ~ filepath).emit();
         
         if (exists(filepath))
             remove(filepath);
@@ -209,7 +209,7 @@ class FileCorruptor
     
     private void corruptCacheEntry(string filepath) @system
     {
-        Logger.info("CHAOS: Corrupting cache entry - " ~ filepath);
+        structuredLog.info("CHAOS: Corrupting cache entry - " ~ filepath).emit();
         
         // Corrupt a cache file (similar to file corruption but for cache)
         corruptFileContents(filepath);
@@ -217,7 +217,7 @@ class FileCorruptor
     
     private void corruptMetadata(string filepath) @system
     {
-        Logger.info("CHAOS: Corrupting metadata - " ~ filepath);
+        structuredLog.info("CHAOS: Corrupting metadata - " ~ filepath).emit();
         
         // In a real implementation, would corrupt file metadata
         // For now, simulate by changing file
@@ -231,7 +231,7 @@ class FileCorruptor
     
     private void partialWrite(string filepath) @system
     {
-        Logger.info("CHAOS: Partial write - " ~ filepath);
+        structuredLog.info("CHAOS: Partial write - " ~ filepath).emit();
         
         // Simulate incomplete write operation
         if (exists(filepath))
@@ -246,7 +246,7 @@ class FileCorruptor
     
     private void changePermissions(string filepath) @system
     {
-        Logger.info("CHAOS: Changing permissions - " ~ filepath);
+        structuredLog.info("CHAOS: Changing permissions - " ~ filepath).emit();
         
         // Platform-specific permission changes would go here
         // On POSIX: chmod, on Windows: icacls
@@ -259,7 +259,7 @@ class FileCorruptor
     
     private void breakSymlink(string filepath) @system
     {
-        Logger.info("CHAOS: Breaking symlink - " ~ filepath);
+        structuredLog.info("CHAOS: Breaking symlink - " ~ filepath).emit();
         
         // If it's a symlink, delete its target
         version(Posix)
@@ -280,7 +280,7 @@ class FileCorruptor
     
     private void deleteDirectory(string filepath) @system
     {
-        Logger.info("CHAOS: Deleting directory - " ~ filepath);
+        structuredLog.info("CHAOS: Deleting directory - " ~ filepath).emit();
         
         import std.path : dirName;
         auto dir = dirName(filepath);
@@ -288,13 +288,13 @@ class FileCorruptor
         if (exists(dir))
         {
             try { rmdirRecurse(dir); }
-            catch (Exception e) { Logger.warning("Could not delete dir: " ~ e.msg); }
+            catch (Exception e) { structuredLog.warning("Could not delete dir: " ~ e.msg).emit(); }
         }
     }
     
     private void simulateDiskFull(string filepath) @system
     {
-        Logger.info("CHAOS: Simulating disk full - " ~ filepath);
+        structuredLog.info("CHAOS: Simulating disk full - " ~ filepath).emit();
         
         // Can't easily simulate disk full, but can make file access fail
         // by filling up space with a large file
@@ -368,35 +368,35 @@ class WorkerKiller
         final switch (type)
         {
             case WorkerKillType.SigTerm:
-                Logger.info("CHAOS: Sending SIGTERM to worker " ~ workerId);
+                structuredLog.info("CHAOS: Sending SIGTERM to worker " ~ workerId).emit();
                 return Result!BuildError.err(cast(BuildError)new InternalError("Worker terminated (SIGTERM)"));
             
             case WorkerKillType.SigKill:
-                Logger.info("CHAOS: Sending SIGKILL to worker " ~ workerId);
+                structuredLog.info("CHAOS: Sending SIGKILL to worker " ~ workerId).emit();
                 return Result!BuildError.err(cast(BuildError)new InternalError("Worker killed (SIGKILL)"));
             
             case WorkerKillType.OutOfMemory:
-                Logger.info("CHAOS: Worker " ~ workerId ~ " OOM");
+                structuredLog.info("CHAOS: Worker " ~ workerId ~ " OOM").emit();
                 return Result!BuildError.err(cast(BuildError)new InternalError("Worker out of memory"));
             
             case WorkerKillType.DiskIOError:
-                Logger.info("CHAOS: Worker " ~ workerId ~ " disk I/O error");
+                structuredLog.info("CHAOS: Worker " ~ workerId ~ " disk I/O error").emit();
                 return Result!BuildError.err(cast(BuildError)new InternalError("Disk I/O error"));
             
             case WorkerKillType.NetworkDisconnect:
-                Logger.info("CHAOS: Worker " ~ workerId ~ " network disconnect");
+                structuredLog.info("CHAOS: Worker " ~ workerId ~ " network disconnect").emit();
                 return Result!BuildError.err(cast(BuildError)new InternalError("Network disconnected"));
             
             case WorkerKillType.CPUExhaustion:
-                Logger.info("CHAOS: Worker " ~ workerId ~ " CPU exhaustion");
+                structuredLog.info("CHAOS: Worker " ~ workerId ~ " CPU exhaustion").emit();
                 return Result!BuildError.err(cast(BuildError)new InternalError("CPU exhausted"));
             
             case WorkerKillType.DeadlockDetected:
-                Logger.info("CHAOS: Worker " ~ workerId ~ " deadlock detected");
+                structuredLog.info("CHAOS: Worker " ~ workerId ~ " deadlock detected").emit();
                 return Result!BuildError.err(cast(BuildError)new InternalError("Deadlock detected"));
             
             case WorkerKillType.Timeout:
-                Logger.info("CHAOS: Worker " ~ workerId ~ " execution timeout");
+                structuredLog.info("CHAOS: Worker " ~ workerId ~ " execution timeout").emit();
                 return Result!BuildError.err(cast(BuildError)new InternalError("Execution timeout"));
         }
     }
@@ -434,7 +434,7 @@ class ChaosSimulator
     /// Simulate build execution with chaos
     Result!BuildError simulateBuild(string buildId, Duration buildTime) @system
     {
-        Logger.info("Starting chaotic build: " ~ buildId);
+        structuredLog.info("Starting chaotic build: " ~ buildId).emit();
         
         auto startTime = MonoTime.currTime;
         
@@ -447,7 +447,7 @@ class ChaosSimulator
             auto killResult = killer.maybeKillWorker(buildId, elapsed);
             if (killResult.isErr)
             {
-                Logger.info("Build killed at step " ~ step.to!string);
+                structuredLog.info("Build killed at step " ~ step.to!string).emit();
                 return killResult;
             }
             
@@ -462,7 +462,7 @@ class ChaosSimulator
             Thread.sleep(buildTime / 10);
         }
         
-        Logger.info("Build completed: " ~ buildId);
+        structuredLog.info("Build completed: " ~ buildId).emit();
         return Ok!BuildError();
     }
     
@@ -512,8 +512,8 @@ class ChaosSimulator
         }
     }
     
-    Logger.info("Files corrupted: " ~ corruptedCount.to!string ~ "/20");
-    Logger.info("Corruption count: " ~ corruptor.getCorruptionCount().to!string);
+    structuredLog.info("Files corrupted: " ~ corruptedCount.to!string ~ "/20").emit();
+    structuredLog.info("Corruption count: " ~ corruptor.getCorruptionCount().to!string).emit();
     
     Assert.isTrue(corruptedCount > 0, "Should have corrupted some files");
     
@@ -539,16 +539,16 @@ class ChaosSimulator
     auto result = simulator.simulateBuild("build1", 500.msecs);
     
     size_t corruptions = simulator.getTotalCorruptions();
-    Logger.info("Cache corruptions during build: " ~ corruptions.to!string);
+    structuredLog.info("Cache corruptions during build: " ~ corruptions.to!string).emit();
     
     // Build may succeed or fail depending on corruption
     if (result.isOk)
     {
-        Logger.info("Build succeeded despite corruptions");
+        structuredLog.info("Build succeeded despite corruptions").emit();
     }
     else
     {
-        Logger.info("Build failed due to corruption");
+        structuredLog.info("Build failed due to corruption").emit();
     }
     
     Assert.isTrue(true, "Handled corruption");
@@ -585,7 +585,7 @@ class ChaosSimulator
     if (exists(filepath))
     {
         auto newSize = read(filepath).length;
-        Logger.info("File size: " ~ originalSize.to!string ~ " -> " ~ newSize.to!string);
+        structuredLog.info("File size: " ~ originalSize.to!string ~ " -> " ~ newSize.to!string).emit();
         
         Assert.isTrue(newSize < originalSize, "File should be truncated");
     }
@@ -643,7 +643,7 @@ class ChaosSimulator
         result = killer.maybeKillWorker("worker1", elapsed);
         if (result.isErr)
         {
-            Logger.info("Worker killed after " ~ elapsed.total!"msecs".to!string ~ "ms");
+            structuredLog.info("Worker killed after " ~ elapsed.total!"msecs".to!string ~ "ms").emit();
             break;
         }
         
@@ -678,8 +678,8 @@ class ChaosSimulator
             killCount++;
     }
     
-    Logger.info("Workers killed: " ~ killCount.to!string ~ "/10");
-    Logger.info("Kill count: " ~ killer.getKillCount().to!string);
+    structuredLog.info("Workers killed: " ~ killCount.to!string ~ "/10").emit();
+    structuredLog.info("Kill count: " ~ killer.getKillCount().to!string).emit();
     
     Assert.isTrue(killCount > 0, "Should have killed some workers");
     Assert.equal(killCount, killer.getKillCount(), "Counts should match");
@@ -719,11 +719,11 @@ class ChaosSimulator
             failureCount++;
     }
     
-    Logger.info("Results:");
-    Logger.info("  Successful builds: " ~ successCount.to!string);
-    Logger.info("  Failed builds: " ~ failureCount.to!string);
-    Logger.info("  Total corruptions: " ~ simulator.getTotalCorruptions().to!string);
-    Logger.info("  Total kills: " ~ simulator.getTotalKills().to!string);
+    structuredLog.info("Results:").emit();
+    structuredLog.info("  Successful builds: " ~ successCount.to!string).emit();
+    structuredLog.info("  Failed builds: " ~ failureCount.to!string).emit();
+    structuredLog.info("  Total corruptions: " ~ simulator.getTotalCorruptions().to!string).emit();
+    structuredLog.info("  Total kills: " ~ simulator.getTotalKills().to!string).emit();
     
     Assert.isTrue(simulator.getTotalCorruptions() > 0 || simulator.getTotalKills() > 0,
                  "Should have applied some chaos");

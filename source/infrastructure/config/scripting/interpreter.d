@@ -300,12 +300,30 @@ class Interpreter
     {
         import infrastructure.config.workspace.ast : LiteralExpr, Literal, LiteralKind, Location;
         
+        // A bare word in field-value position is an enum-like literal, not a
+        // variable: `type: executable`, `language: cpp`. Hand unbound identifiers
+        // to the semantic analyzer, which knows the target types and the language
+        // registry and can report an unknown one in those terms. A bound name
+        // still resolves, so `let t = "library"; type: t;` keeps working.
+        if (auto ident = cast(IdentExpr)expr)
+        {
+            if (!isBoundIdentifier(ident.name))
+                return BuildResult!Expr.ok(expr);
+        }
+        
         auto valueResult = evaluateExpr(expr);
         if (valueResult.isErr)
             return BuildResult!Expr.err(valueResult.unwrapErr());
         
         auto value = valueResult.unwrap();
         return BuildResult!Expr.ok(valueToExpr(value, expr.location()));
+    }
+    
+    /// Whether an identifier resolves to something the evaluator can produce
+    private bool isBoundIdentifier(string name) @system
+    {
+        return name == "true" || name == "false" || name == "null"
+            || evaluator.scopeManager().isDefined(name);
     }
     
     /// Convert Value to Expr (for expanded target fields)

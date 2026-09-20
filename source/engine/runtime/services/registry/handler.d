@@ -6,6 +6,7 @@ import languages.dynamic : SpecRegistry, SpecBasedHandler;
 import languages.registry : parseLanguageName;
 import infrastructure.errors;
 import std.conv : to;
+import core.sync.mutex : Mutex;
 import infrastructure.utils.logging : structuredLog;
 
 /// Handler registry interface
@@ -30,11 +31,23 @@ interface IHandlerRegistry
 /// Concrete handler registry implementation
 /// Manages language handler lifecycle with lazy per-language loading
 /// Extended to support spec-based dynamic languages
+///
+/// Handlers are NOT shared between builds. Every handler keeps per-build state
+/// (parsed language config, resolved toolchain, output type), so handing the
+/// same instance to targets running on different workers makes them overwrite
+/// each other — a library target picks up an executable's output type and fails
+/// to link. `get` therefore returns a fresh handler per call; only a handler an
+/// caller registered explicitly is reused, because that is an explicit choice.
 final class HandlerRegistry : IHandlerRegistry
 {
-    private LanguageHandler[TargetLanguage] handlers;
-    private LanguageHandler[string] dynamicHandlers;  // For spec-based languages
+    private LanguageHandler[TargetLanguage] registered;  // Explicit overrides only
     private SpecRegistry specRegistry;
+    private Mutex registryMutex;
+    
+    this() @safe
+    {
+        registryMutex = new Mutex();
+    }
     
     /// Create handler on-demand for a specific language
     private LanguageHandler createHandler(TargetLanguage language) @trusted
@@ -132,7 +145,11 @@ final class HandlerRegistry : IHandlerRegistry
                 import languages.gpu.metal : MetalHandler;
                 return new MetalHandler();
             case TargetLanguage.FSharp:
+                import languages.dotnet.fsharp : FSharpHandler;
+                return new FSharpHandler();
             case TargetLanguage.CSS:
+                import languages.web.css : CSSHandler;
+                return new CSSHandler();
             case TargetLanguage.Generic:
                 return null;
         }
@@ -140,6 +157,13 @@ final class HandlerRegistry : IHandlerRegistry
     
     /// Initialize registry and load dynamic language specs
     void initialize() @system
+    {
+        synchronized (registryMutex)
+            initializeLocked();
+    }
+    
+    /// Load dynamic language specs; caller must hold registryMutex
+    private void initializeLocked() @system
     {
         // Initialize spec registry for dynamic languages
         specRegistry = new SpecRegistry();
@@ -155,16 +179,14 @@ final class HandlerRegistry : IHandlerRegistry
     
     LanguageHandler get(TargetLanguage language) @trusted
     {
-        // Check if already cached
-        if (auto handler = language in handlers)
-            return *handler;
+        synchronized (registryMutex)
+        {
+            if (auto handler = language in registered)
+                return *handler;
+        }
         
-        // Create handler on-demand
-        auto handler = createHandler(language);
-        if (handler !is null)
-            handlers[language] = handler;
-        
-        return handler;
+        // Fresh instance: handlers are stateful and callers run concurrently
+        return createHandler(language);
     }
     
     /// Get handler by string name (supports dynamic spec-based languages)
@@ -175,23 +197,17 @@ final class HandlerRegistry : IHandlerRegistry
         // First try built-in language enum lookup
         auto language = parseLanguageName(langName);
         if (language != TargetLanguage.Generic)
-        {
             return get(language);
-        }
         
-        // Check if already cached as dynamic handler
-        if (auto handler = langName in dynamicHandlers)
-            return *handler;
-        
-        // Try spec-based dynamic language
-        if (specRegistry is null)
-            initialize();
-        
-        if (auto spec = specRegistry.get(langName))
+        // Spec-based dynamic language. The spec registry is immutable shared
+        // data and is cached; the handler wrapping it is not.
+        synchronized (registryMutex)
         {
-            auto handler = new SpecBasedHandler(*spec);
-            dynamicHandlers[langName] = handler;
-            return handler;
+            if (specRegistry is null)
+                initializeLocked();
+            
+            if (auto spec = specRegistry.get(langName))
+                return new SpecBasedHandler(*spec);
         }
         
         return null;
@@ -199,22 +215,25 @@ final class HandlerRegistry : IHandlerRegistry
     
     bool has(TargetLanguage language) @trusted
     {
-        // Check cache first
-        if (language in handlers)
-            return true;
+        synchronized (registryMutex)
+        {
+            if (language in registered)
+                return true;
+        }
         
-        // For uncached handlers, check if we can create one
         return createHandler(language) !is null;
     }
     
     void register(TargetLanguage language, LanguageHandler handler) @trusted
     {
-        handlers[language] = handler;
+        synchronized (registryMutex)
+            registered[language] = handler;
     }
     
     TargetLanguage[] languages() @trusted
     {
-        return handlers.keys;
+        synchronized (registryMutex)
+            return registered.keys;
     }
 }
 

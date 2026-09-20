@@ -1,6 +1,7 @@
 module tests.unit.config.scripting;
 
 import std.stdio;
+import std.algorithm : equal;
 import infrastructure.config.scripting.types;
 import infrastructure.config.scripting.scopemanager;
 import infrastructure.config.scripting.builtins;
@@ -409,7 +410,7 @@ unittest
     closure.lambdaBody = null;
     
     assert(closure.arity() == 2);
-    assert(closure.paramNames() == ["a", "b"]);
+    assert(closure.paramNames().equal(["a", "b"]));
     assert(!closure.isLambda());
 }
 

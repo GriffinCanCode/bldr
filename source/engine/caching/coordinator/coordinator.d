@@ -353,8 +353,10 @@ final class CacheCoordinator
     }
     
     /// Run garbage collection
+    /// Source blobs are only reachable through sourceRepo, so its hashes must
+    /// join the root set or the sweep would collect live sources.
     BuildResult!size_t runGC() @system
-        => gc.collect(targetCache, actionCache).match(
+        => gc.collect(targetCache, actionCache, sourceRepo.referencedHashes()).match(
             (result) => Ok!(size_t, BuildError)(result.bytesFreed),
             (err) => Err!(size_t, BuildError)(err)
         );

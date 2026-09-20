@@ -23,7 +23,7 @@ import engine.distributed.protocol.messages;
 import engine.distributed.protocol.transport;
 import engine.graph.core.graph : BuildGraph, BuildNode;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// End-to-end test worker (functional mock)
 class E2EWorker
@@ -81,7 +81,7 @@ class E2EWorker
             auto connectResult = transport.connect();
             if (connectResult.isErr)
             {
-                Logger.error("Failed to connect to coordinator: " ~ connectResult.unwrapErr().message());
+                structuredLog.error("Failed to connect to coordinator: " ~ connectResult.unwrapErr().message()).emit();
                 return false;
             }
             
@@ -95,14 +95,14 @@ class E2EWorker
             *cast(uint*)lengthBytes.ptr = cast(uint)regData.length;
             
             // For now, just log registration attempt
-            Logger.info("Worker " ~ address ~ " attempting registration");
+            structuredLog.info("Worker " ~ address ~ " attempting registration").emit();
             
             transport.close();
             return true;
         }
         catch (Exception e)
         {
-            Logger.error("Registration failed: " ~ e.msg);
+            structuredLog.error("Registration failed: " ~ e.msg).emit();
             return false;
         }
     }
@@ -117,7 +117,7 @@ class E2EWorker
             serverSocket.bind(new InternetAddress(host, port));
             serverSocket.listen(10);
             
-            Logger.info("E2E Worker listening on " ~ address);
+            structuredLog.info("E2E Worker listening on " ~ address).emit();
             
             while (atomicLoad(running))
             {
@@ -139,7 +139,7 @@ class E2EWorker
         }
         catch (Exception e)
         {
-            Logger.error("Worker server error: " ~ e.msg);
+            structuredLog.error("Worker server error: " ~ e.msg).emit();
         }
     }
     
@@ -168,7 +168,7 @@ class E2EWorker
         }
         catch (Exception e)
         {
-            Logger.error("Client handling error: " ~ e.msg);
+            structuredLog.error("Client handling error: " ~ e.msg).emit();
         }
     }
     
@@ -189,7 +189,7 @@ class E2EWorker
             
             // Deserialize action request
             // For now, simulate execution
-            Logger.info("Worker " ~ address ~ " received action request");
+            structuredLog.info("Worker " ~ address ~ " received action request").emit();
             
             // Execute action
             executeAction();
@@ -200,7 +200,7 @@ class E2EWorker
         }
         catch (Exception e)
         {
-            Logger.error("Action request handling error: " ~ e.msg);
+            structuredLog.error("Action request handling error: " ~ e.msg).emit();
         }
     }
     
@@ -215,7 +215,7 @@ class E2EWorker
         // Simulate work
         Thread.sleep(100.msecs);
         
-        Logger.debugLog("Worker " ~ address ~ " completed action");
+        structuredLog.debug_("Worker " ~ address ~ " completed action").emit();
     }
     
     /// Get number of completed actions
@@ -380,8 +380,8 @@ unittest
     
     // Verify stats
     auto stats = coordinator.getStats();
-    Logger.info("Simple build - workers: " ~ stats.workerCount.to!string);
-    Logger.info("Simple build - healthy: " ~ stats.healthyWorkerCount.to!string);
+    structuredLog.info("Simple build - workers: " ~ stats.workerCount.to!string).emit();
+    structuredLog.info("Simple build - healthy: " ~ stats.healthyWorkerCount.to!string).emit();
     
     Assert.isTrue(stats.workerCount >= 0, "Workers should be registered");
 }
@@ -425,10 +425,10 @@ unittest
         auto worker = fixture.getWorker(i);
         immutable completed = worker.getCompletedCount();
         totalWork += completed;
-        Logger.info("Worker " ~ i.to!string ~ " completed: " ~ completed.to!string);
+        structuredLog.info("Worker " ~ i.to!string ~ " completed: " ~ completed.to!string).emit();
     }
     
-    Logger.info("Total work completed: " ~ totalWork.to!string);
+    structuredLog.info("Total work completed: " ~ totalWork.to!string).emit();
     Assert.isTrue(true, "Work distributed across workers");
 }
 
@@ -490,8 +490,8 @@ unittest
     Thread.sleep(4.seconds);
     
     auto stats = coordinator.getStats();
-    Logger.info("Dependency test - pending: " ~ stats.pendingActions.to!string);
-    Logger.info("Dependency test - completed: " ~ stats.completedActions.to!string);
+    structuredLog.info("Dependency test - pending: " ~ stats.pendingActions.to!string).emit();
+    structuredLog.info("Dependency test - completed: " ~ stats.completedActions.to!string).emit();
     
     Assert.isTrue(true, "Dependencies handled correctly");
 }
@@ -544,7 +544,7 @@ unittest
     
     // Critical action should execute first
     auto stats = coordinator.getStats();
-    Logger.info("Priority test - completed: " ~ stats.completedActions.to!string);
+    structuredLog.info("Priority test - completed: " ~ stats.completedActions.to!string).emit();
     
     Assert.isTrue(true, "Priority scheduling works");
 }
@@ -584,7 +584,7 @@ unittest
     {
         immutable count = fixture.getWorker(i).getCompletedCount();
         workCounts ~= count;
-        Logger.info("Worker " ~ i.to!string ~ " load: " ~ count.to!string);
+        structuredLog.info("Worker " ~ i.to!string ~ " load: " ~ count.to!string).emit();
     }
     
     // Work should be relatively balanced
@@ -626,7 +626,7 @@ unittest
     
     // Action should be assigned to capable worker
     auto stats = coordinator.getStats();
-    Logger.info("Capability test - executed: " ~ stats.executingActions.to!string);
+    structuredLog.info("Capability test - executed: " ~ stats.executingActions.to!string).emit();
     
     Assert.isTrue(true, "Capability matching works");
 }
@@ -665,13 +665,13 @@ unittest
     auto duration = MonoTime.currTime - startTime;
     
     auto stats = coordinator.getStats();
-    Logger.info("Stress test - total pending: " ~ stats.pendingActions.to!string);
-    Logger.info("Stress test - total completed: " ~ stats.completedActions.to!string);
-    Logger.info("Stress test - duration: " ~ duration.total!"seconds".to!string ~ "s");
+    structuredLog.info("Stress test - total pending: " ~ stats.pendingActions.to!string).emit();
+    structuredLog.info("Stress test - total completed: " ~ stats.completedActions.to!string).emit();
+    structuredLog.info("Stress test - duration: " ~ duration.total!"seconds".to!string ~ "s").emit();
     
     // Calculate throughput
     immutable throughput = stats.completedActions / (duration.total!"msecs" / 1000.0);
-    Logger.info("Throughput: " ~ throughput.to!string ~ " actions/sec");
+    structuredLog.info("Throughput: " ~ throughput.to!string ~ " actions/sec").emit();
     
     Assert.isTrue(stats.completedActions > 0, "Actions should complete");
 }
@@ -721,7 +721,7 @@ unittest
     
     // New worker should receive work
     immutable extraWork = extraWorker.getCompletedCount();
-    Logger.info("Extra worker completed: " ~ extraWork.to!string);
+    structuredLog.info("Extra worker completed: " ~ extraWork.to!string).emit();
     
     Assert.isTrue(true, "Dynamic worker join works");
 }
@@ -764,8 +764,8 @@ unittest
     
     // Coordinator should recover and redistribute work
     auto stats = coordinator.getStats();
-    Logger.info("Recovery test - healthy workers: " ~ stats.healthyWorkerCount.to!string);
-    Logger.info("Recovery test - pending: " ~ stats.pendingActions.to!string);
+    structuredLog.info("Recovery test - healthy workers: " ~ stats.healthyWorkerCount.to!string).emit();
+    structuredLog.info("Recovery test - pending: " ~ stats.pendingActions.to!string).emit();
     
     Assert.isTrue(stats.healthyWorkerCount >= 2, "Remaining workers should be healthy");
 }

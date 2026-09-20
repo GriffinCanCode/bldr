@@ -24,7 +24,7 @@ import engine.distributed.protocol.protocol;
 import engine.distributed.protocol.messages;
 import engine.graph.core.graph : BuildGraph;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 // ============================================================================
 // DISTRIBUTED RECOVERY EDGE CASES
@@ -269,7 +269,7 @@ struct PartialOutputState
     
     // Only one operation should succeed per token
     auto acceptedCount = operations.filter!(op => op.accepted).count;
-    Logger.info("Fencing test - accepted operations: " ~ acceptedCount.to!string);
+    structuredLog.info("Fencing test - accepted operations: " ~ acceptedCount.to!string).emit();
     
     Assert.isTrue(acceptedCount >= 1, "At least one operation should succeed");
     
@@ -716,8 +716,8 @@ struct PartialOutputState
         }
     }
     
-    Logger.info("Queue overflow test - queued: " ~ queue.length.to!string ~ 
-               ", dropped: " ~ queue.dropped.to!string);
+    structuredLog.info("Queue overflow test - queued: " ~ queue.length.to!string ~ 
+               ", dropped: " ~ queue.dropped.to!string).emit();
     
     Assert.equal(queue.length, 100, "Queue should be at capacity");
     Assert.equal(queue.dropped, 400, "Should have dropped 400 items");
@@ -774,8 +774,8 @@ struct PartialOutputState
             rejectedCount++;
     }
     
-    Logger.info("Backpressure - accepted: " ~ acceptedCount.to!string ~ 
-               ", rejected: " ~ rejectedCount.to!string);
+    structuredLog.info("Backpressure - accepted: " ~ acceptedCount.to!string ~ 
+               ", rejected: " ~ rejectedCount.to!string).emit();
     
     Assert.equal(acceptedCount, highWaterMark, "Should accept up to high water mark");
     Assert.equal(rejectedCount, 100 - highWaterMark, "Should reject excess");
@@ -849,7 +849,7 @@ struct PartialOutputState
     synchronized (mutex)
     {
         auto entry = blacklist[worker];
-        Logger.info("After 10 rapid failures - count: " ~ entry.failureCount.to!string);
+        structuredLog.info("After 10 rapid failures - count: " ~ entry.failureCount.to!string).emit();
         Assert.equal(entry.failureCount, 10, "Should record all failures");
     }
     

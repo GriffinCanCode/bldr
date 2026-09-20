@@ -534,6 +534,20 @@ struct ExplainCommand
             current = parent;
         }
         
+        // Fall back to the docs shipped alongside the executable. Without this
+        // an installed bldr can only explain anything while the working
+        // directory happens to sit under a tree that contains a docs/ folder.
+        import std.file : thisExePath;
+        
+        auto exeDir = dirName(thisExePath());
+        foreach (candidate; [buildPath(exeDir, "docs"),
+                             buildPath(dirName(exeDir), "docs"),
+                             buildPath(dirName(exeDir), "share", "bldr", "docs")])
+        {
+            if (exists(candidate))
+                return candidate;
+        }
+        
         return "docs"; // Fallback
     }
     

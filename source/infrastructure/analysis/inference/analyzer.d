@@ -168,12 +168,14 @@ class DependencyAnalyzer
                     continue;
                 }
                 
-                // Add resolved dependencies to graph (no cycle check yet)
+                // Add resolved dependencies to graph (no cycle check yet).
+                // Graph keys are fully-qualified target ids, not bare names.
+                immutable fromKey = target.id.toString();
                 foreach (dep; analysis.dependencies)
                 {
                     if (graph.hasKey(dep.targetName))
                     {
-                        auto addResult = graph.addDependency(target.name, dep.targetName);
+                        auto addResult = graph.addDependency(fromKey, dep.targetName);
                         if (addResult.isErr)
                         {
                             auto error = addResult.unwrapErr();
@@ -209,12 +211,14 @@ class DependencyAnalyzer
                 }
                 else
                 {
-                    // Add resolved dependencies to graph
+                    // Add resolved dependencies to graph.
+                    // Graph keys are fully-qualified target ids, not bare names.
+                    immutable fromKey = target.id.toString();
                     foreach (dep; analysis.dependencies)
                     {
                         if (graph.hasKey(dep.targetName))
                         {
-                            auto addResult = graph.addDependency(target.name, dep.targetName);
+                            auto addResult = graph.addDependency(fromKey, dep.targetName);
                             if (addResult.isErr)
                             {
                                 auto error = addResult.unwrapErr();
@@ -444,10 +448,15 @@ class DependencyAnalyzer
         // Resolve imports to dependencies
         result.dependencies = resolveImports(allImports, target.language, config);
         
-        // Add explicit dependencies
+        // Add explicit dependencies.
+        // Resolve against the fully-qualified id, not the bare name: a relative
+        // label like ":core" is rebased on everything before the first ':' of
+        // the referring target, so passing "app" would yield "app:core" instead
+        // of "//.:core" and the edge would be dropped as unknown.
+        immutable fromId = target.id.toString();
         foreach (dep; target.deps)
         {
-            auto resolved = resolver.resolve(dep, target.name);
+            auto resolved = resolver.resolve(dep, fromId);
             if (!resolved.empty && !result.dependencies.canFind!(d => d.targetName == resolved))
             {
                 result.dependencies ~= Dependency.direct(resolved, dep);

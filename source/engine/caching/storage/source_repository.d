@@ -263,6 +263,14 @@ final class SourceRepository
         size_t trackedPaths;
     }
     
+    /// Every CAS blob hash still referenced by a tracked source
+    /// Used as a GC root set: source blobs are only reachable through this index.
+    bool[string] referencedHashes() @system
+    {
+        synchronized (repoMutex)
+            return index.allHashes();
+    }
+    
     RepositoryStats getStats() @system
     {
         synchronized (repoMutex)
@@ -362,6 +370,15 @@ private final class SourceTrackingIndex
     size_t size() const @safe nothrow @nogc
     {
         return pathToHash.length;
+    }
+    
+    /// Every hash this index still tracks
+    bool[string] allHashes() const @safe
+    {
+        bool[string] hashes;
+        foreach (hash; hashToPath.byKey)
+            hashes[hash] = true;
+        return hashes;
     }
     
     /// Clear index

@@ -507,13 +507,14 @@ final class BuildServices : IServiceContainer
     {
         structuredLog.debug_("shutting_down_services").emit();
         
-        // Stop persistent worker service (saves metrics)
-        if (_persistentWorkers !is null)
-        {
-            structuredLog.debug_("shutting_down_persistent_workers").emit();
-            shutdownWorkerService();  // Stops the global service
-            _persistentWorkers = null;
-        }
+        // Stop persistent worker service (saves metrics).
+        // Unconditional: the service is a process-global singleton that a
+        // language handler can create without going through this container.
+        // Gating on our cached handle leaves its monitor threads running, and
+        // they are non-daemon, so the process would never exit.
+        structuredLog.debug_("shutting_down_persistent_workers").emit();
+        shutdownWorkerService();
+        _persistentWorkers = null;
         
         // Stop remote execution service
         if (_remoteService !is null)

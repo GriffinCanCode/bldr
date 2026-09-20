@@ -44,8 +44,7 @@ final class PerlBuildService : IPerlBuildService
         in PerlConfig perlConfig
     ) @trusted
     {
-        import std.process : executeShell;
-        import std.file : copy, exists, mkdirRecurse;
+        import std.file : copy, exists, mkdirRecurse, setAttributes, getAttributes;
         import std.path : buildPath, dirName, baseName, stripExtension;
         
         LanguageBuildResult result;
@@ -83,7 +82,11 @@ final class PerlBuildService : IPerlBuildService
             
             version(Posix)
             {
-                executeShell("chmod +x " ~ outputPath);
+                // Set the mode directly rather than shelling out: the old
+                // "chmod +x " ~ outputPath ran a target-controlled path through
+                // a shell, and also broke on any path containing a space.
+                import std.conv : octal;
+                setAttributes(outputPath, getAttributes(outputPath) | octal!111);
             }
             
             result.outputs ~= outputPath;

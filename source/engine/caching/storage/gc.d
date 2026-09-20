@@ -27,10 +27,17 @@ final class CacheGarbageCollector
     }
     
     /// Run garbage collection
+    ///
+    /// Mark-and-sweep over the CAS. The caller must supply every root set that
+    /// can reach a blob — the two caches below plus `extraRoots` for producers
+    /// the GC cannot see (the source repository, most importantly). A blob
+    /// absent from the union is deleted, so an incomplete root set is data loss.
+    ///
     /// Returns: number of blobs collected and bytes freed
     BuildResult!GCResult collect(
         BuildCache targetCache,
-        ActionCache actionCache
+        ActionCache actionCache,
+        const bool[string] extraRoots = null
     ) @system
     {
         auto timer = StopWatch(AutoStart.yes);
@@ -41,10 +48,24 @@ final class CacheGarbageCollector
             emitEvent(CacheEventType.GCStarted, 0, 0, 0, dur!"msecs"(0));
             
             // Mark phase: collect all referenced hashes
-            auto referencedHashes = collectReferences(targetCache, actionCache);
+            auto referencedHashes = collectReferences(targetCache, actionCache, extraRoots);
+            auto blobs = cas.listBlobs();
+            
+            // Refuse to sweep on an empty root set against a populated store: that
+            // means the mark phase failed to see the roots, not that everything
+            // is garbage. Sweeping here would wipe the entire cache.
+            if (referencedHashes.length == 0 && blobs.length > 0)
+            {
+                return Err!(GCResult, BuildError)(Errors.cache(
+                    "Refusing to collect: no cache entries reference any blob, " ~
+                    "but the store holds " ~ blobs.length.to!string ~ ". This " ~
+                    "indicates an incomplete mark phase rather than a fully " ~
+                    "garbage store.",
+                    Cache.GCFailed).build());
+            }
             
             // Sweep phase: remove unreferenced blobs
-            auto sweepResult = sweepUnreferenced(referencedHashes);
+            auto sweepResult = sweepUnreferenced(blobs, referencedHashes);
             
             immutable gcTime = timer.peek();
             
@@ -69,29 +90,30 @@ final class CacheGarbageCollector
     /// Collect all referenced blob hashes from caches
     private bool[string] collectReferences(
         BuildCache targetCache,
-        ActionCache actionCache
+        ActionCache actionCache,
+        const bool[string] extraRoots
     ) @system
     {
         bool[string] referenced;
         
-        // Collect from target cache
-        auto targetStats = targetCache.getStats();
-        // Note: Future enhancement - extend BuildCache API to expose output hashes
-        // for more comprehensive garbage collection
+        foreach (hash; targetCache.referencedHashes().byKey)
+            referenced[hash] = true;
         
-        // Collect from action cache
-        auto actionStats = actionCache.getStats();
-        // Similarly, need API to get all action output hashes
+        foreach (hash; actionCache.referencedHashes().byKey)
+            referenced[hash] = true;
+        
+        foreach (hash; extraRoots.byKey)
+            referenced[hash] = true;
         
         return referenced;
     }
     
     /// Sweep unreferenced blobs
-    private GCResult sweepUnreferenced(const bool[string] referenced) @system
+    private GCResult sweepUnreferenced(string[] blobs, const bool[string] referenced) @system
     {
         GCResult result;
         
-        foreach (hash; cas.listBlobs().filter!(h => h !in referenced))
+        foreach (hash; blobs.filter!(h => h !in referenced))
         {
             // Get blob size before deletion
             auto getBlobResult = cas.getBlob(hash);

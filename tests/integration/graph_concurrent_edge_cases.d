@@ -20,7 +20,7 @@ import engine.graph.core.graph : BuildGraph, BuildNode, BuildStatus, ValidationM
 import infrastructure.config.schema.schema : Target, TargetType, TargetId;
 import infrastructure.errors.types.types : BuildError;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 // ============================================================================
 // CONCURRENT GRAPH EDGE CASES
@@ -175,9 +175,9 @@ class InstrumentedGraph
     // Final validation
     auto validateResult = graph.validate();
     
-    Logger.info("Cycle race - edges added: " ~ atomicLoad(edgesAdded).to!string ~
+    structuredLog.info("Cycle race - edges added: " ~ atomicLoad(edgesAdded).to!string ~
                ", cycles rejected: " ~ atomicLoad(cyclesRejected).to!string ~
-               ", cycle detections: " ~ graph.getCycleDetections().to!string);
+               ", cycle detections: " ~ graph.getCycleDetections().to!string).emit();
     
     // Graph should be valid (no cycles)
     Assert.isTrue(validateResult.isOk, "Final graph should be acyclic");
@@ -278,8 +278,8 @@ class InstrumentedGraph
     validateThread.join();
     foreach (t; addThreads) t.join();
     
-    Logger.info("Concurrent validate/add - validations: " ~ atomicLoad(validations).to!string ~
-               ", additions: " ~ atomicLoad(additions).to!string);
+    structuredLog.info("Concurrent validate/add - validations: " ~ atomicLoad(validations).to!string ~
+               ", additions: " ~ atomicLoad(additions).to!string).emit();
     
     // Final validation should succeed (only forward edges)
     auto finalResult = graph.validate();
@@ -465,8 +465,8 @@ class MutableGraph
     traverseThread.join();
     removeThread.join();
     
-    Logger.info("Remove during traversal - traversals: " ~ atomicLoad(traversalCount).to!string ~
-               ", removals: " ~ atomicLoad(removalCount).to!string);
+    structuredLog.info("Remove during traversal - traversals: " ~ atomicLoad(traversalCount).to!string ~
+               ", removals: " ~ atomicLoad(removalCount).to!string).emit();
     
     // Should complete without crash
     Assert.isTrue(atomicLoad(traversalCount) > 0, "Should have completed traversals");
@@ -532,9 +532,9 @@ class MutableGraph
     addThread.join();
     removeThread.join();
     
-    Logger.info("Concurrent add/remove - adds: " ~ atomicLoad(addCount).to!string ~
+    structuredLog.info("Concurrent add/remove - adds: " ~ atomicLoad(addCount).to!string ~
                ", removes: " ~ atomicLoad(removeCount).to!string ~
-               ", final nodes: " ~ graph.getNodes().length.to!string);
+               ", final nodes: " ~ graph.getNodes().length.to!string).emit();
     
     Assert.isTrue(atomicLoad(addCount) > 0, "Should have added nodes");
     Assert.isTrue(atomicLoad(removeCount) > 0, "Should have removed nodes");
@@ -642,9 +642,9 @@ class BoundedArena
         }
     }
     
-    Logger.info("Arena exhaustion - successful: " ~ atomicLoad(successfulAdds).to!string ~
+    structuredLog.info("Arena exhaustion - successful: " ~ atomicLoad(successfulAdds).to!string ~
                ", failed: " ~ atomicLoad(failedAdds).to!string ~
-               ", arena failures: " ~ arena.getFailures().to!string);
+               ", arena failures: " ~ arena.getFailures().to!string).emit();
     
     // Should have some failures due to capacity limit
     Assert.isTrue(atomicLoad(failedAdds) > 0, "Should have some allocation failures");
@@ -710,9 +710,9 @@ class BoundedArena
         }
     }
     
-    Logger.info("Arena expansion - allocations: " ~ atomicLoad(allocations).to!string ~
+    structuredLog.info("Arena expansion - allocations: " ~ atomicLoad(allocations).to!string ~
                ", expansions: " ~ arena.getExpansions().to!string ~
-               ", final capacity: " ~ arena.getCapacity().to!string);
+               ", final capacity: " ~ arena.getCapacity().to!string).emit();
     
     Assert.equal(atomicLoad(allocations), 400, "All allocations should succeed");
     Assert.isTrue(arena.getExpansions() > 0, "Should have expanded");
@@ -915,7 +915,7 @@ class BoundedArena
     observerThread.join();
     writerThread.join();
     
-    Logger.info("ABA detection - detected: " ~ atomicLoad(abaDetections).to!string);
+    structuredLog.info("ABA detection - detected: " ~ atomicLoad(abaDetections).to!string).emit();
     
     // Version counter should detect the ABA pattern
     Assert.isTrue(atomicLoad(versionCounter) >= 10, "Should have version updates");
@@ -983,8 +983,8 @@ class BoundedArena
         }
     }
     
-    Logger.info("Mode switch - deferred: " ~ tracker.deferredOperations.to!string ~
-               ", immediate: " ~ tracker.immediateOperations.to!string);
+    structuredLog.info("Mode switch - deferred: " ~ tracker.deferredOperations.to!string ~
+               ", immediate: " ~ tracker.immediateOperations.to!string).emit();
     
     Assert.equal(tracker.deferredOperations, 50, "Should have 50 deferred operations");
     Assert.equal(tracker.immediateOperations, 50, "Should have 50 immediate operations");
@@ -1067,9 +1067,9 @@ class BoundedArena
     modifierThread.join();
     foreach (sorter; sorters) sorter.join();
     
-    Logger.info("Topo sort race - sorts: " ~ atomicLoad(sortCount).to!string ~
+    structuredLog.info("Topo sort race - sorts: " ~ atomicLoad(sortCount).to!string ~
                ", errors: " ~ atomicLoad(sortErrors).to!string ~
-               ", modifications: " ~ atomicLoad(modifications).to!string);
+               ", modifications: " ~ atomicLoad(modifications).to!string).emit();
     
     // Final sort should succeed
     auto finalResult = graph.topologicalSort();
@@ -1162,8 +1162,8 @@ class BoundedArena
         }
     }
     
-    Logger.info("Depth calculation - hits: " ~ atomicLoad(calculator.cacheHits).to!string ~
-               ", misses: " ~ atomicLoad(calculator.cacheMisses).to!string);
+    structuredLog.info("Depth calculation - hits: " ~ atomicLoad(calculator.cacheHits).to!string ~
+               ", misses: " ~ atomicLoad(calculator.cacheMisses).to!string).emit();
     
     // Should have cache hits after initial population
     Assert.isTrue(atomicLoad(calculator.cacheHits) > 0, "Should have cache hits");

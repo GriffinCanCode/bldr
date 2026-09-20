@@ -430,7 +430,11 @@ final class IoUring
             close(_ringFd);
         
         _valid = false;
-        GC.removeRoot(cast(void*)&this);
+        // cast(void*)this, not &this: IoUring is a class, so &this is the
+        // address of the local reference. create() rooted the object itself,
+        // so the old form removed a root that was never added and left the
+        // real one registered for the life of the process.
+        GC.removeRoot(cast(void*)this);
     }
     
     /// Check if ring is valid

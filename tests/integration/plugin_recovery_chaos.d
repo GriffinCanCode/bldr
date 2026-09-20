@@ -18,7 +18,7 @@ import tests.harness : Assert;
 import tests.fixtures : TempDir;
 import infrastructure.plugins;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Plugin failure chaos types
 enum PluginChaosType
@@ -132,7 +132,7 @@ class ChaoticMockPlugin
     
     private Result!(PluginExecution, BuildError) simulateCrash() @system
     {
-        Logger.info("CHAOS: Plugin '" ~ name ~ "' crashed");
+        structuredLog.info("CHAOS: Plugin '" ~ name ~ "' crashed").emit();
         atomicOp!"+="(crashCount, 1);
         
         auto error = new PluginError("Plugin crashed with exit code 1");
@@ -141,7 +141,7 @@ class ChaoticMockPlugin
     
     private Result!(PluginExecution, BuildError) simulateHang(Duration timeout) @system
     {
-        Logger.info("CHAOS: Plugin '" ~ name ~ "' hanging");
+        structuredLog.info("CHAOS: Plugin '" ~ name ~ "' hanging").emit();
         
         // Hang for longer than timeout
         Thread.sleep(timeout + 1.seconds);
@@ -152,7 +152,7 @@ class ChaoticMockPlugin
     
     private Result!(PluginExecution, BuildError) simulateTimeout(Duration timeout) @system
     {
-        Logger.info("CHAOS: Plugin '" ~ name ~ "' timing out");
+        structuredLog.info("CHAOS: Plugin '" ~ name ~ "' timing out").emit();
         
         Thread.sleep(timeout + 100.msecs);
         
@@ -162,7 +162,7 @@ class ChaoticMockPlugin
     
     private Result!(PluginExecution, BuildError) simulateInvalidJSON() @system
     {
-        Logger.info("CHAOS: Plugin '" ~ name ~ "' returning invalid JSON");
+        structuredLog.info("CHAOS: Plugin '" ~ name ~ "' returning invalid JSON").emit();
         
         PluginExecution exec;
         exec.exitCode = 0;
@@ -176,7 +176,7 @@ class ChaoticMockPlugin
     
     private Result!(PluginExecution, BuildError) simulatePartialResponse(RPCRequest request) @system
     {
-        Logger.info("CHAOS: Plugin '" ~ name ~ "' returning partial response");
+        structuredLog.info("CHAOS: Plugin '" ~ name ~ "' returning partial response").emit();
         
         PluginExecution exec;
         exec.exitCode = 0;
@@ -191,7 +191,7 @@ class ChaoticMockPlugin
     
     private Result!(PluginExecution, BuildError) simulateErrorResponse(RPCRequest request) @system
     {
-        Logger.info("CHAOS: Plugin '" ~ name ~ "' returning error");
+        structuredLog.info("CHAOS: Plugin '" ~ name ~ "' returning error").emit();
         
         PluginExecution exec;
         exec.exitCode = 0;
@@ -207,7 +207,7 @@ class ChaoticMockPlugin
     
     private Result!(PluginExecution, BuildError) simulateResourceExhaustion() @system
     {
-        Logger.info("CHAOS: Plugin '" ~ name ~ "' exhausting resources");
+        structuredLog.info("CHAOS: Plugin '" ~ name ~ "' exhausting resources").emit();
         
         // Simulate memory exhaustion
         auto error = new PluginError("Plugin exhausted system resources");
@@ -216,7 +216,7 @@ class ChaoticMockPlugin
     
     private Result!(PluginExecution, BuildError) simulateSlowResponse(RPCRequest request, Duration delay) @system
     {
-        Logger.info("CHAOS: Plugin '" ~ name ~ "' responding slowly");
+        structuredLog.info("CHAOS: Plugin '" ~ name ~ "' responding slowly").emit();
         
         Thread.sleep(delay);
         
@@ -226,7 +226,7 @@ class ChaoticMockPlugin
     
     private Result!(PluginExecution, BuildError) simulateSegfault() @system
     {
-        Logger.info("CHAOS: Plugin '" ~ name ~ "' segfaulted");
+        structuredLog.info("CHAOS: Plugin '" ~ name ~ "' segfaulted").emit();
         atomicOp!"+="(crashCount, 1);
         
         auto error = new PluginError("Plugin segmentation fault (exit code 139)");
@@ -235,7 +235,7 @@ class ChaoticMockPlugin
     
     private Result!(PluginExecution, BuildError) simulateRestart(RPCRequest request) @system
     {
-        Logger.info("CHAOS: Plugin '" ~ name ~ "' restarting");
+        structuredLog.info("CHAOS: Plugin '" ~ name ~ "' restarting").emit();
         atomicOp!"+="(crashCount, 1);
         
         // Crash a few times then succeed
@@ -295,8 +295,8 @@ class ResilientPluginSystem
         {
             if (attempt > 0)
             {
-                Logger.info("Retrying plugin '" ~ pluginName ~ "' (attempt " ~ 
-                          (attempt + 1).to!string ~ "/" ~ maxRetries.to!string ~ ")");
+                structuredLog.info("Retrying plugin '" ~ pluginName ~ "' (attempt " ~ 
+                          (attempt + 1).to!string ~ "/" ~ maxRetries.to!string ~ ")").emit();
                 Thread.sleep(retryDelay);
             }
             
@@ -304,8 +304,8 @@ class ResilientPluginSystem
             
             if (result.isOk)
             {
-                Logger.info("Plugin '" ~ pluginName ~ "' succeeded on attempt " ~ 
-                          (attempt + 1).to!string);
+                structuredLog.info("Plugin '" ~ pluginName ~ "' succeeded on attempt " ~ 
+                          (attempt + 1).to!string).emit();
                 return result;
             }
             
@@ -313,11 +313,11 @@ class ResilientPluginSystem
             auto error = result.unwrapErr();
             if (!isRetryable(error))
             {
-                Logger.info("Plugin error is not retryable: " ~ error.message());
+                structuredLog.info("Plugin error is not retryable: " ~ error.message()).emit();
                 return result;
             }
             
-            Logger.info("Retryable error: " ~ error.message());
+            structuredLog.info("Retryable error: " ~ error.message()).emit();
         }
         
         // All retries exhausted
@@ -387,7 +387,7 @@ unittest
     Assert.isTrue(result.isOk, "Should recover from crashes");
     
     size_t crashes = plugin.getCrashCount();
-    Logger.info("Plugin crashed " ~ crashes.to!string ~ " times before success");
+    structuredLog.info("Plugin crashed " ~ crashes.to!string ~ " times before success").emit();
     Assert.isTrue(crashes >= 2, "Should have crashed during retries");
     
     writeln("  \x1b[32m✓ Crash recovery test passed\x1b[0m");
@@ -416,12 +416,12 @@ unittest
     // May succeed on retry or eventually fail
     if (result.isOk)
     {
-        Logger.info("Plugin succeeded despite timeout chaos");
+        structuredLog.info("Plugin succeeded despite timeout chaos").emit();
         Assert.isTrue(true, "Recovery successful");
     }
     else
     {
-        Logger.info("Plugin failed: " ~ result.unwrapErr().message());
+        structuredLog.info("Plugin failed: " ~ result.unwrapErr().message()).emit();
         Assert.isTrue(true, "Graceful failure");
     }
     
@@ -453,7 +453,7 @@ unittest
     Assert.isTrue(result.isErr, "Should detect invalid JSON");
     
     auto error = result.unwrapErr();
-    Logger.info("Error: " ~ error.message());
+    structuredLog.info("Error: " ~ error.message()).emit();
     Assert.isTrue(error.message().canFind("invalid") || error.message().canFind("JSON"),
                  "Error should mention JSON issue");
     
@@ -489,7 +489,7 @@ unittest
     Assert.isTrue(result.isErr, "Should detect hang");
     
     // Should not wait too long (respects timeout)
-    Logger.info("Hang detected in " ~ elapsed.total!"msecs".to!string ~ "ms");
+    structuredLog.info("Hang detected in " ~ elapsed.total!"msecs".to!string ~ "ms").emit();
     Assert.isTrue(elapsed.total!"msecs" < 5000, "Should timeout reasonably quickly");
     
     writeln("  \x1b[32m✓ Hang detection test passed\x1b[0m");
@@ -520,7 +520,7 @@ unittest
     if (result.isErr)
     {
         auto error = result.unwrapErr();
-        Logger.info("Partial response error: " ~ error.message());
+        structuredLog.info("Partial response error: " ~ error.message()).emit();
         Assert.isTrue(error.message().canFind("incomplete") || error.message().canFind("partial"),
                      "Should detect incomplete response");
     }
@@ -552,7 +552,7 @@ unittest
     Assert.isTrue(result.isOk, "Should recover from flapping");
     
     size_t crashes = plugin.getCrashCount();
-    Logger.info("Plugin crashed " ~ crashes.to!string ~ " times (flapping)");
+    structuredLog.info("Plugin crashed " ~ crashes.to!string ~ " times (flapping)").emit();
     Assert.isTrue(crashes > 0, "Should have crashed during flapping");
     
     writeln("  \x1b[32m✓ Flapping test passed\x1b[0m");
@@ -584,7 +584,7 @@ unittest
     // Should tolerate slow response if within timeout
     Assert.isTrue(result.isOk, "Should handle slow response");
     
-    Logger.info("Slow response took " ~ elapsed.total!"msecs".to!string ~ "ms");
+    structuredLog.info("Slow response took " ~ elapsed.total!"msecs".to!string ~ "ms").emit();
     Assert.isTrue(elapsed.total!"msecs" >= 1000, "Should have waited for slow response");
     
     writeln("  \x1b[32m✓ Slow response test passed\x1b[0m");
@@ -615,7 +615,7 @@ unittest
     Assert.isTrue(result.isErr, "Should detect RPC error");
     
     auto error = result.unwrapErr();
-    Logger.info("RPC error: " ~ error.message());
+    structuredLog.info("RPC error: " ~ error.message()).emit();
     Assert.isTrue(error.message().canFind("error"), "Should report error");
     
     writeln("  \x1b[32m✓ RPC error test passed\x1b[0m");
@@ -663,9 +663,9 @@ unittest
             failureCount++;
     }
     
-    Logger.info("Success: " ~ successCount.to!string ~ ", Failure: " ~ failureCount.to!string);
-    Logger.info("Total faults injected: " ~ plugin.getFaultCount().to!string);
-    Logger.info("Total crashes: " ~ plugin.getCrashCount().to!string);
+    structuredLog.info("Success: " ~ successCount.to!string ~ ", Failure: " ~ failureCount.to!string).emit();
+    structuredLog.info("Total faults injected: " ~ plugin.getFaultCount().to!string).emit();
+    structuredLog.info("Total crashes: " ~ plugin.getCrashCount().to!string).emit();
     
     // Should succeed on at least some requests
     Assert.isTrue(successCount > 0, "Should have some successes despite chaos");

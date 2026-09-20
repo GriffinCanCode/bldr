@@ -17,7 +17,7 @@ import core.sync.mutex : Mutex;
 import tests.harness : Assert;
 import tests.fixtures : TempDir;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 // ============================================================================
 // CACHE CORRUPTION RECOVERY TESTS
@@ -413,7 +413,7 @@ class CorruptibleActionCache
         }
     }
     
-    Logger.info("Bit rot test - corrupted " ~ corrupted.to!string ~ " of " ~ hashes.length.to!string ~ " blobs");
+    structuredLog.info("Bit rot test - corrupted " ~ corrupted.to!string ~ " of " ~ hashes.length.to!string ~ " blobs").emit();
     
     // Verify detection
     size_t detected = 0;
@@ -463,8 +463,8 @@ class CorruptibleActionCache
     // Run repair
     auto result = cas.checkAndRepair();
     
-    Logger.info("Refcount repair - missing: " ~ result.missingBlobs.to!string ~
-               ", repaired: " ~ result.repairedRefCounts.to!string);
+    structuredLog.info("Refcount repair - missing: " ~ result.missingBlobs.to!string ~
+               ", repaired: " ~ result.repairedRefCounts.to!string).emit();
     
     Assert.equal(result.missingBlobs, 1, "Should detect one missing blob");
     Assert.isTrue(result.repairedRefCounts >= 1, "Should repair refcounts");
@@ -501,7 +501,7 @@ class CorruptibleActionCache
     // Run repair
     auto result = cas.checkAndRepair();
     
-    Logger.info("Orphan cleanup - found: " ~ result.orphanedFiles.to!string);
+    structuredLog.info("Orphan cleanup - found: " ~ result.orphanedFiles.to!string).emit();
     
     Assert.equal(result.orphanedFiles, 5, "Should find 5 orphaned files");
     
@@ -576,9 +576,9 @@ class CorruptibleActionCache
     // Run bulk validation
     auto result = actionCache.validateAll();
     
-    Logger.info("Bulk validation - total: " ~ result.totalEntries.to!string ~
+    structuredLog.info("Bulk validation - total: " ~ result.totalEntries.to!string ~
                ", valid: " ~ result.validEntries.to!string ~
-               ", invalidated: " ~ result.invalidatedEntries.to!string);
+               ", invalidated: " ~ result.invalidatedEntries.to!string).emit();
     
     Assert.equal(result.totalEntries, 100, "Should have 100 entries");
     Assert.equal(result.validEntries, 95, "Should have 95 valid entries");
@@ -685,13 +685,13 @@ class CorruptibleActionCache
     corruptThread.join();
     gcThread.join();
     
-    Logger.info("Concurrent GC - corruptions: " ~ atomicLoad(corruptionCount).to!string ~
-               ", GC runs: " ~ atomicLoad(gcRuns).to!string);
+    structuredLog.info("Concurrent GC - corruptions: " ~ atomicLoad(corruptionCount).to!string ~
+               ", GC runs: " ~ atomicLoad(gcRuns).to!string).emit();
     
     // Final repair should leave system consistent
     auto finalResult = cas.checkAndRepair();
-    Logger.info("Final state - missing: " ~ finalResult.missingBlobs.to!string ~
-               ", corrupted: " ~ finalResult.corruptedBlobs.to!string);
+    structuredLog.info("Final state - missing: " ~ finalResult.missingBlobs.to!string ~
+               ", corrupted: " ~ finalResult.corruptedBlobs.to!string).emit();
     
     writeln("  \x1b[32m✓ Concurrent corruption and GC passed\x1b[0m");
 }
@@ -776,9 +776,9 @@ class CorruptibleActionCache
     atomicStore(buildRunning, false);
     recoveryThread.join();
     
-    Logger.info("Recovery during build - completed: " ~ atomicLoad(actionsCompleted).to!string ~
+    structuredLog.info("Recovery during build - completed: " ~ atomicLoad(actionsCompleted).to!string ~
                ", hits: " ~ atomicLoad(cacheHits).to!string ~
-               ", misses: " ~ atomicLoad(cacheMisses).to!string);
+               ", misses: " ~ atomicLoad(cacheMisses).to!string).emit();
     
     Assert.isTrue(atomicLoad(actionsCompleted) > 0, "Build should make progress");
     

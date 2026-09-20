@@ -439,7 +439,7 @@ unittest
     // Plan should fail due to age
     auto planResult = planner.plan(checkpoint, graph);
     Assert.isTrue(planResult.isErr, "Old checkpoint should be rejected");
-    Assert.isTrue(planResult.unwrapErr().canFind("too old"), "Error should mention age");
+    Assert.isTrue(planResult.unwrapErr().message().canFind("too old"), "Error should mention age");
     
     writeln("\x1b[32m  ✓ Checkpoint expiration works correctly\x1b[0m");
 }

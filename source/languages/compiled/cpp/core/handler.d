@@ -211,31 +211,7 @@ class CppHandler : BaseCompiledLanguageHandler
     
     override protected string getOutputName(string name, TargetType type) const pure nothrow
     {
-        string ext = "";
-        string prefix = "";
-        
-        final switch (_config.outputType)
-        {
-            case OutputType.Executable:
-                version(Windows) ext = ".exe";
-                break;
-            case OutputType.SharedLib:
-                version(Windows) ext = ".dll";
-                else version(OSX) ext = ".dylib";
-                else ext = ".so";
-                break;
-            case OutputType.StaticLib:
-                version(Windows) { prefix = ""; ext = ".lib"; }
-                else { prefix = "lib"; ext = ".a"; }
-                break;
-            case OutputType.Object:
-                ext = ".o";
-                break;
-            case OutputType.HeaderOnly:
-                break;
-        }
-        
-        return prefix ~ name ~ ext;
+        return defaultOutputName(name, _config.outputType);
     }
     
     // ===== Private Implementation =====

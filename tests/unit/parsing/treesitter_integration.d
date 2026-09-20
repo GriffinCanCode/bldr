@@ -8,7 +8,7 @@ import std.path;
 import std.stdio;
 import infrastructure.parsing.treesitter;
 import infrastructure.analysis.ast.parser;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Test tree-sitter configuration loading
 unittest {

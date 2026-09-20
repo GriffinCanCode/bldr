@@ -668,10 +668,15 @@ final class MmapGraphOverlay
     
     /// Persist overlay status back to a new mmap file
     /// Use this to save build progress for resume
+    ///
+    /// Not implemented. Reports the failure rather than returning Ok: a caller
+    /// that checks isOk would otherwise be told build progress was saved when
+    /// nothing was written.
     VoidBuildResult persistOverlay(string path) @system
     {
-        // TODO: Implement status persistence
-        return Ok!BuildError();
+        return VoidBuildResult.err(Errors.cache(
+            "Overlay status persistence is not implemented; build progress was not saved to " ~ path,
+            Cache.WriteFailed).build());
     }
 }
 

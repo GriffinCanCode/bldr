@@ -95,6 +95,10 @@ final class WorkerMemoryMonitor
         if (atomicLoad(running)) return;
         atomicStore(running, true);
         pollThread = new Thread(&pollLoop);
+        // Daemon: sampling has no value once the build is over, and a missed
+        // stop() must not keep the process alive at runtime teardown.
+        // stop() still joins it explicitly on the normal path.
+        pollThread.isDaemon = true;
         pollThread.start();
         structuredLog.info("worker_memory_monitor_started").emit();
     }

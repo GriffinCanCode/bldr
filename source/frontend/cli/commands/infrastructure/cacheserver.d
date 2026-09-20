@@ -140,13 +140,19 @@ struct CacheServerCommand
     
     private static string formatBytes(size_t bytes) pure @safe
     {
-        if (bytes < 1024)
+        import std.format : format;
+        
+        // Format, don't slice: to!string of a short value like 1.5 is
+        // narrower than the fixed window this used to take.
+        enum KB = 1024.0, MB = KB * 1024, GB = MB * 1024;
+        
+        if (bytes < KB)
             return bytes.to!string ~ " B";
-        if (bytes < 1024 * 1024)
-            return (bytes / 1024.0).to!string[0 .. 5] ~ " KB";
-        if (bytes < 1024 * 1024 * 1024)
-            return (bytes / (1024.0 * 1024.0)).to!string[0 .. 5] ~ " MB";
-        return (bytes / (1024.0 * 1024.0 * 1024.0)).to!string[0 .. 5] ~ " GB";
+        if (bytes < MB)
+            return format("%.2f KB", bytes / KB);
+        if (bytes < GB)
+            return format("%.2f MB", bytes / MB);
+        return format("%.2f GB", bytes / GB);
     }
 }
 

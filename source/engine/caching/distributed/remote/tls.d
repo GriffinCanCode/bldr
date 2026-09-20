@@ -235,15 +235,24 @@ final class TlsContext
             return VoidBuildResult.err(
                 Errors.io(config.certFile, "TLS certificates not found: " ~ config.certFile, IO.FileNotFound));
         
-        // Production with SSL library (e.g., deimos-openssl):
-        // SSL_CTX* ctx = SSL_CTX_new(TLS_server_method());
-        // SSL_CTX_use_certificate_file(ctx, certFile, SSL_FILETYPE_PEM);
-        // SSL_CTX_use_PrivateKey_file(ctx, keyFile, SSL_FILETYPE_PEM);
-        // SSL_CTX_set_cipher_list(ctx, "HIGH:!aNULL:!MD5");
-        // See PRODUCTION IMPLEMENTATION NOTE at end of file for details
-        
-        initialized = true;
-        return Ok!BuildError();
+        // Fail closed. The record layer below is a pass-through: no SSL_CTX is
+        // created, no handshake is performed, and send/receive move plaintext.
+        // Reporting success here would hand the operator an unencrypted channel
+        // that every log line and config flag calls "TLS".
+        //
+        // To implement: link an SSL library (e.g. deimos-openssl) and build a
+        // real context here --
+        //   SSL_CTX* ctx = SSL_CTX_new(TLS_server_method());
+        //   SSL_CTX_use_certificate_file(ctx, certFile, SSL_FILETYPE_PEM);
+        //   SSL_CTX_use_PrivateKey_file(ctx, keyFile, SSL_FILETYPE_PEM);
+        //   SSL_CTX_set_cipher_list(ctx, "HIGH:!aNULL:!MD5");
+        // then wire TlsSocket.performHandshake/send/receive to it and delete
+        // this guard. See PRODUCTION IMPLEMENTATION NOTE at end of file.
+        return VoidBuildResult.err(Errors.config(
+            "TLS is enabled but not implemented: this build cannot encrypt " ~
+            "remote cache traffic. Disable TLS to run over plaintext knowingly, " ~
+            "or terminate TLS at a proxy in front of the cache server.",
+            Config.Error));
     }
     
     /// Wrap socket with TLS
@@ -313,40 +322,29 @@ final class TlsSocket
         if (!tlsEnabled)
             return Ok!BuildError();
         
-        // In a real implementation, this would:
-        // 1. Send ClientHello/ServerHello
-        // 2. Exchange certificates
-        // 3. Verify certificates
-        // 4. Establish session keys
-        // 5. Send Finished messages
-        
-        // For now, just verify socket is connected
-        if (!underlyingSocket.isAlive)
-            return VoidBuildResult.err(
-                Errors.system("Socket not connected for TLS handshake", Network.Error));
-        
-        return Ok!BuildError();
+        // Unreachable while TlsContext.initialize fails closed, and kept that
+        // way deliberately: there is no handshake here. A real one would send
+        // ClientHello/ServerHello, exchange and verify certificates, establish
+        // session keys, and exchange Finished messages. Returning Ok after only
+        // an isAlive check would mark the peer as authenticated when it is not.
+        return VoidBuildResult.err(
+            Errors.system("TLS handshake is not implemented; refusing to treat " ~
+                          "this connection as secure", Network.Error));
     }
     
-    /// Send data over TLS socket
+    /// Send data over the socket
+    /// Note: no encryption layer exists; only reachable when TLS is off
     ptrdiff_t send(const(void)[] data) @trusted
     {
-        if (!tlsEnabled)
-            return underlyingSocket.send(data);
-        
-        // In real implementation: encrypt data using session keys
-        // For now: pass through (development mode)
+        assert(!tlsEnabled, "TLS send reached without an encryption layer");
         return underlyingSocket.send(data);
     }
     
-    /// Receive data from TLS socket
+    /// Receive data from the socket
+    /// Note: no encryption layer exists; only reachable when TLS is off
     ptrdiff_t receive(void[] buffer) @trusted
     {
-        if (!tlsEnabled)
-            return underlyingSocket.receive(buffer);
-        
-        // In real implementation: decrypt received data
-        // For now: pass through (development mode)
+        assert(!tlsEnabled, "TLS receive reached without an encryption layer");
         return underlyingSocket.receive(buffer);
     }
     

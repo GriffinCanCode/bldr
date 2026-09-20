@@ -569,7 +569,7 @@ unittest
 
 unittest
 {
-    import std.stdio : writeln;
+    import std.stdio : writeln, writefln;
     
     writeln("\x1b[36m[TEST]\x1b[0m memory.numa - Thread-local NUMA arena");
     

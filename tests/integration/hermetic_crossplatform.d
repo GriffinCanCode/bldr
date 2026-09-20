@@ -7,7 +7,7 @@ import std.process : execute, executeShell;
 import std.algorithm : canFind, startsWith;
 import std.string : strip;
 import std.conv : to;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 import engine.runtime.hermetic;
 import engine.runtime.hermetic.determinism.detector;
 import engine.runtime.hermetic.determinism.enforcer;
@@ -186,7 +186,7 @@ int main() {
         CompilerType.GCC
     );
     
-    Logger.info("Platform " ~ currentPlatform().to!string ~ " detections: " ~ detections.length.to!string);
+    structuredLog.info("Platform " ~ currentPlatform().to!string ~ " detections: " ~ detections.length.to!string).emit();
     
     writeln("  \x1b[32m✓ C compilation test passed on " ~ currentPlatform().to!string ~ "\x1b[0m");
 }
@@ -304,8 +304,8 @@ int main() {
         auto cmd = [testCase.compiler, "test.c", "-o", "test.exe"];
         auto detections = NonDeterminismDetector.analyzeCompilerCommand(cmd, testCase.type);
         
-        Logger.info(testCase.platform.to!string ~ " (" ~ testCase.compiler ~ "): " ~ 
-                   detections.length.to!string ~ " detections");
+        structuredLog.info(testCase.platform.to!string ~ " (" ~ testCase.compiler ~ "): " ~ 
+                   detections.length.to!string ~ " detections").emit();
         
         // Verify platform-appropriate flags are suggested
         bool foundExpectedFlag = false;
@@ -365,7 +365,7 @@ int main() {
             if (exists(upperFile))
             {
                 auto content = readText(upperFile);
-                Logger.info("macOS: Same file, content = " ~ content);
+                structuredLog.info("macOS: Same file, content = " ~ content).emit();
             }
             break;
             
@@ -427,7 +427,7 @@ int main() { return 0; }
     }
     
     auto outputPath = buildPath(fixture.getBuildDir(), exeName);
-    Logger.info("Expected executable: " ~ outputPath);
+    structuredLog.info("Expected executable: " ~ outputPath).emit();
     
     writeln("  \x1b[32m✓ Executable format test passed\x1b[0m");
 }
@@ -463,7 +463,7 @@ int main() { return 0; }
         Assert.isTrue(libName.canFind(convention.extension),
                      convention.platform.to!string ~ " should have correct extension");
         
-        Logger.info(convention.platform.to!string ~ ": " ~ libName);
+        structuredLog.info(convention.platform.to!string ~ ": " ~ libName).emit();
     }
     
     writeln("  \x1b[32m✓ Shared library naming test passed\x1b[0m");
@@ -500,10 +500,10 @@ int main() { return 0; }
     
     foreach (include; includes)
     {
-        Logger.info(include.platform.to!string ~ " include paths:");
+        structuredLog.info(include.platform.to!string ~ " include paths:").emit();
         foreach (path; include.paths)
         {
-            Logger.info("  " ~ path);
+            structuredLog.info("  " ~ path).emit();
         }
     }
     

@@ -151,11 +151,8 @@ class SpecBasedHandler : BaseLanguageHandler
         }
         
         auto outputs = getOutputs(target, config);
-        string[string] vars;
-        vars["sources"] = target.sources.join(" ");
-        vars["output"] = outputs.empty ? "a.out" : outputs[0];
-        vars["flags"] = target.flags.join(" ");
-        vars["workspace"] = config.root;
+        auto vars = templateVars(target, config);
+        vars["output"] = quoted(outputs.empty ? "a.out" : outputs[0]);
         
         auto cmd = spec.expandTemplate(spec.build.compileCmd, vars);
         structuredLog.info("building_").field("detail", "Building: " ~ cmd).emit();
@@ -182,9 +179,7 @@ class SpecBasedHandler : BaseLanguageHandler
         // For libraries, often just validation/syntax check is needed
         if (!spec.build.checkCmd.empty)
         {
-            string[string] vars;
-            vars["sources"] = target.sources.join(" ");
-            vars["workspace"] = config.root;
+            auto vars = templateVars(target, config);
             
             auto cmd = spec.expandTemplate(spec.build.checkCmd, vars);
             auto res = executeWithEnv(cmd, spec.build.env, config.root);
@@ -213,10 +208,7 @@ class SpecBasedHandler : BaseLanguageHandler
             return result;
         }
         
-        string[string] vars;
-        vars["sources"] = target.sources.join(" ");
-        vars["workspace"] = config.root;
-        vars["flags"] = target.flags.join(" ");
+        auto vars = templateVars(target, config);
         
         auto cmd = spec.expandTemplate(spec.build.testCmd, vars);
         structuredLog.info("testing_").field("detail", "Testing: " ~ cmd).emit();
@@ -241,8 +233,7 @@ class SpecBasedHandler : BaseLanguageHandler
     
     private bool installDependencies(in Target target, in WorkspaceConfig config) @system
     {
-        string[string] vars;
-        vars["workspace"] = config.root;
+        auto vars = templateVars(target, config);
         
         if (!spec.deps.manifest.empty)
         {
@@ -252,7 +243,7 @@ class SpecBasedHandler : BaseLanguageHandler
                 structuredLog.debug_("no_manifest_found_at_").field("detail", "No manifest found at " ~ manifestPath).emit();
                 return true; // Not an error if optional
             }
-            vars["manifest"] = manifestPath;
+            vars["manifest"] = quoted(manifestPath);
         }
         
         auto cmd = spec.expandTemplate(spec.deps.installCmd, vars);
@@ -264,9 +255,7 @@ class SpecBasedHandler : BaseLanguageHandler
     
     private void runFormatter(in Target target, in WorkspaceConfig config) @system
     {
-        string[string] vars;
-        vars["sources"] = target.sources.join(" ");
-        vars["workspace"] = config.root;
+        auto vars = templateVars(target, config);
         
         auto cmd = spec.expandTemplate(spec.build.formatCmd, vars);
         structuredLog.debug_("formatting_").field("detail", "Formatting: " ~ cmd).emit();
@@ -278,9 +267,7 @@ class SpecBasedHandler : BaseLanguageHandler
     
     private void runLinter(in Target target, in WorkspaceConfig config) @system
     {
-        string[string] vars;
-        vars["sources"] = target.sources.join(" ");
-        vars["workspace"] = config.root;
+        auto vars = templateVars(target, config);
         
         auto cmd = spec.expandTemplate(spec.build.lintCmd, vars);
         structuredLog.debug_("linting_").field("detail", "Linting: " ~ cmd).emit();
@@ -288,6 +275,32 @@ class SpecBasedHandler : BaseLanguageHandler
         auto res = executeWithEnv(cmd, spec.build.env, config.root);
         if (res.status != 0)
             structuredLog.warning("linting_found_issues_").field("detail", "Linting found issues: " ~ res.output).emit();
+    }
+    
+    /// Shell-quote one value for interpolation into a spec command template.
+    /// The template is trusted spec text, but the values come from the
+    /// Builderfile, so a source named `a.cr; rm -rf ~` must stay one argument
+    /// instead of becoming a second command.
+    private static string quoted(string value) @safe
+    {
+        import std.process : escapeShellFileName;
+        return escapeShellFileName(value);
+    }
+    
+    /// Shell-quote each element, then join for a single `{{...}}` slot
+    private static string quotedAll(const(string)[] values) @safe
+    {
+        return values.map!(v => quoted(v)).join(" ");
+    }
+    
+    /// Standard substitutions available to every spec command template
+    private static string[string] templateVars(in Target target, in WorkspaceConfig config) @safe
+    {
+        return [
+            "sources": quotedAll(target.sources),
+            "flags": quotedAll(target.flags),
+            "workspace": quoted(config.root),
+        ];
     }
     
     /// Execute command with environment variables

@@ -15,7 +15,7 @@ import engine.graph;
 import engine.economics;
 import infrastructure.config.schema.schema;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Chaos injection for economic optimizer
 enum EconomicsChaosType
@@ -94,47 +94,47 @@ class ChaoticCostEstimator
         final switch (type)
         {
             case EconomicsChaosType.PriceSpike:
-                Logger.info("CHAOS: Price spike (×" ~ multiplier.to!string ~ ")");
+                structuredLog.info("CHAOS: Price spike (×" ~ multiplier.to!string ~ ")").emit();
                 // Simulate price spike by increasing usage (mathematically equivalent for linear pricing)
                 estimate.usage.cores = cast(size_t)(estimate.usage.cores * multiplier);
                 estimate.usage.memoryBytes = cast(size_t)(estimate.usage.memoryBytes * multiplier);
                 break;
             
             case EconomicsChaosType.PriceDrop:
-                Logger.info("CHAOS: Price drop (/" ~ multiplier.to!string ~ ")");
+                structuredLog.info("CHAOS: Price drop (/" ~ multiplier.to!string ~ ")").emit();
                 estimate.usage.cores = cast(size_t)(estimate.usage.cores / multiplier);
                 estimate.usage.memoryBytes = cast(size_t)(estimate.usage.memoryBytes / multiplier);
                 break;
             
             case EconomicsChaosType.NetworkCostSurge:
-                Logger.info("CHAOS: Network cost surge");
+                structuredLog.info("CHAOS: Network cost surge").emit();
                 estimate.usage.networkBytes = cast(size_t)(estimate.usage.networkBytes * multiplier * 10);
                 break;
             
             case EconomicsChaosType.SpotTermination:
-                Logger.info("CHAOS: Spot termination penalty");
+                structuredLog.info("CHAOS: Spot termination penalty").emit();
                 estimate.duration += 300.seconds;  // 5 min restart penalty
                 estimate.usage.duration = estimate.duration;
                 break;
             
             case EconomicsChaosType.CostEstimateError:
-                Logger.info("CHAOS: Cost estimate error");
+                structuredLog.info("CHAOS: Cost estimate error").emit();
                 // Wildly incorrect estimate
                 estimate.usage.cores = cast(size_t)(estimate.usage.cores * uniform(0.1f, 10.0f, rng));
                 break;
             
             case EconomicsChaosType.BudgetViolation:
-                Logger.info("CHAOS: Budget violation");
+                structuredLog.info("CHAOS: Budget violation").emit();
                 estimate.usage.cores = cast(size_t)(estimate.usage.cores * 100.0f);  // Blow the budget
                 break;
             
             case EconomicsChaosType.InfiniteCost:
-                Logger.info("CHAOS: Infinite cost (Simulated as Max)");
+                structuredLog.info("CHAOS: Infinite cost (Simulated as Max)").emit();
                 estimate.usage.cores = size_t.max / 100; // Prevent overflow elsewhere
                 break;
             
             case EconomicsChaosType.NegativeCost:
-                Logger.info("CHAOS: Negative cost (Simulated as Zero)");
+                structuredLog.info("CHAOS: Negative cost (Simulated as Zero)").emit();
                 estimate.usage.cores = 0;
                 estimate.usage.memoryBytes = 0;
                 estimate.usage.networkBytes = 0;
@@ -142,13 +142,13 @@ class ChaoticCostEstimator
                 break;
             
             case EconomicsChaosType.ZeroTime:
-                Logger.info("CHAOS: Zero execution time");
+                structuredLog.info("CHAOS: Zero execution time").emit();
                 estimate.duration = Duration.zero;
                 estimate.usage.duration = Duration.zero;
                 break;
             
             case EconomicsChaosType.TimeoutPenalty:
-                Logger.info("CHAOS: Timeout penalty");
+                structuredLog.info("CHAOS: Timeout penalty").emit();
                 estimate.duration += 3600.seconds;  // 1 hour penalty
                 estimate.usage.duration = estimate.duration;
                 estimate.usage.cores = cast(size_t)(estimate.usage.cores * 5.0f);
@@ -260,7 +260,7 @@ unittest
     auto estimate = result.unwrap();
     float totalCost = pricing.effectivePricing().totalCost(estimate.usage);
     
-    Logger.info("Cost with price spike: $" ~ totalCost.to!string);
+    structuredLog.info("Cost with price spike: $" ~ totalCost.to!string).emit();
     Assert.isTrue(totalCost > 0.0f, "Should have positive cost");
     Assert.isFalse(isInfinity(totalCost), "Cost should be finite");
     
@@ -308,7 +308,7 @@ unittest
     
     // Some builds should have termination penalty
     auto maxDuration = durations.map!(d => d.total!"seconds").maxElement;
-    Logger.info("Max duration with terminations: " ~ maxDuration.to!string ~ "s");
+    structuredLog.info("Max duration with terminations: " ~ maxDuration.to!string ~ "s").emit();
     
     writeln("  \x1b[32m✓ Spot termination test passed\x1b[0m");
 }
@@ -350,13 +350,13 @@ unittest
         auto estimate = result.unwrap();
         float cost = pricing.effectivePricing().totalCost(estimate.usage);
         
-        Logger.info("Estimated cost: $" ~ cost.to!string);
+        structuredLog.info("Estimated cost: $" ~ cost.to!string).emit();
         
         // System should detect this exceeds reasonable budget
         immutable maxBudget = 100.0f;
         if (cost > maxBudget)
         {
-            Logger.info("Budget violation detected: $" ~ cost.to!string ~ " > $" ~ maxBudget.to!string);
+            structuredLog.info("Budget violation detected: $" ~ cost.to!string ~ " > $" ~ maxBudget.to!string).emit();
             Assert.isTrue(true, "Can detect budget violation");
         }
     }
@@ -408,12 +408,12 @@ unittest
             if (isInfinity(cost) || isNaN(cost) || cost < 0)
             {
                 invalidCount++;
-                Logger.info("  Invalid cost detected: " ~ cost.to!string);
+                structuredLog.info("  Invalid cost detected: " ~ cost.to!string).emit();
             }
         }
     }
     
-    Logger.info("Invalid costs encountered: " ~ invalidCount.to!string ~ "/20");
+    structuredLog.info("Invalid costs encountered: " ~ invalidCount.to!string ~ "/20").emit();
     
     // System should handle invalid values gracefully
     Assert.isTrue(true, "System survives invalid cost values");
@@ -459,7 +459,7 @@ unittest
         auto estimate = result.unwrap();
         float networkCost = pricing.effectivePricing().networkCost(estimate.usage.networkBytes);
         
-        Logger.info("Network cost with surge: $" ~ networkCost.to!string);
+        structuredLog.info("Network cost with surge: $" ~ networkCost.to!string).emit();
         
         // High network cost should influence strategy choice
         Assert.isTrue(networkCost >= 0.0f, "Network cost should be non-negative");
@@ -496,9 +496,9 @@ unittest
     auto gcpVariance = calculateVariance(gcpPrices);
     auto azureVariance = calculateVariance(azurePrices);
     
-    Logger.info("AWS variance: " ~ awsVariance.to!string);
-    Logger.info("GCP variance: " ~ gcpVariance.to!string);
-    Logger.info("Azure variance: " ~ azureVariance.to!string);
+    structuredLog.info("AWS variance: " ~ awsVariance.to!string).emit();
+    structuredLog.info("GCP variance: " ~ gcpVariance.to!string).emit();
+    structuredLog.info("Azure variance: " ~ azureVariance.to!string).emit();
     
     // Prices should fluctuate but remain realistic
     Assert.isTrue(awsVariance > 0.0f, "AWS prices should fluctuate");
@@ -553,8 +553,8 @@ unittest
     float maxEst = estimates.maxElement;
     float variance = maxEst - minEst;
     
-    Logger.info("Estimate variance: $" ~ variance.to!string);
-    Logger.info("Min: $" ~ minEst.to!string ~ ", Max: $" ~ maxEst.to!string);
+    structuredLog.info("Estimate variance: $" ~ variance.to!string).emit();
+    structuredLog.info("Min: $" ~ minEst.to!string ~ ", Max: $" ~ maxEst.to!string).emit();
     
     // System should handle unreliable estimates
     Assert.isTrue(variance >= 0.0f, "Should track variance");
@@ -593,7 +593,7 @@ unittest
         }
     }
     
-    Logger.info("Total regional transfer costs: $" ~ totalCost.to!string);
+    structuredLog.info("Total regional transfer costs: $" ~ totalCost.to!string).emit();
     
     writeln("  \x1b[32m✓ Regional transfers test passed\x1b[0m");
 }
@@ -648,8 +648,8 @@ unittest
     }
     
     size_t faults = chaosEstimator.getFaultCount();
-    Logger.info("Total chaos injections: " ~ faults.to!string);
-    Logger.info("Successful estimates: " ~ successCount.to!string ~ "/50");
+    structuredLog.info("Total chaos injections: " ~ faults.to!string).emit();
+    structuredLog.info("Successful estimates: " ~ successCount.to!string ~ "/50").emit();
     
     // Should handle majority of chaos scenarios
     Assert.isTrue(successCount > 25, "Should survive most chaos");

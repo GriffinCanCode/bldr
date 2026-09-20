@@ -69,12 +69,16 @@ final class ConfigIndex
             throw Errors.cache("Failed to open config index: " ~ fromStringz(sqlite3_errmsg(db)).idup,
                               Cache.LoadFailed).build();
         
+        // Before any pragma that takes a lock: switching to WAL needs a brief
+        // exclusive lock, so with no timeout set yet a parallel build hits
+        // SQLITE_BUSY on the journal_mode pragma itself.
+        sqlite3_busy_timeout(db, 5000);
+        
         // Optimize for sub-millisecond lookups
-        execSQL("PRAGMA journal_mode=WAL");        // Concurrent reads + crash recovery
+        trySQL("PRAGMA journal_mode=WAL");        // Concurrent reads + crash recovery
         execSQL("PRAGMA synchronous=NORMAL");      // Balance durability/speed
         execSQL("PRAGMA cache_size=-32000");       // 32MB in-memory cache
         execSQL("PRAGMA temp_store=MEMORY");       // Temp tables in RAM
-        execSQL("PRAGMA busy_timeout=5000");       // 5s wait on contention
         execSQL("PRAGMA mmap_size=268435456");     // 256MB memory-mapped I/O
         execSQL("PRAGMA page_size=4096");          // Optimal for SSD
         
@@ -437,6 +441,18 @@ final class ConfigIndex
     }
 
 private:
+    /// Execute a pragma whose failure is survivable.
+    /// A journal-mode switch can return SQLITE_BUSY while another connection to
+    /// the same file is open, and busy_timeout does not cover that case. The
+    /// mode already on disk is then inherited, so refusing to build over it
+    /// would turn a tuning knob into a hard failure.
+    void trySQL(string sql) @trusted nothrow
+    {
+        char* errMsg;
+        if (sqlite3_exec(db, sql.toStringz, null, null, &errMsg) != SQLITE_OK && errMsg)
+            sqlite3_free(errMsg);
+    }
+    
     void execSQL(string sql) @trusted
     {
         char* errMsg;

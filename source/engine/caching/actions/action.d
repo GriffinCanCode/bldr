@@ -447,6 +447,29 @@ class ActionCache
         float indexHitRate;
     }
     
+    /// Every blob hash reachable from this cache's entries
+    /// Used as a GC root set: anything omitted here is a candidate for deletion.
+    bool[string] referencedHashes() const @system
+    {
+        synchronized (cast(Mutex)cacheMutex)
+        {
+            bool[string] referenced;
+            
+            foreach (ref entry; entries)
+            {
+                if (entry.executionHash.length) referenced[entry.executionHash] = true;
+                if (entry.verificationHash.length) referenced[entry.verificationHash] = true;
+                
+                foreach (hash; entry.inputHashes.byValue)
+                    if (hash.length) referenced[hash] = true;
+                foreach (hash; entry.outputHashes.byValue)
+                    if (hash.length) referenced[hash] = true;
+            }
+            
+            return referenced;
+        }
+    }
+    
     ActionCacheStats getStats() const @system
     {
         synchronized (cast(Mutex)cacheMutex)

@@ -434,6 +434,32 @@ final class BuildCache
         float indexHitRate;      // Hit rate from SQLite index
     }
     
+    /// Every blob hash reachable from this cache's entries
+    /// Used as a GC root set: anything omitted here is a candidate for deletion.
+    /// Thread-safe: synchronized via internal mutex
+    bool[string] referencedHashes() const @system
+    {
+        synchronized (cast(Mutex)cacheMutex)
+        {
+            bool[string] referenced;
+            
+            foreach (ref entry; entries)
+            {
+                if (entry.buildHash.length) referenced[entry.buildHash] = true;
+                if (entry.metadataHash.length) referenced[entry.metadataHash] = true;
+                
+                foreach (hash; entry.sourceHashes.byValue)
+                    if (hash.length) referenced[hash] = true;
+                foreach (hash; entry.sourceMetadata.byValue)
+                    if (hash.length) referenced[hash] = true;
+                foreach (hash; entry.depHashes.byValue)
+                    if (hash.length) referenced[hash] = true;
+            }
+            
+            return referenced;
+        }
+    }
+    
     /// Get cache statistics
     /// Thread-safe: synchronized via internal mutex
     CacheStats getStats() const @system

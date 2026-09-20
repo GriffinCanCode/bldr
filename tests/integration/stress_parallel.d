@@ -14,7 +14,7 @@ import tests.mocks;
 import infrastructure.config.schema.schema;
 import engine.graph.core.graph;
 import engine.runtime.core.engine.executor;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Stress test: Build graph with 10,000+ targets
 version(none) unittest

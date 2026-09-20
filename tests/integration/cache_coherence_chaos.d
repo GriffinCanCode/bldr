@@ -23,7 +23,7 @@ import engine.caching.actions.action;
 import engine.caching.storage.cas;
 import engine.caching.coordinator.coordinator;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 // ============================================================================
 // DISTRIBUTED CACHE COHERENCE CHAOS TESTS
@@ -63,13 +63,13 @@ class DistributedCacheNode
     void partition() @system
     {
         atomicStore(partitioned, true);
-        Logger.info("Node " ~ nodeId ~ " partitioned from cluster");
+        structuredLog.info("Node " ~ nodeId ~ " partitioned from cluster").emit();
     }
     
     void heal() @system
     {
         atomicStore(partitioned, false);
-        Logger.info("Node " ~ nodeId ~ " rejoined cluster");
+        structuredLog.info("Node " ~ nodeId ~ " rejoined cluster").emit();
     }
     
     bool isPartitioned() const @system => atomicLoad(partitioned);
@@ -433,8 +433,8 @@ class DistributedCacheCluster
         }
     }
     
-    Logger.info("High frequency updates: " ~ atomicLoad(totalUpdates).to!string ~ 
-               ", conflicts: " ~ atomicLoad(conflicts).to!string);
+    structuredLog.info("High frequency updates: " ~ atomicLoad(totalUpdates).to!string ~ 
+               ", conflicts: " ~ atomicLoad(conflicts).to!string).emit();
     
     Assert.equal(atomicLoad(totalUpdates), 200, "All updates should complete");
     
@@ -478,8 +478,8 @@ class DistributedCacheCluster
     bool node0Cached = cluster.getNode(0).isCached("split-key", [sourcePath], []);
     bool node2Cached = cluster.getNode(2).isCached("split-key", [sourcePath], []);
     
-    Logger.info("After split-brain recovery - Node0 cached: " ~ node0Cached.to!string ~
-               ", Node2 cached: " ~ node2Cached.to!string);
+    structuredLog.info("After split-brain recovery - Node0 cached: " ~ node0Cached.to!string ~
+               ", Node2 cached: " ~ node2Cached.to!string).emit();
     
     // Both nodes should be operational (not crashed)
     Assert.isTrue(true, "System should survive split-brain");
@@ -536,9 +536,9 @@ class DistributedCacheCluster
         totalWrites += stats.writes;
         totalReads += stats.reads;
         
-        Logger.info("Node " ~ i.to!string ~ " - writes: " ~ stats.writes.to!string ~
+        structuredLog.info("Node " ~ i.to!string ~ " - writes: " ~ stats.writes.to!string ~
                    ", reads: " ~ stats.reads.to!string ~
-                   ", hit rate: " ~ (stats.hitRate * 100).to!string ~ "%");
+                   ", hit rate: " ~ (stats.hitRate * 100).to!string ~ "%").emit();
     }
     
     Assert.equal(totalWrites, 150, "Should have 150 total writes (50 per node)");
@@ -594,8 +594,8 @@ class DistributedCacheCluster
         }
     }
     
-    Logger.info("Blob stress - stored: " ~ atomicLoad(successfulStores).to!string ~
-               ", retrieved: " ~ atomicLoad(successfulRetrieves).to!string);
+    structuredLog.info("Blob stress - stored: " ~ atomicLoad(successfulStores).to!string ~
+               ", retrieved: " ~ atomicLoad(successfulRetrieves).to!string).emit();
     
     Assert.equal(atomicLoad(successfulStores), 150, "All stores should succeed");
     Assert.equal(atomicLoad(successfulRetrieves), 150, "All retrieves should succeed");
@@ -715,8 +715,8 @@ class DistributedCacheCluster
     writerThread.join();
     readerThread.join();
     
-    Logger.info("Interleaved ops - reads: " ~ atomicLoad(readOps).to!string ~
-               ", writes: " ~ atomicLoad(writeOps).to!string);
+    structuredLog.info("Interleaved ops - reads: " ~ atomicLoad(readOps).to!string ~
+               ", writes: " ~ atomicLoad(writeOps).to!string).emit();
     
     Assert.isTrue(atomicLoad(readOps) > 100, "Should have many reads");
     Assert.isTrue(atomicLoad(writeOps) > 100, "Should have many writes");

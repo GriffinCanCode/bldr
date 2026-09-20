@@ -3,47 +3,49 @@
     "description": "High-performance build system for mixed-language monorepos",
     "authors": ["Griffin"],
     "copyright": "Copyright © 2025",
-    "license": "MIT",
+    "license": "Griffin-1.0",
     "targetType": "executable",
     "targetPath": "bin",
     "targetName": "bldr",
-    
+
     "sourcePaths": ["source"],
     "importPaths": ["source"],
     "excludedSourceFiles": ["source/frontend/lsp/core/main.d"],
-    
+
     "mainSourceFile": "source/app.d",
-    
+
     "dependencies": {},
-    
+
+    "comment-native": "Prebuilt C objects and native deps are declared once here and inherited by every configuration; `make build-c` produces bin/obj. Keep this list in one place so a new object cannot be wired into some configurations and not others.",
+    "sourceFiles": [
+        "bin/obj/blake3.o",
+        "bin/obj/blake3_dispatch.o",
+        "bin/obj/blake3_avx2.o",
+        "bin/obj/blake3_avx512.o",
+        "bin/obj/blake3_sse2.o",
+        "bin/obj/blake3_sse41.o",
+        "bin/obj/blake3_neon.o",
+        "bin/obj/simd_ops.o",
+        "bin/obj/cpu_detect.o",
+        "bin/obj/bloom.o",
+        "bin/obj/bloom_simd.o",
+        "bin/obj/strings.o",
+        "bin/obj/gear_simd.o",
+        "bin/obj/ts_loader.o",
+        "source/infrastructure/utils/serialization/c/varint.o",
+        "source/infrastructure/utils/serialization/c/memops.o"
+    ],
+    "libs": ["tree-sitter", "sqlite3", "zstd", "lz4"],
+    "lflags-osx": ["-L/opt/homebrew/lib", "-L/usr/local/lib"],
+    "dflags": ["-I/opt/homebrew/include", "-I/usr/local/include", "-od.dub/obj"],
+
     "configurations": [
         {
             "name": "default",
             "targetType": "executable",
             "targetName": "bldr",
             "mainSourceFile": "source/app.d",
-            "excludedSourceFiles": ["source/frontend/lsp/core/main.d"],
-            "sourceFiles": [
-                "bin/obj/blake3.o",
-                "bin/obj/blake3_dispatch.o",
-                "bin/obj/blake3_avx2.o",
-                "bin/obj/blake3_avx512.o",
-                "bin/obj/blake3_sse2.o",
-                "bin/obj/blake3_sse41.o",
-                "bin/obj/blake3_neon.o",
-                "bin/obj/simd_ops.o",
-                "bin/obj/cpu_detect.o",
-                "bin/obj/bloom.o",
-                "bin/obj/bloom_simd.o",
-                "bin/obj/strings.o",
-                "bin/obj/gear_simd.o",
-                "bin/obj/ts_loader.o",
-                "source/infrastructure/utils/serialization/c/varint.o",
-                "source/infrastructure/utils/serialization/c/memops.o"
-            ],
-            "libs": ["tree-sitter", "sqlite3", "zstd", "lz4"],
-            "lflags-osx": ["-L/opt/homebrew/lib", "-L/usr/local/lib"],
-            "dflags": ["-I/opt/homebrew/include", "-I/usr/local/include", "-od.dub/obj"]
+            "excludedSourceFiles": ["source/frontend/lsp/core/main.d"]
         },
         {
             "name": "lsp",
@@ -52,28 +54,7 @@
             "mainSourceFile": "source/frontend/lsp/core/main.d",
             "excludedSourceFiles": [
                 "source/app.d"
-            ],
-            "sourceFiles": [
-                "bin/obj/blake3.o",
-                "bin/obj/blake3_dispatch.o",
-                "bin/obj/blake3_avx2.o",
-                "bin/obj/blake3_avx512.o",
-                "bin/obj/blake3_sse2.o",
-                "bin/obj/blake3_sse41.o",
-                "bin/obj/blake3_neon.o",
-                "bin/obj/simd_ops.o",
-                "bin/obj/cpu_detect.o",
-                "bin/obj/bloom.o",
-                "bin/obj/bloom_simd.o",
-                "bin/obj/strings.o",
-                "bin/obj/gear_simd.o",
-                "bin/obj/ts_loader.o",
-                "source/infrastructure/utils/serialization/c/varint.o",
-                "source/infrastructure/utils/serialization/c/memops.o"
-            ],
-            "libs": ["tree-sitter", "sqlite3", "zstd", "lz4"],
-            "lflags-osx": ["-L/opt/homebrew/lib", "-L/usr/local/lib"],
-            "dflags": ["-I/opt/homebrew/include", "-I/usr/local/include", "-od.dub/obj"]
+            ]
         },
         {
             "name": "library",
@@ -81,49 +62,29 @@
             "targetName": "builder-core",
             "versions": ["BuilderLib"],
             "excludedSourceFiles": ["source/frontend/lsp/core/main.d"],
-            "sourceFiles": ["source/app.d"],
-            "dflags": ["-I/opt/homebrew/include", "-I/usr/local/include", "-od.dub/obj"]
+            "sourceFiles": ["source/app.d"]
         },
         {
             "name": "unittest",
             "targetType": "executable",
+            "comment-targetName": "Distinct name so building this configuration does not overwrite bin/bldr with the test runner.",
+            "targetName": "bldr-test",
             "sourcePaths": ["source", "tests"],
             "importPaths": ["source", "tests"],
             "excludedSourceFiles": [
-                "source/frontend/lsp/core/main.d", 
-                "source/app.d", 
-                "tests/bench/*_bench.d", 
+                "source/frontend/lsp/core/main.d",
+                "source/app.d",
+                "tests/bench/*_bench.d",
                 "tests/bench/*_benchmark.d",
                 "tests/bench/comparative/*",
                 "tests/bench/benchmark_config.example.d",
                 "tests/bench/realworld.d",
                 "tests/bench/profiler.d"
             ],
-            "mainSourceFile": "tests/runner.d",
-            "sourceFiles": [
-                "bin/obj/blake3.o",
-                "bin/obj/blake3_dispatch.o",
-                "bin/obj/blake3_avx2.o",
-                "bin/obj/blake3_avx512.o",
-                "bin/obj/blake3_sse2.o",
-                "bin/obj/blake3_sse41.o",
-                "bin/obj/blake3_neon.o",
-                "bin/obj/simd_ops.o",
-                "bin/obj/cpu_detect.o",
-                "bin/obj/bloom.o",
-                "bin/obj/bloom_simd.o",
-                "bin/obj/strings.o",
-                "bin/obj/gear_simd.o",
-                "bin/obj/ts_loader.o",
-                "source/infrastructure/utils/serialization/c/varint.o",
-                "source/infrastructure/utils/serialization/c/memops.o"
-            ],
-            "libs": ["tree-sitter", "sqlite3", "zstd", "lz4"],
-            "lflags-osx": ["-L/opt/homebrew/lib", "-L/usr/local/lib"],
-            "dflags": ["-I/opt/homebrew/include", "-I/usr/local/include", "-od.dub/obj"]
+            "mainSourceFile": "tests/runner.d"
         }
     ],
-    
+
     "buildTypes": {
         "release": {
             "buildOptions": ["releaseMode", "inline", "optimize"]

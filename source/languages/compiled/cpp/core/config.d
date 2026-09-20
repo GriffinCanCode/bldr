@@ -127,6 +127,30 @@ enum OutputType
     HeaderOnly
 }
 
+/// Platform-correct artifact file name for an output type
+/// Single definition so the handler and the builders cannot disagree about
+/// what a target's artifact is called.
+string defaultOutputName(string base, OutputType type) pure nothrow @safe
+{
+    final switch (type)
+    {
+        case OutputType.Executable:
+            version(Windows) return base ~ ".exe";
+            else return base;
+        case OutputType.StaticLib:
+            version(Windows) return base ~ ".lib";
+            else return "lib" ~ base ~ ".a";
+        case OutputType.SharedLib:
+            version(Windows) return base ~ ".dll";
+            else version(OSX) return "lib" ~ base ~ ".dylib";
+            else return "lib" ~ base ~ ".so";
+        case OutputType.Object:
+            return base ~ ".o";
+        case OutputType.HeaderOnly:
+            return base;
+    }
+}
+
 /// Sanitizer options
 enum Sanitizer
 {
@@ -365,7 +389,9 @@ struct AdvancedOptConfig
     
     /// LTO partition mode (faster parallel LTO compilation)
     /// Options: "none", "one", "balanced", "max"
-    string ltoPartition = "balanced";
+    /// Defaults off: partitioning is only meaningful under LTO, and emitting it
+    /// on every compile put an LTO flag on plain non-LTO builds.
+    string ltoPartition = "none";
     
     /// Enable Polly polyhedral optimizer (Clang only)
     bool polly = false;
@@ -467,9 +493,11 @@ struct AdvancedOptConfig
         // Frame pointer
         if (omitFramePointer) flags ~= "-fomit-frame-pointer";
         
-        // LTO partitioning (Clang)
+        // LTO partitioning. GCC spells it -flto-partition, Clang -flto-partitions;
+        // passing the GCC spelling to Clang is a hard error, not a warning.
         if (ltoPartition.length && ltoPartition != "none")
-            flags ~= "-flto-partition=" ~ ltoPartition;
+            flags ~= (compiler == Compiler.GCC ? "-flto-partition=" : "-flto-partitions=")
+                ~ ltoPartition;
         
         // Polly
         if (polly) flags ~= ["-mllvm", "-polly"];

@@ -20,6 +20,74 @@ module infrastructure.utils.simd.gear;
 
 import infrastructure.utils.simd.detection : SIMDLevel, CPU;
 
+// Unit tests
+// Declared ahead of the `extern(C) @system nothrow @nogc:` label below: that label
+// would otherwise apply to these unittests, and neither `nothrow` nor `@nogc` can be
+// reversed by a later attribute. Module-scope declarations are order-independent.
+version(unittest)
+{
+    unittest {
+        import std.stdio : writeln, writefln;
+    
+        // Test initialization
+        auto gear = SIMDGear.create();
+        assert(gear.minSize == 2048);
+        assert(gear.avgSize == 16384);
+        assert(gear.maxSize == 65536);
+    
+        writefln("SIMD Gear Hash: %s (accelerated: %s)", 
+                 SIMDGear.implName(), SIMDGear.isAccelerated());
+    }
+
+    unittest {
+        import std.stdio : writeln;
+    
+        // Test boundary detection with synthetic data
+        auto gear = SIMDGear.create(SIMDGear.Preset.small);
+    
+        // Create test data that should produce a boundary
+        ubyte[] data = new ubyte[16384];
+        foreach (i, ref b; data) b = cast(ubyte)(i * 17 + 31);  // Pseudo-random
+    
+        auto boundary = gear.findBoundary(data, data.length);
+    
+        // Should find boundary between min (1KB) and max (16KB)
+        assert(boundary >= gear.minSize, "Boundary before min");
+        assert(boundary <= gear.maxSize, "Boundary after max");
+    
+        writeln("Gear hash boundary detection test passed");
+    }
+
+    unittest {
+        import std.stdio : writeln;
+    
+        // Test large preset
+        auto gear = SIMDGear.create(SIMDGear.Preset.large);
+        assert(gear.minSize == 8192);
+        assert(gear.avgSize == 65536);
+        assert(gear.maxSize == 262144);
+    
+        writeln("Gear hash preset test passed");
+    }
+
+    unittest {
+        import std.stdio : writeln;
+    
+        // Test edge cases
+        auto gear = SIMDGear.create();
+    
+        // Empty data
+        ubyte[] empty;
+        assert(gear.findBoundary(empty, 0) == 0);
+    
+        // Data smaller than minSize
+        ubyte[] small = new ubyte[1024];
+        assert(gear.findBoundary(small, small.length) == small.length);
+    
+        writeln("Gear hash edge case tests passed");
+    }
+}
+
 extern(C) @system nothrow @nogc:
 
 /// Gear hash configuration (C interop)
@@ -189,68 +257,3 @@ size_t simdGearFindBoundary()(const(ubyte)[] data, size_t remaining) {
     if (_cached is null) _cached = new SIMDGear(SIMDGear.Config.artifact());
     return _cached.findBoundary(data, remaining);
 }
-
-// Unit tests
-version(unittest) @system:
-
-unittest {
-    import std.stdio : writeln, writefln;
-    
-    // Test initialization
-    auto gear = SIMDGear.create();
-    assert(gear.minSize == 2048);
-    assert(gear.avgSize == 16384);
-    assert(gear.maxSize == 65536);
-    
-    writefln("SIMD Gear Hash: %s (accelerated: %s)", 
-             SIMDGear.implName(), SIMDGear.isAccelerated());
-}
-
-unittest {
-    import std.stdio : writeln;
-    
-    // Test boundary detection with synthetic data
-    auto gear = SIMDGear.create(SIMDGear.Preset.small);
-    
-    // Create test data that should produce a boundary
-    ubyte[] data = new ubyte[16384];
-    foreach (i, ref b; data) b = cast(ubyte)(i * 17 + 31);  // Pseudo-random
-    
-    auto boundary = gear.findBoundary(data, data.length);
-    
-    // Should find boundary between min (1KB) and max (16KB)
-    assert(boundary >= gear.minSize, "Boundary before min");
-    assert(boundary <= gear.maxSize, "Boundary after max");
-    
-    writeln("Gear hash boundary detection test passed");
-}
-
-unittest {
-    import std.stdio : writeln;
-    
-    // Test large preset
-    auto gear = SIMDGear.create(SIMDGear.Preset.large);
-    assert(gear.minSize == 8192);
-    assert(gear.avgSize == 65536);
-    assert(gear.maxSize == 262144);
-    
-    writeln("Gear hash preset test passed");
-}
-
-unittest {
-    import std.stdio : writeln;
-    
-    // Test edge cases
-    auto gear = SIMDGear.create();
-    
-    // Empty data
-    ubyte[] empty;
-    assert(gear.findBoundary(empty, 0) == 0);
-    
-    // Data smaller than minSize
-    ubyte[] small = new ubyte[1024];
-    assert(gear.findBoundary(small, small.length) == small.length);
-    
-    writeln("Gear hash edge case tests passed");
-}
-

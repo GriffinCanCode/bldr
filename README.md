@@ -5,7 +5,7 @@ High-performance build system for polyglot monorepos. Runtime dependency discove
 ## Key Features
 
 - **Dynamic Build Graphs** — Actions discover dependencies at runtime, eliminating code generation friction
-- **28 Language Handlers** — C/C++, Rust, Go, D, Zig, Python, TypeScript, Java, Kotlin, Scala, and more
+- **32 Language Handlers** — C/C++, Rust, Go, D, Zig, Python, TypeScript, Java, Kotlin, Scala, and more
 - **Three-Tier Caching** — Target, action, and distributed cache for maximum reuse
 - **Work-Stealing Scheduler** — Chase-Lev deque, near-linear scaling to 64+ cores
 - **Hermetic Builds** — Native sandboxing on Linux/macOS/Windows
@@ -34,7 +34,8 @@ bldr test                              # Run tests
 bldr build --watch                     # Watch mode
 bldr query 'deps(//src:app)'           # Query dependencies
 bldr migrate --auto CMakeLists.txt     # Migrate from other build systems
-bldr explain caching                   # Built-in documentation
+bldr explain list                      # Built-in documentation topics
+bldr explain testing                   # Read one topic
 ```
 
 ## Builderfile Example

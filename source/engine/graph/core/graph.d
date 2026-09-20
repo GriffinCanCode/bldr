@@ -60,8 +60,13 @@ struct NodeArena
         
         offset = 0;
         nodeCount = 0;
-        // Don't set NO_SCAN - we need GC to scan for Target/TargetId references
-        GC.addRoot(buffer.ptr);
+        
+        // addRange, not addRoot: addRoot only keeps the buffer itself alive, it
+        // does not scan what is inside it. BuildNodes are emplaced here and
+        // their TargetId strings, Target fields and dependency arrays live on
+        // the GC heap with no other reference, so an unscanned arena lets the
+        // collector free them while the graph is still using them.
+        GC.addRange(buffer.ptr, buffer.length);
     }
     
     /// Create arena on current thread's NUMA node
@@ -75,7 +80,7 @@ struct NodeArena
     {
         if (buffer.ptr !is null)
         {
-            GC.removeRoot(buffer.ptr);
+            GC.removeRange(buffer.ptr);
             if (numaAllocated)
                 numaFree(buffer);
         }
@@ -282,14 +287,16 @@ final class BuildNode
     /// 
     /// Invariants:
     /// - Decrement is atomic (no lost updates)
-    /// - Returns value after decrement
+    /// - Returns this caller's post-decrement value, so exactly one of N
+    ///   concurrent callers can observe 0 and claim the node
     /// 
     /// What could go wrong:
     /// - Underflow: If decremented too many times (caller's responsibility)
     size_t decrementPendingDeps() nothrow @system @nogc
     {
-        atomicOp!"-="(this._pendingDeps, 1);
-        return atomicLoad(this._pendingDeps);
+        // Must return the value produced by this RMW, not a fresh load: a
+        // separate load lets two parents both observe 0 and submit the node twice.
+        return atomicOp!"-="(this._pendingDeps, 1);
     }
     
     /// Get current pending dependencies count

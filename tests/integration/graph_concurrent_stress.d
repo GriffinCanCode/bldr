@@ -18,7 +18,7 @@ import tests.fixtures : TempDir, TargetBuilder;
 import engine.graph.core.graph : BuildGraph, BuildNode, BuildStatus, ValidationMode;
 import infrastructure.config.schema.schema : Target, TargetType, TargetId;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 // ============================================================================
 // CONCURRENT GRAPH MODIFICATION STRESS TESTS
@@ -63,7 +63,7 @@ import infrastructure.utils.logging.logger;
     immutable totalSuccess = atomicLoad(successCount);
     immutable totalFail = atomicLoad(failureCount);
     
-    Logger.info("Concurrent node addition: " ~ totalSuccess.to!string ~ " succeeded, " ~ totalFail.to!string ~ " failed");
+    structuredLog.info("Concurrent node addition: " ~ totalSuccess.to!string ~ " succeeded, " ~ totalFail.to!string ~ " failed").emit();
     
     // All unique IDs should succeed
     Assert.equal(totalSuccess, numThreads * nodesPerThread, "All nodes should be added successfully");
@@ -115,7 +115,7 @@ import infrastructure.utils.logging.logger;
     Assert.isTrue(validateResult.isOk, "Graph should be acyclic");
     
     immutable edges = atomicLoad(edgesAdded);
-    Logger.info("Concurrent edge addition: " ~ edges.to!string ~ " edges added");
+    structuredLog.info("Concurrent edge addition: " ~ edges.to!string ~ " edges added").emit();
     
     Assert.isTrue(edges > 0, "Should have added edges");
     
@@ -202,7 +202,7 @@ import infrastructure.utils.logging.logger;
     immutable checks = atomicLoad(readyChecks);
     immutable violations = atomicLoad(invariantViolations);
     
-    Logger.info("Ready checks: " ~ checks.to!string ~ ", violations: " ~ violations.to!string);
+    structuredLog.info("Ready checks: " ~ checks.to!string ~ ", violations: " ~ violations.to!string).emit();
     
     Assert.equal(violations, 0, "No invariant violations should occur");
     Assert.isTrue(checks > 100, "Should have performed many ready checks");
@@ -312,7 +312,7 @@ import infrastructure.utils.logging.logger;
     immutable errors = atomicLoad(sortErrors);
     immutable added = atomicLoad(addedNodes);
     
-    Logger.info("Sorts: " ~ sorts.to!string ~ ", errors: " ~ errors.to!string ~ ", added: " ~ added.to!string);
+    structuredLog.info("Sorts: " ~ sorts.to!string ~ ", errors: " ~ errors.to!string ~ ", added: " ~ added.to!string).emit();
     
     // Final validation
     auto finalResult = graph.validate();
@@ -354,7 +354,7 @@ import infrastructure.utils.logging.logger;
     
     immutable updates = atomicLoad(totalUpdates);
     
-    Logger.info("High contention updates: " ~ updates.to!string);
+    structuredLog.info("High contention updates: " ~ updates.to!string).emit();
     
     Assert.equal(updates, numThreads * updatesPerThread, "All updates should complete");
     
@@ -420,7 +420,7 @@ import infrastructure.utils.logging.logger;
     }
     
     immutable computations = atomicLoad(totalComputations);
-    Logger.info("Depth computations: " ~ computations.to!string);
+    structuredLog.info("Depth computations: " ~ computations.to!string).emit();
     
     Assert.equal(computations, 8 * 500, "All computations should complete");
     
@@ -483,7 +483,7 @@ import infrastructure.utils.logging.logger;
     immutable targets = atomicLoad(discoveredTargets);
     immutable edges = atomicLoad(discoveredEdges);
     
-    Logger.info("Dynamic discovery: " ~ targets.to!string ~ " targets, " ~ edges.to!string ~ " edges");
+    structuredLog.info("Dynamic discovery: " ~ targets.to!string ~ " targets, " ~ edges.to!string ~ " edges").emit();
     
     Assert.equal(targets, generatorCount * 20, "All generated targets should be discovered");
     Assert.equal(edges, generatorCount * 20, "All edges should be added");
@@ -566,7 +566,7 @@ import infrastructure.utils.logging.logger;
     }
     
     auto nodeTime = MonoTime.currTime - startTime;
-    Logger.info("Node creation: " ~ nodeTime.total!"msecs".to!string ~ "ms");
+    structuredLog.info("Node creation: " ~ nodeTime.total!"msecs".to!string ~ "ms").emit();
     
     // Add sparse edges (avoiding cycles by only going forward)
     startTime = MonoTime.currTime;
@@ -583,13 +583,13 @@ import infrastructure.utils.logging.logger;
     }
     
     auto edgeTime = MonoTime.currTime - startTime;
-    Logger.info("Edge creation: " ~ edgeTime.total!"msecs".to!string ~ "ms (" ~ edgeCount.to!string ~ " edges)");
+    structuredLog.info("Edge creation: " ~ edgeTime.total!"msecs".to!string ~ "ms (" ~ edgeCount.to!string ~ " edges)").emit();
     
     // Validate
     startTime = MonoTime.currTime;
     auto validateResult = graph.validate();
     auto validateTime = MonoTime.currTime - startTime;
-    Logger.info("Validation: " ~ validateTime.total!"msecs".to!string ~ "ms");
+    structuredLog.info("Validation: " ~ validateTime.total!"msecs".to!string ~ "ms").emit();
     
     Assert.isTrue(validateResult.isOk, "Large graph should be valid");
     
@@ -597,7 +597,7 @@ import infrastructure.utils.logging.logger;
     startTime = MonoTime.currTime;
     auto stats = graph.getStats();
     auto statsTime = MonoTime.currTime - startTime;
-    Logger.info("Stats calculation: " ~ statsTime.total!"msecs".to!string ~ "ms");
+    structuredLog.info("Stats calculation: " ~ statsTime.total!"msecs".to!string ~ "ms").emit();
     
     Assert.equal(stats.totalNodes, nodeCount, "Should have all nodes");
     Assert.equal(stats.totalEdges, edgeCount, "Should have all edges");

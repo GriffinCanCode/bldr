@@ -596,7 +596,7 @@ unittest
     req.inlineStderr = true;
     req.inlineOutputFiles = ["output.o", "output.log"];
     
-    auto encoded = ReapiV2Codec.encodeGetActionResultRequest(req);
+    auto encoded = ReapiV2Codec.encodeGetActionResultRequestImpl(req);
     Assert.isTrue(encoded.length > 0);
     
     writeln("\x1b[32m  ✓ GetActionResultRequest encoding works\x1b[0m");

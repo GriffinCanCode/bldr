@@ -20,7 +20,7 @@ import core.sync.condition : Condition;
 import tests.harness : Assert;
 import tests.fixtures : TempDir;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 // ============================================================================
 // SYSTEM RESILIENCE TESTS
@@ -91,7 +91,7 @@ class CheckpointManager
         }
         catch (Exception e)
         {
-            Logger.error("Checkpoint save failed: " ~ e.msg);
+            structuredLog.error("Checkpoint save failed: " ~ e.msg).emit();
             return false;
         }
     }
@@ -131,7 +131,7 @@ class CheckpointManager
             catch (Exception e)
             {
                 atomicOp!"+="(corruptedCheckpoints, 1);
-                Logger.error("Checkpoint load failed: " ~ e.msg);
+                structuredLog.error("Checkpoint load failed: " ~ e.msg).emit();
             }
         }
         
@@ -250,7 +250,7 @@ class CheckpointManager
     size_t totalTargets = loaded.completedTargets.length + loaded.pendingTargets.length;
     float progress = cast(float)loaded.completedTargets.length / totalTargets;
     
-    Logger.info("Resume from " ~ (progress * 100).to!string ~ "% complete");
+    structuredLog.info("Resume from " ~ (progress * 100).to!string ~ "% complete").emit();
     
     Assert.equal(loaded.pendingTargets.length, 4, "Should have 4 targets remaining");
     Assert.isTrue(progress >= 0.5, "Should be at least 50% complete");
@@ -461,8 +461,8 @@ class SimulatedRemoteCache
             failures++;
     }
     
-    Logger.info("Network errors - successes: " ~ successes.to!string ~
-               ", failures: " ~ failures.to!string);
+    structuredLog.info("Network errors - successes: " ~ successes.to!string ~
+               ", failures: " ~ failures.to!string).emit();
     
     // With 50% failure rate, should have mix of both
     Assert.isTrue(successes > 0, "Should have some successes");
@@ -785,8 +785,8 @@ class PluginManager
             crashes++;
     }
     
-    Logger.info("Multiple crashes - total: " ~ crashes.to!string ~
-               ", recorded: " ~ manager.getCrashCount().to!string);
+    structuredLog.info("Multiple crashes - total: " ~ crashes.to!string ~
+               ", recorded: " ~ manager.getCrashCount().to!string).emit();
     
     // System should still be healthy
     Assert.isTrue(manager.isSystemHealthy(), "System should survive multiple crashes");
@@ -885,9 +885,9 @@ class ResourcePool
         }
     }
     
-    Logger.info("FD exhaustion - acquired: " ~ atomicLoad(acquired).to!string ~
+    structuredLog.info("FD exhaustion - acquired: " ~ atomicLoad(acquired).to!string ~
                ", failed: " ~ atomicLoad(failed).to!string ~
-               ", exhaustion events: " ~ fdPool.getExhaustionEvents().to!string);
+               ", exhaustion events: " ~ fdPool.getExhaustionEvents().to!string).emit();
     
     // Some should fail due to exhaustion
     Assert.isTrue(atomicLoad(acquired) > 0, "Some acquisitions should succeed");
@@ -950,8 +950,8 @@ class ResourcePool
         }
     }
     
-    Logger.info("Memory pressure - allocated: " ~ totalAllocated.to!string ~
-               " MB, failures: " ~ allocationFailures.to!string);
+    structuredLog.info("Memory pressure - allocated: " ~ totalAllocated.to!string ~
+               " MB, failures: " ~ allocationFailures.to!string).emit();
     
     // Can't allocate 1500 MB in 1000 MB pool
     Assert.isTrue(allocationFailures > 0, "Should have allocation failures");
@@ -1001,8 +1001,8 @@ class ResourcePool
         writes++;
     }
     
-    Logger.info("Disk full - successful writes: " ~ writes.to!string ~
-               ", total written: " ~ writer.written.to!string ~ " MB");
+    structuredLog.info("Disk full - successful writes: " ~ writes.to!string ~
+               ", total written: " ~ writer.written.to!string ~ " MB").emit();
     
     Assert.equal(writes, 5, "Should write 5 chunks (500 MB)");
     Assert.equal(writer.written, 500, "Should write exactly 500 MB");
@@ -1043,7 +1043,7 @@ class ResourcePool
     auto worker1Time = worker1.currentTime();
     auto worker2Time = worker2.currentTime();
     
-    Logger.info("Clock skew - coord: 0, worker1: +5s, worker2: -3s");
+    structuredLog.info("Clock skew - coord: 0, worker1: +5s, worker2: -3s").emit();
     
     // Check if message would timeout
     bool wouldTimeout(long sendTime, long receiveTime, long timeout)

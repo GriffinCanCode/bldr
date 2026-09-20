@@ -14,7 +14,7 @@ import tests.fixtures : TempDir;
 import engine.graph;
 import infrastructure.config.schema.schema;
 import infrastructure.errors;
-import infrastructure.utils.logging.logger;
+import infrastructure.utils.logging;
 
 /// Chaos injection for dynamic graph discovery
 enum GraphChaosType
@@ -108,7 +108,7 @@ class ChaoticDynamicGraph
     
     private Result!BuildError injectCyclicDeps(DiscoveryMetadata discovery)
     {
-        Logger.info("CHAOS: Injecting cyclic dependency");
+        structuredLog.info("CHAOS: Injecting cyclic dependency").emit();
         
         // Create target that depends on origin (creates cycle)
         Target cyclicTarget;
@@ -125,7 +125,7 @@ class ChaoticDynamicGraph
     
     private Result!BuildError injectRaceCondition(DiscoveryMetadata discovery)
     {
-        Logger.info("CHAOS: Injecting race condition");
+        structuredLog.info("CHAOS: Injecting race condition").emit();
         
         // Record same discovery twice from different "threads"
         graph.recordDiscovery(discovery);
@@ -135,7 +135,7 @@ class ChaoticDynamicGraph
     
     private Result!BuildError injectInvalidTarget(DiscoveryMetadata discovery)
     {
-        Logger.info("CHAOS: Injecting invalid target");
+        structuredLog.info("CHAOS: Injecting invalid target").emit();
         
         // Create target with invalid data
         Target invalidTarget;
@@ -151,7 +151,7 @@ class ChaoticDynamicGraph
     
     private Result!BuildError injectExplosiveGrowth(DiscoveryMetadata discovery)
     {
-        Logger.info("CHAOS: Injecting explosive growth");
+        structuredLog.info("CHAOS: Injecting explosive growth").emit();
         
         // Create many targets that each discover more
         auto modifiedDiscovery = discovery;
@@ -169,7 +169,7 @@ class ChaoticDynamicGraph
     
     private Result!BuildError injectPartialData(DiscoveryMetadata discovery)
     {
-        Logger.info("CHAOS: Injecting partial discovery");
+        structuredLog.info("CHAOS: Injecting partial discovery").emit();
         
         // Create target with missing required data
         auto modifiedDiscovery = discovery;
@@ -181,7 +181,7 @@ class ChaoticDynamicGraph
     
     private Result!BuildError injectConflictingDeps(DiscoveryMetadata discovery)
     {
-        Logger.info("CHAOS: Injecting conflicting dependencies");
+        structuredLog.info("CHAOS: Injecting conflicting dependencies").emit();
         
         // Create two targets with contradictory dependency relationships
         Target target1;
@@ -248,14 +248,14 @@ unittest
     if (result.isErr)
     {
         auto error = result.unwrapErr();
-        Logger.info("Cycle correctly detected: " ~ error.message());
+        structuredLog.info("Cycle correctly detected: " ~ error.message()).emit();
         Assert.isTrue(true, "Cycle detection working");
     }
     else
     {
         // If accepted, verify no actual cycle exists
         auto nodes = result.unwrap();
-        Logger.info("Applied " ~ nodes.length.to!string ~ " nodes without cycle");
+        structuredLog.info("Applied " ~ nodes.length.to!string ~ " nodes without cycle").emit();
         Assert.isTrue(true, "Graceful handling of cycle attempt");
     }
     
@@ -348,7 +348,7 @@ unittest
     if (result.isOk)
     {
         auto nodes = result.unwrap();
-        Logger.info("Handled explosive growth: " ~ nodes.length.to!string ~ " nodes");
+        structuredLog.info("Handled explosive growth: " ~ nodes.length.to!string ~ " nodes").emit();
         Assert.isTrue(nodes.length <= 1000, "Should limit growth");
     }
     
@@ -393,13 +393,13 @@ unittest
     
     if (result.isErr)
     {
-        Logger.info("Invalid targets correctly rejected");
+        structuredLog.info("Invalid targets correctly rejected").emit();
         Assert.isTrue(true, "Validation working");
     }
     else
     {
         auto nodes = result.unwrap();
-        Logger.info("Applied " ~ nodes.length.to!string ~ " valid nodes, filtered invalid");
+        structuredLog.info("Applied " ~ nodes.length.to!string ~ " valid nodes, filtered invalid").emit();
         Assert.isTrue(true, "Graceful filtering of invalid data");
     }
     
@@ -440,12 +440,12 @@ unittest
     
     if (result.isErr)
     {
-        Logger.info("Conflicting dependencies detected and rejected");
+        structuredLog.info("Conflicting dependencies detected and rejected").emit();
         Assert.isTrue(true, "Conflict detection working");
     }
     else
     {
-        Logger.info("Conflicts resolved or prevented");
+        structuredLog.info("Conflicts resolved or prevented").emit();
         Assert.isTrue(true, "Graceful conflict resolution");
     }
     
@@ -489,12 +489,12 @@ unittest
     auto result = chaosGraph.applyDiscoveries();
     
     size_t faults = chaosGraph.getFaultCount();
-    Logger.info("Injected " ~ faults.to!string ~ " partial data faults");
+    structuredLog.info("Injected " ~ faults.to!string ~ " partial data faults").emit();
     
     if (result.isOk)
     {
         auto nodes = result.unwrap();
-        Logger.info("Recovered " ~ nodes.length.to!string ~ " nodes from partial data");
+        structuredLog.info("Recovered " ~ nodes.length.to!string ~ " nodes from partial data").emit();
         Assert.isTrue(nodes.length > 0, "Should recover some valid discoveries");
     }
     
@@ -540,7 +540,7 @@ unittest
     // Should detect cycle even if it's deep
     auto result = dynamicGraph.applyDiscoveries();
     
-    Logger.info("Deep cycle detection result: " ~ (result.isOk ? "OK" : "ERR"));
+    structuredLog.info("Deep cycle detection result: " ~ (result.isOk ? "OK" : "ERR")).emit();
     Assert.isTrue(true, "System handles deep cycle detection");
     
     writeln("  \x1b[32m✓ Deep cycle test passed\x1b[0m");
@@ -600,17 +600,17 @@ unittest
     auto result = chaosGraph.applyDiscoveries();
     
     size_t faults = chaosGraph.getFaultCount();
-    Logger.info("Total faults injected: " ~ faults.to!string);
+    structuredLog.info("Total faults injected: " ~ faults.to!string).emit();
     
     // Either succeeds with valid subset, or fails gracefully
     if (result.isOk)
     {
         auto nodes = result.unwrap();
-        Logger.info("Survived chaos: " ~ nodes.length.to!string ~ " valid nodes");
+        structuredLog.info("Survived chaos: " ~ nodes.length.to!string ~ " valid nodes").emit();
     }
     else
     {
-        Logger.info("Failed gracefully under chaos");
+        structuredLog.info("Failed gracefully under chaos").emit();
     }
     
     Assert.isTrue(true, "System survived combined chaos");
