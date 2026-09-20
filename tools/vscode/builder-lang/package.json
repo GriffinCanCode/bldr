@@ -2,7 +2,7 @@
   "name": "builder-lang",
   "displayName": "Builder - Build System IDE",
   "description": "Complete IDE for Builder: LSP, Dashboard, Build-as-Code Generator, Dependency Visualizer, and CLI Integration",
-  "version": "3.0.0",
+  "version": "2.1.0",
   "publisher": "builder",
   "icon": "icons/file-icon.png",
   "repository": {
