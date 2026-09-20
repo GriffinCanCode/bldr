@@ -25,7 +25,7 @@ import infrastructure.errors.helpers;
 class ConfigParser
 {
     private static ConfigIndex _configIndex;
-    
+
     /// Get or create the shared config index (lazy initialization)
     private static ConfigIndex getConfigIndex(string cacheDir) @system
     {
@@ -33,7 +33,7 @@ class ConfigParser
             _configIndex = new ConfigIndex(cacheDir);
         return _configIndex;
     }
-    
+
     /// Close the config index (call during cleanup)
     static void closeConfigIndex() @system
     {
@@ -43,7 +43,7 @@ class ConfigParser
             _configIndex = null;
         }
     }
-    
+
     /// Parse entire workspace starting from root
     /// Uses SQLite-backed ConfigIndex for sub-millisecond cache lookups
     /// Returns Result with WorkspaceConfig
@@ -53,13 +53,13 @@ class ConfigParser
     {
         immutable cacheDir = buildPath(root, ".builder-cache");
         immutable workspacePath = absolutePath(root);
-        
+
         WorkspaceConfig config;
         config.root = workspacePath;
-        
+
         // Find all Builderfile files
         auto buildFiles = findBuildFiles(root);
-        
+
         // Try SQLite cache first for fast lookup
         if (!buildFiles.empty)
         {
@@ -74,7 +74,7 @@ class ConfigParser
                 return Ok!(WorkspaceConfig, BuildError)(*cachedConfig);
             }
         }
-        
+
         // Zero-config mode: infer targets if no Builderfiles found
         if (buildFiles.empty)
         {
@@ -82,19 +82,19 @@ class ConfigParser
                 .field("workspace", root)
                 .field("hint", "No Builderfile found - attempting automatic target inference")
                 .emit();
-            
+
             try
             {
                 auto inference = new TargetInference(root);
                 config.targets = inference.inferTargets();
-                
+
                 if (config.targets.empty)
                 {
                     slog.warning("config_inference_failed")
                         .field("workspace", root)
                         .field("hint", "No recognizable project structure found. Run 'bldr init' to create a Builderfile")
                         .emit();
-                    
+
                     auto error = createParseError(
                         root,
                         "No Builderfile found and no build targets could be automatically inferred",
@@ -104,7 +104,7 @@ class ConfigParser
                     error.addSuggestion(ErrorSuggestion.docs("See zero-config mode", "docs/user-guides/examples.md"));
                     return Err!(WorkspaceConfig, BuildError)(error);
                 }
-                
+
                 slog.info("config_inference_complete")
                     .field("workspace", root)
                     .field("targets", config.targets.length)
@@ -118,7 +118,7 @@ class ConfigParser
                     .field("error", e.msg)
                     .field("hint", "Run 'bldr init' to create a Builderfile manually")
                     .emit();
-                
+
                 auto error = createParseError(
                     root,
                     "Failed to automatically infer build targets: " ~ e.msg,
@@ -136,17 +136,17 @@ class ConfigParser
                 .field("workspace", root)
                 .field("files", buildFiles.length)
                 .emit();
-            
+
             // Create parse cache
             auto cache = new ParseCache(true, buildPath(root, ".builder-cache/parse"));
-            
+
             // Parse each Builderfile with error aggregation
             auto aggregated = aggregateMap(
                 buildFiles,
                 (string buildFile) => parseBuildFile(buildFile, root, cache),
                 policy
             );
-            
+
             // Log results
             if (aggregated.hasErrors)
             {
@@ -154,14 +154,14 @@ class ConfigParser
                     .field("failed_files", aggregated.errors.length)
                     .field("hint", "Check Builderfile syntax. Run 'bldr explain <error_code>' for help")
                     .emit();
-                
+
                 import infrastructure.errors.formatting.format : format;
                 foreach (error; aggregated.errors)
                 {
                     slog.error("config_parse_error").field("details", format(error)).emit();
                 }
             }
-            
+
             if (aggregated.hasSuccesses)
             {
                 foreach (result; aggregated.successes)
@@ -169,29 +169,29 @@ class ConfigParser
                     config.targets ~= result.targets;
                     config.repositories ~= result.repositories;
                 }
-                
-                structuredLog.info("log_event").field("message", 
+
+                structuredLog.info("log_event").field("message",
                     "Successfully parsed " ~ config.targets.length.to!string ~
                     " target(s) from " ~ buildFiles.length.to!string ~ " Builderfile file(s)"
                 ).emit();
-                
+
                 if (config.repositories.length > 0)
                 {
                     structuredLog.info("found_").field("detail", "Found " ~ config.repositories.length.to!string ~ " repository rule(s)").emit();
                 }
             }
-            
+
             // Flush parse cache
             if (cache !is null)
                 cache.close();
-            
+
             if (policy == AggregationPolicy.FailFast && aggregated.hasErrors)
                 return Err!(WorkspaceConfig, BuildError)(aggregated.errors[0]);
-            
+
             if (!aggregated.hasSuccesses && aggregated.hasErrors)
                 return Err!(WorkspaceConfig, BuildError)(aggregated.errors[0]);
         }
-        
+
         // Load workspace config if exists
         string workspaceFile = buildPath(root, "Builderspace");
         if (exists(workspaceFile))
@@ -203,19 +203,19 @@ class ConfigParser
                 structuredLog.error("failed_to_parse_builderspace_file").emit();
                 import infrastructure.errors.formatting.format : format;
                 structuredLog.error("log_event").field("message", format(error)).emit();
-                
+
                 if (policy == AggregationPolicy.FailFast)
                     return Err!(WorkspaceConfig, BuildError)(error);
             }
         }
-        
+
         // Save to SQLite cache for future sub-millisecond lookups
         if (!buildFiles.empty)
             saveToCache(workspacePath, buildFiles, config, cacheDir);
-        
+
         return Ok!(WorkspaceConfig, BuildError)(config);
     }
-    
+
     /// Try to load config from SQLite cache with validation
     private static WorkspaceConfig* tryLoadFromCache(
         string workspacePath,
@@ -225,14 +225,14 @@ class ConfigParser
         try
         {
             auto configIndex = getConfigIndex(cacheDir);
-            
+
             // Check if we have a cached entry
             auto cacheResult = configIndex.getConfig(workspacePath);
             if (cacheResult.isErr)
                 return null;
-            
+
             auto entry = cacheResult.unwrap();
-            
+
             // Validate content hash (files haven't changed)
             immutable currentHash = computeConfigHash(buildFiles);
             if (entry.contentHash != currentHash)
@@ -241,12 +241,12 @@ class ConfigParser
                 configIndex.deleteConfig(workspacePath);
                 return null;
             }
-            
+
             // Deserialize cached config
             auto config = deserializeConfig(entry.configData);
             if (config is null)
                 return null;
-            
+
             return config;
         }
         catch (Exception e)
@@ -255,7 +255,7 @@ class ConfigParser
             return null;
         }
     }
-    
+
     /// Save config to SQLite cache
     private static void saveToCache(
         string workspacePath,
@@ -263,10 +263,22 @@ class ConfigParser
         ref WorkspaceConfig config,
         string cacheDir) @system
     {
+        // Repository rules are not in the blob, and a workspace that declares
+        // them would come back from the cache without them - leaving every
+        // `@repo//...` dep unresolvable. Decline to cache rather than serve a
+        // config that is quietly missing part of the workspace.
+        if (config.repositories.length > 0)
+        {
+            structuredLog.debug_("config_cache_skipped")
+                .field("detail", "Workspace declares repository rules; not caching")
+                .emit();
+            return;
+        }
+
         try
         {
             auto configIndex = getConfigIndex(cacheDir);
-            
+
             ConfigEntry entry;
             entry.workspacePath = workspacePath;
             entry.contentHash = computeConfigHash(buildFiles);
@@ -274,9 +286,9 @@ class ConfigParser
             entry.targetCount = cast(int)config.targets.length;
             entry.configData = serializeConfig(config);
             entry.createdAt = Clock.currTime();
-            
+
             configIndex.putConfig(entry);
-            
+
             // Also cache individual targets for fast lookup
             TargetEntry[] targetEntries;
             foreach (ref target; config.targets)
@@ -292,10 +304,10 @@ class ConfigParser
                 te.targetData = serializeTarget(target);
                 targetEntries ~= te;
             }
-            
+
             if (targetEntries.length > 0)
                 configIndex.putTargetsBatch(targetEntries);
-            
+
             structuredLog.debug_("saved_").field("detail", "Saved " ~ config.targets.length.to!string ~ " targets to config cache").emit();
         }
         catch (Exception e)
@@ -303,12 +315,12 @@ class ConfigParser
             structuredLog.debug_("config_cache_save_failed_").field("detail", "Config cache save failed: " ~ e.msg).emit();
         }
     }
-    
+
     /// Compute BLAKE3 hash of all config files
     private static string computeConfigHash(string[] buildFiles) @system
     {
         import std.digest : toHexString;
-        
+
         // Hash all file contents together
         ubyte[][string] fileHashes;
         foreach (file; buildFiles)
@@ -316,16 +328,16 @@ class ConfigParser
             if (exists(file))
                 fileHashes[file] = cast(ubyte[])FastHash.hashFile(file);
         }
-        
+
         // Sort by filename for deterministic ordering
         auto sortedKeys = fileHashes.keys.dup.sort();
         string combined;
         foreach (key; sortedKeys)
             combined ~= cast(string)fileHashes[key];
-        
+
         return FastHash.hashString(combined);
     }
-    
+
     /// Compute fast metadata hash (sizes + mtimes)
     private static string computeMetadataHash(string[] buildFiles) @system
     {
@@ -337,103 +349,184 @@ class ConfigParser
         }
         return FastHash.hashString(metadata);
     }
-    
+
     /// Serialize WorkspaceConfig to bytes
+    /// Layout version of the cached config blob.
+    ///
+    /// A blob written by an older bldr describes fewer fields, and reading it
+    /// back would look like a workspace whose targets had lost them. Bumping
+    /// this rejects the old entry so the workspace is reparsed instead.
+    private enum ubyte configBlobVersion = 2;
+
     private static ubyte[] serializeConfig(ref WorkspaceConfig config) @system
     {
         import std.bitmanip : nativeToBigEndian;
         import std.array : appender;
-        
+
         auto buffer = appender!(ubyte[]);
         buffer.reserve(4096);
-        
-        // Version byte
-        buffer.put(cast(ubyte)1);
-        
-        // Root path
-        buffer.put(nativeToBigEndian(cast(uint)config.root.length)[]);
-        buffer.put(cast(const(ubyte)[])config.root);
-        
+
+        buffer.put(configBlobVersion);
+        putString(buffer, config.root);
+        putMap(buffer, config.globalEnv);
+
         // Target count
         buffer.put(nativeToBigEndian(cast(uint)config.targets.length)[]);
-        
+
         // Serialize each target
         foreach (ref target; config.targets)
             buffer.put(serializeTarget(target));
-        
+
         return buffer.data;
     }
-    
+
     /// Serialize single Target to bytes
+    ///
+    /// Every field, deliberately. On the next build this blob is returned as
+    /// the authoritative target set without reparsing, so a field omitted here
+    /// does not merely lose a cache optimisation - it disappears from the
+    /// build. A dropped `includes` costs a header search path, a dropped
+    /// `langConfig` costs every language-specific setting, and a dropped
+    /// `command` leaves a shell target with nothing to run.
     private static ubyte[] serializeTarget(ref Target target) @system
     {
-        import std.bitmanip : nativeToBigEndian;
         import std.array : appender;
-        
+
         auto buffer = appender!(ubyte[]);
-        
-        // Name
-        buffer.put(nativeToBigEndian(cast(uint)target.name.length)[]);
-        buffer.put(cast(const(ubyte)[])target.name);
-        
-        // Type and language
+
+        putString(buffer, target.name);
         buffer.put(cast(ubyte)target.type);
         buffer.put(cast(ubyte)target.language);
-        
-        // Sources
-        buffer.put(nativeToBigEndian(cast(uint)target.sources.length)[]);
-        foreach (src; target.sources)
-        {
-            buffer.put(nativeToBigEndian(cast(uint)src.length)[]);
-            buffer.put(cast(const(ubyte)[])src);
-        }
-        
-        // Deps
-        buffer.put(nativeToBigEndian(cast(uint)target.deps.length)[]);
-        foreach (dep; target.deps)
-        {
-            buffer.put(nativeToBigEndian(cast(uint)dep.length)[]);
-            buffer.put(cast(const(ubyte)[])dep);
-        }
-        
-        // Output path
-        buffer.put(nativeToBigEndian(cast(uint)target.outputPath.length)[]);
-        buffer.put(cast(const(ubyte)[])target.outputPath);
-        
+        putStrings(buffer, target.sources);
+        putStrings(buffer, target.deps);
+        putStrings(buffer, target.flags);
+        putStrings(buffer, target.includes);
+        putMap(buffer, target.env);
+        putMap(buffer, target.langConfig);
+        putString(buffer, target.outputPath);
+        putString(buffer, target.platform);
+        putString(buffer, target.toolchain);
+        putString(buffer, target.command);
+        putString(buffer, target.workdir);
+        putString(buffer, target.root);
+
         return buffer.data;
     }
-    
+
+    /// Length-prefixed string, the one encoding the blob uses
+    private static void putString(Appender)(ref Appender buffer, in string value) @system
+    {
+        import std.bitmanip : nativeToBigEndian;
+
+        buffer.put(nativeToBigEndian(cast(uint)value.length)[]);
+        if (value.length)
+            buffer.put(cast(const(ubyte)[])value);
+    }
+
+    private static void putStrings(Appender)(ref Appender buffer, in string[] values) @system
+    {
+        import std.bitmanip : nativeToBigEndian;
+
+        buffer.put(nativeToBigEndian(cast(uint)values.length)[]);
+        foreach (value; values)
+            putString(buffer, value);
+    }
+
+    /// Sorted by key, so the same workspace always serializes to the same bytes
+    private static void putMap(Appender)(ref Appender buffer, in string[string] map) @system
+    {
+        import std.algorithm : sort;
+        import std.bitmanip : nativeToBigEndian;
+
+        buffer.put(nativeToBigEndian(cast(uint)map.length)[]);
+
+        string[] keys;
+        keys.reserve(map.length);
+        foreach (key, _; map)
+            keys ~= key;
+        keys.sort();
+
+        foreach (key; keys)
+        {
+            putString(buffer, key);
+            putString(buffer, map[key]);
+        }
+    }
+
+    private static string takeString(ubyte[] data, ref size_t offset) @system
+    {
+        import std.bitmanip : bigEndianToNative;
+
+        ubyte[4] lenBytes = data[offset .. offset + 4];
+        offset += 4;
+        immutable len = bigEndianToNative!uint(lenBytes);
+        if (len == 0)
+            return "";
+
+        auto value = cast(string)data[offset .. offset + len].idup;
+        offset += len;
+        return value;
+    }
+
+    private static string[] takeStrings(ubyte[] data, ref size_t offset) @system
+    {
+        import std.bitmanip : bigEndianToNative;
+
+        ubyte[4] countBytes = data[offset .. offset + 4];
+        offset += 4;
+        immutable count = bigEndianToNative!uint(countBytes);
+
+        string[] values;
+        values.reserve(count);
+        foreach (_; 0 .. count)
+            values ~= takeString(data, offset);
+        return values;
+    }
+
+    private static string[string] takeMap(ubyte[] data, ref size_t offset) @system
+    {
+        import std.bitmanip : bigEndianToNative;
+
+        ubyte[4] countBytes = data[offset .. offset + 4];
+        offset += 4;
+        immutable count = bigEndianToNative!uint(countBytes);
+
+        string[string] map;
+        foreach (_; 0 .. count)
+        {
+            auto key = takeString(data, offset);
+            map[key] = takeString(data, offset);
+        }
+        return map;
+    }
+
     /// Deserialize WorkspaceConfig from bytes
     private static WorkspaceConfig* deserializeConfig(ubyte[] data) @system
     {
         import std.bitmanip : bigEndianToNative;
-        
+
         if (data.length < 5)
             return null;
-        
+
         try
         {
             size_t offset = 0;
-            
+
             // Version check
             ubyte ver = data[offset++];
-            if (ver != 1)
+            if (ver != configBlobVersion)
                 return null;
-            
+
             auto config = new WorkspaceConfig;
-            
-            // Root path
-            ubyte[4] rootLenBytes = data[offset .. offset + 4];
-            offset += 4;
-            uint rootLen = bigEndianToNative!uint(rootLenBytes);
-            config.root = cast(string)data[offset .. offset + rootLen].idup;
-            offset += rootLen;
-            
+
+            config.root = takeString(data, offset);
+            config.globalEnv = takeMap(data, offset);
+
             // Target count
             ubyte[4] countBytes = data[offset .. offset + 4];
             offset += 4;
             uint targetCount = bigEndianToNative!uint(countBytes);
-            
+
             // Deserialize targets
             foreach (_; 0 .. targetCount)
             {
@@ -441,7 +534,7 @@ class ConfigParser
                 offset = deserializeTarget(data, offset, target);
                 config.targets ~= target;
             }
-            
+
             return config;
         }
         catch (Exception)
@@ -449,83 +542,53 @@ class ConfigParser
             return null;
         }
     }
-    
-    /// Deserialize single Target from bytes
+
+    /// Deserialize single Target from bytes - mirrors serializeTarget exactly
     private static size_t deserializeTarget(ubyte[] data, size_t offset, ref Target target) @system
     {
-        import std.bitmanip : bigEndianToNative;
-        
-        // Name
-        ubyte[4] nameLenBytes = data[offset .. offset + 4];
-        offset += 4;
-        uint nameLen = bigEndianToNative!uint(nameLenBytes);
-        target.name = cast(string)data[offset .. offset + nameLen].idup;
-        offset += nameLen;
-        
-        // Type and language
+        target.name = takeString(data, offset);
         target.type = cast(TargetType)data[offset++];
         target.language = cast(TargetLanguage)data[offset++];
-        
-        // Sources
-        ubyte[4] srcCountBytes = data[offset .. offset + 4];
-        offset += 4;
-        uint srcCount = bigEndianToNative!uint(srcCountBytes);
-        foreach (_; 0 .. srcCount)
-        {
-            ubyte[4] srcLenBytes = data[offset .. offset + 4];
-            offset += 4;
-            uint srcLen = bigEndianToNative!uint(srcLenBytes);
-            target.sources ~= cast(string)data[offset .. offset + srcLen].idup;
-            offset += srcLen;
-        }
-        
-        // Deps
-        ubyte[4] depCountBytes = data[offset .. offset + 4];
-        offset += 4;
-        uint depCount = bigEndianToNative!uint(depCountBytes);
-        foreach (_; 0 .. depCount)
-        {
-            ubyte[4] depLenBytes = data[offset .. offset + 4];
-            offset += 4;
-            uint depLen = bigEndianToNative!uint(depLenBytes);
-            target.deps ~= cast(string)data[offset .. offset + depLen].idup;
-            offset += depLen;
-        }
-        
-        // Output path
-        ubyte[4] outLenBytes = data[offset .. offset + 4];
-        offset += 4;
-        uint outLen = bigEndianToNative!uint(outLenBytes);
-        target.outputPath = cast(string)data[offset .. offset + outLen].idup;
-        offset += outLen;
-        
+        target.sources = takeStrings(data, offset);
+        target.deps = takeStrings(data, offset);
+        target.flags = takeStrings(data, offset);
+        target.includes = takeStrings(data, offset);
+        target.env = takeMap(data, offset);
+        target.langConfig = takeMap(data, offset);
+        target.outputPath = takeString(data, offset);
+        target.platform = takeString(data, offset);
+        target.toolchain = takeString(data, offset);
+        target.command = takeString(data, offset);
+        target.workdir = takeString(data, offset);
+        target.root = takeString(data, offset);
+
         return offset;
     }
-    
+
     /// Find all Builderfile files in directory tree
     private static string[] findBuildFiles(string root)
     {
         string[] buildFiles;
-        
+
         if (!exists(root) || !isDir(root))
             return buildFiles;
-        
+
         foreach (entry; dirEntries(root, SpanMode.depth))
         {
             import infrastructure.utils.security.validation;
             if (!SecurityValidator.isPathWithinBase(entry.name, root))
                 continue;
-            
+
             if (entry.isFile && entry.name.baseName == "Builderfile")
                 buildFiles ~= entry.name;
         }
-        
+
         return buildFiles;
     }
-    
+
     /// Parse a single Builderfile file
     private static BuildResult!ParseResult parseBuildFile(
-        string path, 
+        string path,
         string root,
         ParseCache cache) @system
     {
@@ -541,12 +604,12 @@ class ConfigParser
         }
         catch (Exception e)
         {
-            auto error = parseErrorWithContext(path, 
+            auto error = parseErrorWithContext(path,
                 "Failed to parse Builderfile: " ~ e.msg, 0, 0, "parsing Builderfile file");
             return Err!(ParseResult, BuildError)(error);
         }
     }
-    
+
     /// Parse workspace-level configuration
     private static VoidBuildResult parseWorkspaceFile(string path, ref WorkspaceConfig config) @system
     {
@@ -564,7 +627,7 @@ class ConfigParser
         }
         catch (Exception e)
         {
-            auto error = parseErrorWithContext(path, 
+            auto error = parseErrorWithContext(path,
                 "Failed to parse Builderspace file: " ~ e.msg, 0, 0, "parsing Builderspace file");
             return VoidBuildResult.err(error);
         }

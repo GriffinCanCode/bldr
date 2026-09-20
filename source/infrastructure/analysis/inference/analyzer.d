@@ -93,18 +93,32 @@ class DependencyAnalyzer
         if (cachedResult.isOk)
         {
             auto cachedGraph = cachedResult.unwrap();
-            sw.stop();
-            structuredLog.info("loaded_dependency_graph_from_cache_").field("detail", "Loaded dependency graph from cache (" ~ 
-                         sw.peek().total!"msecs".to!string ~ "ms)").emit();
             
-            // Apply target filter if specified
-            if (!targetFilter.empty)
+            // The cache stores topology, not target definitions: a mapped node
+            // record carries the id, type, output path and edges, and nothing
+            // else. Restoring targets from it alone would hand the build
+            // sources-less, language-less targets - which then read as "no
+            // sources changed" and never rebuild. Take the edges from the
+            // cache and the definitions from the config that was just parsed.
+            if (rehydrateTargets(cachedGraph))
             {
-                auto filteredGraph = filterGraph(cachedGraph, targetFilter);
-                return BuildResult!BuildGraph.ok(filteredGraph);
+                sw.stop();
+                structuredLog.info("loaded_dependency_graph_from_cache_").field("detail", "Loaded dependency graph from cache (" ~ 
+                             sw.peek().total!"msecs".to!string ~ "ms)").emit();
+                
+                // Apply target filter if specified
+                if (!targetFilter.empty)
+                {
+                    auto filteredGraph = filterGraph(cachedGraph, targetFilter);
+                    return BuildResult!BuildGraph.ok(filteredGraph);
+                }
+                
+                return BuildResult!BuildGraph.ok(cachedGraph);
             }
             
-            return BuildResult!BuildGraph.ok(cachedGraph);
+            structuredLog.debug_("graph_cache_target_mismatch")
+                .field("detail", "Cached graph does not match the parsed targets; reanalyzing")
+                .emit();
         }
         
         structuredLog.debug_("graph_cache_miss__analyzing_dependencies").emit();
@@ -287,6 +301,39 @@ class DependencyAnalyzer
         }
         
         return files;
+    }
+    
+    /// Replace a cached graph's target definitions with the ones just parsed.
+    ///
+    /// The mmap cache is a topology cache. Its per-node record holds the
+    /// target id, type, output path and edge indices - it has never carried
+    /// sources, language, includes or language config, and widening a
+    /// fixed-size record to do so would cost the zero-copy load it exists for.
+    /// So the edges come from the cache and the definitions come from the
+    /// config, which the caller has already parsed in full.
+    ///
+    /// Returns false if any cached node names a target the config no longer
+    /// defines, which leaves the caller to reanalyze rather than build against
+    /// a definition nobody can produce.
+    private bool rehydrateTargets(BuildGraph graph) @trusted
+    {
+        Target*[string] byName;
+        foreach (ref target; config.targets)
+            byName[target.name] = &target;
+        
+        foreach (node; graph._nodeArray)
+        {
+            if (node is null)
+                continue;
+            
+            auto parsed = node.target.name in byName;
+            if (parsed is null)
+                return false;
+            
+            node.target = **parsed;
+        }
+        
+        return true;
     }
     
     /// Filter graph to only include matching targets

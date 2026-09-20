@@ -984,11 +984,26 @@ final class MappedGraphStorage
                     auto edge = view.getEdge(mappedNode.firstEdgeIndex + edgeIdx);
                     auto depId = indexToId.get(edge.toIndex, null);
                     
-                    if (depId !is null)
+                    if (depId is null)
+                        continue;
+                    
+                    auto depIdResult = TargetId.parse(depId);
+                    if (depIdResult.isErr)
+                        continue;
+                    
+                    node.dependencyIds ~= depIdResult.unwrap();
+                    node.dependencyIndices ~= edge.toIndex;
+                    
+                    // Both directions, the same as addDependency records them.
+                    // The scheduler releases a node by walking its dependency's
+                    // dependentIds, so a restored graph with only the forward
+                    // edge leaves every dependent waiting on a counter nobody
+                    // decrements, and it is dropped from the build in silence.
+                    auto depNode = graph.getNodeByKey(depId);
+                    if (depNode !is null)
                     {
-                        auto depIdResult = TargetId.parse(depId);
-                        if (depIdResult.isOk)
-                            node.dependencyIds ~= depIdResult.unwrap();
+                        depNode.dependentIds ~= node.id;
+                        depNode.dependentIndices ~= node._nodeIndex;
                     }
                 }
             }
@@ -1330,14 +1345,26 @@ final class MmapGraphCache
                 foreach (depIdx; deps)
                 {
                     auto depId = indexToId.get(depIdx, null);
-                    if (depId !is null)
+                    if (depId is null)
+                        continue;
+                    
+                    auto depIdResult = TargetId.parse(depId);
+                    if (depIdResult.isErr)
+                        continue;
+                    
+                    node.dependencyIds ~= depIdResult.unwrap();
+                    node.dependencyIndices ~= depIdx;
+                    
+                    // Both directions, the same as addDependency records them.
+                    // The scheduler releases a node by walking its dependency's
+                    // dependentIds, so a restored graph with only the forward
+                    // edge leaves every dependent waiting on a counter nobody
+                    // decrements, and it is dropped from the build in silence.
+                    auto depNode = graph.getNodeByKey(depId);
+                    if (depNode !is null)
                     {
-                        auto depIdResult = TargetId.parse(depId);
-                        if (depIdResult.isOk)
-                        {
-                            node.dependencyIds ~= depIdResult.unwrap();
-                            node.dependencyIndices ~= depIdx;
-                        }
+                        depNode.dependentIds ~= node.id;
+                        depNode.dependentIndices ~= node._nodeIndex;
                     }
                 }
             }
