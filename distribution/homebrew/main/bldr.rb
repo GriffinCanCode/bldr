@@ -2,7 +2,7 @@ class Bldr < Formula
   desc "High-performance build system for mixed-language monorepos"
   homepage "https://github.com/GriffinCanCode/bldr"
   url "https://github.com/GriffinCanCode/bldr/archive/refs/tags/v2.1.0.tar.gz"
-  sha256 "f8c3808984cb1e6a7c102a60d396398e0301e36134988aefd02b460279b7b31c"
+  sha256 "716a70a07e6a3a4fd1eca14a28b2a143a55c912e01e1be848fe9c9d73b19ff2b"
   # Griffin License v1.0 — no SPDX identifier exists for it.
   license :cannot_represent
   head "https://github.com/GriffinCanCode/bldr.git", branch: "master"
