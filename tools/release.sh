@@ -87,12 +87,15 @@ update_version_files() {
     # package.json
     sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$new\"/" "$PACKAGE_JSON"
     
-    # builder_entry.d
-    sed -i '' "s/bldr version [0-9]\+\.[0-9]\+\.[0-9]\+/bldr version $new/g" "$BUILDER_ENTRY"
+    # builder_entry.d and the Homebrew formula
+    #
+    # -E throughout: `\+` is a GNU extension that BSD sed does not read as
+    # repetition, so on macOS these two substitutions matched nothing and the
+    # release shipped a binary still reporting the previous version.
+    sed -i '' -E "s/bldr version [0-9]+\.[0-9]+\.[0-9]+/bldr version $new/g" "$BUILDER_ENTRY"
     
-    # Homebrew formula (URL and test)
-    sed -i '' "s|refs/tags/v[0-9]\+\.[0-9]\+\.[0-9]\+|refs/tags/v$new|" "$HOMEBREW_FORMULA"
-    sed -i '' "s/bldr version [0-9]\+\.[0-9]\+\.[0-9]\+/bldr version $new/" "$HOMEBREW_FORMULA"
+    sed -i '' -E "s|refs/tags/v[0-9]+\.[0-9]+\.[0-9]+|refs/tags/v$new|" "$HOMEBREW_FORMULA"
+    sed -i '' -E "s/bldr version [0-9]+\.[0-9]+\.[0-9]+/bldr version $new/" "$HOMEBREW_FORMULA"
     
     success "Version files updated"
 }
