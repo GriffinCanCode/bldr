@@ -75,8 +75,10 @@ struct WorkspaceParser
         auto token = peek();
         immutable line = token.line, col = token.column;
         
-        // Expect: workspace keyword (identifier "workspace")
-        if (!check(TokenType.Identifier) || peek().value != "workspace")
+        // `workspace` lexes as its own keyword token; the identifier spelling
+        // is still accepted for anything tokenized before it became one.
+        if (!check(TokenType.Workspace) &&
+            !(check(TokenType.Identifier) && peek().value == "workspace"))
             return error!(WorkspaceDecl)("Expected 'workspace' keyword at start of Builderspace file");
         advance();
         

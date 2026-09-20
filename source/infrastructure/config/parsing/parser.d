@@ -168,6 +168,11 @@ class ConfigParser
                 {
                     config.targets ~= result.targets;
                     config.repositories ~= result.repositories;
+                    
+                    // First declaration wins; a workspace has one name however
+                    // many of its Builderfiles happen to state it.
+                    if (config.name.empty && !result.workspaceName.empty)
+                        config.name = result.workspaceName;
                 }
 
                 structuredLog.info("log_event").field("message",
@@ -356,7 +361,7 @@ class ConfigParser
     /// A blob written by an older bldr describes fewer fields, and reading it
     /// back would look like a workspace whose targets had lost them. Bumping
     /// this rejects the old entry so the workspace is reparsed instead.
-    private enum ubyte configBlobVersion = 2;
+    private enum ubyte configBlobVersion = 3;
 
     private static ubyte[] serializeConfig(ref WorkspaceConfig config) @system
     {
@@ -368,6 +373,7 @@ class ConfigParser
 
         buffer.put(configBlobVersion);
         putString(buffer, config.root);
+        putString(buffer, config.name);
         putMap(buffer, config.globalEnv);
 
         // Target count
@@ -520,6 +526,7 @@ class ConfigParser
             auto config = new WorkspaceConfig;
 
             config.root = takeString(data, offset);
+            config.name = takeString(data, offset);
             config.globalEnv = takeMap(data, offset);
 
             // Target count

@@ -376,6 +376,10 @@ struct Target
 struct WorkspaceConfig
 {
     string root;
+    
+    /// Name from a `workspace "..."` declaration, empty if none was given
+    string name;
+    
     Target[] targets;
     string[string] globalEnv;
     BuildOptions options;

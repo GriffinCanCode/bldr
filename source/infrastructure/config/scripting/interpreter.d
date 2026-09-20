@@ -69,6 +69,11 @@ class Interpreter
             return executeExprStmt(exprStmt);
         else if (auto blockStmt = cast(BlockStmt)stmt)
             return executeBlockStmt(blockStmt);
+        else if (cast(WorkspaceDeclStmt)stmt || cast(RepositoryDeclStmt)stmt)
+            // Declarations the interpreter has nothing to expand. They are
+            // read straight off the original AST afterwards, so passing over
+            // them here is the whole job - rejecting them would fail the file.
+            return VoidBuildResult.ok();
         else
             return err("Unknown statement type");
     }

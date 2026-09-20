@@ -22,6 +22,7 @@ enum TokenType
     // Keywords - Target fields
     Target,
     Repository,
+    Workspace,
     Type,
     Language,
     Sources,
@@ -125,6 +126,7 @@ struct Lexer
             // Target field keywords
             "target": "Target",
             "repository": "Repository",
+            "workspace": "Workspace",
             "type": "Type",
             "language": "Language",
             "sources": "Sources",
@@ -458,6 +460,8 @@ struct Lexer
             {
                 // Target field keywords
                 case "Target": return ok(TokenType.Target, value, startLine, startCol);
+                case "Repository": return ok(TokenType.Repository, value, startLine, startCol);
+                case "Workspace": return ok(TokenType.Workspace, value, startLine, startCol);
                 case "Type": return ok(TokenType.Type, value, startLine, startCol);
                 case "Language": return ok(TokenType.Language, value, startLine, startCol);
                 case "Sources": return ok(TokenType.Sources, value, startLine, startCol);

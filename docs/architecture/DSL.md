@@ -119,7 +119,7 @@ target("plugin") {
     language: cpp;
     sources: ["plugin/*.cpp"];
     deps: [":core"];
-    cpp: { outputType: shared; }   // dependents link -lplugin + rpath
+    cpp: { outputType: "shared"; }  // dependents link -lplugin + rpath
 }
 
 target("app") {
@@ -169,6 +169,37 @@ config: {
     "bundler": "esbuild"
 };
 ```
+
+**Language blocks** - Configuration for one language, named after it
+
+A block named after a language (`cpp`, `cuda`, `rust`, `go`, …) or suffixed
+with `config` (`cppConfig`) carries that language's settings.
+
+```d
+target("kernels") {
+    type: library;
+    language: cuda;
+    sources: ["src/*.cu"];
+    cuda: {
+        arch: ["sm_80", "sm_90"];
+        opt: "O3";
+        fastMath: true;
+    }
+}
+```
+
+Entries separate with `;` or `,`, whichever reads better — a block laid out
+over several lines usually wants semicolons, an inline one commas. A trailing
+separator before the closing brace is allowed, and the `;` after the block
+itself is optional because the braces already close it.
+
+```d
+cpp: { std: "c++20"; optLevel: "O3"; }   // semicolons
+cpp: { std: "c++20", optLevel: "O3" };   // commas
+```
+
+Values are strings, booleans, numbers, or arrays of strings. A string needs
+its quotes: `outputType: "shared"` parses, `outputType: shared` does not.
 
 **`command`** - Shell command (for shell/genrule targets)
 ```d

@@ -14,7 +14,7 @@ import infrastructure.utils.security.validation;
 import infrastructure.utils.simd.strings : SIMDStrings;
 
 /// Semantic Analyzer - Converts AST to semantic objects (Targets, Repositories)
-/// 
+///
 /// Responsibilities:
 /// - Type checking and validation
 /// - Glob expansion
@@ -26,18 +26,18 @@ struct SemanticAnalyzer
 {
     private string workspaceRoot;
     private string filePath;
-    
+
     this(string workspaceRoot, string filePath)
     {
         this.workspaceRoot = workspaceRoot;
         this.filePath = filePath;
     }
-    
+
     /// Analyze build file and extract targets
     BuildResult!(Target[]) analyzeTargets(BuildFile ast) @system
     {
         Target[] targets;
-        
+
         foreach (stmt; ast.statements)
         {
             if (auto targetDecl = cast(TargetDeclStmt)stmt)
@@ -48,16 +48,16 @@ struct SemanticAnalyzer
                 targets ~= targetResult.unwrap();
             }
         }
-        
+
         return Ok!(Target[], BuildError)(targets);
     }
-    
+
     /// Analyze single target declaration
     private BuildResult!Target analyzeTarget(TargetDeclStmt decl) @system
     {
         Target target;
         target.name = decl.name;
-        
+
         // Parse required fields
         if (auto typeField = decl.getField("type"))
         {
@@ -70,8 +70,16 @@ struct SemanticAnalyzer
         {
             return error!Target("Target must have 'type' field", decl.location());
         }
-        
+
         // Parse optional fields
+        //
+        // Whether the field was written is tracked rather than inferred from
+        // the value: `language` defaults to the first enum member, so an
+        // absent field is indistinguishable from an explicit `language: d;`
+        // by value alone, and a C++ target that omitted it would be handed to
+        // the D handler.
+        immutable languageDeclared = decl.getField("language") !is null;
+
         if (auto langField = decl.getField("language"))
         {
             auto langResult = extractLanguage(langField.value);
@@ -79,14 +87,14 @@ struct SemanticAnalyzer
                 return Err!(Target, BuildError)(langResult.unwrapErr());
             target.language = langResult.unwrap();
         }
-        
+
         if (auto srcField = decl.getField("sources"))
         {
             auto srcResult = extractStringArray(srcField.value);
             if (srcResult.isErr)
                 return Err!(Target, BuildError)(srcResult.unwrapErr());
             target.sources = expandGlobs(srcResult.unwrap(), dirName(filePath));
-            
+
             // Validate paths
             foreach (source; target.sources)
             {
@@ -97,14 +105,14 @@ struct SemanticAnalyzer
                         srcField.loc);
                 }
             }
-            
+
             // Infer language if not specified
-            if (target.language == TargetLanguage.Generic && !target.sources.empty)
+            if ((!languageDeclared || target.language == TargetLanguage.Generic) && !target.sources.empty)
             {
                 target.language = inferLanguageFromExtension(extension(target.sources[0]));
             }
         }
-        
+
         if (auto depsField = decl.getField("deps"))
         {
             auto depsResult = extractStringArray(depsField.value);
@@ -112,7 +120,7 @@ struct SemanticAnalyzer
                 return Err!(Target, BuildError)(depsResult.unwrapErr());
             target.deps = depsResult.unwrap();
         }
-        
+
         if (auto flagsField = decl.getField("flags"))
         {
             auto flagsResult = extractStringArray(flagsField.value);
@@ -120,7 +128,7 @@ struct SemanticAnalyzer
                 return Err!(Target, BuildError)(flagsResult.unwrapErr());
             target.flags = flagsResult.unwrap();
         }
-        
+
         if (auto envField = decl.getField("env"))
         {
             auto envResult = extractStringMap(envField.value);
@@ -128,7 +136,7 @@ struct SemanticAnalyzer
                 return Err!(Target, BuildError)(envResult.unwrapErr());
             target.env = envResult.unwrap();
         }
-        
+
         if (auto outField = decl.getField("output"))
         {
             auto outResult = extractString(outField.value);
@@ -136,7 +144,7 @@ struct SemanticAnalyzer
                 return Err!(Target, BuildError)(outResult.unwrapErr());
             target.outputPath = outResult.unwrap();
         }
-        
+
         if (auto incField = decl.getField("includes"))
         {
             auto incResult = extractStringArray(incField.value);
@@ -144,7 +152,7 @@ struct SemanticAnalyzer
                 return Err!(Target, BuildError)(incResult.unwrapErr());
             target.includes = incResult.unwrap();
         }
-        
+
         // Cross-compilation fields
         if (auto platformField = decl.getField("platform"))
         {
@@ -153,7 +161,7 @@ struct SemanticAnalyzer
                 return Err!(Target, BuildError)(platResult.unwrapErr());
             target.platform = platResult.unwrap();
         }
-        
+
         if (auto toolchainField = decl.getField("toolchain"))
         {
             auto toolResult = extractString(toolchainField.value);
@@ -161,7 +169,7 @@ struct SemanticAnalyzer
                 return Err!(Target, BuildError)(toolResult.unwrapErr());
             target.toolchain = toolResult.unwrap();
         }
-        
+
         // Shell target fields
         if (auto cmdField = decl.getField("command"))
         {
@@ -170,7 +178,7 @@ struct SemanticAnalyzer
                 return Err!(Target, BuildError)(cmdResult.unwrapErr());
             target.command = cmdResult.unwrap();
         }
-        
+
         if (auto workdirField = decl.getField("workdir"))
         {
             auto workdirResult = extractString(workdirField.value);
@@ -178,7 +186,7 @@ struct SemanticAnalyzer
                 return Err!(Target, BuildError)(workdirResult.unwrapErr());
             target.workdir = workdirResult.unwrap();
         }
-        
+
         // Root directory for language toolchains (e.g., where build.zig is located)
         if (auto rootField = decl.getField("root"))
         {
@@ -187,23 +195,23 @@ struct SemanticAnalyzer
                 return Err!(Target, BuildError)(rootResult.unwrapErr());
             target.root = rootResult.unwrap();
         }
-        
+
         // Parse language-specific config blocks (e.g., javascript:, go:, python:, etc.)
         // These are stored in target.langConfig as JSON strings
         foreach (field; decl.fields)
         {
             string fieldName = field.name.toLower();
-            
+
             // Check if field name is a recognized language or language config
             // Use the language registry to determine if this is a language-specific config
             import languages.registry : parseLanguageName;
             auto parsedLang = parseLanguageName(fieldName);
-            
+
             // If it's a recognized language (not Generic), treat it as a config block
             // Also handle common patterns like "jsConfig", "goConfig", etc. (SIMD-accelerated)
-            bool isLangConfig = parsedLang != TargetLanguage.Generic || 
+            bool isLangConfig = parsedLang != TargetLanguage.Generic ||
                                (() @trusted => SIMDStrings.endsWith(fieldName, "config"))();
-            
+
             if (isLangConfig)
             {
                 // Convert the field value to JSON string
@@ -214,18 +222,18 @@ struct SemanticAnalyzer
                 }
             }
         }
-        
+
         // Generate full target name
         string relativeDir = relativePath(dirName(filePath), workspaceRoot);
         target.name = "//" ~ relativeDir ~ ":" ~ target.name;
-        
+
         return Ok!(Target, BuildError)(target);
     }
-    
+
     // ========================================================================
     // FIELD EXTRACTION
     // ========================================================================
-    
+
     private BuildResult!string extractString(const Expr expr) @system
     {
         if (auto litExpr = cast(const LiteralExpr)expr)
@@ -238,54 +246,54 @@ struct SemanticAnalyzer
                     .build()
             );
         }
-        
+
         if (auto identExpr = cast(const IdentExpr)expr)
         {
             // Variable reference - would need evaluator
             return Ok!(string, BuildError)(identExpr.name);
         }
-        
+
         return Err!(string, BuildError)(
             Errors.parse("", "Expected string literal", Parse.InvalidFieldValue)
                 .withLocation(__FILE__, __LINE__)
                 .build()
         );
     }
-    
+
     private BuildResult!(string[]) extractStringArray(const Expr expr) @system
     {
         if (auto litExpr = cast(const LiteralExpr)expr)
         {
             return litExpr.value.toStringArray();
         }
-        
+
         return Err!(string[], BuildError)(
             Errors.parse("", "Expected array of strings", Parse.InvalidFieldValue)
                 .withLocation(__FILE__, __LINE__)
                 .build()
         );
     }
-    
+
     private BuildResult!(string[string]) extractStringMap(const Expr expr) @system
     {
         if (auto litExpr = cast(const LiteralExpr)expr)
         {
             return litExpr.value.toStringMap();
         }
-        
+
         return Err!(string[string], BuildError)(
             Errors.parse("", "Expected map of strings", Parse.InvalidFieldValue)
                 .withLocation(__FILE__, __LINE__)
                 .build()
         );
     }
-    
+
     private BuildResult!TargetType extractType(const Expr expr) @system
     {
         auto strResult = extractString(expr);
         if (strResult.isErr)
             return Err!(TargetType, BuildError)(strResult.unwrapErr());
-        
+
         string typeStr = strResult.unwrap().toLower;
         switch (typeStr)
         {
@@ -303,28 +311,28 @@ struct SemanticAnalyzer
             }
         }
     }
-    
+
     private BuildResult!TargetLanguage extractLanguage(const Expr expr) @system
     {
         auto strResult = extractString(expr);
         if (strResult.isErr)
             return Err!(TargetLanguage, BuildError)(strResult.unwrapErr());
-        
+
         return Ok!(TargetLanguage, BuildError)(
             parseLanguageName(strResult.unwrap()));
     }
-    
+
     private BuildResult!string extractMapAsJSON(const Expr expr) @system
     {
         import std.json : JSONValue;
-        
+
         if (auto litExpr = cast(const LiteralExpr)expr)
         {
             if (litExpr.value.kind == LiteralKind.Map)
             {
                 // Convert map to JSON
                 JSONValue[string] jsonObj;
-                
+
                 auto map = litExpr.value.asMap();
                 foreach (key, value; map)
                 {
@@ -347,27 +355,27 @@ struct SemanticAnalyzer
                         jsonObj[key] = JSONValue(jsonArr);
                     }
                 }
-                
+
                 return Ok!(string, BuildError)(JSONValue(jsonObj).toString());
             }
         }
-        
+
         return Err!(string, BuildError)(
             Errors.parse("", "Expected map for language config", Parse.InvalidFieldValue)
                 .withLocation(__FILE__, __LINE__)
                 .build()
         );
     }
-    
+
     // ========================================================================
     // HELPERS
     // ========================================================================
-    
+
     private string[] expandGlobs(string[] patterns, string baseDir) @system
     {
         return glob(patterns, baseDir);
     }
-    
+
     private BuildResult!T error(T)(string message, Location loc) @system
     {
         auto err = Errors.parse(loc.file, message, Parse.InvalidFieldValue)
@@ -381,9 +389,12 @@ struct SemanticAnalyzer
 struct ParseResult
 {
     Target[] targets;
-    
+
     import infrastructure.repository.core.types : RepositoryRule;
     RepositoryRule[] repositories;
+
+    /// Name from a `workspace "..."` declaration, empty if the file has none
+    string workspaceName;
 }
 
 /// High-level API - Parse DSL source into targets and repositories
@@ -394,51 +405,51 @@ BuildResult!ParseResult parseDSL(
 {
     import infrastructure.config.parsing.unified : parse;
     import infrastructure.config.scripting.interpreter : Interpreter;
-    
+
     // Parse to AST
     auto astResult = parse(source, filePath, workspaceRoot, null);
     if (astResult.isErr)
         return Err!(ParseResult, BuildError)(astResult.unwrapErr());
-    
+
     auto ast = astResult.unwrap();
-    
+
     // Execute interpreter to process variables, loops, conditionals
     // This expands for loops, evaluates if conditions, resolves variables
     auto interpreter = new Interpreter();
     auto execResult = interpreter.execute(ast.statements);
     if (execResult.isErr)
         return Err!(ParseResult, BuildError)(execResult.unwrapErr());
-    
+
     auto generatedTargets = execResult.unwrap();
-    
+
     // Create a new BuildFile with the expanded/generated targets
     BuildFile expandedAst;
     expandedAst.filePath = ast.filePath;
     foreach (target; generatedTargets)
         expandedAst.statements ~= target;
-    
+
     // Also preserve repository declarations from original AST
     foreach (stmt; ast.statements)
         if (auto repoDecl = cast(RepositoryDeclStmt)stmt)
             expandedAst.statements ~= repoDecl;
-    
+
     // Analyze targets from expanded AST
     auto analyzer = SemanticAnalyzer(workspaceRoot, filePath);
     auto targetsResult = analyzer.analyzeTargets(expandedAst);
     if (targetsResult.isErr)
         return Err!(ParseResult, BuildError)(targetsResult.unwrapErr());
-    
+
     // Convert repositories
     import infrastructure.repository.core.types : RepositoryRule, RepositoryKind, ArchiveFormat;
     RepositoryRule[] repositories;
-    
+
     foreach (stmt; ast.statements)
     {
         if (auto repoDecl = cast(RepositoryDeclStmt)stmt)
         {
             RepositoryRule rule;
             rule.name = repoDecl.name;
-            
+
             if (auto urlField = repoDecl.getField("url"))
             {
                 if (auto litExpr = cast(LiteralExpr)urlField.value)
@@ -447,7 +458,7 @@ BuildResult!ParseResult parseDSL(
                         rule.url = litExpr.value.asString();
                 }
             }
-            
+
             if (auto intField = repoDecl.getField("integrity"))
             {
                 if (auto litExpr = cast(LiteralExpr)intField.value)
@@ -456,7 +467,7 @@ BuildResult!ParseResult parseDSL(
                         rule.integrity = litExpr.value.asString();
                 }
             }
-            
+
             if (auto kindField = repoDecl.getField("kind"))
             {
                 if (auto litExpr = cast(LiteralExpr)kindField.value)
@@ -470,15 +481,22 @@ BuildResult!ParseResult parseDSL(
                     }
                 }
             }
-            
+
             repositories ~= rule;
         }
     }
-    
+
     ParseResult result;
     result.targets = targetsResult.unwrap();
     result.repositories = repositories;
-    
+
+    foreach (stmt; ast.statements)
+        if (auto workspaceDecl = cast(WorkspaceDeclStmt)stmt)
+        {
+            result.workspaceName = workspaceDecl.name;
+            break;
+        }
+
     return Ok!(ParseResult, BuildError)(result);
 }
 
