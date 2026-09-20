@@ -13,9 +13,12 @@ NC='\033[0m'
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-log() { echo -e "${BLUE}→${NC} $1"; }
-success() { echo -e "${GREEN}✓${NC} $1"; }
-warn() { echo -e "${YELLOW}!${NC} $1"; }
+# Progress goes to stderr. These are status messages, not output: a function
+# that logs and then echoes its result is read with $(...), and on stdout the
+# log line would be captured as part of that result.
+log() { echo -e "${BLUE}→${NC} $1" >&2; }
+success() { echo -e "${GREEN}✓${NC} $1" >&2; }
+warn() { echo -e "${YELLOW}!${NC} $1" >&2; }
 error() { echo -e "${RED}✗${NC} $1" >&2; exit 1; }
 
 # Version files
