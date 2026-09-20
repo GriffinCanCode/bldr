@@ -339,6 +339,17 @@ private final class Worker
         this.id = id;
         this.pool = pool;
         this.thread = new Thread(&run);
+        
+        // A worker must never be the reason the process cannot exit. Druntime
+        // runs thread_joinAll() before module destructors, so a pool that was
+        // never shut down - every one of this pool's singleton users - would
+        // hang termination before any exit hook could run. Idle workers park
+        // in jobAvailable.wait() holding nothing, and map/forEach do not
+        // return until pendingJobs reaches zero, so there is never in-flight
+        // work to abandon. shutdown() still joins explicitly for callers that
+        // want deterministic teardown. std.parallelism marks its own singleton
+        // pool daemon for exactly this reason.
+        this.thread.isDaemon = true;
     }
     
     /// Start worker thread
