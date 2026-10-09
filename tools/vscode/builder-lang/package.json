@@ -11,7 +11,7 @@
   },
   "homepage": "https://github.com/GriffinCanCode/bldr",
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.91.0"
   },
   "categories": [
     "Programming Languages",
@@ -208,9 +208,17 @@
     "languages": [
       {
         "id": "builder",
-        "aliases": ["Builder", "builder"],
-        "filenames": ["Builderfile", "Builderspace"],
-        "extensions": [".builder"],
+        "aliases": [
+          "Builder",
+          "builder"
+        ],
+        "filenames": [
+          "Builderfile",
+          "Builderspace"
+        ],
+        "extensions": [
+          ".builder"
+        ],
         "configuration": "./language-configuration.json",
         "icon": {
           "light": "./icons/file-icon.svg",
@@ -219,8 +227,12 @@
       },
       {
         "id": "builderignore",
-        "aliases": ["Builder Ignore"],
-        "filenames": [".builderignore"],
+        "aliases": [
+          "Builder Ignore"
+        ],
+        "filenames": [
+          ".builderignore"
+        ],
         "icon": {
           "light": "./icons/builderignore-icon.svg",
           "dark": "./icons/builderignore-icon.svg"
@@ -245,7 +257,11 @@
         },
         "builder.lsp.trace.server": {
           "type": "string",
-          "enum": ["off", "messages", "verbose"],
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
           "default": "off",
           "description": "Trace communication between VS Code and the language server"
         },
@@ -271,7 +287,11 @@
         },
         "builder.graph.layout": {
           "type": "string",
-          "enum": ["hierarchical", "force", "circular"],
+          "enum": [
+            "hierarchical",
+            "force",
+            "circular"
+          ],
           "default": "hierarchical",
           "description": "Default layout for dependency graph visualization"
         },
@@ -319,7 +339,9 @@
     "taskDefinitions": [
       {
         "type": "builder",
-        "required": ["target"],
+        "required": [
+          "target"
+        ],
         "properties": {
           "target": {
             "type": "string",
@@ -354,6 +376,6 @@
     "@typescript-eslint/parser": "^8.70.1",
     "esbuild": "^0.28.2",
     "eslint": "^10.11.0",
-    "typescript": "^7.0.2"
+    "typescript": "~6.0.3"
   }
 }

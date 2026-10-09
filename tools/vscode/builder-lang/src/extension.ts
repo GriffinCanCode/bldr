@@ -13,11 +13,11 @@ import { ProjectAnalyzer } from './utils/analyzer';
 
 let client: LanguageClient | undefined;
 let statusBarItem: vscode.StatusBarItem;
-let outputChannel: vscode.OutputChannel;
+let outputChannel: vscode.LogOutputChannel;
 let targetsProvider: BuilderTargetsProvider;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-    outputChannel = vscode.window.createOutputChannel('Builder');
+    outputChannel = vscode.window.createOutputChannel('Builder', { log: true });
     outputChannel.appendLine('Builder IDE Extension activating...');
 
     // Create status bar
