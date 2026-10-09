@@ -62,6 +62,15 @@ static inline bool scalar_probe_single(const bloom_filter_t* filter, uint64_t h1
 
 #if defined(__AVX2__)
 
+/* Low 64 bits of each product, using only AVX2's 32-bit multiplies. */
+static inline __m256i mullo64_avx2(__m256i a, __m256i b) {
+    __m256i low = _mm256_mul_epu32(a, b);
+    __m256i cross = _mm256_add_epi64(
+        _mm256_mul_epu32(_mm256_srli_epi64(a, 32), b),
+        _mm256_mul_epu32(a, _mm256_srli_epi64(b, 32)));
+    return _mm256_add_epi64(low, _mm256_slli_epi64(cross, 32));
+}
+
 /* Probe 4 hashes using AVX2 gather
  * Strategy: For each hash function k, compute bit positions for all 4 hashes,
  * gather the corresponding words, and check bits.
@@ -75,7 +84,7 @@ uint32_t bloom_probe_avx2_4(const bloom_filter_t* filter, const uint64_t hashes[
     /* Mix to get h2 values: h2 = mix(h1) */
     __m256i h2_vec = _mm256_xor_si256(h1_vec, _mm256_srli_epi64(h1_vec, 33));
     __m256i mix_const = _mm256_set1_epi64x(0xff51afd7ed558ccdLL);
-    h2_vec = _mm256_mullo_epi64(h2_vec, mix_const);
+    h2_vec = mullo64_avx2(h2_vec, mix_const);
     h2_vec = _mm256_xor_si256(h2_vec, _mm256_srli_epi64(h2_vec, 33));
     
     /* Track which hashes might be present (all start as potential matches) */
@@ -87,7 +96,7 @@ uint32_t bloom_probe_avx2_4(const bloom_filter_t* filter, const uint64_t hashes[
     for (uint32_t k = 0; k < filter->num_hashes; k++) {
         /* Compute h(k) = h1 + k * h2 for all 4 hashes */
         __m256i k_vec = _mm256_set1_epi64x((int64_t)k);
-        __m256i hk = _mm256_add_epi64(h1_vec, _mm256_mullo_epi64(k_vec, h2_vec));
+        __m256i hk = _mm256_add_epi64(h1_vec, mullo64_avx2(k_vec, h2_vec));
         
         /* Compute bit_idx = hk % num_bits using multiplication trick */
         /* For simplicity, we extract and compute modulo scalar-style */
