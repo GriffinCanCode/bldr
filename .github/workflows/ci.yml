@@ -46,7 +46,7 @@ jobs:
           compiler: ${{ matrix.compiler }}
 
       - name: Cache dub packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.dub
           key: dub-${{ matrix.os }}-${{ hashFiles('dub.json') }}
@@ -83,7 +83,7 @@ jobs:
           compiler: ldc-latest
 
       - name: Cache dub packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.dub
           key: dub-test-ubuntu-${{ hashFiles('dub.json') }}
