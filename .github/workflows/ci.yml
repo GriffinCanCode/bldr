@@ -26,7 +26,7 @@ jobs:
           - os: macos-latest
             compiler: ldc-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # tree-sitter, sqlite3, zstd and lz4 are linked from the host, not
       # vendored — see the `libs` array in dub.json and NOTICE.
@@ -70,7 +70,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install system libraries
         run: |
@@ -104,7 +104,7 @@ jobs:
     # turn formatting into a hard gate.
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dlang-community/setup-dlang@v2
         with:
@@ -120,7 +120,7 @@ jobs:
     name: lint · shellcheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: ShellCheck
         run: |
